@@ -2,7 +2,7 @@
 
 Read `docs/DESIGN.md` before changing gameplay. Preserve no direct cell control, all six organelle categories, particle-driven interactions, and the bright vector-style cellular art direction.
 
-Use Godot 4.7.2 (standard build). Run `tools/test.sh` with `GODOT_BIN` if Godot is not on PATH. Tests must fail on script errors even when the Godot process exits zero. Keep the simulation independent of scene-tree and rendering code.
+The user runs Godot through Steam on a separate Linux machine. Keep Steam discovery as the default in both launchers; support custom libraries and Flatpak. The prototype was validated with Godot 4.7.2. Run `tools/test.sh`; `GODOT_BIN` is an optional explicit override. Tests must fail on script errors even when the Godot process exits zero. For launcher changes, also run `python3 tests/test_launchers.py` (isolated fixtures; never alter a real Steam install). Keep the simulation independent of scene-tree and rendering code.
 
 Do not commit `.godot/`, exported builds, downloaded engine binaries, captures, or logs. Keep authored sources and stable Godot `.uid` identifiers. Generated imports must be recreated automatically.
 

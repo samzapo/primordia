@@ -6,15 +6,25 @@ This first playable prototype uses Godot 4.7.2, a fixed-step particle simulation
 
 ## Play
 
-Install the standard [Godot 4.7.2 editor](https://godotengine.org/download/archive/4.7.2-stable/), import `project.godot`, and press **F6** with `scenes/pond.tscn` open, or **F5** to run the project.
-
-With Godot on your PATH:
+With **Godot Engine installed through Steam on Linux**, run:
 
 ```sh
 ./tools/run.sh
 ```
 
-Alternatively, set `GODOT_BIN` to the absolute path of the executable. The project opens a 1440 × 900 window and scales with its aspect ratio preserved. Rendering uses the Compatibility backend; compute shaders are not required.
+The launcher finds Godot in standard Steam locations, custom libraries listed by Steam, and Flatpak Steam installations. It runs the installed editor binary directly, so Steam does not need to be running. No separate Godot download or PATH setup is required.
+
+To open the project in your Steam-installed editor instead:
+
+```sh
+./tools/run.sh --editor
+```
+
+Press **F5** in Godot to play. The prototype was validated with Godot 4.7.2; keep the Steam installation on a compatible Godot 4 release.
+
+Discovery order is an explicit `GODOT_BIN`, then Steam libraries, then `godot4` or `godot` on PATH. If the Steam client itself is in a nonstandard location, set `STEAM_DIR` to its root directory (the directory containing `steamapps`). An explicit `GODOT_BIN` remains available for other installations. Both the game and test launchers use the same discovery logic.
+
+The project opens a 1440 × 900 window and scales with its aspect ratio preserved. Rendering uses the Compatibility backend; compute shaders are not required.
 
 ## How to play
 
@@ -44,12 +54,12 @@ A useful first experiment is to add a toxin vesicle, then spend acquired biomass
 ./tools/test.sh
 ```
 
-The headless suite checks chemistry budgets, contact-triggered feeding, receptor dependence, propulsion, installation and recycling, defenses, membrane constraints, seeded replay, a complete autonomous survival strategy, and interface input. It exits nonzero on a failed assertion or a Godot script error. No third-party test framework is required.
+The test launcher automatically uses the same Steam-installed Godot. The headless suite checks chemistry budgets, contact-triggered feeding, receptor dependence, propulsion, installation and recycling, defenses, membrane constraints, seeded replay, a complete autonomous survival strategy, and interface input. It exits nonzero on a failed assertion or a Godot script error. No third-party test framework is required. Launcher discovery can also be checked separately with `python3 tests/test_launchers.py`; Python is only needed for those development fixtures, not to launch the game.
 
 For a rendered capture, run with a real or virtual display:
 
 ```sh
-GODOT_BIN=/path/to/godot ./tools/run.sh -- --capture=/absolute/path/primordia.png
+./tools/run.sh -- --capture=/absolute/path/primordia.png
 ```
 
 Optional capture arguments: `--advance=600` advances 600 simulation ticks, `--assembly` selects a protective organelle, and `--senses` shows receptor ranges. Capture outputs belong outside source control.
