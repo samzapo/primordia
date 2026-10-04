@@ -1,0 +1,5 @@
+# Godot imports and build output are generated, never authored.
+.godot/
+build/
+*.tmp
+*.log
