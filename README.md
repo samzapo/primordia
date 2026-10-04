@@ -72,6 +72,12 @@ The initial dense simulation is GDScript so behavior can be iterated quickly. A 
 
 Core design requirements are in [docs/DESIGN.md](docs/DESIGN.md). Implementation boundaries and next steps are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+## Next revision
+
+The next revision develops free membrane anatomy, biomass-dependent shape and inertia, significant fluid interaction, a following microscope view over a wrapping world, shared organism rules, consequential chemistry, and several viable feeding strategies. The organelle list stays at six categories; permanent progression remains deferred.
+
+The [revision-two specification](docs/REVISION_2.md) records the playtest feedback, implementation order, acceptance criteria, and outstanding decisions. This is planned work; the current playable build is described above.
+
 ## Source and generated files
 
 Only authored project files and Godot's stable resource identifiers are tracked. Godot imports and caches live under ignored `.godot/` and are generated automatically on import/run. Build output belongs under ignored `build/`. Engine downloads, screenshots, logs, and exports are not committed. No license has been granted for redistribution of this private project's source.

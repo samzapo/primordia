@@ -10,13 +10,21 @@ Established by the project owner on October 4, 2026. These requirements persist 
 - Organelle composition and placement determine cell motion and behavior.
 - The visual reference is Kurzgesagt's immune-system and cellular-biology videos: bright, cartoony, vectorized graphics throughout. Primordia uses its own procedural shapes, palettes, and characters.
 
-## First playable interpretation
+## First playable interpretation (revision 1)
 
 A 2D desktop prototype in Godot, with CPU simulation and GPU rendering. This direction was proposed and approved as a starting point, not as a permanent restriction on platforms or scientific fidelity.
 
 The player pauses for anatomical assembly, chooses an organelle, and attaches it to one of eight membrane sockets. There are no movement keys, click-to-move commands, or player-aimed attacks. Observation and anatomy are the player's inputs.
 
 Gameplay particles are authoritative: their positions and species determine absorption, chemical signaling, and toxin contact. Cosmetic effects may supplement them but may not replace the interaction system.
+
+## Revision 2 direction
+
+The owner's first playtest established the next design: floating membrane organelles limited by physical surface area, biomass-dependent volume and inertia, internal tension elements supporting noncircular pressure-driven shapes, organelle damage and biomass repair, significant two-way fluid interaction, and an invisible wrapping map viewed through a following microscope camera.
+
+The visible center simulates fully, the vignette fringe slows, and offscreen state is dormant except for explicit game triggers. Other organisms use the same rules; hunters can die, release nutrients, and be replaced. Waste participates in chemistry. Grazing, predation, engulfment, and parasitism are important feeding paths, with the exact first implementation of specialized feeding still to be resolved within the current six organelle categories. Keep innate behavior and assembly pause; defer metagame decisions.
+
+See [the revision-two specification](REVISION_2.md) for requirements, implementation sequence, acceptance evidence, and remaining questions. These describe planned work, not current build capabilities.
 
 ## Proposed expansion areas
 
