@@ -19,6 +19,11 @@ func _initialize() -> void:
 func _run() -> void:
 	_test_metabolism()
 	_test_anatomy()
+	_test_receptors()
+	_test_growth_and_anchors()
+	_test_incremental_grid()
+	_test_local_feeding()
+	_test_preferences()
 	_test_damage()
 	_test_fluid()
 	_test_propulsion_and_toxins()
@@ -95,8 +100,8 @@ func _test_anatomy() -> void:
 	small.update_geometry()
 	expect(small.radius < radius,"Losing biomass shrinks the cell")
 	var starting: float = cell.organs[0].a
-	cell.drift_organs(1,Vector2(20,10))
-	expect(cell.organs[0].a != starting,"Organs float along membrane under relative flow")
+	cell.membrane.step(DT,cell.radius,Vector2(20,10),1,cell.aspect)
+	expect(cell.organs[0].a == starting,"Organs stay anchored under relative flow")
 
 func _test_damage() -> void:
 	var cell = Cell.new()
@@ -181,13 +186,16 @@ func _test_propulsion_and_toxins() -> void:
 	for p in sim.particles:
 		if p.kind == Sim.TOXIN: toxins += 1
 	expect(toxins == 0,"Food sensing alone does not trigger wasteful attacks")
-	sim.spawn_particle(Sim.DANGER,sim.player.position+Vector2(100,0),Vector2.ZERO,1,999,90)
+	var threat = sim._make_cell(sim.player.position+Vector2(100,0),"hunter")
+	sim.player.organs[1].mode = "flee"
+	sim.spawn_particle(Sim.DANGER,threat.position,Vector2.ZERO,1,threat.id,90)
 	sim.grid.rebuild(sim.particles)
 	for i in 45: sim._sense(sim.player,DT)
 	var energy: float = sim.player.energy
 	sim.player.attack_clock = 0
 	sim._emit_and_attack(sim.player,DT)
 	expect(sim.player.energy < energy and sim.particles[-1].kind == Sim.TOXIN,"An arriving threat signal triggers an ATP-funded toxin")
+	sim.cells.erase(threat)
 	var prey = sim._make_cell(sim.player.position+Vector2(150,0),"hunter")
 	prey.organs.clear()
 	prey.activity = 1
@@ -325,6 +333,14 @@ func _test_death() -> void:
 	expect(sim.particles.size() == count,"Death emits resources exactly once")
 	expect(sim.cells[-1].id != id and Fluid.visibility(sim.cells[-1].position,sim.player.position) == 0,"Replacement is a distinct individual beyond view")
 	expect(sim.events.size() == 2,"Death and population replacement are explicit triggers")
+	sim = isolated()
+	sim.view_half = Fluid.WORLD
+	hunter = sim._make_cell(sim.player.position+Vector2(180,0),"hunter")
+	sim._die(hunter)
+	expect(sim.cells.size() == 1 and sim.pending_replacements.size() == 1,"Population replacement waits when zoom exposes the entire world")
+	sim.view_half = Sim.VIEW*0.5
+	sim._replace_population()
+	expect(sim.pending_replacements.is_empty() and sim.activity_at(sim.cells[-1].position) == 0,"Deferred population returns only beyond the current view")
 
 func _test_closed_budget() -> void:
 	var sim = isolated()
@@ -472,7 +488,7 @@ func _test_interface() -> void:
 	var key := InputEventKey.new()
 	key.pressed = true
 	key.keycode = KEY_2
-	scene._unhandled_input(key)
+	scene._input(key)
 	expect(scene.selected == 1,"Keyboard selects anatomy")
 	var time: float = scene.world.time
 	scene._physics_process(DT)
@@ -480,19 +496,166 @@ func _test_interface() -> void:
 	var click := InputEventMouseButton.new()
 	click.pressed = true
 	click.button_index = MOUSE_BUTTON_LEFT
-	click.position = scene.ORIGIN+Sim.VIEW*0.5+Vector2.DOWN*scene.world.player.radius
+	scene._update_world(1)
 	# Sensing organ sits near 1.15 radians; use the free lower-left surface.
-	click.position = scene.ORIGIN+Sim.VIEW*0.5+Vector2.from_angle(2.15)*scene.world.player.radius
+	click.position = scene.camera_screen+Vector2.from_angle(2.15+scene.world.player.angle)*scene.world.player.radius*scene.zoom
 	scene._unhandled_input(click)
-	expect(scene.selected == -1 and scene.world.player.count("protection") == 1,"Clicking free membrane installs without sockets")
+	expect(scene.build_open and scene.world.player.count("protection") == 1,"Clicking free membrane installs without sockets")
 	click.button_index = MOUSE_BUTTON_RIGHT
 	scene._unhandled_input(click)
 	expect(scene.world.player.count("protection") == 0,"Right-click recycles a freely placed organ")
 	key.keycode = KEY_F
-	scene._unhandled_input(key)
+	scene._input(key)
 	expect(scene.feeding_mode == 1,"Feeding specialization changes within the same category")
 	key.keycode = KEY_H
-	scene._unhandled_input(key)
+	scene._input(key)
 	expect(scene.world.habitat == 1 and scene.selected == -1,"Habitat pressure selection starts a new run")
+	scene.cards[0].grab_focus()
+	key.keycode = KEY_TAB
+	Input.parse_input_event(key.duplicate())
+	await process_frame
+	expect(scene.build_open and scene.is_paused(),"Tab reaches assembly even with a focused GUI control")
+	key.pressed = false
+	Input.parse_input_event(key.duplicate())
+	key.pressed = true
+	Input.parse_input_event(key.duplicate())
+	await process_frame
+	expect(not scene.build_open and not scene.is_paused(),"Tab closes assembly and resumes observation")
+	scene.paused = true
+	scene._toggle_build()
+	scene._toggle_build()
+	expect(scene.is_paused(),"Closing assembly preserves an existing manual pause")
+	scene._apply_ui_scale(1.75)
+	scene._toggle_build()
+	await process_frame
+	await process_frame
+	scene._layout()
+	expect(scene.ui.theme.default_font_size == 35,"HUD scale changes real interface font size")
+	expect(scene.build_panel.position.x+scene.build_panel.size.x <= scene.get_viewport_rect().size.x,"Large assembly HUD stays within the viewport")
+	expect(scene.vignette.size == scene.get_viewport_rect().size,"Microscope world covers the whole viewport")
+	scene.set_fullscreen(true)
+	expect(scene.preferences.fullscreen and scene.fullscreen_check.button_pressed,"Fullscreen checkbox reflects display preference")
+	key.keycode = KEY_F11
+	scene._input(key)
+	expect(not scene.preferences.fullscreen,"F11 toggles fullscreen")
+	scene.world.player.previous_position = Vector2(4094,1200)
+	scene.world.player.position = Vector2(2,1200)
+	scene._update_world(0.5)
+	expect(scene.views[0].position.length() < 0.001,"Interpolated player stays centered while crossing a world seam")
 	scene.queue_free()
 	await process_frame
+
+func _test_receptors() -> void:
+	var sim = isolated()
+	var prey = sim._make_cell(sim.player.position+Vector2(120,0),"hunter")
+	prey.organs.clear()
+	sim.spawn_particle(Sim.DANGER,prey.position,Vector2.ZERO,1,prey.id,prey.radius)
+	sim.spawn_particle(Sim.NUTRIENT,sim.player.position+Vector2(70,0))
+	for i in 60: sim._sense(sim.player,DT)
+	expect(sim.player.target_mode == "forage" and sim.player.target.x > 0,"Nutrient receptor never automatically flees a larger cell")
+	sim.player.organs[1].mode = "flee"
+	for i in 60: sim._sense(sim.player,DT)
+	expect(sim.player.target_mode == "flee" and sim.player.target.x < 0,"Explicit flight receptor turns away from a detected cell")
+	sim.player.recycle(1)
+	sim._sense(sim.player,DT)
+	expect(sim.player.target_memory == 0 and sim.player.state != "FLEEING","Removing the flight receptor cancels remembered and pending flight signals")
+	for mode in ["engulf","parasite"]:
+		sim = isolated()
+		sim.player.organs.clear()
+		if mode == "engulf": sim.player.body = 280
+		sim.player.update_geometry()
+		sim.player.membrane = Membrane.new(sim.player.radius)
+		sim.player.add_organ("feeding",0,mode,false)
+		sim.player.add_organ("propulsion",PI,"graze",false)
+		prey = sim._make_cell(sim.player.position+Vector2(160,0),"grazer" if mode == "engulf" else "hunter")
+		sim.spawn_particle(Sim.DANGER,prey.position,Vector2.ZERO,1,prey.id,prey.radius)
+		for i in 60: sim._sense(sim.player,DT)
+		expect(sim.player.target_id == prey.id and sim.player.target.x > 0,"Specialized mouth pursues nearby compatible cells without a receptor: "+mode)
+		var receptor_mode := "hunt" if mode == "engulf" else "host"
+		sim.player.add_organ("sensing",1.2,receptor_mode,false)
+		prey.position += Vector2(150,0)
+		sim.particles.clear()
+		sim.grid.rebuild(sim.particles)
+		sim.spawn_particle(Sim.DANGER,prey.position,Vector2.ZERO,1,prey.id,prey.radius)
+		for i in 100: sim._sense(sim.player,DT)
+		expect(sim.player.target_memory > 0 and sim.player.target_position == prey.position,"Dedicated receptor extends pursuit beyond the mouth's short range: "+mode)
+
+func _test_growth_and_anchors() -> void:
+	var sim = isolated()
+	var cell = sim.player
+	var anchors: Array = cell.organs.map(func(o): return o.a)
+	var original: Vector2 = cell.local_point(anchors[0])
+	var last_radius: float = cell.radius
+	var last_capacity: float = cell.gut_capacity()
+	for reserve in [100.0,1000.0,10000.0,1000000.0]:
+		cell.biomass = reserve
+		cell.update_geometry()
+		expect(cell.radius > last_radius and cell.gut_capacity() > last_capacity,"Additional biomass keeps increasing radius and metabolic storage")
+		last_radius = cell.radius
+		last_capacity = cell.gut_capacity()
+		cell.substrate = cell.gut_capacity()
+		cell.oxygen = cell.oxygen_capacity()
+		cell.energy = 1
+		sim._metabolize(cell,1)
+		expect(cell.biomass > reserve and cell.energy > 1,"A fed large cell can still gain biomass and ATP")
+	for i in 120: cell.membrane.step(DT,cell.radius,Vector2(80,-40),i*DT,1.2)
+	cell.angle = 1.4
+	cell.position += Vector2(50,25)
+	expect(cell.organs.map(func(o): return o.a) == anchors,"Growth and deformation preserve every attachment coordinate")
+	expect(cell.local_point(anchors[0]).distance_to(original) > 100,"Anchored organs follow the expanding membrane")
+
+func _test_incremental_grid() -> void:
+	var grid = Sim.Grid.new()
+	var particles: Array = []
+	for i in 120:
+		var at := Fluid.wrap_position(Vector2(i*97,i*131))
+		particles.append({"p":at,"alive":true})
+	grid.rebuild(particles)
+	for i in particles.size():
+		var old: Vector2 = particles[i].p
+		particles[i].p = Fluid.wrap_position(old+Vector2(130,-240))
+		grid.move(i,old,particles[i].p)
+	var rebuilt = Sim.Grid.new()
+	rebuilt.rebuild(particles)
+	for at in [Vector2.ZERO,Vector2(4090,2550),Vector2(2000,1000)]:
+		var a: Array = grid.query(at,350)
+		var b: Array = rebuilt.query(at,350)
+		a.sort()
+		b.sort()
+		expect(a == b,"Incremental spatial movement agrees with a full rebuild, including seams")
+	var all: Array = grid.query_rect(Vector2.ZERO,Fluid.WORLD)
+	expect(all.size() == particles.size(),"A zoomed-out query returns each wrapped bucket once")
+
+func _test_local_feeding() -> void:
+	var sim = isolated()
+	var eater = sim.player
+	eater.organs.clear()
+	eater.add_organ("feeding",0,"parasite",false)
+	var prey = sim._make_cell(eater.position+Vector2(110,0),"hunter")
+	prey.organs.clear()
+	prey.angle = 0
+	prey.activity = 1
+	prey.add_organ("protection",PI,"graze",false)
+	prey.damage(10,0)
+	var reserve: float = prey.biomass
+	eater.velocity = Vector2(12,0)
+	prey.velocity = Vector2(-4,0)
+	var momentum: Vector2 = eater.velocity*eater.mass+prey.velocity*prey.mass
+	sim._intercell_feeding(0.1)
+	expect(prey.biomass == reserve and eater.stolen == 0,"A remote puncture does not bypass armor at the proboscis contact")
+	expect(eater.feeding_feedback == "Piercing local armor" and eater.organs[0].feeding,"Proboscis reports and renders its armor contact")
+	expect((eater.velocity*eater.mass+prey.velocity*prey.mass).distance_to(momentum) < 0.001,"Feeding grip preserves the pair's momentum")
+	for i in 300: sim._intercell_feeding(DT)
+	expect(eater.stolen > 0 and eater.feeding_feedback == "Draining biomass","Proboscis drains after piercing its own contact point")
+
+func _test_preferences() -> void:
+	var preferences = preload("res://scripts/preferences.gd").new()
+	preferences.path = "user://test-preferences-%d.cfg" % Time.get_ticks_usec()
+	preferences.fullscreen = true
+	preferences.hud_scale = 1.5
+	preferences.save_settings()
+	var restored = preload("res://scripts/preferences.gd").new()
+	restored.path = preferences.path
+	restored.load_settings()
+	expect(restored.fullscreen and restored.hud_scale == 1.5,"Fullscreen and HUD scale survive settings reload")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(preferences.path))

@@ -1,5 +1,7 @@
 # Revision 2 — living cells in a liquid ecosystem
 
+Historical specification: [revision three](REVISION_3.md) supersedes attachment drift, receptor behavior, growth scaling, and interface/performance details.
+
 Status: design specification from the owner's playtest feedback, October 4, 2026. The design questions are resolved and the second playable implementation is present. Validation and numerical limits are recorded below.
 
 ## Preserve what works

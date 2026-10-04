@@ -2,7 +2,7 @@
 
 A physics and chemistry simulation game about managing one small cell. Eat to grow. Adapt to survive predation. **You never steer the cell**: its anatomy controls its behavior.
 
-This second playable revision uses Godot 4.7.2, a fixed-step particle simulation, a deformable membrane, and procedural 2D artwork. It needs no external assets or plugins.
+This third playable revision uses Godot 4.7.2, a fixed-step particle simulation, a deformable membrane, and procedural 2D artwork. It needs no external assets or plugins.
 
 ## Play
 
@@ -24,18 +24,19 @@ Press **F5** in Godot to play. The prototype was validated with Godot 4.7.2; kee
 
 Discovery order is an explicit `GODOT_BIN`, then Steam libraries, then `godot4` or `godot` on PATH. If the Steam client itself is in a nonstandard location, set `STEAM_DIR` to its root directory (the directory containing `steamapps`). An explicit `GODOT_BIN` remains available for other installations. Both the game and test launchers use the same discovery logic.
 
-The project opens a 1440 × 900 window and scales with its aspect ratio preserved. Rendering uses the Compatibility backend; compute shaders are not required.
+The project opens a 1440 × 900 window. The microscope fills the window or screen, with controls overlaid on the world. **F11** toggles fullscreen; **Settings** also provides fullscreen and **85–175% HUD/text size**. Both preferences persist between launches. Rendering uses the Compatibility backend; compute shaders are not required.
 
 ## How to play
 
 Your cell moves on its own through a wrapping liquid world. The microscope follows it: there are no walls. Nearby life runs at full speed, activity slows into the vignette, and distant life stays dormant.
 
-1. Choose an organelle card or press **1–6**. Assembly pauses the simulation.
-2. Click a free stretch of membrane to attach it. Biomass and available surface determine capacity; there are no fixed sockets.
-3. **F** cycles the feeding organelle between **grazer**, **engulfer**, and **proboscis** before placement. These are specializations of the same category.
-4. Right-click an organelle to recycle half its remaining material. The rest becomes debris that can recycle chemically.
+1. Press **Tab** or click **Build** to pause and open assembly. **1–6** selects a category.
+2. Click a free stretch of membrane to attach it. Biomass and available surface determine capacity; there are no fixed sockets. Organs stay anchored to that membrane location as the cell grows, turns, and deforms.
+3. Choose **grazing pore**, **engulfing pore**, or **proboscis** in the feeding menu; **F** cycles them.
+4. Choose a **nutrient**, **hunting**, **host**, or **flight** receptor in the receptor menu; **C** cycles them. **Only the flight receptor causes fleeing.**
+5. Right-click an organelle to recycle half its remaining material. The rest becomes debris that can recycle chemically. Press **Tab** again to resume.
 
-**Space** pauses observation, **S** shows sensing, **Escape** cancels assembly, and **R** starts a new life in the same habitat. **H** starts a new run in the next habitat: balanced, nutrient-poor hunting grounds, or rich waters with armored hunters.
+**Space** pauses observation, **S** shows sensing, **Escape** closes the open panel, **mouse wheel** changes microscope zoom, and **R** starts a new life. **H** starts a new run in the next habitat: balanced, nutrient-poor hunting grounds, or rich waters with armored hunters. **F3** shows FPS, simulation time, frame preparation time, and active populations.
 
 Process **40 food units and survive 90 seconds** to reach the first milestone. Food from grazing, carcasses, engulfment, and parasitism all contributes through the same metabolism. The ecosystem continues afterward.
 
@@ -46,9 +47,13 @@ Process **40 food units and survive 90 seconds** to reach the first milestone. F
 | Toxin vesicle | 12 | Spends ATP and biomass to fire damaging chemical particles toward a sensed organism. |
 | Repair body | 10 | Accelerates membrane closure and organelle repair. |
 | Feeding organelle | 8 | Graze on nutrient particles, engulf sufficiently smaller cells, or use a proboscis to drain larger living hosts. |
-| Chemoreceptor | 6 | Detects nearby food and cell traces; internal signal particles relay the response. |
+| Receptor | 6 | Nutrient: approach food. Hunting: approach smaller prey. Host: approach larger cells. Flight: flee other cells. Internal particles relay the selected response. |
 
-Organelles drift along the membrane and pack against their neighbors. Growth increases effective volume, membrane capacity, mass, inertia, and exposure. Punctures leak biomass into the medium and close quickly; organelles repair themselves from reserves. A repair body improves both processes. Shrinkage can shed organs when the membrane becomes overcrowded.
+Engulfing pores and proboscises follow nearby compatible cell traces on their own. Hunting and host receptors extend that detection range. An engulfer needs at least **15% more radius** than its prey; its mouth grips and damages the prey, then consumes biomass on death. A proboscis needs a host with **over 5% more radius**; it pierces the armor at its contact point before draining. Contact links, moving food particles, and status text distinguish seeking, blocked armor, draining, and engulfing. A mouth still needs propulsion to swim toward its target.
+
+Flight receptors deliberately prioritize avoidance while another cell is detected, even if a mouth wants to feed. Nutrient receptors and feeding organs never add automatic flight. Recycle the flight receptor to cancel avoidance.
+
+Growth has no arbitrary biomass or radius cap. Digestion and food, oxygen, and ATP storage scale with the growing cell. Growth increases effective volume, membrane capacity, mass, inertia, and exposure. Punctures leak biomass into the medium and close quickly; organelles repair themselves from reserves. A repair body improves both processes. Shrinkage can shed organs when the membrane becomes overcrowded.
 
 Hunters obey the same rules. They can die, release their retained biomass, and be replaced by a different individual outside the view. Waste consumes local oxygen as it recycles into food, with conversion losses. Currents transport chemicals and move cells; cells push back on the fluid.
 
@@ -66,19 +71,21 @@ For a rendered capture, run with a real or virtual display:
 ./tools/run.sh -- --capture=/absolute/path/primordia.png
 ```
 
-Optional capture arguments: `--habitat=0`, `--habitat=1`, or `--habitat=2` selects conditions; place it before `--advance=600` to advance that world by 600 simulation ticks. `--assembly` selects a protective organelle, and `--senses` shows receptor ranges. Capture outputs belong outside source control.
+Optional capture arguments: `--habitat=0`, `--habitat=1`, or `--habitat=2` selects conditions; place it before `--advance=600` to advance that world by 600 simulation ticks. `--assembly` opens feeding assembly, `--settings` opens display preferences, `--hud-scale=1.75` previews larger text, and `--senses` shows receptor ranges. Capture outputs belong outside source control.
 
 ## Scope and performance
 
 This is a coarse 2D biological simulation, not molecular chemistry or a full 3D cell. The fluid is a finite-mass viscous grid with two-way impulse exchange, local currents, and explicitly driven tides; it does not solve incompressible Navier–Stokes equations. The pressure/tension membrane deforms, while swept body contacts use radial membrane extents rather than a full soft-body manifold.
 
-The default world stores 19 cells and roughly 3,000 chemical particles; the microscope bounds active work. CPU simulation remains in GDScript and rendering uses procedural vector-style shapes plus particle MultiMeshes. No compute-capable GPU is required. See [the architecture](docs/ARCHITECTURE.md) for numerical boundaries and [revision-two validation](docs/REVISION_2.md#validation-and-remaining-limits) for measured evidence.
+The default world stores 19 cells and roughly 3,000 chemical particles; the microscope bounds active work. CPU simulation remains in GDScript and rendering uses procedural vector-style shapes plus particle MultiMeshes. No compute-capable GPU is required. Active spatial queries, cached membrane drawings, batched particle uploads, and motion interpolation reduce simulation and rendering work while preserving the fluid model. See [the architecture](docs/ARCHITECTURE.md) for numerical boundaries and [revision-three validation](docs/REVISION_3.md#validation) for measured evidence.
+
+For a repeatable CPU-only profile, run `./tools/run.sh --headless --script res://tests/profile.gd`. Use **F3 during actual play** to measure frame rate; the headless profile does not measure rendering.
 
 The owner's **Steam Godot 4.7.2 / RTX 3090 / Threadripper 2990WX (32 cores)** Linux machine is the high-end reference, not a minimum requirement. It is unavailable to this task, so no frame-rate claim has been made for that machine. Profile before choosing native or GPU acceleration.
 
 There are no saves, audio, permanent progression, or packaged releases yet. Same-seed reproducibility is checked within one engine/platform, not promised across platforms. Long-term balance across habitats and diets needs playtesting.
 
-Core design requirements are in [docs/DESIGN.md](docs/DESIGN.md). The [revision-two specification](docs/REVISION_2.md) records the feedback and resolved decisions. Further work should follow playtest findings rather than add organelle categories or a behavior programming system.
+Core design requirements are in [docs/DESIGN.md](docs/DESIGN.md). The [current revision](docs/REVISION_3.md) records the latest feedback and validation; [revision two](docs/REVISION_2.md) retains earlier design history. Further work should follow playtest findings rather than add organelle categories or a behavior programming system.
 
 ## Source and generated files
 

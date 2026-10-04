@@ -1,6 +1,7 @@
 extends RefCounted
 ## Uniform grid for local chemical/receptor queries. Stable insertion order.
 var buckets: Dictionary = {}
+var source_size := 0
 const SIZE := 64.0
 const COLS := 64
 const ROWS := 40
@@ -11,20 +12,32 @@ func key_for(p: Vector2) -> Vector2i:
 
 func rebuild(particles: Array) -> void:
 	buckets.clear()
-	for i in particles.size():
-		var key := key_for(particles[i].p)
-		if not buckets.has(key):
-			buckets[key] = []
-		buckets[key].append(i)
+	source_size = 0
+	for i in particles.size(): insert(i,particles[i].p)
+
+func insert(i: int, p: Vector2) -> void:
+	var key := key_for(p)
+	if not buckets.has(key): buckets[key] = []
+	buckets[key].append(i)
+	source_size = maxi(source_size,i+1)
+
+func move(i: int, old: Vector2, p: Vector2) -> void:
+	var from := key_for(old)
+	var to := key_for(p)
+	if from == to: return
+	if buckets.has(from): buckets[from].erase(i)
+	if not buckets.has(to): buckets[to] = []
+	buckets[to].append(i)
 
 func query(position: Vector2, radius: float) -> Array[int]:
+	return query_rect(position,Vector2.ONE*radius)
+
+func query_rect(position: Vector2, half_extent: Vector2) -> Array[int]:
 	var found: Array[int] = []
-	var lo := Vector2i(((position - Vector2.ONE * radius) / SIZE).floor())
-	var hi := Vector2i(((position + Vector2.ONE * radius) / SIZE).floor())
-	for x in range(lo.x, hi.x + 1):
-		for y in range(lo.y, hi.y + 1):
+	var lo := Vector2i(((position-half_extent)/SIZE).floor())
+	var hi := Vector2i(((position+half_extent)/SIZE).floor())
+	for x in range(lo.x,mini(hi.x+1,lo.x+COLS)):
+		for y in range(lo.y,mini(hi.y+1,lo.y+ROWS)):
 			var key := Vector2i(posmod(x,COLS),posmod(y,ROWS))
-			if buckets.has(key):
-				for index in buckets[key]:
-					found.append(index)
+			if buckets.has(key): found.append_array(buckets[key])
 	return found

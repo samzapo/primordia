@@ -12,13 +12,13 @@ window/size/viewport_height=900
 window/size/window_width_override=1440
 window/size/window_height_override=900
 window/stretch/mode="canvas_items"
-window/stretch/aspect="keep"
+window/stretch/aspect="expand"
 
 [rendering]
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 textures/default_filters/use_nearest_mipmap_filter=false
-environment/defaults/default_clear_color=Color(0.028, 0.067, 0.1, 1)
+environment/defaults/default_clear_color=Color(0.063, 0.176, 0.224, 1)
 
 [physics]
 common/physics_ticks_per_second=60

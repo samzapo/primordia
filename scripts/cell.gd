@@ -3,9 +3,19 @@ const Membrane = preload("res://scripts/membrane.gd")
 const KINDS := ["propulsion", "protection", "offensive", "regenerative", "feeding", "sensing"]
 const COST := [8.0, 10.0, 12.0, 10.0, 8.0, 6.0]
 const WIDTH := [19.0, 34.0, 26.0, 27.0, 30.0, 20.0]
+const SENSE_MODES := ["forage", "hunt", "host", "flee"]
 const MODES := ["graze", "engulf", "parasite"]
 var id := 0
 var role := "grazer"
+var previous_position := Vector2.ZERO
+var previous_angle := 0.0
+var target_id := -1
+var target_memory := 0.0
+var target_position := Vector2.ZERO
+var target_mode := "forage"
+var target_mouth := 0.0
+var feeding_feedback := ""
+var render_revision := 0
 var position := Vector2.ZERO
 var velocity := Vector2.ZERO
 var angle := 0.0
@@ -46,6 +56,7 @@ var dead := false
 func _init(identity: int = 0, at: Vector2 = Vector2.ZERO) -> void:
 	id = identity
 	position = at
+	previous_position = at
 
 func count(kind: String) -> int:
 	var n = 0
@@ -100,11 +111,10 @@ func surface_parameter(local_angle: float) -> float:
 	return fposmod(local_angle,TAU)
 
 func arc_coordinate(a: float) -> float:
+	membrane.refresh_arcs()
 	var phase: float = fposmod(a,TAU)/TAU*membrane.COUNT
-	var total := 0.0
-	for i in int(phase): total += membrane.points[i].distance_to(membrane.points[(i+1)%membrane.COUNT])
 	var i := int(phase)
-	return total+membrane.points[i].distance_to(membrane.points[(i+1)%membrane.COUNT])*(phase-i)
+	return lerpf(membrane.arcs[i],membrane.arcs[i+1],phase-i)
 
 func arc_gap(a: float, b: float) -> float:
 	var length := perimeter()
@@ -117,9 +127,20 @@ func support(world_angle: float) -> float:
 	return local_point(surface_parameter(world_angle-angle)).length()
 
 func perimeter() -> float:
-	var length = 0.0
-	for i in membrane.COUNT: length += membrane.points[i].distance_to(membrane.points[(i+1)%membrane.COUNT])
-	return length
+	membrane.refresh_arcs()
+	return membrane.arcs[membrane.COUNT]
+
+func growth_scale() -> float:
+	return pow(maxf(1.0,(body+biomass)/78.0),2.0/3.0)
+
+func gut_capacity() -> float:
+	return 24.0*growth_scale()
+
+func oxygen_capacity() -> float:
+	return 30.0*growth_scale()
+
+func energy_capacity() -> float:
+	return 100.0*growth_scale()
 
 func occupied() -> float:
 	var total = 0.0
@@ -138,11 +159,15 @@ func can_fit(kind: String, a: float) -> bool:
 
 func add_organ(kind: String, a: float, mode: String = "graze", paid: bool = true) -> bool:
 	var k = KINDS.find(kind)
-	if dead or k < 0 or not MODES.has(mode) or not can_fit(kind,a): return false
+	if dead or k < 0 or not can_fit(kind,a): return false
+	if kind == "sensing":
+		if mode == "graze": mode = "forage"
+		if not SENSE_MODES.has(mode): return false
+	elif not MODES.has(mode): return false
 	if paid and biomass < COST[k]: return false
 	if paid: biomass -= COST[k]
 	var max_health = 70.0 if kind == "protection" else 25.0
-	organs.append({"kind":kind, "a":fposmod(a,TAU), "mode":mode, "hp":max_health, "max_hp":max_health, "material":COST[k]})
+	organs.append({"kind":kind, "a":fposmod(a,TAU), "mode":mode, "hp":max_health, "max_hp":max_health, "material":COST[k], "target_id":-1, "progress":0.0, "feeding":false, "link":Vector2.ZERO, "feedback":""})
 	update_geometry()
 	return true
 
@@ -153,21 +178,6 @@ func recycle(index: int) -> float:
 	organs.remove_at(index)
 	update_geometry()
 	return material * 0.5
-
-func drift_organs(dt: float, local_flow: Vector2) -> void:
-	for organ in organs:
-		var tangent = Vector2.from_angle(organ.a).orthogonal()
-		organ.a = fposmod(organ.a + tangent.dot(local_flow)*dt*0.0007, TAU)
-	# Arc-length packing, symmetric displacement. There is no count limit.
-	for iteration in 5:
-		for i in organs.size():
-			for j in range(i+1, organs.size()):
-				var gap: float = arc_gap(organs[j].a,organs[i].a)
-				var need: float = (WIDTH[KINDS.find(organs[i].kind)]+WIDTH[KINDS.find(organs[j].kind)])*0.5+4
-				if absf(gap) < need:
-					var push = (need-absf(gap))*0.5*(1 if gap >= 0 else -1)*TAU/maxf(perimeter(),occupied())
-					organs[i].a = fposmod(organs[i].a-push,TAU)
-					organs[j].a = fposmod(organs[j].a+push,TAU)
 
 func drain(amount: float) -> float:
 	var taken = minf(biomass, amount)
@@ -235,3 +245,9 @@ func heal(dt: float) -> float:
 			biomass -= restore*unit
 			energy -= restore*0.15
 	return leaked
+
+func punctured_at(world_angle: float) -> bool:
+	var local_angle := surface_parameter(world_angle-angle)
+	for hole in holes:
+		if absf(wrapf(hole.a-local_angle,-PI,PI)) < 0.23: return true
+	return false
