@@ -2,7 +2,7 @@
 
 A physics and chemistry simulation game about managing one small cell. Eat to grow. Adapt to survive predation. **You never steer the cell**: its anatomy controls its behavior.
 
-This first playable prototype uses Godot 4.7.2, a fixed-step particle simulation, a deformable membrane, and procedural 2D artwork. It needs no external assets or plugins.
+This second playable revision uses Godot 4.7.2, a fixed-step particle simulation, a deformable membrane, and procedural 2D artwork. It needs no external assets or plugins.
 
 ## Play
 
@@ -28,25 +28,29 @@ The project opens a 1440 × 900 window and scales with its aspect ratio preserve
 
 ## How to play
 
-Your starting cell has a feeding pore, chemoreceptor, and flagellum. It seeks green nutrient particles and avoids pink predator traces. Blue oxygen particles diffuse through its membrane. Metabolism turns the absorbed resources into ATP and biomass.
+Your cell moves on its own through a wrapping liquid world. The microscope follows it: there are no walls. Nearby life runs at full speed, activity slows into the vignette, and distant life stays dormant.
 
-1. Choose an organelle card, or press **1–6**. The pond pauses for assembly.
-2. Click a glowing empty membrane socket to attach the organelle. It costs biomass.
-3. Watch the new anatomy change your cell's behavior. **Escape** cancels placement.
-4. Right-click an occupied socket to recycle it for half its biomass cost.
+1. Choose an organelle card or press **1–6**. Assembly pauses the simulation.
+2. Click a free stretch of membrane to attach it. Biomass and available surface determine capacity; there are no fixed sockets.
+3. **F** cycles the feeding organelle between **grazer**, **engulfer**, and **proboscis** before placement. These are specializations of the same category.
+4. Right-click an organelle to recycle half its remaining material. The rest becomes debris that can recycle chemically.
 
-**Space** pauses observation, **S** shows receptor ranges and preferred direction, and **R** starts a new life. The first milestone is to metabolize 40 nutrient units and survive 90 seconds. The ecosystem continues after the milestone. On death, restart and try a different anatomy.
+**Space** pauses observation, **S** shows sensing, **Escape** cancels assembly, and **R** starts a new life in the same habitat. **H** starts a new run in the next habitat: balanced, nutrient-poor hunting grounds, or rich waters with armored hunters.
 
-| Organelle | Cost | Effect |
+Process **40 food units and survive 90 seconds** to reach the first milestone. Food from grazing, carcasses, engulfment, and parasitism all contributes through the same metabolism. The ecosystem continues afterward.
+
+| Organelle | Biomass | Effect |
 | --- | ---: | --- |
-| Flagellum | 8 | Produces thrust at its attachment point; receptor signals modulate its direction. Placement can help or hinder movement. |
-| Protective cortex | 10 | Reduces bite damage. Multiple cortices stack with diminishing absolute benefit. |
-| Toxin vesicle | 12 | Uses ATP to launch particles along a detected predator-trace gradient. Contact damages and temporarily repels the hunter. Requires a chemoreceptor signal. |
-| Repair body | 10 | Converts ATP and a little biomass into membrane repair. |
-| Feeding pore | 8 | Converts contact with external nutrient particles into internal substrate. |
-| Chemoreceptor | 6 | Reads local nutrient and predator-trace particles; also relays boundary proximity. |
+| Flagellum | 8 | Applies thrust and torque at its location, with an opposite impulse into the liquid. Internal sensor signals modulate direction. |
+| Protective cortex | 10 | Absorbs damage at its own location. Exposed membrane elsewhere remains vulnerable. |
+| Toxin vesicle | 12 | Spends ATP and biomass to fire damaging chemical particles toward a sensed organism. |
+| Repair body | 10 | Accelerates membrane closure and organelle repair. |
+| Feeding organelle | 8 | Graze on nutrient particles, engulf sufficiently smaller cells, or use a proboscis to drain larger living hosts. |
+| Chemoreceptor | 6 | Detects nearby food and cell traces; internal signal particles relay the response. |
 
-A useful first experiment is to add a toxin vesicle, then spend acquired biomass on repair and protection. Remove a sensor or move a flagellum to see how much behavior depends on the anatomy.
+Organelles drift along the membrane and pack against their neighbors. Growth increases effective volume, membrane capacity, mass, inertia, and exposure. Punctures leak biomass into the medium and close quickly; organelles repair themselves from reserves. A repair body improves both processes. Shrinkage can shed organs when the membrane becomes overcrowded.
+
+Hunters obey the same rules. They can die, release their retained biomass, and be replaced by a different individual outside the view. Waste consumes local oxygen as it recycles into food, with conversion losses. Currents transport chemicals and move cells; cells push back on the fluid.
 
 ## Verify
 
@@ -54,7 +58,7 @@ A useful first experiment is to add a toxin vesicle, then spend acquired biomass
 ./tools/test.sh
 ```
 
-The test launcher automatically uses the same Steam-installed Godot. The headless suite checks chemistry budgets, contact-triggered feeding, receptor dependence, propulsion, installation and recycling, defenses, membrane constraints, seeded replay, a complete autonomous survival strategy, and interface input. It exits nonzero on a failed assertion or a Godot script error. No third-party test framework is required. Launcher discovery can also be checked separately with `python3 tests/test_launchers.py`; Python is only needed for those development fixtures, not to launch the game.
+The test launcher automatically uses the same Steam-installed Godot. The headless suite checks material and fluid momentum budgets, membrane packing and tension, punctures and repair, wrapped contacts, dormant state, all feeding interactions, irreversible hunter death, internal signals, seeded replay, crowded encounters, a 90-second autonomous run, and interface input. It exits nonzero on a failed assertion or a Godot script error. No third-party test framework is required. Launcher discovery can also be checked separately with `python3 tests/test_launchers.py`; Python is only needed for those development fixtures, not to launch the game.
 
 For a rendered capture, run with a real or virtual display:
 
@@ -62,21 +66,19 @@ For a rendered capture, run with a real or virtual display:
 ./tools/run.sh -- --capture=/absolute/path/primordia.png
 ```
 
-Optional capture arguments: `--advance=600` advances 600 simulation ticks, `--assembly` selects a protective organelle, and `--senses` shows receptor ranges. Capture outputs belong outside source control.
+Optional capture arguments: `--habitat=0`, `--habitat=1`, or `--habitat=2` selects conditions; place it before `--advance=600` to advance that world by 600 simulation ticks. `--assembly` selects a protective organelle, and `--senses` shows receptor ranges. Capture outputs belong outside source control.
 
-## Scope of this prototype
+## Scope and performance
 
-The core loop and all six organelle categories work. Chemistry uses coarse game quantities rather than real molecular stoichiometry. The pool has a bounded particle population and one hunter with a simple pursuit controller. The membrane uses XPBD edge and area constraints; collision response currently uses a circular body approximation with local membrane deformation. Swimming is a force-and-drag model, not a full fluid solver.
+This is a coarse 2D biological simulation, not molecular chemistry or a full 3D cell. The fluid is a finite-mass viscous grid with two-way impulse exchange, local currents, and explicitly driven tides; it does not solve incompressible Navier–Stokes equations. The pressure/tension membrane deforms, while swept body contacts use radial membrane extents rather than a full soft-body manifold.
 
-The initial dense simulation is GDScript so behavior can be iterated quickly. A native C++ extension or GPU simulation is an option if profiling justifies it. There are no saves, audio, progression beyond the first milestone, or packaged releases yet. Same-seed reproducibility is tested within one engine/platform; cross-platform bitwise determinism is not promised.
+The default world stores 19 cells and roughly 3,000 chemical particles; the microscope bounds active work. CPU simulation remains in GDScript and rendering uses procedural vector-style shapes plus particle MultiMeshes. No compute-capable GPU is required. See [the architecture](docs/ARCHITECTURE.md) for numerical boundaries and [revision-two validation](docs/REVISION_2.md#validation-and-remaining-limits) for measured evidence.
 
-Core design requirements are in [docs/DESIGN.md](docs/DESIGN.md). Implementation boundaries and next steps are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+The owner's **Steam Godot 4.7.2 / RTX 3090 / Threadripper 2990WX (32 cores)** Linux machine is the high-end reference, not a minimum requirement. It is unavailable to this task, so no frame-rate claim has been made for that machine. Profile before choosing native or GPU acceleration.
 
-## Next revision
+There are no saves, audio, permanent progression, or packaged releases yet. Same-seed reproducibility is checked within one engine/platform, not promised across platforms. Long-term balance across habitats and diets needs playtesting.
 
-The next revision develops free membrane anatomy, biomass-dependent shape and inertia, significant fluid interaction, a following microscope view over a wrapping world, shared organism rules, consequential chemistry, and several viable feeding strategies. The organelle list stays at six categories; permanent progression remains deferred.
-
-The [revision-two specification](docs/REVISION_2.md) records the playtest feedback, implementation order, acceptance criteria, and outstanding decisions. This is planned work; the current playable build is described above.
+Core design requirements are in [docs/DESIGN.md](docs/DESIGN.md). The [revision-two specification](docs/REVISION_2.md) records the feedback and resolved decisions. Further work should follow playtest findings rather than add organelle categories or a behavior programming system.
 
 ## Source and generated files
 

@@ -22,9 +22,9 @@ Gameplay particles are authoritative: their positions and species determine abso
 
 The owner's first playtest established the next design: floating membrane organelles limited by physical surface area, biomass-dependent volume and inertia, internal tension elements supporting noncircular pressure-driven shapes, organelle damage and biomass repair, significant two-way fluid interaction, and an invisible wrapping map viewed through a following microscope camera.
 
-The visible center simulates fully, the vignette fringe slows, and offscreen state is dormant except for explicit game triggers. Other organisms use the same rules; hunters can die, release nutrients, and be replaced. Waste participates in chemistry. Grazing, predation, engulfment, and parasitism are important feeding paths, with the exact first implementation of specialized feeding still to be resolved within the current six organelle categories. Keep innate behavior and assembly pause; defer metagame decisions.
+The visible center simulates fully, the vignette fringe slows, and offscreen state is dormant except for explicit game triggers. Other organisms use the same rules; hunters can die, release nutrients, and be replaced. Waste participates in chemistry. Grazing, predation, engulfment, and parasitism are important feeding paths, including a proboscis specialization within the existing feeding category. Keep innate behavior and assembly pause; defer metagame decisions.
 
-See [the revision-two specification](REVISION_2.md) for requirements, implementation sequence, acceptance evidence, and remaining questions. These describe planned work, not current build capabilities.
+See [the revision-two specification](REVISION_2.md) for requirements, implementation sequence, acceptance evidence, and confirmed decisions. The specification also records validation and the numerical limits of the current revision.
 
 ## Proposed expansion areas
 

@@ -13,10 +13,10 @@ func _init(radius: float = 47.0) -> void:
 	previous = points.duplicate()
 	edge_lambda.resize(COUNT)
 
-func step(dt: float, radius: float, acceleration: Vector2, time: float) -> void:
+func step(dt: float, radius: float, acceleration: Vector2, time: float, aspect: float = 1.0) -> void:
 	for i in COUNT:
 		var p := points[i]
-		var rest := Vector2.from_angle(TAU * i / COUNT) * radius
+		var rest := Vector2.from_angle(TAU * i / COUNT) * radius * Vector2(aspect, 1.0/aspect)
 		var motion := (p - previous[i]) * 0.91
 		previous[i] = p
 		# Weak shape recovery keeps the unconstrained ring from folding over.
@@ -24,7 +24,6 @@ func step(dt: float, radius: float, acceleration: Vector2, time: float) -> void:
 		points[i] += rest.normalized() * sin(time * 2.1 + i * 0.9) * dt * 0.7
 	edge_lambda.fill(0.0)
 	area_lambda = 0.0
-	var rest_length := 2.0 * radius * sin(PI / COUNT)
 	var edge_alpha := 0.00002 / (dt * dt)
 	var area_alpha := 0.00001 / (dt * dt)
 	for iteration in 6:
@@ -34,10 +33,25 @@ func step(dt: float, radius: float, acceleration: Vector2, time: float) -> void:
 			var length := delta.length()
 			if length < 0.0001:
 				continue
+			var rest_a := Vector2.from_angle(TAU*i/COUNT)*radius*Vector2(aspect,1.0/aspect)
+			var rest_b := Vector2.from_angle(TAU*j/COUNT)*radius*Vector2(aspect,1.0/aspect)
+			var rest_length := rest_a.distance_to(rest_b)
 			var dl := (-(length - rest_length) - edge_alpha * edge_lambda[i]) / (2.0 + edge_alpha)
 			edge_lambda[i] += dl
 			points[i] -= delta / length * dl
 			points[j] += delta / length * dl
+		# Internal microtubule-inspired tensile chords oppose hydrostatic pressure.
+		for ends in [[0,14], [7,21], [3,17], [10,24]]:
+			var i: int = ends[0]
+			var j: int = ends[1]
+			var rest_a := Vector2.from_angle(TAU*i/COUNT)*radius*Vector2(aspect,1.0/aspect)
+			var rest_b := Vector2.from_angle(TAU*j/COUNT)*radius*Vector2(aspect,1.0/aspect)
+			var delta := points[j]-points[i]
+			var extension := delta.length()-rest_a.distance_to(rest_b)
+			if extension > 0:
+				var correction := delta.normalized()*extension*0.24
+				points[i] += correction
+				points[j] -= correction
 		var gradients := PackedVector2Array()
 		var denominator := area_alpha
 		var area := 0.0

@@ -1,6 +1,6 @@
 # Revision 2 — living cells in a liquid ecosystem
 
-Status: design specification from the owner's playtest feedback, October 4, 2026. This document describes the next revision; these features are not implemented in the current build. Implementation follows resolution of the remaining design questions below.
+Status: design specification from the owner's playtest feedback, October 4, 2026. The design questions are resolved and the second playable implementation is present. Validation and numerical limits are recorded below.
 
 ## Preserve what works
 
@@ -16,7 +16,7 @@ The target is Godot installed through Steam on a separate Linux machine unavaila
 - Track mass incorporated in the body, reserves, and organelles consistently. Assembly and repair must not duplicate biomass. Volume must respond to retained biomass rather than only a lifetime food counter.
 - Retain hydrostatic pressure as the basis of the membrane shape. Add internal microtubule-inspired tension elements that can support noncircular shapes against that pressure.
 - Organelle mass and location affect both translation and rotation. A heavier cell or an asymmetric attachment pattern should have observable consequences.
-- Organelle damage precedes body damage. Organelles repair themselves by consuming biomass. The exact spatial damage-routing rule is an open question below.
+- Damage is local: an organelle at the point of impact takes damage first. Exposed membrane can be punctured even while organelles elsewhere remain intact. Punctures leak biomass and the membrane heals quickly. Organelles repair themselves by consuming biomass.
 - Preserve a distinct role for the existing regenerative organelle when baseline organelle self-repair is added; it could accelerate repair or repair the body. The final balance must make its cost meaningful.
 
 The game still presents a 2D world. The implementation must explicitly document how effective volume, surface capacity, mass, and rendered dimensions relate; it must not claim to solve full 3D cell geometry.
@@ -51,7 +51,7 @@ A killed hunter yields a substantial nutrient resource appropriate to its biomas
 
 Use recognizable substances and consistent reaction rules, with internal particle signals connecting sensing to organelle activity. The player does not configure signal-routing circuitry.
 
-Waste must participate in the ecosystem rather than only disappear as a visual effect. Proposed first role: waste/debris enters a resource-limited decomposition and recycling chain, influencing local nutrient availability and oxygen demand. Specify the energy input and conversion losses so recycling cannot create unlimited food or energy.
+Waste participates in the ecosystem through waste/debris enters a resource-limited decomposition and recycling chain, influencing local nutrient availability and oxygen demand. Specify the energy input and conversion losses so recycling cannot create unlimited food or energy.
 
 Transport food, oxygen, waste, signals, and offensive chemicals through the same local fluid environment where appropriate. Make chemical differences readable without requiring the player to manage a molecular inventory manually.
 
@@ -64,7 +64,7 @@ This is a central design requirement, not an optional later polish item:
 - Engulfment: sufficient size and feeding capability allow consumption of smaller cells.
 - Parasitism: extract resources from a larger living host using a proboscis-like feeding adaptation.
 
-The scope and presentation of specialized feeding adaptations within the fixed organelle list is an open question below. Do not silently add a seventh organelle.
+Parasitic feeding is included in this revision as a proboscis specialization of the existing feeding organelle. Keep grazing and engulfment within that same category; do not add a seventh organelle category.
 
 Use a common survival/growth objective that can be reached with different diets. Avoid a victory counter that only credits environmental nutrient particles. Costs, anatomy, risk, and resource conversion should distinguish feeding strategies.
 
@@ -80,7 +80,7 @@ Dangerous hunters remain governed by the shared rules. Near-invulnerability shou
 
 Persistent campaigns, roguelike unlocks, inheritance, and other metagame decisions are deferred. They are not prerequisites for this revision.
 
-## Proposed implementation sequence
+## Implementation sequence
 
 1. **Physical foundation and continuous view:** replace wall-bound contact with wrapping coordinates, a following microscope view, and an explicit active region. Build and validate significant two-way cell/fluid coupling and stable cell contacts.
 2. **Living anatomy:** free membrane placement and packing, biomass-dependent volume/mass/inertia, pressure plus internal tension, and organelle damage/self-repair. Preserve the ease of paused anatomical changes.
@@ -103,8 +103,23 @@ Each step should remain playable and have focused behavioral and numerical check
 - Different diets/builds can reach the same growth/survival objective under suitable environmental conditions.
 - Performance evidence includes active organism/particle counts and target-machine CPU/GPU/frame timing. No unmeasured scale or frame-rate guarantee.
 
-## Remaining questions
+## Confirmed decisions and performance reference
 
-1. **Damage routing:** Does an attack damage organelles at its contact location, allowing exposed membrane to be hurt while other organelles survive elsewhere, or do all organelles collectively protect the body until they are depleted? The proposed default is local contact-based damage because it makes placement matter.
-2. **Feeding scope:** Should proboscis/parasitic feeding arrive now as a specialization of the existing feeding organelle, or remain a planned path while this revision establishes grazing, hunting, and engulfment with the current set? Do not infer permission for additional organelle categories.
-3. **Performance target:** The CPU, GPU, RAM, and installed Steam Godot version of the player's separate Linux machine are still unknown. These inform the coupled-fluid budget and playtest instructions.
+- Attacks are local. Exposed membrane can develop holes and leak biomass; membrane closure is quick. An organelle elsewhere is not a global shield.
+- Include proboscis/parasitic feeding now within the existing feeding category.
+- The owner's separate Linux machine runs Steam Godot **4.7.2**, an **Nvidia RTX 3090**, and an **AMD Ryzen Threadripper 2990WX (32 cores)**. RAM was not specified.
+- Treat that machine as a high-end reference for exploring upper simulation capacity, not a minimum requirement. Keep conservative defaults and measure CPU and GPU costs separately before setting performance targets. No benchmark has been run on the owner's machine.
+
+No gameplay design questions remain open for starting this revision.
+
+## Validation and remaining limits
+
+The implementation includes the six categories with three feeding modes, continuous placement and packing, biomass-dependent geometry/inertia, local punctures and repair, internal signals, a shared cell model, hunter death/replacement, waste recycling, a wrapping microscope view, and locally active two-way fluid interaction.
+
+Automated validation covers material accounting, momentum exchange, dissipative drag, pressure/tension stability, compressed contacts, seam feeding, dormant state, grazing/parasitism/engulfment interactions, hunter death exactly once, shared food progress, and interface controls. The suite passes 164 assertions. A crowded fixture and a 90-second autonomous default run are included, alongside 30-second parasite and engulfer trials against targets with stationary anatomy. These trials use ordinary fluid/biology rules and no steering after setup. Steam launcher fixtures pass all seven tests. Rendered gameplay and assembly receive separate visual inspection.
+
+The medium is a finite-mass viscous grid with explicit tidal forcing, not an incompressible Navier–Stokes solver. Body/ring contact uses swept radial extents rather than a full soft-body contact manifold. Fluid traction does not yet solve ring deformation jointly with pressure. Feeding strategies share the objective and their interactions are tested; comparable difficulty and long-term viability across all habitats still require player feedback.
+
+On the validation workstation (Ryzen 9 9950X, Godot 4.7.2), the 90-second run took 29.04 seconds of wall time: about 5.38 ms per simulation tick, with a 11.21 ms observed maximum. At its end, 2 of 19 stored cells and 214 of 3,221 particles were active. The crowded fixture started with 13 cells and averaged 6.35 ms per tick over 360 ticks. The default grazer processed 98.5 food and reached the milestone at full health. The parasite trial processed 42.0 food; the engulfer processed 43.1 food after consuming two cells. Both ended at full health. These are fixture results, not general difficulty guarantees. The workstation is shared; another build was active near the end of the final run, so timings are observations rather than performance thresholds.
+
+Local headless measurements are CPU simulation evidence only. They do not include GPU rendering and do not establish performance on the owner's RTX 3090 / Threadripper machine. No minimum hardware or population-scale guarantee has been set. Saves, audio, permanent progression, and new organelle categories remain outside this revision.
