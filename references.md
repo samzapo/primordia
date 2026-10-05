@@ -28,7 +28,7 @@ This is a living design record. For each new biological or physical mechanic, re
 
 **Source:** [Oxidation state of bioavailable dissolved organic matter influences bacterioplankton respiration and growth efficiency](https://www.nature.com/articles/s42003-025-07574-2) (2025), experiments measuring organic carbon, dissolved inorganic carbon and oxygen changes during microbial processing.
 
-**Game:** cells process food with oxygen; waste/oxygen encounters recover nutrient material and dissolved carbon. Photosynthetic cells can reuse carbon.
+**Game:** cells process food efficiently with oxygen, with lower-yield fermentation when oxygen is insufficient (documented below); waste/oxygen encounters recover nutrient material and dissolved carbon. Photosynthetic cells can reuse carbon.
 
 **Abstraction:** extracellular waste-to-food conversion condenses unrepresented microbial processing into a contact rule. Oxygen alone does not turn waste into food in real water. Our carbon resource and organic ledger combine chemical pools that real biogeochemistry distinguishes; they are not an atom-balanced reaction equation. The cited work motivates recycling and its oxygen cost, not the game's yield ratios.
 
@@ -104,7 +104,7 @@ This is a living design record. For each new biological or physical mechanic, re
 
 **Game:** biomass changes projected volume and membrane capacity. Enclosed-area pressure opposes a player-authored tension network; the membrane can deform while preserving an ordered outline.
 
-**Abstraction:** the tool is called “microtubules,” but its tension-only links are closer to a generic contractile cytoskeletal network. Real microtubules also bear compression and bend; we do not simulate that material behavior. A 2D star-shaped membrane, uncapped growth and freely edited internal points are design choices. No cell division is implemented.
+**Abstraction:** the tool is called “microtubules,” but its tension-only links are closer to a generic contractile cytoskeletal network. Real microtubules also bear compression and bend; we do not simulate that material behavior. A 2D star-shaped membrane, uncapped growth and freely edited internal points are design choices. Reserve-funded division is now implemented as a separate game abstraction in revision nine.
 
 ## Spike contact and predation
 
@@ -152,6 +152,41 @@ Revision seven preserves the biological/physical abstractions above. [Godot C++ 
 
 The soft edge blur is a presentation choice, not a new biological or chemical mechanic. [Godot screen-reading shader documentation](https://docs.godotengine.org/en/stable/tutorials/shaders/screen-reading_shaders.html) describes filtered screen-texture mip levels and the shared back-buffer behavior used here. Primordia blends toward a blurred level only in the outer view, keeps level zero in the center and draws HUD controls afterward. It is a stylized microscope focus effect, not a calibrated optical model.
 
-## Proposed adaptation economy and victory conditions
+## Adaptation economy and lineage (revision 9)
 
-These ideas are **not implemented**. The [action economy proposal](docs/ACTION_ECONOMY_PROPOSAL.md#scientific-grounding) records primary sources for cellular resource-allocation costs, antagonistic coevolution, costly resistance and microbial dormancy, with explicit differences between the experimental phenomena and the proposed game rules. Adaptation points, draft offers, short ecological phases and victory thresholds are game abstractions.
+**Resource allocation:** [Scott et al., Interdependence of cell growth and gene expression (2010)](https://pubmed.ncbi.nlm.nih.gov/21097934/) motivates competition for limited cellular resources. The game charges real tissue and ATP for anatomy, repair and secretions. Mutation traits trade throughput against energy, mass or environmental sensitivity. The numerical prices and adaptation-point allowance are design choices, not measured biochemical constants.
+
+**Costly resistance:** [Buckling and Rainey, Antagonistic coevolution between a bacterium and a bacteriophage (2002)](https://pmc.ncbi.nlm.nih.gov/articles/PMC1690980/) and [Antagonistic coevolution with parasites increases the cost of host deleterious mutations (2006)](https://pmc.ncbi.nlm.nih.gov/articles/PMC1560003/) motivate reciprocal adaptation and resource tradeoffs. The game uses a coarse exposure counter, a warning and a limited fraction of paid resistant newcomers. It does not simulate genetic inheritance across the entire population, claim all resistance is costly, or make individual cells evolve deliberately.
+
+**Nutrient-dependent growth and division:** [Control of cell division in Paramecium tetraurelia: effects of abrupt changes in nutrient level on accumulation of macronuclear DNA and cell mass](https://pubmed.ncbi.nlm.nih.gov/3758201/) links nutritional conditions with growth and the division cycle. Primordia requires accumulated reproductive material and energy, then partitions existing parental body tissue and transfers the remainder from reserves to an independently living offspring. [Molecular Biology of the Cell: Cytokinesis](https://www.ncbi.nlm.nih.gov/books/NBK26831/) provides authoritative background for physical partition of a parent into daughter cells; our reserved-material budget and minimum parental body are gameplay rules. The 12-minute division schedule, ATP budget and optional oxygen transfer, blueprint inheritance and 60-second viability threshold are gameplay abstractions; DNA replication and chromosome segregation are not modeled.
+
+The [original proposal](docs/ACTION_ECONOMY_PROPOSAL.md#scientific-grounding) retains further context. Dominance, microbial dormancy and refuge victory modes remain proposals. Current implemented rules are listed in [Revision 9](docs/REVISION_9.md).
+
+
+
+## Emergency reserve metabolism
+
+[Sekar et al., Bacterial Glycogen Provides Short-Term Benefits in Changing Environments (2020)](https://journals.asm.org/doi/10.1128/AEM.00049-20) experimentally links intracellular glycogen mobilization to metabolic activity and adaptation during short nutrient gaps. This motivates Primordia's limited transfer of spare biomass into its metabolic pathways when ATP is low.
+
+The game treats generic unspent biomass as containing usable stores; it does not distinguish glycogen, fat and structural proteins. Its ATP threshold, protected eight-unit repair reserve, mobilization rate and respiration yields are design abstractions. The study does not establish indefinite starvation survival, and this mechanism still requires material. Available oxygen determines whether respiration or the lower-yield fallback processes it. Offspring reserves must be deliberately withdrawn before emergency metabolism can use them.
+
+
+## Inherited self-recognition
+
+[Hirose et al., TgrB1/TgrC1 ligand–receptor allorecognition (2017)](https://pmc.ncbi.nlm.nih.gov/articles/PMC5769593/) demonstrates molecular recognition associated with cooperative aggregation in social amoebae. Primordia uses an inherited self-signature so a parent and offspring do not automatically hunt/flee one another or attack their own lineage with spikes, toxins or decoys.
+
+This is a gameplay extension of the earlier self-toxin exclusion, not a claim that those proteins provide toxin immunity or control weapons. The study motivates recognition only. Unrelated cells and environmental stress still use the ordinary damage rules; physical contact and fluid coupling remain unchanged.
+
+## Demand-triggered secretion and lysis
+
+The [resource-allocation experiments of Scott et al. (2010)](https://pubmed.ncbi.nlm.nih.gov/21097934/) motivate making secretion consume limited cellular resources. The game avoids unproductive spending by requiring nearby waste for enzyme output, foreign toxin for antitoxin, and local acidity or internal acid stress for buffering. These particular sensing thresholds and immediate responses are a maintenance policy for gameplay, not experimentally established regulation for these fictional organs. Orientation-based reaction rules are unchanged.
+
+[Turnbull et al., Explosive cell lysis as a mechanism for the biogenesis of bacterial membrane vesicles and biofilms (2016)](https://www.nature.com/articles/ncomms11220) demonstrates release of cellular contents through lysis. Primordia releases retained organic material and its modeled dissolved oxygen pool once on death. The paper motivates content release, not oxygen storage or a measured oxygen yield; the game's oxygen packets transfer an existing abstract resource and add none.
+
+## Oxygen limitation and fermentation
+
+[Deciphering the physiological response of Escherichia coli under high ATP demand (2021)](https://pmc.ncbi.nlm.nih.gov/articles/PMC8686765/) experimentally examines ATP demand, biomass yields and fermentation-product output under aerobic and anaerobic conditions. [Engineering new-to-nature biochemical conversions by combining fermentative metabolism with respiratory modules (2024)](https://www.nature.com/articles/s41467-024-51029-x) further motivates the lower growth yield and metabolite output of fermentative metabolism.
+
+Primordia's shared food-processing pathway uses available oxygen first. Remaining throughput can ferment food for 2 ATP, 0.3 biomass, 0.3 waste and 0.1 carbon per coarse unit; 0.3 leaves the represented pool as unrecoverable end products. The latter is recorded in the existing material-loss ledger and makes recycling unable to supply energy indefinitely from a closed material loop. It is a deliberately coarse accounting sink, not literal destruction of atoms. Respiration instead yields 5 ATP and 0.7 biomass with its existing carbon/waste outputs.
+
+These are gameplay yields, not ATP-per-glucose measurements, universal microbial capabilities or redox-balanced chemical equations. We do not resolve glycolysis, NADH regeneration, ethanol, lactate or acetate. Fermentation does not create oxygen, adds no organ/species, and gives oxygen-poor diets a less efficient fallback.

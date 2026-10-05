@@ -1,5 +1,11 @@
 extends RefCounted
 ## Authoritative fixed-step ecology, independent of input and scene nodes.
+const Evolution = preload("res://scripts/evolution.gd")
+const Genes = preload("res://scripts/mutations.gd")
+var evolution
+var build_original = null
+var build_state: Dictionary = {}
+var build_waste := 0.0
 const Backend = preload("res://scripts/backend.gd")
 var kernels = Backend.create()
 var gpu_transport = null
@@ -46,6 +52,7 @@ var particles: Array = []
 var events: Array = []
 var pending_replacements: Array = []
 var next_id := 1
+var inherited_lineages: Dictionary = {}
 var time := 0.0
 var habitat := 0
 var seed_value := 20261004
@@ -67,13 +74,20 @@ var chemistry_events := {"decay":0,"combine":0,"recycle":0,"detox":0,"spoil":0,"
 func _init(seed_number: int = 20261004, profile: int = 0) -> void:
 	seed_value = seed_number
 	rng.seed = seed_number
+	evolution = Evolution.new(seed_number)
 	habitat = clampi(profile,0,2)
 	player.role = "player"
+	player.biomass = 36
+	player.update_geometry()
+	player.membrane = Cell.Membrane.new(player.radius)
 	player.add_organ("feeding",0,"graze",false)
 	player.add_organ("propulsion",PI,"graze",false)
 	cells.append(player)
 	# Whole habitats are stored. Only organisms inside the microscope advance.
 	for i in 18:
+		if habitat == 0 and i%5 == 3:
+			pending_replacements.append({"role":"hunter","id":-1,"not_before":240.0})
+			continue
 		var p = player.position + Vector2.from_angle(i*2.4)* (1050+i*45 if i%5 == 3 else 220 if i == 0 else 340+i*94)
 		_make_cell(Medium.wrap_position(p), "hunter" if i%5 == 3 else "grazer")
 	habitat_geometry = Habitat.new(seed_number,cells)
@@ -127,12 +141,16 @@ func cell_by_id(identity: int):
 	return null
 
 func install(kind: String, local_angle: float, mode: String = "graze", size: float = 1.0) -> bool:
-	return player.add_organ(kind,local_angle,mode,true,size)
+	var cost := Evolution.install_price(size)
+	if evolution.terminal() or (evolution.enabled and evolution.points < cost): return false
+	if not player.add_organ(kind,local_angle,mode,true,size): return false
+	evolution.spend(cost,"Install "+kind)
+	return true
 
 func remove(index: int) -> bool:
 	var debris: float = player.recycle(index)
 	if debris < 0: return false
-	spawn_particle(WASTE,player.position,Vector2.ZERO,debris,player.id)
+	_build_debris(debris)
 	return true
 
 func spawn_particle(kind: int, p: Vector2, v: Vector2 = Vector2.ZERO, amount: float = 1.0, owner: int = -1, source_radius: float = 0.0) -> void:
@@ -149,7 +167,7 @@ func _emit_material(kind: int, at: Vector2, amount: float, motion: Vector2 = Vec
 	for i in count: spawn_particle(kind,at,motion,amount/count,owner)
 
 func step(dt: float) -> void:
-	if player.dead: return
+	if player.dead or evolution.terminal() or build_original != null: return
 	time += dt
 	revision += 1
 	if grid.source_size != particles.size(): grid.rebuild(particles)
@@ -202,6 +220,7 @@ func step(dt: float) -> void:
 		# Shrinkage can shed crowded organs, releasing their remaining material.
 		while cell.occupied() > cell.perimeter() and not cell.organs.is_empty():
 			var organ: Dictionary = cell.organs.pop_back()
+			cell.lost_organs.append(organ.duplicate(true))
 			spawn_particle(WASTE,cell.organ_position(organ),Vector2.ZERO,organ.material,cell.id)
 		var traction := PackedVector2Array()
 		for point in cell.membrane.points:
@@ -241,7 +260,10 @@ func step(dt: float) -> void:
 		grid.rebuild(particles)
 		_replace_population()
 	profile_usec["ecology"] = Time.get_ticks_usec()-mark
-	won = player.processed >= 40 and time+0.000001 >= 90
+	mark = Time.get_ticks_usec()
+	evolution.advance(dt,self)
+	profile_usec["evolution"] = Time.get_ticks_usec()-mark
+	won = evolution.status == "won"
 
 func _move_particles(dt: float) -> void:
 	if gpu_transport != null:
@@ -400,7 +422,7 @@ func chance(rate: float, dt: float) -> bool:
 func light_at(at: Vector2) -> float:
 	var p := Medium.wrap_position(at)
 	var field := 0.5+0.28*sin(TAU*p.x/WORLD.x*3+0.4)+0.22*cos(TAU*p.y/WORLD.y*3-0.8)
-	return clampf(field*(0.5 if habitat == 1 else 1.25 if habitat == 2 else 1.0),0.02,1.0)
+	return clampf(field*(0.5 if habitat == 1 else 1.25 if habitat == 2 else 1.0)*evolution.light_factor,0.02,1.0)
 
 func light_direction(at: Vector2) -> Vector2:
 	var p := Medium.wrap_position(at)
@@ -410,7 +432,7 @@ func _photosynthesize(cell, dt: float) -> void:
 	for organ in cell.organs:
 		if organ.kind != "photosynthesis": continue
 		var light := light_at(cell.organ_position(organ))
-		if not chance(10*light*organ.scale*organ.scale*organ.hp/organ.max_hp,dt): continue
+		if not chance(10*light*organ.scale*organ.scale*organ.hp/organ.max_hp*Genes.factor(organ,"sun" if light >= 0.5 else "shade"),dt): continue
 		# Light drives a coarse dissolved-carbon fixation event. Water is an
 		# implicit medium reservoir; oxygen units are not organic mass units.
 		var amount: float = minf(cell.carbon,0.35)
@@ -421,6 +443,7 @@ func _photosynthesize(cell, dt: float) -> void:
 		cell.substrate += stored
 		var food := amount*0.65-stored
 		cell.fixed_carbon += amount
+		if cell == player: evolution.record("photo",amount)
 		cell.oxygen_produced += amount*2.5
 		cell.energy = minf(cell.energy_capacity(),cell.energy+amount*4)
 		var at: Vector2 = cell.organ_position(organ)+cell.local_point(organ.a).normalized().rotated(cell.angle)*16
@@ -448,7 +471,7 @@ func _suction(dt: float) -> void:
 			if organ.kind != "feeding" or cell.energy <= 0: continue
 			var local_dt: float = dt*cell.activity
 			var health: float = organ.hp/organ.max_hp
-			fluid.suction(cell,cell.pore_center(organ),110*sqrt(organ.scale),24*organ.scale*health,local_dt)
+			fluid.suction(cell,cell.pore_center(organ),110*sqrt(organ.scale),24*organ.scale*health*Genes.factor(organ,"suction"),local_dt)
 			cell.spend_energy(local_dt*0.18*organ.scale*organ.scale,organ)
 
 func _sense(cell, dt: float) -> void:
@@ -465,7 +488,7 @@ func _sense(cell, dt: float) -> void:
 		for organ in cell.organs:
 			if organ.kind not in ["feeding","sensing","offensive","photosynthesis"]: continue
 			var mode: String = "hunt" if organ.kind == "offensive" else "light" if organ.kind == "photosynthesis" else organ.mode
-			var reach: float = (760.0 if mode == "hunt" else 310.0)*sqrt(organ.scale)*(1-organ.blocked*0.65)
+			var reach: float = (760.0 if mode == "hunt" else 310.0)*sqrt(organ.scale)*(1-organ.blocked*0.65)*Genes.factor(organ,"sense")
 			var receptor: Vector2 = cell.organ_position(organ)
 			if mode == "light":
 				var direction := light_direction(receptor)
@@ -483,7 +506,7 @@ func _sense(cell, dt: float) -> void:
 					food += Medium.offset(cell.position,p.p).normalized()*p.amount/maxf(25,distance)
 				elif p.kind == DANGER and mode in ["hunt","flee"]:
 					var prey = cell_by_id(p.owner)
-					if prey == null: continue
+					if prey == null or prey.lineage_id() == cell.lineage_id(): continue
 					if mode == "hunt" and prey.organic_mass() >= cell.organic_mass(): continue
 					var score := (100.0 if mode == "flee" else 2.0)+1.0/(1+distance)
 					if prey.id == cell.target_id: score += 0.05
@@ -534,6 +557,7 @@ func _feed(cell) -> void:
 				p.amount -= amount
 				cell.substrate += amount
 				cell.eaten += amount
+				if p.owner != cell.id: cell.foreign_intake += amount
 				if amount > 0: cell.consumed(organ,amount)
 				if p.amount <= 0.000001: p.alive = false
 	for index in grid.query(cell.position,cell.extent()+12):
@@ -541,6 +565,7 @@ func _feed(cell) -> void:
 		if p.alive and p.kind == CARBON and cell.count("photosynthesis") > 0 and activity_at(p.p) > 0 and Medium.offset(cell.position,p.p).length() < cell.extent()+18:
 			var carbon_taken: float = minf(p.amount,maxf(0,30*cell.growth_scale()-cell.carbon))
 			cell.carbon += carbon_taken
+			if p.owner != cell.id: cell.foreign_intake += carbon_taken
 			p.amount -= carbon_taken
 			if p.amount <= 0.000001: p.alive = false
 		if p.alive and p.kind == OXYGEN and activity_at(p.p) > 0 and Medium.offset(cell.position,p.p).length() < cell.support(Medium.offset(cell.position,p.p).angle())+14:
@@ -550,7 +575,17 @@ func _feed(cell) -> void:
 			if p.amount <= 0.000001: p.alive = false
 
 func _metabolize(cell, dt: float) -> void:
-	var amount = minf(minf(cell.substrate,cell.oxygen),dt*1.8*cell.growth_scale()*(1-cell.acid_stress*0.6))
+	# Storage mobilization bridges a food gap; it is not free ATP. It transfers
+	# existing tissue through the same limited metabolic pathways.
+	cell.reserve_activity = maxf(0,cell.reserve_activity-dt)
+	if cell.energy < 20 and cell.substrate < 1:
+		var mobilized: float = minf(maxf(0,cell.biomass-8),dt*0.3*cell.growth_scale())
+		cell.biomass -= mobilized
+		cell.substrate += mobilized
+		cell.reserve_used += mobilized
+		if mobilized > 0: cell.reserve_activity = 2
+	var capacity: float = dt*1.8*cell.growth_scale()*(1-cell.acid_stress*0.6)
+	var amount = minf(minf(cell.substrate,cell.oxygen),capacity)
 	cell.substrate -= amount
 	cell.oxygen -= amount
 	cell.energy = minf(cell.energy_capacity(),cell.energy+amount*5.0)
@@ -558,8 +593,36 @@ func _metabolize(cell, dt: float) -> void:
 	cell.carbon += amount*0.1
 	cell.waste += amount*0.2
 	cell.processed += amount
+	cell.fermentation_activity = maxf(0,cell.fermentation_activity-dt)
+	var fermented: float = minf(cell.substrate,maxf(0,capacity-amount))
+	if fermented > 0:
+		cell.substrate -= fermented
+		cell.energy = minf(cell.energy_capacity(),cell.energy+fermented*2)
+		cell.biomass += fermented*0.3
+		cell.waste += fermented*0.3
+		cell.carbon += fermented*0.1
+		# Unrecoverable end products leave the represented material pool. This
+		# prevents waste/enzyme recycling from becoming a closed energy source.
+		respiration_loss += fermented*0.3
+		cell.processed += fermented
+		cell.fermented += fermented
+		cell.fermentation_activity = 2
 	cell.spend_energy(dt*0.264*cell.growth_scale())
+	for organ in cell.organs: cell.spend_energy(dt*organ.scale*organ.scale*Genes.factor(organ,"upkeep",0.0),organ)
 	if cell.energy <= 0: cell.health = maxf(0,cell.health-dt*2)
+
+func _secretion_needed(cell, organ: Dictionary, kind: int) -> bool:
+	if kind == BUFFER: return acidity.sample(cell.organ_position(organ)) > 0.02 or cell.acid_stress > 0.03
+	if kind not in [ENZYME,ANTITOXIN]: return true
+	var wanted := WASTE if kind == ENZYME else TOXIN
+	var at: Vector2 = cell.organ_position(organ)
+	var reach: float = 140*sqrt(organ.scale)
+	for index in grid.query(at,reach):
+		var packet: Dictionary = particles[index]
+		if not packet.alive or packet.kind != wanted or activity_at(packet.p) <= 0: continue
+		if wanted == TOXIN and inherited_lineages.get(packet.owner,packet.owner) == cell.lineage_id(): continue
+		if Medium.offset(at,packet.p).length_squared() <= reach*reach: return true
+	return false
 
 func _emit_and_attack(cell, dt: float) -> void:
 	if chance(4.0,dt):
@@ -571,31 +634,38 @@ func _emit_and_attack(cell, dt: float) -> void:
 		spawn_particle(CARBON,cell.position-Vector2.from_angle(cell.angle)*(cell.radius+12),Vector2.ZERO,amount,cell.id)
 	for organ in cell.organs:
 		var kind: int = {"feeding":ENZYME,"neutralizing":ANTITOXIN,"acidifying":ACID,"regenerative":BUFFER}.get(organ.kind,-1)
-		if kind < 0 or cell.biomass < 0.06 or cell.energy < 0.15: continue
+		var energy_cost := 0.15*Genes.factor(organ,"secretion_cost")
+		if kind < 0 or cell.biomass < 0.06 or cell.energy < energy_cost: continue
+		if kind != ENZYME and cell.energy < 12: continue
 		var rate := 0.35 if kind == ENZYME else 2.0
-		if not chance(rate*organ.scale*organ.scale,dt): continue
+		if not chance(rate*organ.scale*organ.scale*Genes.factor(organ,"secretion"),dt): continue
+		# Query only on a scheduled secretion attempt, rather than every tick.
+		if not _secretion_needed(cell,organ,kind): continue
 		cell.biomass -= 0.06
-		cell.spend_energy(0.15,organ)
+		cell.spend_energy(energy_cost,organ)
 		var direction: Vector2 = cell.local_point(organ.a).normalized().rotated(cell.angle)
-		spawn_particle(kind,cell.organ_position(organ)+direction*10,direction*18,0.06,cell.id)
+		spawn_particle(kind,cell.organ_position(organ)+direction*10,direction*18*Genes.factor(organ,"dispersal"),0.06,cell.id)
 		particles[-1].capacity = 0.25 if kind in [ACID,BUFFER] else 0.06
 		organ.charge_flash = 1
+		if cell == player and kind == ACID: evolution.record("acid",0.06)
 	# Cellular stress also releases a material-bearing toxic byproduct.
 	if cell.health < 90 and cell.biomass > 0.08 and chance(0.6,dt):
 		cell.biomass -= 0.08
 		var direction := Vector2.from_angle(rng.randf()*TAU)
 		spawn_particle(TOXIN,cell.position+direction*(cell.radius+12),direction*24,0.08,cell.id)
 
-	cell.attack_clock = maxf(0,cell.attack_clock-dt)
-	if cell.attack_clock > 0 or cell.target_id < 0 or cell.threat.length_squared() < 0.01: return
 	for organ in cell.organs:
-		if organ.kind != "toxin" or cell.energy < 2 or cell.biomass < 0.18: continue
-		spawn_particle(DECOY,cell.organ_position(organ),cell.threat*145,0.03,cell.id)
-		spawn_particle(TOXIN,cell.organ_position(organ),cell.threat*170,0.15,cell.id)
-		cell.spend_energy(2,organ)
-		cell.biomass -= 0.18
+		if organ.kind != "toxin": continue
+		organ["burst_clock"] = maxf(0,float(organ.get("burst_clock",0))-dt)
+		if organ.burst_clock > 0 or cell.target_id < 0 or cell.threat.length_squared() < 0.01: continue
+		var burst: float = organ.scale*organ.scale*Genes.factor(organ,"burst")
+		if cell.energy < maxf(12,2*burst) or cell.biomass < 0.18*burst: continue
+		spawn_particle(DECOY,cell.organ_position(organ),cell.threat*145,0.03*burst,cell.id)
+		spawn_particle(TOXIN,cell.organ_position(organ),cell.threat*170,0.15*burst,cell.id)
+		cell.spend_energy(2*burst,organ)
+		cell.biomass -= 0.18*burst
 		organ.consume_flash = 1
-	cell.attack_clock = 0.75
+		organ.burst_clock = 0.75*Genes.factor(organ,"cooldown")
 
 func _motion(dt: float) -> void:
 	for cell in cells:
@@ -608,13 +678,15 @@ func _motion(dt: float) -> void:
 			var pursuing: bool = organ.id == cell.target_organ_id and cell.target_mode in ["hunt","light"]
 			if organ.kind != "propulsion" and not pursuing: continue
 			var arm: Vector2 = cell.organ_position(organ)-cell.position
-			var power: float = (2600.0 if organ.kind == "propulsion" else 1100.0)*organ.scale*organ.scale*(organ.hp/organ.max_hp)
+			var power: float = (2600.0 if organ.kind == "propulsion" else 1100.0)*organ.scale*organ.scale*(organ.hp/organ.max_hp)*Genes.factor(organ,"thrust")
+			var energy_cost: float = local_dt*0.3*organ.scale*organ.scale*Genes.factor(organ,"motion_cost")
+			power *= minf(1,cell.energy/maxf(0.000001,energy_cost))
 			var impulse: Vector2 = cell.target.normalized()*power*local_dt
 			if fluid.deposit(cell.position+arm,-impulse):
 				cell.velocity += impulse/cell.mass
 				cell.angular_velocity += arm.cross(impulse)/cell.inertia
 				steering_power += power
-				cell.spend_energy(local_dt*0.3*organ.scale*organ.scale,organ)
+				cell.spend_energy(energy_cost,organ)
 		# Flagella can reverse their stroke to retreat while the receptor remains
 		# facing the threat. A paired steering impulse also acts on the medium.
 		if steering_power > 0:
@@ -694,16 +766,17 @@ func _spike_contacts(dt: float) -> void:
 			var direction: Vector2 = attacker.local_point(organ.a).normalized().rotated(attacker.angle)
 			var length: float = 42.0*organ.scale
 			for prey in cells:
-				if prey == attacker or prey.dead or prey.activity <= 0 or prey.health <= 0: continue
+				if prey == attacker or prey.dead or prey.activity <= 0 or prey.health <= 0 or prey.lineage_id() == attacker.lineage_id(): continue
 				var d := Medium.offset(base,prey.position)
 				var along := clampf(d.dot(direction),0,length)
 				var contact: Vector2 = base+direction*along
 				var offset := Medium.offset(prey.position,contact)
 				if offset.length() > prey.support(offset.angle())+3*organ.scale: continue
 				var local_dt := dt*minf(attacker.activity,prey.activity)
-				var energy: float = attacker.spend_energy(local_dt*1.2*organ.scale*organ.scale,organ)
+				var energy: float = attacker.spend_energy(local_dt*1.2*organ.scale*organ.scale*Genes.factor(organ,"attack_cost"),organ)
 				if energy <= 0: continue
-				prey.waste += prey.damage(energy*12,offset.angle())
+				prey.waste += prey.damage(energy*12*Genes.factor(organ,"damage"),offset.angle())
+				if attacker == player: evolution.record("spike",energy*12*Genes.factor(organ,"damage"))
 				organ.feeding = true
 				organ.consume_flash = 1
 				organ.link = contact
@@ -758,7 +831,7 @@ func _receptor_contacts() -> void:
 			var radius: float = 12*organ.scale
 			for index in grid.query(at,radius+6):
 				var p: Dictionary = particles[index]
-				if not p.alive or p.kind != DECOY or p.owner == cell.id or activity_at(p.p) <= 0: continue
+				if not p.alive or p.kind != DECOY or inherited_lineages.get(p.owner,p.owner) == cell.lineage_id() or activity_at(p.p) <= 0: continue
 				var delta := Medium.offset(at,p.p)
 				if delta.length() > radius+particle_radius(p.kind)*particle_scale(p.amount): continue
 				var normal := delta.normalized()
@@ -775,10 +848,11 @@ func _toxin_contacts() -> void:
 		if not p.alive or p.kind != TOXIN or activity_at(p.p) <= 0: continue
 		for cell_id in cell_index.at(p.p) if spatial_queries else range(cells.size()):
 			var cell = cells[cell_id]
-			if cell.dead or cell.activity <= 0 or cell.id == p.owner: continue
+			if cell.dead or cell.activity <= 0 or cell.lineage_id() == inherited_lineages.get(p.owner,p.owner): continue
 			var d = Medium.offset(cell.position,p.p)
 			if d.length() <= cell.support(d.angle())+5:
 				cell.waste += cell.damage(p.amount*75,d.angle()) + p.amount
+				if p.owner == player.id: evolution.record("toxin",p.amount*75)
 				p.alive = false
 				break
 
@@ -791,8 +865,18 @@ func _die(cell, transferred: float = 0.0) -> void:
 	for i in count:
 		var direction = Vector2.from_angle(TAU*i/count)
 		spawn_particle(NUTRIENT,cell.position+direction*cell.radius*0.9,direction*24,total/count,cell.id)
-	events.append({"time":time,"type":"death","id":cell.id,"released":total})
+	var oxygen: float = maxf(0,cell.oxygen)
+	cell.oxygen = 0
+	# Retained dissolved resource is released, never manufactured on death.
+	var oxygen_packets := ceili(oxygen/0.4)
+	for i in oxygen_packets:
+		var direction := Vector2.from_angle(TAU*(i+0.5)/oxygen_packets)
+		spawn_particle(OXYGEN,cell.position+direction*cell.radius*0.9,direction*24,oxygen/oxygen_packets,cell.id)
+	events.append({"time":time,"type":"death","id":cell.id,"released":total,"oxygen_released":oxygen})
 	if cell == player: return
+	if cell.role == "ancestor":
+		cells.erase(cell)
+		return
 	kills += 1
 	cells.erase(cell)
 	pending_replacements.append({"role":cell.role,"id":cell.id})
@@ -802,16 +886,147 @@ func _replace_population() -> void:
 	# At wide microscope zoom there may be no hidden space. Defer the explicit
 	# replacement trigger until a full organism can fit outside the view.
 	for pending in pending_replacements.duplicate():
+		if time < float(pending.get("not_before",0)): continue
+		if evolution.enabled and evolution.clock < float(pending.get("not_before",0)): continue
 		var at := Vector2.ZERO
 		var found := false
 		for attempt in 24:
 			at = Medium.wrap_position(player.position+Vector2.from_angle(rng.randf()*TAU)*1100)
 			if attempt > 0: at = Vector2(rng.randf()*WORLD.x,rng.randf()*WORLD.y)
-			if habitat_geometry.clear_at(at,160) and Medium.visibility(at,player.position if camera_follows_player else camera_position,view_half+Vector2.ONE*160) <= 0:
+			var hidden := Medium.visibility(at,player.position if camera_follows_player else camera_position,view_half+Vector2.ONE*160) <= 0
+			var announced: bool = evolution.enabled and evolution.arrival_budget > 0 and evolution.clock >= evolution.resistance_clock and Medium.offset(player.position,at).length() > 700+player.extent()
+			if safe_birth_position(at,160) and (hidden or announced):
 				found = true
 				break
 		if not found: continue
-		var replacement = _make_cell(at,pending.role)
+		var role: String = pending.role
+		if evolution.enabled and evolution.tide == 1: role = "grazer"
+		elif evolution.enabled and evolution.tide >= 2 and evolution.newcomer_count%2 == 0: role = "hunter"
+		var replacement = _make_cell(at,role)
+		evolution.newcomer(replacement,self)
+		evolution.arrival_budget = maxi(0,evolution.arrival_budget-1)
 		external_input += replacement.organic_mass()
-		events.append({"time":time,"type":"population_replacement","id":replacement.id,"replaces":pending.id})
+		events.append({"time":time,"type":"population_arrival" if pending.id < 0 else "population_replacement","id":replacement.id,"replaces":pending.id})
 		pending_replacements.erase(pending)
+
+func _build_debris(amount: float) -> void:
+	if amount <= 0: return
+	if build_original != null: build_waste += amount
+	else: spawn_particle(WASTE,player.position,Vector2.ZERO,amount,player.id)
+
+func begin_build() -> void:
+	if build_original != null or player.dead or evolution.terminal(): return
+	build_original = player
+	build_state = {"points":evolution.points,"learned":evolution.learned.duplicate(),"chosen":evolution.chosen,"spending":evolution.spending.duplicate(true),"challenge":evolution.challenge,"challenge_mass":evolution.challenge_mass,"challenge_intake":evolution.challenge_intake,"stable_seconds":evolution.stable_seconds}
+	var index := cells.find(player)
+	player = Cell.clone_state(player)
+	cells[index] = player
+	build_waste = 0
+
+func cancel_build() -> void:
+	if build_original == null: return
+	cells[cells.find(player)] = build_original
+	player = build_original
+	for key in build_state: evolution.set(key,build_state[key])
+	build_original = null
+	build_state.clear()
+	build_waste = 0
+
+func commit_build() -> void:
+	if build_original == null: return
+	build_original = null
+	build_state.clear()
+	_build_debris(build_waste)
+	build_waste = 0
+
+func undo_build() -> void:
+	cancel_build()
+	begin_build()
+
+func resize_organ(identity: int, size: float) -> bool:
+	var quote: Dictionary = player.resize_quote(identity,size)
+	if quote.is_empty() or (evolution.enabled and evolution.points < quote.ap): return false
+	var result: Dictionary = player.resize_organ(identity,size)
+	if result.is_empty(): return false
+	evolution.spend(result.ap,"Enlarge organ")
+	_build_debris(result.debris)
+	return true
+
+func mutate_organ(identity: int, gene: String) -> bool:
+	var organ: Dictionary = player.organ_by_id(identity)
+	if gene not in evolution.learned or organ.is_empty(): return false
+	var cost := Genes.adaptation_price(organ)
+	if evolution.enabled and evolution.points < cost: return false
+	if not player.specialize(identity,gene): return false
+	evolution.spend(cost,"Apply "+gene)
+	return true
+
+func offspring_quote() -> Dictionary:
+	var tissue := 0.0
+	for organ in player.organs: tissue += organ.get("max_material",Cell.organ_cost(organ.kind,organ.scale))
+	var radius := maxf(34,player.occupied()/(TAU*0.8))
+	var body := maxf(30,pow(radius/47.0,3)*78-12)
+	var inherited_body := minf(body,maxf(0,player.body-30))
+	return {"body":body,"body_transfer":inherited_body,"biomass":12.0,"material":body+12+6+8+tissue-inherited_body,"total_material":body+12+6+8+tissue,"energy":60.0,"oxygen":12.0}
+
+func safe_birth_position(at: Vector2, radius: float) -> bool:
+	if not habitat_geometry.clear_at(at,radius): return false
+	for cell in cells:
+		if not cell.dead and Medium.offset(cell.position,at).length() < cell.extent()+radius+20: return false
+	return true
+
+func divide_lineage() -> bool:
+	if evolution.offspring_id >= 0 or player.dead: return false
+	var quote := offspring_quote()
+	if player.brood_mass+0.000001 < quote.material or player.brood_energy < quote.energy: return false
+	if player.count("feeding")+player.count("photosynthesis") == 0: return false
+	var child = Cell.new(next_id)
+	child.role = "player"
+	child.lineage = player.lineage_id()
+	child.body = quote.body
+	child.biomass = quote.biomass
+	child.substrate = 6
+	child.carbon = 8
+	child.oxygen = minf(player.oxygen,quote.oxygen)
+	child.energy = 40
+	child.organs = player.organs.duplicate(true)
+	child.next_organ_id = player.next_organ_id
+	for organ in child.organs:
+		organ.hp = organ.max_hp
+		organ.material = organ.max_material
+		organ.blocked = 0
+		organ.target_id = -1
+		organ.burst_clock = 0.0
+		organ.feeding = false
+		organ.link = Vector2.ZERO
+		organ.consume_flash = 0.0
+		organ.consume_clock = 0.0
+		organ.charge_flash = 0.0
+		organ.consumed_total = 0.0
+	child.update_geometry()
+	child.membrane = Cell.Membrane.new(child.radius)
+	child.membrane.skeleton = Cell.clone_state(player.membrane.skeleton)
+	child.membrane.skeleton.begin(child.radius)
+	var found := false
+	for i in 32:
+		child.position = Medium.wrap_position(player.position+Vector2.from_angle(player.angle+TAU*i/32)*(player.extent()+child.extent()+45))
+		if safe_birth_position(child.position,child.extent()):
+			found = true
+			break
+	if not found: return false
+	player.brood_mass -= quote.material
+	player.body -= quote.body_transfer
+	player.brood_energy -= quote.energy
+	player.oxygen -= child.oxygen
+	player.role = "ancestor"
+	player.update_geometry()
+	child.previous_position = child.position
+	child.angle = player.angle
+	child.previous_angle = child.angle
+	cells.append(child)
+	inherited_lineages[child.id] = child.lineage_id()
+	player = child
+	next_id += 1
+	evolution.offspring_id = child.id
+	events.append({"type":"division","id":child.id,"time":time,"material":quote.total_material,"reserve_used":quote.material,"body_transferred":quote.body_transfer,"oxygen_transferred":child.oxygen,"atp_used":20})
+	return true

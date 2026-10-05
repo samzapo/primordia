@@ -1,6 +1,6 @@
 # Proposal: adaptation economy, ecosystem resistance and victory
 
-Status: design proposal for owner review. No gameplay changes are authorized by this document. All costs, timings and thresholds below are starting hypotheses, not tuned values. Existing gameplay remains revision 8.
+Status: the owner approved implementation of the recommended first prototype. Revision 9 implements that scope; see [the revision record](REVISION_9.md) for actual rules and validation. Alternative victory modes remain proposals. The original design rationale below is retained; its sample numbers are not the source of truth for current gameplay.
 
 ## Recommendation
 

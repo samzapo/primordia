@@ -59,6 +59,10 @@ var light_layer := ColorRect.new()
 var microscope_layer := ColorRect.new()
 var acidity_texture := ImageTexture.new()
 var light_texture := ImageTexture.new()
+var organ_items := VBoxContainer.new()
+var genome_button := Button.new()
+var evolution_panel = preload("res://scripts/evolution_panel.gd").new()
+var light_factor_shown := -1.0
 var build_open := false
 var show_senses := false
 var show_debug := false
@@ -72,7 +76,7 @@ var simulation_ms := 0.0
 var render_ms := 0.0
 var screenshot_path := ""
 var capture_frame := 0
-var notice := "Tab opens build · drag on your cell there to add microtubules · hover + wheel sets tension"
+var notice := "Establish a lineage: fund offspring before 12:00, then sustain it through dusk. Tab to adapt."
 var notice_timer := 8.0
 
 func _ready() -> void:
@@ -88,6 +92,7 @@ func _ready() -> void:
 		elif arg.begins_with("--advance="):
 			for i in int(arg.trim_prefix("--advance=")): world.step(1.0/60)
 		elif arg == "--assembly":
+			world.begin_build()
 			build_open = true
 			selected = 4
 		elif arg == "--senses": show_senses = true
@@ -160,15 +165,20 @@ func _ready() -> void:
 func _physics_process(dt: float) -> void:
 	if is_paused(): return
 	var started := Time.get_ticks_usec()
+	var identity: int = world.player.id
 	world.step(dt)
+	if identity != world.player.id:
+		camera_locked = true
+		free_camera = world.player.position
+		_message("Division complete. You now follow the offspring; keep it healthy and feeding through dusk.")
 	simulation_ms = lerpf(simulation_ms,(Time.get_ticks_usec()-started)/1000.0,0.15)
 	if world.revision%4 == 0: currents.queue_redraw()
 
 func is_paused() -> bool:
-	return build_open or settings_panel.visible or world.player.dead
+	return build_open or settings_panel.visible or world.player.dead or world.evolution.terminal()
 
 func _can_edit_tubules() -> bool:
-	return build_open and not settings_panel.visible and not world.player.dead
+	return build_open and not settings_panel.visible and not world.player.dead and not world.evolution.terminal()
 
 func _process(dt: float) -> void:
 	ui_time += dt
@@ -233,6 +243,8 @@ func _update_world(alpha: float) -> void:
 			world_layer.add_child(node)
 			node.z_index = 2
 			views[cell.id] = node
+		if views[cell.id].cell != cell: views[cell.id].seen_revision = -1
+		views[cell.id].cell = cell
 		var fraction: float = alpha if cell.activity > 0 else 1.0
 		var p: Vector2 = cell.previous_position+Simulation.Medium.offset(cell.previous_position,cell.position)*fraction
 		var heading := lerp_angle(cell.previous_angle,cell.angle,fraction)
@@ -325,14 +337,14 @@ func _draw_currents() -> void:
 			currents.draw_line(p,p+flow*0.55,Color(0.48,0.89,0.91,0.2),1.0/zoom,true)
 
 func _draw_preview() -> void:
-	if settings_panel.visible or world.player.dead: return
+	if settings_panel.visible or world.player.dead or world.evolution.terminal(): return
 	_draw_tubule_preview()
 	if not build_open or selected < 0: return
 	var relative := _player_relative(get_global_mouse_position())
 	var a: float = world.player.surface_parameter(relative.angle()-world.player.angle)
 	var local: Vector2 = world.player.local_point(a)
 	var point: Vector2 = (local+local.normalized()*5*placement_scale).rotated(world.player.angle)
-	var fits: bool = world.player.can_fit(Simulation.KINDS[selected],a,placement_scale) and world.player.biomass >= Simulation.Cell.organ_cost(Simulation.KINDS[selected],placement_scale)
+	var fits: bool = world.player.can_fit(Simulation.KINDS[selected],a,placement_scale) and world.player.biomass >= Simulation.Cell.organ_cost(Simulation.KINDS[selected],placement_scale) and world.evolution.points >= world.Evolution.install_price(placement_scale)
 	Visuals.icon(preview,point,Simulation.KINDS[selected],local.angle()+world.player.angle,placement_scale,ui_time)
 	preview.draw_arc(point,22*placement_scale,0,TAU,32,MINT if fits else Color("fc8c90"),2/zoom,true)
 
@@ -361,7 +373,11 @@ func _toggle_settings() -> void:
 	settings_panel.visible = not settings_panel.visible
 	tube_start.clear()
 	camera_dragging = false
-	if settings_panel.visible: build_open = false; selected = -1
+	if settings_panel.visible:
+		world.cancel_build()
+		build_open = false
+		selected = -1
+		shape_preview_ticks = 0
 	_layout()
 	_update_hud()
 
@@ -407,22 +423,41 @@ func _build_ui() -> void:
 	camera_button_control.pressed.connect(_toggle_camera)
 	_button(row,"Settings [Esc]",_toggle_settings)
 	var lower := _panel_box(bottom)
+	for label in [status_label,detail_label,debug_label]: label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	lower.add_child(status_label)
 	lower.add_child(detail_label)
 	lower.add_child(debug_label)
 	var box := _panel_box(build_panel)
 	var heading := HBoxContainer.new()
 	box.add_child(heading)
-	_label(heading,"ASSEMBLY PAUSED",MINT).size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_button(heading,"Close",func(): _toggle_build())
+	_label(heading,"BUILD · PAUSED",MINT).size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_button(heading,"Cancel",func(): _toggle_build())
+	var actions := HFlowContainer.new()
+	box.add_child(actions)
+	_button(actions,"Apply & resume",_apply_build)
+	_button(actions,"Undo plan",_undo_build)
 	var scroll := build_scroll
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	var pages := HFlowContainer.new()
+	box.add_child(pages)
+	_button(pages,"Grow",func(): organ_items.show(); evolution_panel.hide())
+	_button(pages,"Modify",func(): _build_section("modify"))
+	pages.add_child(genome_button)
+	genome_button.pressed.connect(func(): _build_section("genome"))
+	_button(pages,"Lineage",func(): _build_section("lineage"))
 	box.add_child(scroll)
-	var items := VBoxContainer.new()
+	var contents := VBoxContainer.new()
+	contents.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(contents)
+	contents.add_child(evolution_panel)
+	evolution_panel.initialize(self)
+	evolution_panel.hide()
+	var items := organ_items
 	items.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	items.add_theme_constant_override("separation",10)
-	scroll.add_child(items)
+	contents.add_child(items)
+	_label(items,"GROW NEW ANATOMY",MINT)
 	for i in Simulation.KINDS.size():
 		var card = OrganCard.new()
 		items.add_child(card)
@@ -557,8 +592,13 @@ func _apply_fullscreen() -> void:
 
 func _update_hud() -> void:
 	var cell = world.player
+	if absf(world.evolution.light_factor-light_factor_shown) > 0.02:
+		_refresh_light_texture()
+		light_factor_shown = world.evolution.light_factor
+	genome_button.text = "Genome" + (" •" if not world.evolution.chosen else "")
+	if build_open: evolution_panel.refresh()
 	if acidity_texture.get_width() > 0: acidity_texture.update(Image.create_from_data(64,40,false,Image.FORMAT_RF,world.acidity.values.to_byte_array()))
-	stats_label.text = "Biomass %s · Light %d%% · Acid %d%%" % [_quantity(cell.biomass),roundi(world.light_at(cell.position)*100),roundi(world.acidity.sample(cell.position)*100)]
+	stats_label.text = "Biomass %s · %d AP · Tide %d · %d:%02d" % [_quantity(cell.biomass),world.evolution.points,mini(6,world.evolution.tide+1),int(world.time)/60,int(world.time)%60]
 	camera_button_control.text = "Unlock view [Space]" if camera_locked else "Follow cell [Space]"
 	health_bar.max_value = 100
 	health_bar.value = cell.health
@@ -567,25 +607,38 @@ func _update_hud() -> void:
 	health_text.text = "Health %d%%" % roundi(cell.health)
 	atp_text.text = "ATP %s / %s" % [_quantity(cell.energy),_quantity(cell.energy_capacity())]
 	var status: String = cell.state
+	if cell.reserve_activity > 0: status += " · USING BIOMASS FOR ATP"
+	if cell.fermentation_activity > 0: status += " · FERMENTING · LOW OXYGEN"
 	if cell.organs.any(func(o): return o.blocked > 0.05): status += " · RECEPTORS CLEARING"
 	if cell.acid_stress > 0.1: status += " · ACID STRESS %d%%" % roundi(cell.acid_stress*100)
-	if cell.dead: status = "LIFE ENDED · R to start again"
+	if world.evolution.terminal(): status = ("LINEAGE ESTABLISHED" if world.won else "LINEAGE ENDED")+" · R to start again"
+	elif cell.dead: status = "LIFE ENDED · R to start again"
 	elif build_open: status = "ASSEMBLY PAUSED"
 	elif settings_panel.visible: status = "SETTINGS · PAUSED"
 	status_label.text = status+(" · "+cell.feeding_feedback if cell.feeding_feedback != "" else "")
-	detail_label.text = notice if notice_timer > 0 else "%s · Food %s / %s · Oxygen %s · %d sec · Tab to build" % [Simulation.HABITATS[world.habitat],_quantity(cell.substrate),_quantity(cell.gut_capacity()),_quantity(cell.oxygen),int(world.time)]
+	detail_label.text = world.evolution.ending if world.evolution.terminal() else notice if notice_timer > 0 else world.evolution.forecast()+"\nTab to adapt · Light %d%% · Acid %d%% · Oxygen %.1f" % [roundi(world.light_at(cell.position)*100),roundi(world.acidity.sample(cell.position)*100),cell.oxygen]
+	if not world.evolution.chosen and not world.evolution.terminal(): detail_label.text += "\nBlueprint ready · Tab → Genome"
+	if not world.evolution.terminal() and world.evolution.tide < 6:
+		var quote: Dictionary = world.offspring_quote()
+		detail_label.text += "\nLineage reserve %.0f / %.0f biomass · %.0f / 60 ATP · due 12:00" % [cell.brood_mass,quote.material,cell.brood_energy]
 	detail_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	debug_label.visible = show_debug
-	debug_label.text = "%s · %d FPS · sim %.2f ms · prepare %.2f ms · %d active cells / %d particles" % ["GPU experiment" if world.gpu_transport != null else "Native CPU" if world.kernels != null else "GDScript",Engine.get_frames_per_second(),simulation_ms,render_ms,world.active_cells,world.active_particles]
+	var viewport_size := get_viewport_rect().size
+	var fitted_zoom := minf(viewport_size.x/Simulation.VIEW.x,viewport_size.y/Simulation.VIEW.y)
+	var effective_zoom := zoom/maxf(fitted_zoom,0.001)
+	var zoom_text := "Zoom %.1f%%" % (effective_zoom*100)
+	if absf(effective_zoom-manual_zoom) >= 0.0005: zoom_text += " (selected %.1f%%)" % (manual_zoom*100)
+	debug_label.text = "%s · %d FPS · %s · sim %.2f ms · prepare %.2f ms · %d active cells / %d particles" % ["GPU experiment" if world.gpu_transport != null else "Native CPU" if world.kernels != null else "GDScript",Engine.get_frames_per_second(),zoom_text,simulation_ms,render_ms,world.active_cells,world.active_particles]
+	debug_label.tooltip_text = "Zoom is relative to the default view (100%). Selected is your wheel setting; growth or the build panel can widen the actual view."
 	if selected >= 0:
-		help_label.text = HELP[selected]+"\n\nSize %.2f× · Cost %.1f biomass\nWheel over the cell to resize." % [placement_scale,Simulation.Cell.organ_cost(Simulation.KINDS[selected],placement_scale)]
+		help_label.text = HELP[selected]+"\n\nSize %.2f× · Cost %.1f tissue + %d AP\nWheel over the cell to resize." % [placement_scale,Simulation.Cell.organ_cost(Simulation.KINDS[selected],placement_scale),world.Evolution.install_price(placement_scale)]
 	else: help_label.text = "Choose an organ, then click the membrane. Drag between membrane or microtubule points to shape your cell; hover a link and scroll for tension."
 	growth_label.text = "Biomass %s · Radius %.1f · Surface %.0f%% occupied\nGrowth has no size cap." % [_quantity(cell.biomass),cell.radius,100*cell.occupied()/cell.perimeter()]
 	for i in cards.size():
 		cards[i].modulate = MINT if selected == i else Color.WHITE
 		var size: float = placement_scale if selected == i else 1.0
 		var title: String = TITLES[i]
-		cards[i].configure("%d  %s\n%.1f biomass · %.2f×" % [(i+1)%10,title,Simulation.Cell.organ_cost(Simulation.KINDS[i],size),size],Simulation.KINDS[i],"graze",preferences.hud_scale)
+		cards[i].configure("%d  %s\n%.1f tissue · %d AP · %.2f×" % [(i+1)%10,title,Simulation.Cell.organ_cost(Simulation.KINDS[i],size),world.Evolution.install_price(size),size],Simulation.KINDS[i],"graze",preferences.hud_scale)
 
 func _quantity(value: float) -> String:
 	if value >= 1000000: return "%.2fM" % (value/1000000)
@@ -593,17 +646,30 @@ func _quantity(value: float) -> String:
 	return "%.0f" % value
 
 func _toggle_build() -> void:
+	if world.player.dead or world.evolution.terminal(): return
+	if build_open: world.cancel_build()
+	else: world.begin_build()
 	build_open = not build_open
+	evolution_panel.signature = ""
+	evolution_panel.moving = false
+	shape_preview_ticks = 0
 	settings_panel.hide()
 	if not build_open:
+		shape_preview_ticks = 0
+		tube_group = -1
 		selected = -1
 		tube_start.clear()
 	_layout()
 	_update_hud()
 
 func _select(index: int) -> void:
-	if world.player.dead: return
+	if world.player.dead or world.evolution.terminal(): return
+	world.begin_build()
 	build_open = true
+	organ_items.show()
+	evolution_panel.hide()
+	evolution_panel.existing_id = -1
+	evolution_panel.moving = false
 	selected = index
 	settings_panel.hide()
 	_layout()
@@ -671,7 +737,7 @@ func _input(event: InputEvent) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not _can_edit_tubules(): tube_start.clear()
-	if settings_panel.visible or world.player.dead: return
+	if settings_panel.visible or world.player.dead or world.evolution.terminal(): return
 	if event is InputEventMouseMotion and camera_dragging and not camera_locked:
 		free_camera = Simulation.Medium.wrap_position(free_camera-event.relative/zoom)
 		world.camera_position = free_camera
@@ -708,12 +774,19 @@ func _unhandled_input(event: InputEvent) -> void:
 		manual_zoom = clampf(manual_zoom*(1.12 if event.button_index == MOUSE_BUTTON_WHEEL_UP else 1/1.12),0.15,3)
 		currents.queue_redraw()
 		return
+	if event.button_index == MOUSE_BUTTON_LEFT and build_open and evolution_panel.moving:
+		var a: float = world.player.surface_parameter(local.angle())
+		if absf(relative.length()-world.player.support(relative.angle())) > maxf(26/zoom,12): return
+		world.player.move_organ(evolution_panel.existing_id,a)
+		evolution_panel.moving = false
+		_message("Move planned. Apply to commit.")
+		return
 	if event.button_index == MOUSE_BUTTON_LEFT and build_open and selected >= 0:
 		var a: float = world.player.surface_parameter(relative.angle()-world.player.angle)
 		if absf(relative.length()-world.player.support(relative.angle())) > maxf(26/zoom,12): return
 		if world.install(Simulation.KINDS[selected],a,"flee" if selected == 5 else "graze",placement_scale):
-			_message("Attached. Tab resumes life; right-click recycles an organelle.")
-		else: _message("Needs enough biomass and total membrane area. Neighbors move aside.")
+			_message("Attachment planned. Apply commits; Tab cancels the plan.")
+		else: _message("Needs enough AP, tissue and total membrane area. Neighbors move aside.")
 		return
 	if event.button_index == MOUSE_BUTTON_LEFT and _can_edit_tubules():
 		var anchor := _tubule_anchor(local)
@@ -797,3 +870,29 @@ func _configure_backend() -> void:
 
 func _exit_tree() -> void:
 	if world.gpu_transport != null: world.gpu_transport.close()
+
+func _apply_build() -> void:
+	world.commit_build()
+	build_open = false
+	selected = -1
+	tube_start.clear()
+	evolution_panel.moving = false
+	shape_preview_ticks = 0
+	_message("Anatomy applied. The ecological clock resumes.")
+	_layout()
+
+func _build_section(name: String) -> void:
+	organ_items.hide()
+	evolution_panel.show()
+	evolution_panel.show_section(name)
+	build_scroll.scroll_vertical = 0
+
+func _undo_build() -> void:
+	world.undo_build()
+	tube_start.clear()
+	tube_group = -1
+	shape_preview_ticks = 0
+	evolution_panel.existing_id = -1
+	evolution_panel.moving = false
+	evolution_panel.signature = ""
+	_update_hud()

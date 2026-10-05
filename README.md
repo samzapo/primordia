@@ -2,7 +2,7 @@
 
 A physics and chemistry simulation game about managing one small cell. Eat, grow and survive predation. **You never steer the cell:** its anatomy controls its behavior.
 
-This eighth playable revision uses **Godot 4.7.2**, a fixed-step simulation, deformable membranes, oriented chemical particles and procedural 2D artwork. Its vector artwork is authored in the project; cached particle textures and mipmaps generate automatically at runtime. The default Linux launcher builds a batched C++ GDExtension automatically; the GDScript reference backend remains available.
+This ninth playable revision uses **Godot 4.7.2**, a fixed-step simulation, deformable membranes, oriented chemical particles and procedural 2D artwork. Its vector artwork is authored in the project; cached particle textures and mipmaps generate automatically at runtime. The default Linux launcher builds a batched C++ GDExtension automatically; the GDScript reference backend remains available.
 
 ## Run with Steam Godot on Linux
 
@@ -16,13 +16,21 @@ The launcher finds Godot in standard Steam locations, custom Steam libraries and
 
 ## Controls
 
-- **Tab:** open/close paused organ assembly. Illustrated cards or **1–9 / 0** select organs. Click the membrane to attach; the wheel sizes the selected organ. Existing neighbors move aside to make space and stay anchored afterward. Right-click an installed organ during assembly to recycle it.
-- **In the build menu (Tab), drag on your cell:** press the left button for the first microtubule point and release for the second. Endpoints can be on the membrane, on another tube, or inside the cell. Hover a tube and **scroll** to adjust tension; a label shows the current setting. Right-click a tube to remove it. No microtubule build card is needed. During selected-organ placement, left click attaches that organ; close and reopen assembly to clear the selection and draw tubes. Creation, tension changes and removal are available only while the build menu is open.
+- **Tab:** open a paused assembly preview, or cancel it. **Apply & resume** commits changes; **Undo plan** resets them. **Grow / Modify / Genome / Lineage** switch between new organs, existing anatomy, mutation drafts and offspring reserves. Illustrated cards or **1–9 / 0** select organs. Click the membrane to attach; the wheel sizes the selected organ. Existing neighbors move aside to make space and stay anchored afterward. Right-click an installed organ during assembly to recycle it.
+- **In the build menu (Tab), drag on your cell:** press the left button for the first microtubule point and release for the second. Endpoints can be on the membrane, on another tube, or inside the cell. Hover a tube and **scroll** to adjust tension; a label shows the current setting. Right-click a tube to remove it. No microtubule build card is needed. During selected-organ placement, left click attaches that organ; use **Modify → Shape microtubules** to clear the selection and draw tubes. Creation, tension changes and removal are available only while the build menu is open.
 - **Space:** lock/unlock the camera to your cell's **position**, without changing its rotation or pausing. In free view, drag empty water or middle-drag to pan. Space returns to following the cell.
 - **Escape:** settings, including **Quit game**. Settings pause biology. **F11** toggles fullscreen. Fullscreen, **Light bloom** and **85–175% HUD/text scale** persist. Bloom can be disabled in settings.
-- **Wheel elsewhere:** microscope zoom. **S:** sensing ranges. **F3:** active backend, FPS and CPU simulation/frame preparation times. **H:** next habitat. **R:** new life.
+- **Wheel elsewhere:** microscope zoom. **S:** sensing ranges. **F3:** active backend, FPS, zoom percentage and CPU simulation/frame preparation times. Zoom is relative to the default view (100%); when growth or the build panel widens it, the selected wheel setting is also shown. **H:** next habitat. **R:** new life.
 
 The world wraps without walls. The microscope center simulates fully, the fringe slows, and offscreen state freezes except for explicit population triggers. The active region follows the actual camera, including free view. Tab/settings remain ways to pause; Space is solely a camera control.
+
+## Adapt and establish a lineage
+
+Start with **36 biomass and 3 adaptation points**. New anatomy and enlargement cost biomass and adaptation; existing damage repair, repositioning and microtubules do not cost adaptation. Keep one of three mutation blueprints each tide, then pay to specialize a matching organ. Costs, routine ATP estimates and low repair reserves appear in the build menu.
+
+Six two-minute tides forecast changing light, population pressure and costly opponent adaptations. Gain 3 AP per transition before the finale; optional risks can earn at most one extra. The clock pauses with the build/settings menu, but continues when the free camera looks elsewhere.
+
+Fund an offspring's quoted additional tissue and **60 ATP** before **12:00**. Up to **12 oxygen** transfers if available; fermentation permits oxygen-poor reproduction. Division partitions existing body tissue and transfers real reproductive reserves and the camera follows the offspring. Sustain it for at least 60 healthy, metabolically active seconds through the **13:30** finale to establish a lineage. Death or missing the objective ends the run; **R** restarts. [Revision 9](docs/REVISION_9.md) lists every cost, mutation, counter and victory rule.
 
 ## Anatomy
 
@@ -41,11 +49,11 @@ The world wraps without walls. The microscope center simulates fully, the fringe
 
 Proboscis and engulfing pores have been removed. The spike and toxin vesicle are the weapons. Spike target size uses all retained organic material, not just unspent building reserves. A spike or photosynthetic organ can guide and propel a cell; flagella provide additional power. Toxin vesicles use a target found by a spike or flight receptor.
 
-Organ cost, material and most output scale with size squared. Surface area and biomass limit placement. Biomass growth has no arbitrary upper cap, although the finite toroidal habitat remains a geometric limit. Hydrostatic pressure, a soft cortex and the player-authored tension network control shape. Internal unattached junctions move freely; connect them to the membrane/network to transmit useful shape forces.
+Organ cost, material and most output scale with size squared. Surface area, biomass and adaptation constrain new construction. Biomass growth has no arbitrary upper cap, although the finite toroidal habitat remains a geometric limit. Hydrostatic pressure, a soft cortex and the player-authored tension network control shape. Internal unattached junctions move freely; connect them to the membrane/network to transmit useful shape forces.
 
 ## Living chemistry
 
-**Cells are the only sources of external particles.** The initial clouds represent products of the existing cells' earlier life, with source-cell identifiers. There is no automatic food/oxygen habitat spawner. Respiration, photosynthesis, secretion, wounds, recycling and death sustain the particle economy. Replacing a dead NPC is an explicit offscreen population event with accounted material input.
+**Cells are the only sources of external particles.** The initial clouds represent products of the existing cells' earlier life, with source-cell identifiers. There is no automatic food/oxygen habitat spawner. Respiration, lower-yield fermentation, photosynthesis, secretion, wounds, recycling and death sustain the particle economy. Replacing a dead NPC is an explicit population event with accounted material input. Hidden replacement remains preferred; forecasted tides can admit a bounded number of arrivals into safe visible space when wide zoom leaves no hidden habitat.
 
 Eleven particle types are visible: nutrient, oxygen, waste, cell trace, toxin, dissolved carbon, digestive enzyme, antitoxin, acidifying carrier, buffer and decoy. Forks, hooks, combs and linked lobes distinguish species; their bright tips rotate with the actual particle orientation. Compatible faces must touch and point toward each other to react; there is no additional reaction success roll. Thermal motion tumbles particles, and decay uses a per-second hazard instead of a fixed lifetime. Neighbor searches use spatial grids rather than all-pairs testing.
 
@@ -67,7 +75,7 @@ Decoys temporarily reduce chemical sensing range. Every affected receptor automa
 
 Pores pulse on consumption. Health/ATP bars show actual resources. Yellow nucleus-to-surface packets illustrate ATP spending; pink packets illustrate biomass-funded repair. External particles are shunted to the membrane edge instead of rendering underneath cells.
 
-Process **40 food units and survive 90 seconds** for the first milestone. The ecosystem continues afterward. The starting grazing anatomy is a starting point for adaptation, not a guaranteed unattended win in the cell-sourced ecosystem.
+The former 90-second food milestone has been replaced by lineage victory. The starting anatomy is a starting point for adaptation, not a guaranteed unattended win. Balanced habitat delays its first three hunter arrivals until Lean Current; lean and rich profiles retain their opening hunters.
 
 ## Performance revision
 
@@ -87,7 +95,7 @@ Revision six uses the requested luminous coral-reef palette: blue/teal water, sh
 
 [Complement-inspired mechanics](docs/COMPLEMENT_PROPOSAL.md) are proposed next: surface tags, cooperative pore assembly and protective inhibitors. They are not enabled in this graphics revision.
 
-[Action economy and victory proposal](docs/ACTION_ECONOMY_PROPOSAL.md) outlines an adaptation budget, drafted mutations, ecological resistance and several possible endings. This is a proposal for review; none of these systems is implemented yet.
+[Action economy proposal](docs/ACTION_ECONOMY_PROPOSAL.md) retains the approved design rationale and future alternative endings. Its first prototype is implemented in [Revision 9](docs/REVISION_9.md).
 
 ## Science and scope
 

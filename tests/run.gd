@@ -50,6 +50,7 @@ func _run() -> void:
 	_test_habitat_pressures()
 	_test_replay()
 	_test_ecosystem()
+	preload("res://tests/evolution.gd").new().run(self)
 	await _test_interface()
 	print("RESULT: %d assertions, %d failures" % [assertions,failures])
 	quit(0 if failures == 0 else 1)
@@ -57,6 +58,7 @@ func _run() -> void:
 func isolated():
 	var sim = Sim.new(41)
 	sim.cells = [sim.player]
+	sim.pending_replacements.clear()
 	sim.particles.clear()
 	return sim
 
@@ -77,11 +79,13 @@ func _test_metabolism() -> void:
 	var mass: float = cell.organic_mass()
 	var biomass: float = cell.biomass
 	sim._metabolize(cell,1)
-	expect(is_equal_approx(cell.substrate,0.75) and cell.oxygen == 0,"Oxygen limits respiration")
-	expect(is_equal_approx(cell.biomass-biomass,0.175),"Food becomes biomass, carbon and waste")
-	expect(is_equal_approx(cell.organic_mass(),mass),"Respiration accounts for biomass and waste")
+	expect(cell.substrate == 0 and cell.oxygen == 0 and is_equal_approx(cell.processed-cell.fermented,0.25),"Available oxygen bounds the aerobic share; fermentation processes remaining food")
+	expect(is_equal_approx(cell.biomass-biomass,0.4),"Mixed metabolism uses the appropriate biomass yields")
+	expect(is_equal_approx(cell.organic_mass()+sim.respiration_loss,mass),"Metabolism accounts for biomass, waste and lost end products")
+	var processed: float = cell.processed
+	cell.biomass = 8
 	sim._metabolize(cell,1)
-	expect(is_equal_approx(cell.substrate,0.75),"No oxygen means no respiration")
+	expect(cell.processed == processed,"No food or mobilizable reserves means no metabolism")
 
 func _test_anatomy() -> void:
 	var cell = Cell.new()
@@ -346,12 +350,16 @@ func _test_death() -> void:
 	var hunter = sim._make_cell(sim.player.position+Vector2(180,0),"hunter")
 	var id: int = hunter.id
 	var mass: float = hunter.organic_mass()
+	var oxygen: float = hunter.oxygen
 	sim._die(hunter)
 	var released := 0.0
+	var oxygen_released := 0.0
 	for p in sim.particles:
 		if p.kind == Sim.NUTRIENT: released += p.amount
+		elif p.kind == Sim.OXYGEN: oxygen_released += p.amount
 	expect(hunter.dead and hunter.health == 0 and not sim.cells.has(hunter),"Hunter dies and is removed, never reset")
 	expect(is_equal_approx(released,mass),"Dead hunter releases its retained biomass")
+	expect(is_equal_approx(oxygen_released,oxygen) and hunter.oxygen == 0,"Death transfers retained oxygen exactly")
 	var count: int = sim.particles.size()
 	sim._die(hunter)
 	expect(sim.particles.size() == count,"Death emits resources exactly once")
@@ -462,6 +470,7 @@ func _test_replay() -> void:
 
 func _test_ecosystem() -> void:
 	var sim = Sim.new()
+	sim.view_half = Sim.VIEW # Normal half-zoom play includes the local producer community.
 	var started := Time.get_ticks_usec()
 	var max_tick := 0
 	for i in 5400:
@@ -475,7 +484,7 @@ func _test_ecosystem() -> void:
 	var elapsed := (Time.get_ticks_usec()-started)/1000000.0
 	print("ECOSYSTEM: simulated=%.1f food=%.1f health=%.1f active=%d/%d particles=%d active_particles=%d wall=%.2fs max_tick=%.2fms" % [sim.time,sim.player.processed,sim.player.health,sim.active_cells,sim.cells.size(),sim.particles.size(),sim.active_particles,elapsed,max_tick/1000.0])
 	expect(sim.player.processed >= 10,"Default anatomy autonomously feeds and metabolizes")
-	expect(sim.won == (sim.player.processed >= 40 and sim.time+0.000001 >= 90),"Milestone requires both food processing and survival thresholds")
+	expect(not sim.won,"Early food processing is not lineage victory")
 	expect(sim.time >= 60,"Default anatomy leaves time to adapt")
 	expect(sim.player.energy >= 0 and sim.player.biomass >= 0 and sim.player.oxygen >= 0,"Resources remain nonnegative")
 	expect(sim.recycled > 0,"Waste participates in the running ecosystem")
@@ -588,6 +597,10 @@ func _test_interface() -> void:
 	scene._unhandled_input(click)
 	expect(network.links.size() == link_count,"Right-click during play cannot remove microtubules")
 	scene._input(key)
+	cell = scene.world.player
+	network = cell.membrane.skeleton
+	link = network.links[-1]
+	midpoint = (network.point(link.a,cell.membrane)+network.point(link.b,cell.membrane))*0.5
 	scene._update_world(1)
 	click.position = scene.camera_screen+midpoint.rotated(cell.angle)*scene.zoom
 	scene._unhandled_input(click)
@@ -608,6 +621,24 @@ func _test_interface() -> void:
 	expect(scene.placement_scale > 1 and scene.manual_zoom == zoom,"Wheel sizes anatomy away from microtubules")
 	scene._update_hud()
 	expect(scene.health_bar.value == cell.health and scene.atp_bar.value == cell.energy,"Health and ATP bars show actual resources")
+	var original_player = scene.world.build_original
+	scene._toggle_settings()
+	expect(scene.world.player == original_player and scene.world.build_original == null,"Settings cancels the uncommitted build")
+	scene._toggle_settings()
+	expect(not scene.is_paused(),"Closing settings resumes after discarding a plan")
+	scene._toggle_build()
+	scene._build_section("genome")
+	expect(scene.evolution_panel.visible and not scene.organ_items.visible,"Genome tab opens draft choices")
+	scene._build_section("lineage")
+	expect(scene.evolution_panel.sections.lineage.visible,"Lineage tab exposes reserve controls")
+	scene.world.evolution.offspring_id = scene.world.player.id
+	scene.evolution_panel.refresh()
+	expect(not scene.evolution_panel.reserve_row.visible and "VIABILITY" in scene.evolution_panel.offspring_label.text,"After division the lineage panel tracks viability instead of another reserve")
+	scene.world.evolution.offspring_id = -1
+	scene._apply_build()
+	expect(scene.world.build_original == null and not scene.build_open,"Apply ends the transaction")
+	scene._toggle_build()
+
 	scene._apply_ui_scale(1.75)
 	await process_frame
 	await process_frame

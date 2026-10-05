@@ -89,6 +89,7 @@ func _draw_organs() -> void:
 		var at: Vector2 = point+point.normalized()*5*organ.scale
 		var heading := point.angle()
 		Visuals.icon(appendages,at,organ.kind,heading,organ.scale,cell.age,organ.mode,organ.consume_flash)
+		if organ.get("mutation","") != "": appendages.draw_circle(at,3.5*organ.scale,Color("fff2a3"))
 		if organ.blocked > 0:
 			appendages.draw_arc(at,15*organ.scale,-PI/2,-PI/2+TAU*organ.blocked,28,Color("cf92e8"),4*organ.scale,true)
 		if organ.charge_flash > 0:
