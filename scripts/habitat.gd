@@ -17,13 +17,20 @@ func _init(seed_number: int = 0, occupied: Array = []) -> void:
 	for i in 6:
 		var form := {"arms":5+i%3,"turn":random.randf_range(0.6,0.86),"branches":[],"palette":i%3}
 		for arm in form.arms:
-			_branch(form.branches,Vector2.ZERO,TAU*arm/form.arms,61.0,6.0,2,form.turn)
+			_branch(form.branches,Vector2.ZERO,TAU*arm/form.arms,61.0,7.0,2,form.turn)
 		forms.append(form)
 	# Reject overlap with all initial cells and keep water passages between colonies.
 	for i in 10:
 		for attempt in 120:
 			var radius := random.randf_range(185,275)
 			var position := Vector2(random.randf()*Medium.WORLD.x,random.randf()*Medium.WORLD.y)
+			# Three radial colonies form each loose reef; fallback preserves open starts.
+			# Keep the same colony count and explicit water corridors.
+			if i%3 != 0 and not plants.is_empty() and attempt < 80:
+				var anchor: Dictionary = plants[mini(plants.size()-1,(i/3)*3)]
+				var heading := random.randf()*TAU
+				var separation: float = radius+anchor.radius+random.randf_range(110,210)
+				position = Medium.wrap_position(anchor.p+Vector2.from_angle(heading)*separation)
 			if i == 0 and attempt == 0:
 				radius = 190
 				position = Vector2(1580,1340)

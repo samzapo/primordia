@@ -190,3 +190,9 @@ The [resource-allocation experiments of Scott et al. (2010)](https://pubmed.ncbi
 Primordia's shared food-processing pathway uses available oxygen first. Remaining throughput can ferment food for 2 ATP, 0.3 biomass, 0.3 waste and 0.1 carbon per coarse unit; 0.3 leaves the represented pool as unrecoverable end products. The latter is recorded in the existing material-loss ledger and makes recycling unable to supply energy indefinitely from a closed material loop. It is a deliberately coarse accounting sink, not literal destruction of atoms. Respiration instead yields 5 ATP and 0.7 biomass with its existing carbon/waste outputs.
 
 These are gameplay yields, not ATP-per-glucose measurements, universal microbial capabilities or redox-balanced chemical equations. We do not resolve glycolysis, NADH regeneration, ethanol, lactate or acetate. Fermentation does not create oxygen, adds no organ/species, and gives oxygen-poor diets a less efficient fallback.
+
+## Revision 10 presentation
+
+The finite branching and optical presentation references above also motivate this visual revision. Broader stems use matching drawn and collision radii; rounded terminal bracts remain decorative. Loose reef grouping is a level-layout choice.
+
+Seeded colors, stylized nucleus lobes, vesicle patterns, bounded nuclear lag and organ swelling are visual representations, not additional biological processes or measured intracellular mechanics. Color identifies organ/particle function but never cell occupation. The existing membrane, secretion, feeding and lineage systems provide the states being illustrated. Highlight-selective bloom adds no light resource; orientation glyphs add no reaction sites.

@@ -91,3 +91,9 @@ These are future directions, not features already implemented.
 The approved first action-economy prototype is implemented in [Revision 9](REVISION_9.md). Adaptation points constrain deliberate anatomy; biomass and ATP remain conserved physical/operational resources. Assembly is transactional, with free positioning and tension changes, paid growth/specialization, partial tissue recycling and zero-AP restoration. The run has seeded mutation drafts, forecasted tides, bounded costly opponent variants and reserve-funded offspring viability as its default win condition. No direct steering, extra organ types or persistent metagame have been added.
 
 The run director tracks a few scalar exposures and events independently of camera dormancy. Particle chemistry remains orientation-based. Build estimates describe current conditions rather than promising future income. Public source motivation and game abstractions are recorded in references.md.
+
+## Revision 10: luminous vector art
+
+The owner approved deeper, spatially varied water beneath saturated anatomy, broad colored membranes, larger simple internals, integrated organ silhouettes, thicker oriented chemistry glyphs, grouped fractal reefs and restrained event-driven animation. Body palettes and internal patterns now vary by seeded lineage, independently of occupation or equipped organs. This supersedes the single shared periwinkle body while preserving the prohibition on occupation-based body colors.
+
+Preserve physical scale, cell-sourced chemistry, existing particle orientation and counts, microtubule-controlled membrane shape, acidity tint, selective light bloom and peripheral blur without a vignette. Wide-view detail reduction is visual only. The art and per-pass measurements are documented in [revision ten](REVISION_10.md); run rules remain in revision nine.

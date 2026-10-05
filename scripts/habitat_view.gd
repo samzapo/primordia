@@ -3,7 +3,7 @@ extends Node2D
 var habitat
 var textures: Array[Texture2D] = []
 var sprites: Array[Sprite2D] = []
-const PALETTES := [["185875","38c6a5","b8f778"],["454185","a777e8","f7acd8"],["246d81","4dbfdf","e4fa9b"]]
+const PALETTES := [["12475d","1ebc98","a5ef73"],["472369","a544b7","f89cbe"],["14447d","298bcc","64dddb"]]
 
 func configure(value) -> void:
 	habitat = value
@@ -46,10 +46,15 @@ static func svg(form: Dictionary) -> String:
 		var a: Vector2 = branch.a
 		var b: Vector2 = branch.b
 		var r: float = branch.r
-		output += "<path d='M %.3f %.3f L %.3f %.3f' stroke='#%s' stroke-width='%.3f'/>" % [a.x,a.y,b.x,b.y,palette[0],r*2+1.0]
-		output += "<path d='M %.3f %.3f L %.3f %.3f' stroke='#%s' stroke-width='%.3f'/>" % [a.x,a.y,b.x,b.y,palette[1],r*2]
-		output += "<path d='M %.3f %.3f L %.3f %.3f' stroke='#%s' stroke-width='%.3f' opacity='0.65'/>" % [a.x,a.y-0.5,b.x,b.y-0.5,palette[2],r*0.48]
-		if branch.depth == 0:
-			output += "<ellipse cx='%.3f' cy='%.3f' rx='3.2' ry='1.8' transform='rotate(%.2f %.3f %.3f)' fill='#%s'/><circle cx='%.3f' cy='%.3f' r='0.9' fill='#fff6c5'/>" % [b.x,b.y,rad_to_deg((b-a).angle()),b.x,b.y,palette[2],b.x,b.y]
-	output += "<circle r='9' fill='#%s'/><circle r='6' fill='#%s'/><circle r='2.7' fill='#fff6c5'/></g></svg>" % [palette[0],palette[1]]
+		# Main stroke exactly matches the capsule diameter in habitat.gd.
+		output += "<path d='M %.3f %.3f L %.3f %.3f' stroke='#%s' stroke-width='%.3f'/>" % [a.x,a.y,b.x,b.y,palette[0],r*2]
+		output += "<path d='M %.3f %.3f L %.3f %.3f' stroke='#%s' stroke-width='%.3f'/>" % [a.x,a.y,b.x,b.y,palette[1],r*1.62]
+		if branch.depth > 0:
+			output += "<path d='M %.3f %.3f L %.3f %.3f' stroke='#%s' stroke-width='%.3f'/>" % [a.x,a.y-r*0.22,b.x,b.y-r*0.22,palette[2],r*0.45]
+		else:
+			# Rounded terminal bracts are fine, permeable foliage, not extra solids.
+			var angle := rad_to_deg((b-a).angle())
+			output += "<ellipse cx='%.3f' cy='%.3f' rx='4.5' ry='2.6' transform='rotate(%.2f %.3f %.3f)' fill='#%s'/><ellipse cx='%.3f' cy='%.3f' rx='2.6' ry='1.4' transform='rotate(%.2f %.3f %.3f)' fill='#%s'/>" % [b.x,b.y,angle,b.x,b.y,palette[1],b.x,b.y-0.5,angle,b.x,b.y,palette[2]]
+	# Stems overlap at the origin; this center stays inside their shared footprint.
+	output += "<circle r='6.5' fill='#%s'/><circle cy='-0.7' r='4.5' fill='#%s'/><circle cx='-1' cy='-1.5' r='2' fill='#%s'/></g></svg>" % [palette[0],palette[1],palette[2]]
 	return output

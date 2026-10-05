@@ -2,7 +2,7 @@
 
 A physics and chemistry simulation game about managing one small cell. Eat, grow and survive predation. **You never steer the cell:** its anatomy controls its behavior.
 
-This ninth playable revision uses **Godot 4.7.2**, a fixed-step simulation, deformable membranes, oriented chemical particles and procedural 2D artwork. Its vector artwork is authored in the project; cached particle textures and mipmaps generate automatically at runtime. The default Linux launcher builds a batched C++ GDExtension automatically; the GDScript reference backend remains available.
+This tenth playable revision uses **Godot 4.7.2**, a fixed-step simulation, deformable membranes, oriented chemical particles and procedural 2D artwork. Its vector artwork is authored in the project; cached particle textures and mipmaps generate automatically at runtime. The default Linux launcher builds a batched C++ GDExtension automatically; the GDScript reference backend remains available.
 
 ## Run with Steam Godot on Linux
 
@@ -69,7 +69,7 @@ Eleven particle types are visible: nutrient, oxygen, waste, cell trace, toxin, d
 
 Light varies smoothly across the habitat and is visible in the water. Photosynthesis requires both light and carbon; light supplies energy, while water is an implicit reservoir for oxygen production. Photosynthetic cells release food and oxygen for neighbors.
 
-Acidity is a local transported field: increasing acidity shifts water from turquoise toward rose/magenta; buffering restores its normal color. Moderate acidity favors the modeled digestive enzyme. Excess acidity raises maintenance ATP costs, accumulates internal stress, slows metabolism and eventually damages cells. Buffers have finite capacity. The secreting cell is also exposed. Nutrient assembly does **not** gain an automatic acid bonus.
+Acidity is a local transported field: increasing acidity shifts blue/teal water toward rose/magenta; buffering restores its normal color. Moderate acidity favors the modeled digestive enzyme. Excess acidity raises maintenance ATP costs, accumulates internal stress, slows metabolism and eventually damages cells. Buffers have finite capacity. The secreting cell is also exposed. Nutrient assembly does **not** gain an automatic acid bonus.
 
 Decoys temporarily reduce chemical sensing range. Every affected receptor automatically spends a little ATP to clean itself, repair bodies accelerate clearance, and passive release still works with no ATP. Purple rings and the **RECEPTORS CLEARING** status show the effect. Light sensing is unaffected.
 
@@ -91,7 +91,7 @@ Water gains broad blue, teal, jade and violet regions from seamless multiscale n
 
 ## Graphics and proposed chemistry
 
-Revision six uses the requested luminous coral-reef palette: blue/teal water, shared periwinkle cell bodies, layered nuclei and clearer membrane rims. Functional colors live on the organelles and emitted particles; cells are not colored by occupation. Brighter presentation preserves the actual light resource and shaded habitat regions. A restrained bloom follows light-rich water and bright world details. Soft peripheral blur replaces the dark vignette; the center and HUD stay sharp. The blur remains active when bloom is disabled.
+[Revision ten](docs/REVISION_10.md) adds deep indigo/petrol water, turquoise light pools, broad colored membranes and seeded lineage palettes. **Body color never depends on occupation:** organelles and emitted particles communicate function. Larger internal shapes, integrated organ bases, rounded secretory glands and cached wide-zoom chemistry silhouettes make the vector artwork clearer. Fractal colonies form loose reefs with thicker, matching solid stems. Highlight-selective bloom follows the actual light resource; soft peripheral blur keeps the center and HUD sharp without a dark vignette. Blur remains active when bloom is disabled.
 
 [Complement-inspired mechanics](docs/COMPLEMENT_PROPOSAL.md) are proposed next: surface tags, cooperative pore assembly and protective inhibitors. They are not enabled in this graphics revision.
 
@@ -112,7 +112,7 @@ There are no saves, audio, permanent progression or packaged releases yet. Same-
 python3 tests/test_launchers.py
 ```
 
-The test launcher uses the same Steam discovery and fails on assertions or Godot script errors. Native tests build the extension first. Run `PRIMORDIA_BACKEND=script ./tools/test.sh` to verify the independent fallback too. Wide-view performance checks and per-item ablations are described in [revision seven](docs/REVISION_7.md) and [revision eight](docs/REVISION_8.md). `tests/profile.gd` is a historical close-view diagnostic, not performance acceptance. F3 during play measures the real frame rate.
+The test launcher uses the same Steam discovery and fails on assertions or Godot script errors. Native tests build the extension first. Run `PRIMORDIA_BACKEND=script ./tools/test.sh` to verify the independent fallback too. Wide-view performance checks and per-item ablations are described in [revision seven](docs/REVISION_7.md) and [revision ten](docs/REVISION_10.md). `tests/profile.gd` is a historical close-view diagnostic, not performance acceptance. F3 during play measures the real frame rate.
 
 For a rendered capture with a display:
 

@@ -8,8 +8,13 @@ uniform sampler2D light_map : filter_linear, repeat_enable;
 uniform vec2 camera;
 uniform vec2 view_size;
 uniform vec2 screen_center = vec2(0.5,0.52);
+vec3 radiance(vec3 color) {
+	float peak = max(color.r,max(color.g,color.b));
+	float luminance = dot(color,vec3(0.2126,0.7152,0.0722));
+	return color*smoothstep(0.72,0.96,peak)*smoothstep(0.34,0.72,luminance);
+}
 vec3 bright(vec2 at) {
-	return max(textureLod(screen_texture,at,0.0).rgb-vec3(0.35),vec3(0.0));
+	return radiance(textureLod(screen_texture,at,0.0).rgb);
 }
 void fragment() {
 	vec2 world = camera + (UV-screen_center)*view_size;
@@ -20,7 +25,7 @@ void fragment() {
 	if (bloom_enabled && sunlit > 0.001) {
 		vec2 small = SCREEN_PIXEL_SIZE*2.5;
 		vec2 wide = SCREEN_PIXEL_SIZE*5.0;
-		glow = max(base-vec3(0.35),vec3(0.0))*0.28;
+		glow = radiance(base)*0.28;
 		glow += (bright(SCREEN_UV+vec2(small.x,0.0))+bright(SCREEN_UV-vec2(small.x,0.0))
 			+bright(SCREEN_UV+vec2(0.0,small.y))+bright(SCREEN_UV-vec2(0.0,small.y)))*0.12;
 		glow += (bright(SCREEN_UV+wide)+bright(SCREEN_UV-wide)

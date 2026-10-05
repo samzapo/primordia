@@ -1,0 +1,57 @@
+extends SceneTree
+## Same seeded scenes for each art pass; frozen isolates presentation, live includes physics.
+func _initialize() -> void: run.call_deferred()
+func option(name: String, fallback: String) -> String:
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with(name+"="): return arg.substr(name.length()+1)
+	return fallback
+func run() -> void:
+	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+	var output := option("--output","")
+	var mode := option("--mode","frozen")
+	var stage := option("--stage","current")
+	var count := int(option("--frames","36"))
+	for fixture in option("--fixtures","normal,dense,growth").split(","):
+		for zoom in [0.5,0.25,0.15]:
+			for bloom in [false,true]:
+				var scene = load("res://scenes/pond.tscn").instantiate()
+				root.add_child(scene)
+				scene.preferences.persist = false
+				scene.set_physics_process(false)
+				scene.manual_zoom = zoom
+				scene.preferences.bloom = bloom
+				scene.microscope_layer.material.set_shader_parameter("bloom_enabled",bloom)
+				var sim = scene.world
+				if fixture == "dense":
+					var initial: Array = sim.particles.duplicate(true)
+					for copy in range(1,4):
+						for packet in initial:
+							var item: Dictionary = packet.duplicate(true)
+							item.p = sim.Medium.wrap_position(item.p+Vector2(copy*17,copy*31))
+							item.previous = item.p
+							sim.particles.append(item)
+					sim.grid.rebuild(sim.particles)
+				elif fixture == "growth":
+					sim.player.biomass *= 256
+					sim.player.update_geometry()
+					sim.player.membrane = sim.Cell.Membrane.new(sim.player.radius)
+				for i in 60: sim.step(1.0/60)
+				scene._update_world(1.0)
+				scene.ui.hide()
+				scene.set_physics_process(mode == "live")
+				for i in 12: await process_frame
+				var elapsed: Array[int] = []
+				var prior := Time.get_ticks_usec()
+				for i in count:
+					await process_frame
+					var now := Time.get_ticks_usec()
+					elapsed.append(now-prior)
+					prior = now
+				elapsed.sort()
+				print("VISUAL_BENCHMARK ",JSON.stringify({"stage":stage,"mode":mode,"fixture":fixture,"zoom":zoom,"bloom":bloom,"frames":count,"median_ms":elapsed[count/2]/1000.0,"p95_ms":elapsed[mini(count-1,int(count*0.95))]/1000.0,"prepare_ms":scene.render_ms,"tick_ms":scene.simulation_ms,"cells":sim.active_cells,"particles":sim.active_particles,"renderer":RenderingServer.get_video_adapter_name()}))
+				if output != "" and fixture == "normal" and mode == "frozen":
+					await RenderingServer.frame_post_draw
+					root.get_texture().get_image().save_png(output+"/"+stage+"-"+str(int(zoom*100))+"-"+("bloom" if bloom else "flat")+".png")
+				scene.queue_free()
+				await process_frame
+	quit()

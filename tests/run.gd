@@ -19,6 +19,7 @@ func _initialize() -> void:
 func _run() -> void:
 	preload("res://tests/acceleration.gd").run(expect)
 	preload("res://tests/habitat.gd").run(expect)
+	preload("res://tests/art.gd").run(expect)
 	_test_metabolism()
 	_test_anatomy()
 	_test_receptors()
@@ -677,6 +678,19 @@ func _test_interface() -> void:
 	scene._update_world(1)
 	var forward := Vector2(scene.buffers[0][0],scene.buffers[0][4]).normalized()
 	expect(forward.distance_to(Vector2.DOWN) < 0.0001,"Quarter-turn particle rotation turns the visible branches")
+	var state: Array = scene.world.particles.duplicate(true)
+	scene.manual_zoom = 0.15
+	scene._update_world(1)
+	for kind in Sim.SPECIES_COUNT:
+		var data: PackedFloat32Array = scene.buffers[kind]
+		var facing := Vector2(data[0],data[4]).normalized()
+		expect(facing.distance_to(Vector2.DOWN) < 0.0001,"Wide-zoom simplified glyph preserves chemistry orientation")
+	expect(scene.world.particles == state,"Artwork LOD cannot change particle state")
+	var style: Dictionary = scene.views[scene.world.player.id].art.duplicate(true)
+	scene.world.player.role = "hunter"
+	scene.world.player.render_revision += 1
+	scene._update_world(1)
+	expect(scene.views[scene.world.player.id].art == style,"Occupation cannot change cell body artwork")
 	scene.queue_free()
 	await process_frame
 

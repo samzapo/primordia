@@ -63,6 +63,7 @@ var organ_items := VBoxContainer.new()
 var genome_button := Button.new()
 var evolution_panel = preload("res://scripts/evolution_panel.gd").new()
 var light_factor_shown := -1.0
+var particle_lod := PackedByteArray()
 var build_open := false
 var show_senses := false
 var show_debug := false
@@ -136,6 +137,7 @@ func _ready() -> void:
 		instance.material = particle_material
 		world_layer.add_child(instance)
 		batches.append(instance)
+		particle_lod.append(0)
 		var data := PackedFloat32Array()
 		data.resize(256*12)
 		buffers.append(data)
@@ -230,6 +232,12 @@ func _update_world(alpha: float) -> void:
 	world_layer.scale = Vector2.ONE*zoom
 	currents.position = Simulation.Medium.offset(render_camera,currents_origin)
 	habitat_view.sync(render_camera,world.view_half)
+	# Cached glyph variants preserve facing while dropping subpixel embellishment.
+	for kind in batches.size():
+		var simplified := int(2*Simulation.particle_radius(kind)*zoom < 6)
+		if particle_lod[kind] != simplified:
+			particle_lod[kind] = simplified
+			batches[kind].texture = ParticleArt.texture(kind,bool(simplified))
 	_sync_particles(alpha)
 	var alive_ids: Dictionary = {}
 	for cell in world.cells:
