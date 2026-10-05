@@ -87,6 +87,8 @@ Revision six uses the requested luminous coral-reef palette: blue/teal water, sh
 
 [Complement-inspired mechanics](docs/COMPLEMENT_PROPOSAL.md) are proposed next: surface tags, cooperative pore assembly and protective inhibitors. They are not enabled in this graphics revision.
 
+[Action economy and victory proposal](docs/ACTION_ECONOMY_PROPOSAL.md) outlines an adaptation budget, drafted mutations, ecological resistance and several possible endings. This is a proposal for review; none of these systems is implemented yet.
+
 ## Science and scope
 
 [references.md](references.md) records a real phenomenon and source for each biological/physical mechanic, plus the differences between evidence and game rules. Maintain it as mechanics evolve.

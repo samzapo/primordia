@@ -151,3 +151,7 @@ Revision seven preserves the biological/physical abstractions above. [Godot C++ 
 ## Peripheral optical defocus
 
 The soft edge blur is a presentation choice, not a new biological or chemical mechanic. [Godot screen-reading shader documentation](https://docs.godotengine.org/en/stable/tutorials/shaders/screen-reading_shaders.html) describes filtered screen-texture mip levels and the shared back-buffer behavior used here. Primordia blends toward a blurred level only in the outer view, keeps level zero in the center and draws HUD controls afterward. It is a stylized microscope focus effect, not a calibrated optical model.
+
+## Proposed adaptation economy and victory conditions
+
+These ideas are **not implemented**. The [action economy proposal](docs/ACTION_ECONOMY_PROPOSAL.md#scientific-grounding) records primary sources for cellular resource-allocation costs, antagonistic coevolution, costly resistance and microbial dormancy, with explicit differences between the experimental phenomena and the proposed game rules. Adaptation points, draft offers, short ecological phases and victory thresholds are game abstractions.
