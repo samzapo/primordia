@@ -19,7 +19,6 @@ var habitat_view := preload("res://scripts/habitat_view.gd").new()
 var currents := Node2D.new()
 var currents_origin := Vector2.ZERO
 var preview := Node2D.new()
-var vignette := ColorRect.new()
 var ui := Control.new()
 var hud := PanelContainer.new()
 var build_panel := PanelContainer.new()
@@ -57,7 +56,7 @@ var camera_button := 0
 var camera_button_control := Button.new()
 var quit_button := Button.new()
 var light_layer := ColorRect.new()
-var bloom_layer := ColorRect.new()
+var microscope_layer := ColorRect.new()
 var acidity_texture := ImageTexture.new()
 var light_texture := ImageTexture.new()
 var build_open := false
@@ -96,12 +95,12 @@ func _ready() -> void:
 	var light_material := ShaderMaterial.new()
 	light_material.shader = preload("res://shaders/light.gdshader")
 	light_layer.material = light_material
-	bloom_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var bloom_material := ShaderMaterial.new()
-	bloom_material.shader = preload("res://shaders/bloom.gdshader")
-	bloom_layer.material = bloom_material
-	bloom_layer.z_index = 4
-	bloom_layer.visible = preferences.bloom
+	microscope_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var microscope_material := ShaderMaterial.new()
+	microscope_material.shader = preload("res://shaders/microscope.gdshader")
+	microscope_layer.material = microscope_material
+	microscope_layer.z_index = 4
+	microscope_material.set_shader_parameter("bloom_enabled",preferences.bloom)
 	acidity_texture = ImageTexture.create_from_image(Image.create_from_data(64,40,false,Image.FORMAT_RF,world.acidity.values.to_byte_array()))
 	light_material.set_shader_parameter("acidity_map",acidity_texture)
 	_refresh_light_texture()
@@ -138,13 +137,7 @@ func _ready() -> void:
 	world_layer.add_child(preview)
 	preview.z_index = 3
 	preview.draw.connect(_draw_preview)
-	add_child(bloom_layer)
-	vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vignette.z_index = 5
-	var material := ShaderMaterial.new()
-	material.shader = preload("res://shaders/microscope.gdshader")
-	vignette.material = material
-	add_child(vignette)
+	add_child(microscope_layer)
 	var canvas := CanvasLayer.new()
 	canvas.layer = 10
 	add_child(canvas)
@@ -219,14 +212,13 @@ func _update_world(alpha: float) -> void:
 	light_layer.material.set_shader_parameter("camera",render_camera)
 	light_layer.material.set_shader_parameter("view_size",size/zoom)
 	light_layer.material.set_shader_parameter("screen_center",camera_screen/size)
-	bloom_layer.material.set_shader_parameter("camera",render_camera)
-	bloom_layer.material.set_shader_parameter("view_size",size/zoom)
-	bloom_layer.material.set_shader_parameter("screen_center",camera_screen/size)
+	microscope_layer.material.set_shader_parameter("camera",render_camera)
+	microscope_layer.material.set_shader_parameter("view_size",size/zoom)
+	microscope_layer.material.set_shader_parameter("screen_center",camera_screen/size)
 	preview.position = Simulation.Medium.offset(render_camera,world.player.position)
 	world_layer.position = camera_screen
 	world_layer.scale = Vector2.ONE*zoom
 	currents.position = Simulation.Medium.offset(render_camera,currents_origin)
-	vignette.material.set_shader_parameter("center",camera_screen/size)
 	habitat_view.sync(render_camera,world.view_half)
 	_sync_particles(alpha)
 	var alive_ids: Dictionary = {}
@@ -351,7 +343,7 @@ func _refresh_light_texture() -> void:
 		for x in 64: values[y*64+x] = world.light_at(Vector2(x+0.5,y+0.5)*64)
 	light_texture = ImageTexture.create_from_image(Image.create_from_data(64,40,false,Image.FORMAT_RF,values.to_byte_array()))
 	light_layer.material.set_shader_parameter("light_map",light_texture)
-	bloom_layer.material.set_shader_parameter("light_map",light_texture)
+	microscope_layer.material.set_shader_parameter("light_map",light_texture)
 
 func _player_relative(screen: Vector2) -> Vector2:
 	return (screen-camera_screen)/zoom-Simulation.Medium.offset(render_camera,world.player.position)
@@ -531,9 +523,8 @@ func _apply_ui_scale(value: float) -> void:
 
 func _layout() -> void:
 	var size := get_viewport_rect().size
-	vignette.size = size
 	light_layer.size = size
-	bloom_layer.size = size
+	microscope_layer.size = size
 	hud.position = Vector2(16,16)
 	hud.size = Vector2(size.x-32,0)
 	var panel_y := hud.position.y+hud.size.y+16
@@ -550,7 +541,7 @@ func _layout() -> void:
 
 func set_bloom(on: bool) -> void:
 	preferences.bloom = on
-	bloom_layer.visible = on
+	microscope_layer.material.set_shader_parameter("bloom_enabled",on)
 	bloom_check.set_pressed_no_signal(on)
 	preferences.save_settings()
 

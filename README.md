@@ -83,7 +83,7 @@ Water gains broad blue, teal, jade and violet regions from seamless multiscale n
 
 ## Graphics and proposed chemistry
 
-Revision six uses the requested luminous coral-reef palette: blue/teal water, shared periwinkle cell bodies, layered nuclei and clearer membrane rims. Functional colors live on the organelles and emitted particles; cells are not colored by occupation. Brighter presentation preserves the actual light resource and shaded habitat regions. A restrained bloom follows light-rich water and bright world details, while the HUD stays sharp.
+Revision six uses the requested luminous coral-reef palette: blue/teal water, shared periwinkle cell bodies, layered nuclei and clearer membrane rims. Functional colors live on the organelles and emitted particles; cells are not colored by occupation. Brighter presentation preserves the actual light resource and shaded habitat regions. A restrained bloom follows light-rich water and bright world details. Soft peripheral blur replaces the dark vignette; the center and HUD stay sharp. The blur remains active when bloom is disabled.
 
 [Complement-inspired mechanics](docs/COMPLEMENT_PROPOSAL.md) are proposed next: surface tags, cooperative pore assembly and protective inhibitors. They are not enabled in this graphics revision.
 

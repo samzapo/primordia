@@ -50,6 +50,14 @@ A separate **live whole-game** minimum-zoom run measured **174.580 ms median / 1
 
 A separate 3,600-tick fully active habitat stress run passed with finite cell, fluid and packet motion throughout. Final rendered captures were inspected for plant visibility, contact/art alignment and HUD legibility.
 
+## Peripheral blur follow-up
+
+The owner replaced the dark vignette with soft edge defocus. A single microscope shader now shares its screen copy between existing light bloom and filtered peripheral blur; the center uses the original sharp image. HUD controls draw afterward. The bloom setting controls the halo only, leaving blur active. Existing simulation activity falloff is unchanged.
+
+Both suites still pass (1,582 native / 528 reference assertions). A frozen-scene render check passed at 0.50, 0.25 and 0.15 zoom in Vulkan Mobile (RTX 5080) and OpenGL Compatibility (software llvmpipe in the virtual display), including bloom disabled, build-focus shift and resize. Sampled center pixels remain identical with blur on/off; translucent HUD backgrounds transmit the blurred scene, while foreground controls remain outside the post-process.
+
+At minimum zoom, two Vulkan frame-median pairs were 24.277→24.488 and 24.470→24.581 ms with blur enabled. The sharp baseline disables mipmap generation too, so this comparison includes the added filtering work. Software OpenGL pairs were 11.712→13.970 and 11.594→13.982 ms. These are frozen-scene virtual-display timings, not live game FPS or owner-machine results; the wide-view limitation above remains.
+
 ## Reproduce
 
 Use the Steam-discovering launchers, or supply an explicit Godot executable:

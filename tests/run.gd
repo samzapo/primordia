@@ -510,9 +510,9 @@ func _test_interface() -> void:
 	expect(scene.settings_panel.visible and scene.is_paused(),"Escape opens settings and pauses biology")
 	expect(scene.quit_button.text == "Quit game" and scene.quit_button.pressed.get_connections().size() == 1,"Settings includes connected quit control")
 	scene.bloom_check.toggled.emit(false)
-	expect(not scene.bloom_layer.visible and not scene.preferences.bloom,"Settings can disable the bloom pass")
+	expect(scene.microscope_layer.visible and not scene.microscope_layer.material.get_shader_parameter("bloom_enabled") and not scene.preferences.bloom,"Disabling bloom keeps the peripheral blur pass active")
 	scene.bloom_check.toggled.emit(true)
-	expect(scene.bloom_layer.visible and scene.preferences.bloom,"Settings can restore light bloom")
+	expect(scene.microscope_layer.visible and scene.microscope_layer.material.get_shader_parameter("bloom_enabled") and scene.preferences.bloom,"Settings can restore light bloom")
 	scene._input(key)
 	expect(not scene.settings_panel.visible and not scene.is_paused(),"Escape closes settings")
 	key.keycode = KEY_SPACE

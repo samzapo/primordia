@@ -73,6 +73,8 @@ The owner selected the large plant obstacles and varied water colors in the supp
 
 The first implementation uses finite recursive branching for plant-like scenery with solid main stems, and periodic fractal noise for water color. Fine fronds are decorative. These are fixed environmental obstacles, not new food sources or organs. See [revision eight](REVISION_8.md) for the collision approximations, performance evidence and remaining limits.
 
+The owner subsequently replaced the dark microscope vignette with a soft peripheral blur. Keep the center and HUD sharp, preserve water brightness at the edges, and retain existing simulation activity falloff.
+
 ## Proposed expansion areas
 
 - More varied ecosystems and organisms with their own organelle-derived behavior.
