@@ -536,6 +536,43 @@ func _test_interface() -> void:
 	scene._unhandled_input(wheel)
 	expect(link.tension > tension and scene.shape_preview_ticks > 0,"Hover-wheel changes physical microtubule tension")
 	expect(scene.cards.size() == Cell.KINDS.size(),"Build contains organ cards only, no microtubule entry")
+	# Closing assembly cancels a drag and disables creation, tension and removal.
+	click.pressed = true
+	scene._unhandled_input(click)
+	expect(not scene.tube_start.is_empty(),"Build starts a pending microtubule drag")
+	scene._input(key)
+	scene._update_world(1)
+	expect(not scene.build_open and scene.tube_start.is_empty(),"Closing build cancels an unfinished microtubule")
+	before = network.next_group
+	click.pressed = false
+	scene._input(click)
+	scene._unhandled_input(click)
+	expect(network.next_group == before,"Release after closing build does not place a microtubule")
+	click.pressed = true
+	click.position = scene.camera_screen+cell.local_point(0.6).rotated(cell.angle)*scene.zoom
+	scene._unhandled_input(click)
+	click.pressed = false
+	click.position = scene.camera_screen+cell.local_point(3.3).rotated(cell.angle)*scene.zoom
+	scene._unhandled_input(click)
+	expect(network.next_group == before and scene.tube_start.is_empty(),"Dragging during normal play cannot edit microtubules")
+	wheel.position = scene.camera_screen+midpoint.rotated(cell.angle)*scene.zoom
+	tension = link.tension
+	var play_zoom: float = scene.manual_zoom
+	scene._unhandled_input(wheel)
+	expect(link.tension == tension and scene.manual_zoom > play_zoom,"Wheel over a microtubule zooms during play without changing tension")
+	click.pressed = true
+	click.button_index = MOUSE_BUTTON_RIGHT
+	click.position = wheel.position
+	var link_count: int = network.links.size()
+	scene._unhandled_input(click)
+	expect(network.links.size() == link_count,"Right-click during play cannot remove microtubules")
+	scene._input(key)
+	scene._update_world(1)
+	click.position = scene.camera_screen+midpoint.rotated(cell.angle)*scene.zoom
+	scene._unhandled_input(click)
+	expect(network.link_by_id(link.id).is_empty(),"Reopening build enables microtubule removal")
+	click.button_index = MOUSE_BUTTON_LEFT
+
 	scene._select(1)
 	click.pressed = true
 	click.position = scene.camera_screen+cell.local_point(2.15).rotated(cell.angle)*scene.zoom

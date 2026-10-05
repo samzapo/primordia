@@ -24,7 +24,7 @@ Spike collisions use the finite tip segment against a prey's radial support, rou
 
 `cytoskeleton.gd` is a tension-only network. Endpoints can use fractional membrane coordinates, free interior points, or junctions created by splitting an existing link. Split segments retain their group/tension. Removing a group retains junctions used by other links. Rest lengths scale with growth. The normalized tension control contracts target span from 100% to 35%; it is not force in newtons.
 
-Direct left press/release creates endpoints. Hover-wheel edits tension, with a native hint; right-click removes a group. Anatomy placement takes precedence when an organ is selected. Paused edits run bounded membrane relaxation without advancing biology. There is no microtubule build-menu entry. Interior links affect the membrane only through connected anchors.
+While the build menu is open, direct left press/release creates endpoints. Creation, tension changes, removal and editing previews are disabled outside build; closing the menu cancels an unfinished drag. Hover-wheel edits tension, with a native hint; right-click removes a group. Anatomy placement takes precedence when an organ is selected. Paused edits run bounded membrane relaxation without advancing biology. There is no microtubule build-menu entry. Interior links affect the membrane only through connected anchors.
 
 ## Particle chemistry and orientation
 

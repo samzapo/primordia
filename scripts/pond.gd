@@ -70,7 +70,7 @@ var simulation_ms := 0.0
 var render_ms := 0.0
 var screenshot_path := ""
 var capture_frame := 0
-var notice := "Tab builds organs · drag on your cell to add microtubules · hover + wheel sets tension"
+var notice := "Tab opens build · drag on your cell there to add microtubules · hover + wheel sets tension"
 var notice_timer := 8.0
 
 func _ready() -> void:
@@ -157,6 +157,9 @@ func _physics_process(dt: float) -> void:
 func is_paused() -> bool:
 	return build_open or settings_panel.visible or world.player.dead
 
+func _can_edit_tubules() -> bool:
+	return build_open and not settings_panel.visible and not world.player.dead
+
 func _process(dt: float) -> void:
 	ui_time += dt
 	notice_timer = maxf(0,notice_timer-dt)
@@ -176,7 +179,7 @@ func _process(dt: float) -> void:
 				shape_preview_ticks -= 1
 			world.player.render_revision += 1
 	preview.queue_redraw()
-	var hover := _nearest_tubule(_player_relative(get_global_mouse_position()).rotated(-world.player.angle))
+	var hover := _nearest_tubule(_player_relative(get_global_mouse_position()).rotated(-world.player.angle)) if _can_edit_tubules() else {}
 	tube_hint.visible = not settings_panel.visible and not hover.is_empty() and get_viewport().gui_get_hovered_control() == null
 	if tube_hint.visible:
 		var link: Dictionary = world.player.membrane.skeleton.link_by_id(hover.id)
@@ -425,7 +428,7 @@ Right-click an installed organ to recycle.",MUTED)
 	_button(options,"Next habitat [H]",func(): _restart((world.habitat+1)%3))
 	_button(options,"New life [R]",func(): _restart())
 	_label(options,"Wheel during placement: organ size
-Hover microtubule + wheel: tension
+In build: drag microtubules; hover + wheel: tension
 Wheel elsewhere: zoom
 Space: follow / free camera
 Free camera: drag empty water or middle-drag
@@ -602,7 +605,7 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and not event.pressed:
 		if event.button_index == camera_button: camera_dragging = false
 		if event.button_index == MOUSE_BUTTON_LEFT and not tube_start.is_empty():
-			if get_viewport().gui_get_hovered_control() != null: tube_start.clear()
+			if not _can_edit_tubules() or get_viewport().gui_get_hovered_control() != null: tube_start.clear()
 			else: _unhandled_input(event)
 			get_viewport().set_input_as_handled()
 			return
@@ -625,6 +628,7 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 func _unhandled_input(event: InputEvent) -> void:
+	if not _can_edit_tubules(): tube_start.clear()
 	if settings_panel.visible or world.player.dead: return
 	if event is InputEventMouseMotion and camera_dragging and not camera_locked:
 		free_camera = Simulation.Medium.wrap_position(free_camera-event.relative/zoom)
@@ -646,7 +650,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			tube_start.clear()
 		return
 	if event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
-		var hit := _nearest_tubule(local)
+		var hit := _nearest_tubule(local) if _can_edit_tubules() else {}
 		if not hit.is_empty():
 			var link: Dictionary = world.player.membrane.skeleton.link_by_id(hit.id)
 			tube_group = link.group
@@ -669,10 +673,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			_message("Attached. Tab resumes life; right-click recycles an organelle.")
 		else: _message("Needs enough biomass and total membrane area. Neighbors move aside.")
 		return
-	if event.button_index == MOUSE_BUTTON_LEFT:
+	if event.button_index == MOUSE_BUTTON_LEFT and _can_edit_tubules():
 		var anchor := _tubule_anchor(local)
 		if not anchor.is_empty(): tube_start = anchor; return
-	if event.button_index == MOUSE_BUTTON_RIGHT:
+	if event.button_index == MOUSE_BUTTON_RIGHT and build_open:
 		if not tube_start.is_empty(): tube_start.clear(); return
 		if build_open:
 			for i in world.player.organs.size():
@@ -714,11 +718,13 @@ func _tubule_anchor(local: Vector2) -> Dictionary:
 	return {}
 
 func _set_tubule_tension(value: float) -> void:
+	if not _can_edit_tubules(): return
 	tube_tension = clampf(value,0,1)
 	if tube_group >= 0: world.player.membrane.skeleton.set_tension(tube_group,tube_tension)
 	shape_preview_ticks = 60
 
 func _draw_tubule_preview() -> void:
+	if not _can_edit_tubules(): return
 	var membrane = world.player.membrane
 	var skeleton = membrane.skeleton
 	var hit := _nearest_tubule(_player_relative(get_global_mouse_position()).rotated(-world.player.angle))
