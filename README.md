@@ -2,7 +2,7 @@
 
 A physics and chemistry simulation game about managing one small cell. Eat, grow and survive predation. **You never steer the cell:** its anatomy controls its behavior.
 
-This fifth playable revision uses **Godot 4.7.2**, a fixed-step simulation, deformable membranes, oriented chemical particles and procedural 2D artwork. It needs no external assets or plugins.
+This sixth playable revision uses **Godot 4.7.2**, a fixed-step simulation, deformable membranes, oriented chemical particles and procedural 2D artwork. Its vector artwork is authored in the project; cached particle textures and mipmaps generate automatically at runtime. It needs no external assets or plugins.
 
 ## Run with Steam Godot on Linux
 
@@ -17,7 +17,7 @@ The launcher finds Godot in standard Steam locations, custom Steam libraries and
 - **Tab:** open/close paused organ assembly. Illustrated cards or **1–9 / 0** select organs. Click the membrane to attach; the wheel sizes the selected organ. Existing neighbors move aside to make space and stay anchored afterward. Right-click an installed organ during assembly to recycle it.
 - **In the build menu (Tab), drag on your cell:** press the left button for the first microtubule point and release for the second. Endpoints can be on the membrane, on another tube, or inside the cell. Hover a tube and **scroll** to adjust tension; a label shows the current setting. Right-click a tube to remove it. No microtubule build card is needed. During selected-organ placement, left click attaches that organ; close and reopen assembly to clear the selection and draw tubes. Creation, tension changes and removal are available only while the build menu is open.
 - **Space:** lock/unlock the camera to your cell's **position**, without changing its rotation or pausing. In free view, drag empty water or middle-drag to pan. Space returns to following the cell.
-- **Escape:** settings, including **Quit game**. Settings pause biology. **F11** toggles fullscreen. Fullscreen and **85–175% HUD/text scale** persist.
+- **Escape:** settings, including **Quit game**. Settings pause biology. **F11** toggles fullscreen. Fullscreen, **Light bloom** and **85–175% HUD/text scale** persist. Bloom can be disabled in settings.
 - **Wheel elsewhere:** microscope zoom. **S:** sensing ranges. **F3:** FPS and CPU simulation/frame preparation times. **H:** next habitat. **R:** new life.
 
 The world wraps without walls. The microscope center simulates fully, the fringe slows, and offscreen state freezes except for explicit population triggers. The active region follows the actual camera, including free view. Tab/settings remain ways to pause; Space is solely a camera control.
@@ -45,7 +45,7 @@ Organ cost, material and most output scale with size squared. Surface area and b
 
 **Cells are the only sources of external particles.** The initial clouds represent products of the existing cells' earlier life, with source-cell identifiers. There is no automatic food/oxygen habitat spawner. Respiration, photosynthesis, secretion, wounds, recycling and death sustain the particle economy. Replacing a dead NPC is an explicit offscreen population event with accounted material input.
 
-Eleven particle types are visible: nutrient, oxygen, waste, cell trace, toxin, dissolved carbon, digestive enzyme, antitoxin, acidifying carrier, buffer and decoy. Bright caps show particle orientation. Compatible faces must touch and point toward each other to react; there is no additional reaction success roll. Thermal motion tumbles particles, and decay uses a per-second hazard instead of a fixed lifetime. Neighbor searches use spatial grids rather than all-pairs testing.
+Eleven particle types are visible: nutrient, oxygen, waste, cell trace, toxin, dissolved carbon, digestive enzyme, antitoxin, acidifying carrier, buffer and decoy. Forks, hooks, combs and linked lobes distinguish species; their bright tips rotate with the actual particle orientation. Compatible faces must touch and point toward each other to react; there is no additional reaction success roll. Thermal motion tumbles particles, and decay uses a per-second hazard instead of a fixed lifetime. Neighbor searches use spatial grids rather than all-pairs testing.
 
 | Encounter | Result |
 | --- | --- |
@@ -59,13 +59,19 @@ Eleven particle types are visible: nutrient, oxygen, waste, cell trace, toxin, d
 
 Light varies smoothly across the habitat and is visible in the water. Photosynthesis requires both light and carbon; light supplies energy, while water is an implicit reservoir for oxygen production. Photosynthetic cells release food and oxygen for neighbors.
 
-Acidity is a local transported field, tinted pink in the water. Moderate acidity favors the modeled digestive enzyme. Excess acidity raises maintenance ATP costs, accumulates internal stress, slows metabolism and eventually damages cells. Buffers have finite capacity. The secreting cell is also exposed. Nutrient assembly does **not** gain an automatic acid bonus.
+Acidity is a local transported field: increasing acidity shifts water from turquoise toward rose/magenta; buffering restores its normal color. Moderate acidity favors the modeled digestive enzyme. Excess acidity raises maintenance ATP costs, accumulates internal stress, slows metabolism and eventually damages cells. Buffers have finite capacity. The secreting cell is also exposed. Nutrient assembly does **not** gain an automatic acid bonus.
 
 Decoys temporarily reduce chemical sensing range. Every affected receptor automatically spends a little ATP to clean itself, repair bodies accelerate clearance, and passive release still works with no ATP. Purple rings and the **RECEPTORS CLEARING** status show the effect. Light sensing is unaffected.
 
 Pores pulse on consumption. Health/ATP bars show actual resources. Yellow nucleus-to-surface packets illustrate ATP spending; pink packets illustrate biomass-funded repair. External particles are shunted to the membrane edge instead of rendering underneath cells.
 
 Process **40 food units and survive 90 seconds** for the first milestone. The ecosystem continues afterward. The starting grazing anatomy is a starting point for adaptation, not a guaranteed unattended win in the cell-sourced ecosystem.
+
+## Graphics and proposed chemistry
+
+Revision six uses the requested luminous coral-reef palette: blue/teal water, shared periwinkle cell bodies, layered nuclei and clearer membrane rims. Functional colors live on the organelles and emitted particles; cells are not colored by occupation. Brighter presentation preserves the actual light resource and shaded habitat regions. A restrained bloom follows light-rich water and bright world details, while the HUD stays sharp.
+
+[Complement-inspired mechanics](docs/COMPLEMENT_PROPOSAL.md) are proposed next: surface tags, cooperative pore assembly and protective inhibitors. They are not enabled in this graphics revision.
 
 ## Science and scope
 
@@ -92,6 +98,6 @@ For a rendered capture with a display:
 
 Optional capture flags include `--habitat=0`, `--advance=600`, `--assembly`, `--settings`, `--hud-scale=1.75` and `--senses`. Put habitat selection before advance. Capture output belongs outside source control.
 
-The owner's separate Linux **Steam Godot 4.7.2 / RTX 3090 / Threadripper 2990WX** machine remains unavailable to this task. It is an upper-capacity reference, not minimum hardware. See [revision-five validation](docs/REVISION_5.md), [architecture](docs/ARCHITECTURE.md) and [persistent design](docs/DESIGN.md).
+The owner's separate Linux **Steam Godot 4.7.2 / RTX 3090 / Threadripper 2990WX** machine remains unavailable to this task. It is an upper-capacity reference, not minimum hardware. See [revision-six graphics notes](docs/REVISION_6.md), [architecture](docs/ARCHITECTURE.md) and [persistent design](docs/DESIGN.md).
 
 Only authored source and stable Godot `.uid` identifiers are tracked. `.godot/` imports and caches regenerate automatically. Engine downloads, captures, logs and exports are not committed. No redistribution license has been granted for this private project.

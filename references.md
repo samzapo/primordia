@@ -10,7 +10,7 @@ This is a living design record. For each new biological or physical mechanic, re
 
 **Game:** grazing pores release reusable digestive enzymes. An enzyme meeting waste with complementary orientation converts it into edible nutrient material. Moderate acidity improves the modeled enzyme's binding acceptance; extreme acidity prevents this reaction. Acid glands and finite-capacity buffer particles change a transported acid-equivalent field. Repair bodies secrete buffers.
 
-**Abstraction:** the wider accepted contact angle represents favorable enzyme activity; pH does not literally widen a molecular patch. Our normalized acidity is not measured pH, and averaging it is not averaging pH values. Generic waste stands for digestible organic debris. Water, ions and individual chemical bonds are unresolved. Nutrient assembly is not automatically enhanced by acid.
+**Abstraction:** the wider accepted contact angle represents favorable enzyme activity; pH does not literally widen a molecular patch. Our normalized acidity is not measured pH, and averaging it is not averaging pH values. Rose/magenta water is a visualization of that field, not a claim that acid or hydrogen ions are naturally pink. Generic waste stands for digestible organic debris. Water, ions and individual chemical bonds are unresolved. Nutrient assembly is not automatically enhanced by acid.
 
 ## Acid stress and cellular defense
 
@@ -42,7 +42,7 @@ This is a living design record. For each new biological or physical mechanic, re
 
 **Game:** reactive faces must touch and point toward one another. Compatible contact reactions have no extra success roll. Thermal translation/rotation and probabilistic decay make encounters variable. Aligned nutrient packets aggregate into a larger packet containing their combined edible material.
 
-**Abstraction:** packets represent coarse amounts, not single molecules. Nutrient assembly is physical packet aggregation, not spontaneous protein or sugar synthesis. Orientation alone does not capture activation barriers, conformation, solvent effects or quantum chemistry. Decay uses continuous hazards rather than fixed expiration times. Rendered caps show orientation, not actual molecular structure.
+**Abstraction:** packets represent coarse amounts, not single molecules. Nutrient assembly is physical packet aggregation, not spontaneous protein or sugar synthesis. Orientation alone does not capture activation barriers, conformation, solvent effects or quantum chemistry. Decay uses continuous hazards rather than fixed expiration times. Bright tips on asymmetric vector glyphs show orientation, not actual molecular structure.
 
 ## Toxins and neutralization
 
@@ -119,3 +119,19 @@ This is a living design record. For each new biological or physical mechanic, re
 ## Repair, energy and presentation
 
 [Plasma membrane repair is mediated by Ca(2+)-regulated exocytosis of lysosomes](https://pubmed.ncbi.nlm.nih.gov/11511344/) (Reddy, Caler and Andrews, 2001) provides experimental motivation for active membrane resealing. Our repair consumes biomass and ATP, with internal resource animations illustrating those debits. Calcium, trafficking and exocytosis are not resolved; the repair organ, its buffer secretion and cleanup bonus combine distinct functions for gameplay. Protective cortex tiles, instantaneous anatomical editing, HUD resource bars, camera locking, toroidal space, dormant offscreen ecology and particle shunting are explicitly game/implementation choices. Do not invent biological support for them.
+
+## Complement: recognition, assembly and regulation (proposals)
+
+**Phenomena:** complement-derived fragments on a surface can promote receptor-mediated uptake; terminal complement proteins assemble membrane pores; regulatory proteins limit activation and protect host tissue.
+
+**Sources:** [Purified C3b phagocytosis experiments](https://www.nature.com/articles/s41598-022-27279-4); [MAC cryo-EM structure](https://pubmed.ncbi.nlm.nih.gov/26841837/) (Serna and colleagues, 2016); [Factor H–C3b structure](https://www.nature.com/articles/ni.1755) (Wu and colleagues, 2009).
+
+**Proposed game use:** surface tagging, orientation-dependent pore assembly and a protective inhibitor. See [the complement proposal](docs/COMPLEMENT_PROPOSAL.md). These mechanics are **not yet implemented**.
+
+**Abstraction:** a small local assembly/counter loop would condense a multicellular immune system into fictional cell-secreted chemistry. A few game pieces would not reproduce MAC stoichiometry, and a generic neutralizer would combine several regulatory actions. Recognition bonuses and lower-biomass spike targeting are gameplay rules.
+
+**Artwork:** the owner's reference images motivate a bright, rounded vector vocabulary of forks, combs, hooks and linked lobes. Primordia's authored glyphs are original symbolic species markers, not traced illustrations or literal protein structures. Their forward axis matches the existing chemistry orientation. Decorative branches do not add reaction sites; the contact model remains circular.
+
+## Light bloom as presentation
+
+The screen bloom is a stylistic optical halo in light-rich regions. It does not add light energy, photosynthesis or chemical activity. The world pass uses a bounded neighborhood of [Godot screen-texture samples](https://docs.godotengine.org/en/stable/tutorials/shaders/screen-reading_shaders.html); the HUD is drawn afterward and stays sharp. This is an inexpensive screen-space approximation, not a simulation of microscope optics or spectral scattering.

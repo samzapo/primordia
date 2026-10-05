@@ -492,6 +492,10 @@ func _test_interface() -> void:
 	scene._input(key)
 	expect(scene.settings_panel.visible and scene.is_paused(),"Escape opens settings and pauses biology")
 	expect(scene.quit_button.text == "Quit game" and scene.quit_button.pressed.get_connections().size() == 1,"Settings includes connected quit control")
+	scene.bloom_check.toggled.emit(false)
+	expect(not scene.bloom_layer.visible and not scene.preferences.bloom,"Settings can disable the bloom pass")
+	scene.bloom_check.toggled.emit(true)
+	expect(scene.bloom_layer.visible and scene.preferences.bloom,"Settings can restore light bloom")
 	scene._input(key)
 	expect(not scene.settings_panel.visible and not scene.is_paused(),"Escape closes settings")
 	key.keycode = KEY_SPACE
@@ -601,6 +605,30 @@ func _test_interface() -> void:
 	cell.position = Vector2(2,1200)
 	scene._update_world(0.5)
 	expect(scene.views[0].position.length() < 0.001,"Position follow interpolates smoothly over world seam")
+
+	# Shader artwork and the binding axis share the real particle angle, including interpolation.
+	scene.world = isolated()
+	scene.build_open = false
+	scene.manual_zoom = 1
+	for kind in Sim.SPECIES_COUNT:
+		scene.world.spawn_particle(kind,scene.world.player.position+Vector2(120+kind*16,50),Vector2.ZERO,0.3,0)
+		var particle: Dictionary = scene.world.particles[-1]
+		particle.previous_angle = 0
+		particle.angle = PI/2
+		particle.updated = scene.world.revision
+	scene._update_world(0.5)
+	var distinct_art: Dictionary = {}
+	for kind in Sim.SPECIES_COUNT:
+		var batch: MultiMeshInstance2D = scene.batches[kind]
+		var data: PackedFloat32Array = scene.buffers[kind]
+		var forward := Vector2(data[0],data[4]).normalized()
+		expect(forward.distance_to(Vector2.from_angle(PI/4)) < 0.0001,"Visible glyph front interpolates the chemistry heading")
+		expect(batch.texture != null and batch.multimesh.visible_instance_count == 1,"Every species uses its cached vector glyph")
+		distinct_art[batch.texture.get_rid()] = true
+	expect(distinct_art.size() == Sim.SPECIES_COUNT,"Species have distinct cached artwork")
+	scene._update_world(1)
+	var forward := Vector2(scene.buffers[0][0],scene.buffers[0][4]).normalized()
+	expect(forward.distance_to(Vector2.DOWN) < 0.0001,"Quarter-turn particle rotation turns the visible branches")
 	scene.queue_free()
 	await process_frame
 
@@ -703,12 +731,13 @@ func _test_preferences() -> void:
 	var preferences = preload("res://scripts/preferences.gd").new()
 	preferences.path = "user://test-preferences-%d.cfg" % Time.get_ticks_usec()
 	preferences.fullscreen = true
+	preferences.bloom = false
 	preferences.hud_scale = 1.5
 	preferences.save_settings()
 	var restored = preload("res://scripts/preferences.gd").new()
 	restored.path = preferences.path
 	restored.load_settings()
-	expect(restored.fullscreen and restored.hud_scale == 1.5,"Fullscreen and HUD scale survive settings reload")
+	expect(restored.fullscreen and restored.hud_scale == 1.5 and not restored.bloom,"Fullscreen, bloom and HUD scale survive settings reload")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(preferences.path))
 
 func _test_packing_and_size() -> void:

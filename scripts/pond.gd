@@ -4,12 +4,12 @@ const CellView = preload("res://scripts/cell_view.gd")
 const Preferences = preload("res://scripts/preferences.gd")
 const OrganCard = preload("res://scripts/organ_card.gd")
 const Visuals = preload("res://scripts/visuals.gd")
+const ParticleArt = preload("res://scripts/particle_art.gd")
 const PARTICLE_SHADER = preload("res://shaders/particle.gdshader")
 const MINT := Color("80efce")
 const GOLD := Color("f5d47b")
 const TEXT := Color("e5f5ec")
 const MUTED := Color("a3bfc5")
-const PALETTE := [Color("a1e88a"),Color("70d6e1"),Color("af9ac3"),Color("fc8c90"),Color("f6b86a"),Color("dfbfa1"),Color("c9d980"),Color("8dbcf8"),Color("f59db9"),Color("b2eae1"),Color("cf92e8")]
 const TITLES := ["Flagellum","Protective cortex","Hunting spike","Repair body","Grazing pore","Flight receptor","Photosynthesis","Toxin vesicle","Toxin neutralizer","Acid gland"]
 const HELP := ["Larger flagella deliver more thrust. Anatomy chooses travel direction.","Protects the membrane directly beneath it. Larger armor covers more surface.","Senses lower total biomass cells at long range, turns toward them and pulls you into pursuit. Its physical tip punctures on contact.","Uses biomass and ATP to repair organs and close punctures faster. Releases buffers that neutralize local acidity and accelerates receptor cleaning.","Senses and pumps nutrients into its opening. Secretes reusable enzymes that turn waste into food when aligned.","Faces a detected cell while propelling you away. This is the only organ that triggers flight.","Seeks brighter water. Light fixes dissolved carbon into biomass and food, releasing oxygen. Works best in bright habitat patches.","Spends ATP and biomass to fire toxins and receptor-blocking decoys at a cell detected by a spike or flight receptor.","Releases complementary particles that bind toxin into harmless waste. Costs small amounts of biomass and ATP.","Releases acidifying particles. Moderate acidity favors digestive enzymes; excess acidity costs ATP and stresses cells. Repair bodies release buffers."]
 var world: Simulation = Simulation.new()
@@ -39,6 +39,7 @@ var health_text := Label.new()
 var atp_text := Label.new()
 var scale_select := OptionButton.new()
 var fullscreen_check := CheckButton.new()
+var bloom_check := CheckButton.new()
 var batches: Array[MultiMeshInstance2D] = []
 var buffers: Array[PackedFloat32Array] = []
 var views: Dictionary = {}
@@ -55,6 +56,7 @@ var camera_button := 0
 var camera_button_control := Button.new()
 var quit_button := Button.new()
 var light_layer := ColorRect.new()
+var bloom_layer := ColorRect.new()
 var acidity_texture := ImageTexture.new()
 var light_texture := ImageTexture.new()
 var build_open := false
@@ -93,6 +95,12 @@ func _ready() -> void:
 	var light_material := ShaderMaterial.new()
 	light_material.shader = preload("res://shaders/light.gdshader")
 	light_layer.material = light_material
+	bloom_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var bloom_material := ShaderMaterial.new()
+	bloom_material.shader = preload("res://shaders/bloom.gdshader")
+	bloom_layer.material = bloom_material
+	bloom_layer.z_index = 4
+	bloom_layer.visible = preferences.bloom
 	acidity_texture = ImageTexture.create_from_image(Image.create_from_data(64,40,false,Image.FORMAT_RF,world.acidity.values.to_byte_array()))
 	light_material.set_shader_parameter("acidity_map",acidity_texture)
 	_refresh_light_texture()
@@ -101,6 +109,8 @@ func _ready() -> void:
 	add_child(world_layer)
 	world_layer.add_child(currents)
 	currents.draw.connect(_draw_currents)
+	var particle_material := ShaderMaterial.new()
+	particle_material.shader = PARTICLE_SHADER
 	for kind in Simulation.SPECIES_COUNT:
 		var instance := MultiMeshInstance2D.new()
 		var mesh := QuadMesh.new()
@@ -112,9 +122,9 @@ func _ready() -> void:
 		multi.instance_count = 256
 		multi.visible_instance_count = 0
 		instance.multimesh = multi
-		var material := ShaderMaterial.new()
-		material.shader = PARTICLE_SHADER
-		instance.material = material
+		instance.texture = ParticleArt.texture(kind)
+		instance.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		instance.material = particle_material
 		world_layer.add_child(instance)
 		batches.append(instance)
 		var data := PackedFloat32Array()
@@ -123,8 +133,9 @@ func _ready() -> void:
 	world_layer.add_child(preview)
 	preview.z_index = 3
 	preview.draw.connect(_draw_preview)
+	add_child(bloom_layer)
 	vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vignette.z_index = 4
+	vignette.z_index = 5
 	var material := ShaderMaterial.new()
 	material.shader = preload("res://shaders/microscope.gdshader")
 	vignette.material = material
@@ -202,6 +213,9 @@ func _update_world(alpha: float) -> void:
 	light_layer.material.set_shader_parameter("camera",render_camera)
 	light_layer.material.set_shader_parameter("view_size",size/zoom)
 	light_layer.material.set_shader_parameter("screen_center",camera_screen/size)
+	bloom_layer.material.set_shader_parameter("camera",render_camera)
+	bloom_layer.material.set_shader_parameter("view_size",size/zoom)
+	bloom_layer.material.set_shader_parameter("screen_center",camera_screen/size)
 	preview.position = Simulation.Medium.offset(render_camera,world.player.position)
 	world_layer.position = camera_screen
 	world_layer.scale = Vector2.ONE*zoom
@@ -231,7 +245,6 @@ func _update_world(alpha: float) -> void:
 
 func _sync_particles(alpha: float = 1.0) -> void:
 	var counts := PackedInt32Array([0,0,0,0,0,0,0,0,0,0,0])
-	const SIZES := [8.0,5.0,6.0,5.0,10.0,6.0,8.0,8.0,6.0,6.0,7.0]
 	for index in world.local_particle_ids(30):
 		var p: Dictionary = world.particles[index]
 		if not p.alive: continue
@@ -245,13 +258,15 @@ func _sync_particles(alpha: float = 1.0) -> void:
 		if slot >= batches[kind].multimesh.instance_count:
 			batches[kind].multimesh.instance_count *= 2
 			buffers[kind].resize(batches[kind].multimesh.instance_count*12)
-		var color: Color = PALETTE[kind]
+		var color := Color.WHITE
 		color.a = 0.6 if kind in [Simulation.OXYGEN,Simulation.DANGER] else 1.0
 		var offset := slot*12
 		# Transform2D row-major (8 floats), followed by RGBA (4 floats).
 		var heading: float = lerp_angle(p.previous_angle,p.angle,alpha) if p.get("updated",-1) == world.revision else p.angle
-		var cosine: float = cos(heading)*SIZES[kind]*Simulation.particle_scale(p.amount)
-		var sine: float = sin(heading)*SIZES[kind]*Simulation.particle_scale(p.amount)
+		# The vector silhouette fits inside the existing circular contact envelope.
+		var diameter: float = 2.0*Simulation.particle_radius(kind)*Simulation.particle_scale(p.amount)
+		var cosine: float = cos(heading)*diameter
+		var sine: float = sin(heading)*diameter
 		buffers[kind][offset] = cosine
 		buffers[kind][offset+1] = -sine
 		buffers[kind][offset+3] = at.x
@@ -294,7 +309,7 @@ func _draw_currents() -> void:
 			var at := Vector2(x+0.5,y+0.5)*step
 			var p := Simulation.Medium.offset(origin,at)
 			var flow: Vector2 = world.fluid.sample(at)
-			currents.draw_line(p,p+flow*0.55,Color(0.32,0.64,0.69,0.17),1.0/zoom,true)
+			currents.draw_line(p,p+flow*0.55,Color(0.48,0.89,0.91,0.2),1.0/zoom,true)
 
 func _draw_preview() -> void:
 	if settings_panel.visible or world.player.dead: return
@@ -315,6 +330,7 @@ func _refresh_light_texture() -> void:
 		for x in 64: values[y*64+x] = world.light_at(Vector2(x+0.5,y+0.5)*64)
 	light_texture = ImageTexture.create_from_image(Image.create_from_data(64,40,false,Image.FORMAT_RF,values.to_byte_array()))
 	light_layer.material.set_shader_parameter("light_map",light_texture)
+	bloom_layer.material.set_shader_parameter("light_map",light_texture)
 
 func _player_relative(screen: Vector2) -> Vector2:
 	return (screen-camera_screen)/zoom-Simulation.Medium.offset(render_camera,world.player.position)
@@ -423,6 +439,10 @@ Right-click an installed organ to recycle.",MUTED)
 	options.add_child(fullscreen_check)
 	fullscreen_check.text = "Fullscreen [F11]"
 	fullscreen_check.toggled.connect(func(on): set_fullscreen(on))
+	options.add_child(bloom_check)
+	bloom_check.text = "Light bloom"
+	bloom_check.set_pressed_no_signal(preferences.bloom)
+	bloom_check.toggled.connect(set_bloom)
 	_button(options,"Sense view [S]",func(): show_senses = not show_senses)
 	_button(options,"Performance overlay [F3]",func(): show_debug = not show_debug)
 	_button(options,"Next habitat [H]",func(): _restart((world.habitat+1)%3))
@@ -444,7 +464,7 @@ func _resource_bar(parent: Node, bar: ProgressBar, label: Label, color: Color) -
 	parent.add_child(bar)
 	bar.show_percentage = false
 	bar.step = 0.0
-	bar.add_theme_stylebox_override("background",_style(Color("193642"),Color("355664")))
+	bar.add_theme_stylebox_override("background",_style(Color("254361"),Color("527b9d")))
 	bar.add_theme_stylebox_override("fill",_style(color.darkened(0.42),color))
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bar.add_child(label)
@@ -471,11 +491,11 @@ func _apply_ui_scale(value: float) -> void:
 	theme.default_font_size = roundi(20*preferences.hud_scale)
 	theme.set_color("font_color","Label",TEXT)
 	theme.set_color("font_color","Button",TEXT)
-	theme.set_stylebox("panel","PanelContainer",_style(Color(0.035,0.09,0.13,0.88),Color("355664")))
+	theme.set_stylebox("panel","PanelContainer",_style(Color(0.085,0.16,0.29,0.94),Color("527b9d")))
 	for type_name in ["Button","OptionButton"]:
-		theme.set_stylebox("normal",type_name,_style(Color("193642"),Color("355664")))
-		theme.set_stylebox("hover",type_name,_style(Color("27505a"),MINT))
-		theme.set_stylebox("pressed",type_name,_style(Color("27505a"),MINT))
+		theme.set_stylebox("normal",type_name,_style(Color("254361"),Color("527b9d")))
+		theme.set_stylebox("hover",type_name,_style(Color("315b7c"),MINT))
+		theme.set_stylebox("pressed",type_name,_style(Color("315b7c"),MINT))
 	ui.theme = theme
 	for bar in [health_bar,atp_bar]: bar.custom_minimum_size = Vector2(205,44)*preferences.hud_scale
 	var closest := 0
@@ -492,6 +512,7 @@ func _layout() -> void:
 	var size := get_viewport_rect().size
 	vignette.size = size
 	light_layer.size = size
+	bloom_layer.size = size
 	hud.position = Vector2(16,16)
 	hud.size = Vector2(size.x-32,0)
 	var panel_y := hud.position.y+hud.size.y+16
@@ -505,6 +526,12 @@ func _layout() -> void:
 	bottom.visible = not build_open and not settings_panel.visible
 	build_panel.visible = build_open
 	preview.queue_redraw()
+
+func set_bloom(on: bool) -> void:
+	preferences.bloom = on
+	bloom_layer.visible = on
+	bloom_check.set_pressed_no_signal(on)
+	preferences.save_settings()
 
 func set_fullscreen(on: bool) -> void:
 	preferences.fullscreen = on
