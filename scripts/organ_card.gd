@@ -20,7 +20,7 @@ func configure(label: String, category: String, variant: String, scale_value: fl
 	kind = category
 	mode = variant
 	hud_scale = scale_value
-	tooltip_text = label+("\nRight-click to cycle feeding variants" if category == "feeding" else "")
+	tooltip_text = label
 	custom_minimum_size.y = 88*hud_scale
 	_layout()
 	picture.queue_redraw()

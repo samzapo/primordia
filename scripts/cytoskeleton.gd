@@ -9,6 +9,7 @@ var next_junction := 0
 var last_radius := 0.0
 
 func point(anchor: Dictionary, membrane) -> Vector2:
+	if anchor.kind == "point": return anchor.p
 	if anchor.kind == "junction": return junctions[anchor.id].p
 	if anchor.kind == "link":
 		var link := link_by_id(anchor.id)
@@ -25,6 +26,7 @@ func link_by_id(identity: int) -> Dictionary:
 
 func valid(anchor: Dictionary) -> bool:
 	if anchor.is_empty(): return false
+	if anchor.kind == "point": return anchor.p.is_finite()
 	if anchor.kind == "membrane": return is_finite(anchor.a)
 	if anchor.kind == "junction": return junctions.has(anchor.id)
 	if anchor.kind == "link": return not link_by_id(anchor.id).is_empty() and is_finite(anchor.t) and anchor.t >= 0 and anchor.t <= 1
@@ -69,6 +71,12 @@ func connect_points(start: Dictionary, end: Dictionary, tension: float, membrane
 			cut.merge(endpoint)
 		if previous_t < 0.999: _segment(prior,link.b,link.tension,link.length*(1-previous_t),link.radius,link.group)
 		links.erase(link)
+	for anchor in anchors:
+		if anchor.kind == "point":
+			junctions[next_junction] = {"p":anchor.p,"previous":anchor.p}
+			anchor.clear()
+			anchor.merge({"kind":"junction","id":next_junction})
+			next_junction += 1
 	var group := next_group
 	next_group += 1
 	_segment(anchors[0],anchors[1],clampf(tension,0,1),distance,radius,group)

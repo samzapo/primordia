@@ -1,10 +1,10 @@
 extends RefCounted
 const Membrane = preload("res://scripts/membrane.gd")
-const KINDS := ["propulsion", "protection", "offensive", "regenerative", "feeding", "sensing"]
-const COST := [8.0, 10.0, 12.0, 10.0, 8.0, 6.0]
-const WIDTH := [19.0, 34.0, 26.0, 27.0, 36.0, 20.0]
+const KINDS := ["propulsion", "protection", "offensive", "regenerative", "feeding", "sensing", "photosynthesis", "toxin", "neutralizing", "acidifying"]
+const COST := [8.0, 10.0, 12.0, 10.0, 8.0, 6.0, 12.0, 12.0, 10.0, 12.0]
+const WIDTH := [19.0, 34.0, 26.0, 27.0, 36.0, 20.0, 30.0, 26.0, 26.0, 26.0]
 const SENSE_MODES := ["flee"]
-const MODES := ["graze", "engulf", "parasite"]
+const MODES := ["graze"]
 var id := 0
 var role := "grazer"
 var previous_position := Vector2.ZERO
@@ -31,6 +31,7 @@ var body := 60.0
 var biomass := 18.0
 var substrate := 4.0
 var oxygen := 16.0
+var carbon := 8.0
 var energy := 72.0
 var health := 100.0
 var radius := 47.0
@@ -54,8 +55,9 @@ var emission_clock := 0.0
 var waste := 0.0
 var processed := 0.0
 var eaten := 0.0
-var stolen := 0.0
-var engulfed := 0
+var acid_stress := 0.0
+var fixed_carbon := 0.0
+var oxygen_produced := 0.0
 var activity := 1.0
 var age := 0.0
 var dead := false
@@ -82,14 +84,14 @@ func organ_mass() -> float:
 	return result
 
 func organic_mass() -> float:
-	return body + biomass + organ_mass() + substrate + waste
+	return body + biomass + organ_mass() + substrate + waste + carbon
 
 func update_geometry() -> void:
 	# Effective volume is retained cytoplasm. Sphere radius projected into 2D;
 	# usable membrane capacity is its simulated perimeter, not a claim of 3D packing.
 	radius = 47.0 * pow(maxf(8, body + biomass) / 78.0, 1.0/3.0)
 	mass = maxf(4, organic_mass()*0.45)
-	inertia = (body + biomass + substrate + waste) * radius * radius * 0.5
+	inertia = (body + biomass + substrate + waste + carbon) * radius * radius * 0.5
 	for organ in organs:
 		var arm = local_point(organ.a)
 		inertia += organ.material * arm.length_squared()
@@ -232,7 +234,7 @@ func add_organ(kind: String, a: float, mode: String = "graze", paid: bool = true
 	_make_room(a,WIDTH[k]*size+4,length)
 	if paid: biomass -= cost
 	var max_health := (70.0 if kind == "protection" else 25.0)*size*size
-	organs.append({"id":next_organ_id,"kind":kind,"a":fposmod(a,TAU),"scale":size,"mode":mode,"hp":max_health,"max_hp":max_health,"material":cost,"target_id":-1,"progress":0.0,"coverage":0.0,"feeding":false,"link":Vector2.ZERO,"feedback":"","consume_flash":0.0,"consume_clock":0.0,"charge_flash":0.0,"consumed_total":0.0})
+	organs.append({"id":next_organ_id,"kind":kind,"a":fposmod(a,TAU),"scale":size,"mode":mode,"hp":max_health,"max_hp":max_health,"material":cost,"target_id":-1,"progress":0.0,"coverage":0.0,"feeding":false,"link":Vector2.ZERO,"feedback":"","consume_flash":0.0,"consume_clock":0.0,"charge_flash":0.0,"consumed_total":0.0,"blocked":0.0})
 	next_organ_id += 1
 	update_geometry()
 	render_revision += 1

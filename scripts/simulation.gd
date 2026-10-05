@@ -12,10 +12,20 @@ const OXYGEN := 1
 const WASTE := 2
 const DANGER := 3
 const TOXIN := 4
+const CARBON := 5
+const ENZYME := 6
+const ANTITOXIN := 7
+const ACID := 8
+const BUFFER := 9
+const DECOY := 10
+const SPECIES_COUNT := 11
+const Acidity = preload("res://scripts/acidity.gd")
 const HABITATS := ["BALANCED TIDE", "LEAN HUNTING GROUNDS", "RICH / ARMORED HUNTERS"]
 var rng := RandomNumberGenerator.new()
 var grid = Grid.new()
+var reaction_grid = Grid.new(16.0)
 var fluid = Medium.new()
+var acidity = Acidity.new()
 var player = Cell.new(0,Vector2(2048,1280))
 var cells: Array = []
 var particles: Array = []
@@ -36,7 +46,9 @@ var active_particles := 0
 var view_half := VIEW*0.5
 var revision := 0
 var profile_usec: Dictionary = {}
-var food_sources: Array[Vector2] = []
+var camera_position := Vector2(2048,1280)
+var camera_follows_player := true
+var chemistry_events := {"decay":0,"combine":0,"recycle":0,"detox":0,"spoil":0,"enzyme":0,"neutralize":0}
 
 func _init(seed_number: int = 20261004, profile: int = 0) -> void:
 	seed_value = seed_number
@@ -48,22 +60,13 @@ func _init(seed_number: int = 20261004, profile: int = 0) -> void:
 	cells.append(player)
 	# Whole habitats are stored. Only organisms inside the microscope advance.
 	for i in 18:
-		var p = player.position + Vector2.from_angle(i*2.4)* (220 if i == 0 else 340+i*94)
+		var p = player.position + Vector2.from_angle(i*2.4)* (1050+i*45 if i%5 == 3 else 220 if i == 0 else 340+i*94)
 		_make_cell(Medium.wrap_position(p), "hunter" if i%5 == 3 else "grazer")
-	for i in 28:
-		food_sources.append(Medium.wrap_position(player.position + Vector2.from_angle(i*2.4)*(120+i*75)))
-	for i in (900 if habitat != 1 else 260):
-		var source: Vector2 = food_sources[i%food_sources.size()]
-		spawn_particle(NUTRIENT,source+Vector2(rng.randfn(0,44),rng.randfn(0,35)))
-	for i in 1900:
-		spawn_particle(OXYGEN,Vector2(rng.randf()*WORLD.x,rng.randf()*WORLD.y))
-	# A breathing and feeding patch at the initial observation site.
-	for i in 75:
-		spawn_particle(OXYGEN,player.position+Vector2(rng.randfn(0,180),rng.randfn(0,130)))
-	for i in (60 if habitat != 1 else 12):
-		spawn_particle(NUTRIENT,player.position+Vector2(rng.randf_range(40,140),rng.randfn(0,36)))
+	# Initial clouds are retained products of these cells' pre-observation life.
+	# No environmental spawner runs after initialization.
+	for cell in cells: _seed_cell_products(cell)
 	grid.rebuild(particles)
-	fluid.set_camera(player.position,view_half)
+	fluid.set_camera(player.position if camera_follows_player else camera_position,view_half)
 
 func _make_cell(p: Vector2, role: String):
 	var cell = Cell.new(next_id,p)
@@ -74,30 +77,33 @@ func _make_cell(p: Vector2, role: String):
 	cell.biomass = 35 if role == "hunter" else 10
 	cell.update_geometry()
 	cell.membrane = Cell.Membrane.new(cell.radius)
-	cell.add_organ("feeding",0,"engulf" if role == "hunter" else "graze",false,(2.2 if habitat == 2 else 1.7) if role == "hunter" else 1.0)
+	cell.add_organ("feeding",1.1 if role == "hunter" else 1.4,"graze",false)
 	cell.add_organ("propulsion",PI,"graze",false)
 	if role == "hunter":
-		cell.add_organ("offensive",-1.2,"graze",false)
+		cell.add_organ("offensive",0,"graze",false)
 		if habitat == 2:
+			cell.add_organ("toxin",1.8,"graze",false)
 			cell.biomass = 90
 			cell.update_geometry()
 			cell.membrane = Cell.Membrane.new(cell.radius)
 			for a in [0.6,1.9,2.6,3.7,5.65]: cell.add_organ("protection",a,"graze",false)
 			cell.add_organ("regenerative",4.4,"graze",false)
+	else:
+		cell.add_organ("photosynthesis",0,"graze",false)
 	cell.update_geometry()
 	cell.previous_angle = cell.angle
 	cells.append(cell)
 	return cell
 
 func screen_position(p: Vector2) -> Vector2:
-	return view_half+Medium.offset(player.position,p)
+	return view_half+Medium.offset(camera_position if not camera_follows_player else player.position,p)
 
 func activity_at(p: Vector2) -> float:
-	return Medium.visibility(p,player.position,view_half)
+	return Medium.visibility(p,player.position if camera_follows_player else camera_position,view_half)
 
 func local_particle_ids(margin: float = 0.0) -> Array[int]:
 	if grid.source_size != particles.size(): grid.rebuild(particles)
-	return grid.query_rect(player.position,view_half+Vector2.ONE*margin)
+	return grid.query_rect(player.position if camera_follows_player else camera_position,view_half+Vector2.ONE*margin)
 
 func cell_by_id(identity: int):
 	for cell in cells:
@@ -110,27 +116,21 @@ func install(kind: String, local_angle: float, mode: String = "graze", size: flo
 func remove(index: int) -> bool:
 	var debris: float = player.recycle(index)
 	if debris < 0: return false
-	spawn_particle(WASTE,player.position,Vector2.ZERO,debris)
+	spawn_particle(WASTE,player.position,Vector2.ZERO,debris,player.id)
 	return true
 
 func spawn_particle(kind: int, p: Vector2, v: Vector2 = Vector2.ZERO, amount: float = 1.0, owner: int = -1, source_radius: float = 0.0) -> void:
 	if amount <= 0: return
 	if grid.source_size != particles.size(): grid.rebuild(particles)
-	var life = -1.0
-	if kind == DANGER: life = 3.0
-	if kind == TOXIN: life = 2.8
-	particles.append({"kind":kind,"p":Medium.wrap_position(p),"previous":Medium.wrap_position(p),"v":v,"amount":amount,"life":life,"age":0.0,"alive":true,"owner":owner,"source_radius":source_radius})
+	particles.append({"kind":kind,"p":Medium.wrap_position(p),"previous":Medium.wrap_position(p),"v":v,"amount":amount,"age":0.0,"alive":true,"owner":owner,"source_radius":source_radius,"angle":rng.randf()*TAU,"previous_angle":0.0,"spin":rng.randfn(0,0.8),"direction":Vector2.RIGHT,"capacity":amount})
+	particles[-1].previous_angle = particles[-1].angle
+	particles[-1].direction = Vector2.from_angle(particles[-1].angle)
 	grid.insert(particles.size()-1,particles[-1].p)
 
-func _emit_material(kind: int, at: Vector2, amount: float, motion: Vector2 = Vector2.ZERO) -> void:
-	for index in grid.query(at,18):
-		if index >= particles.size(): continue
-		var p: Dictionary = particles[index]
-		if p.alive and p.kind == kind and p.amount < 3 and activity_at(p.p) > 0 and Medium.offset(at,p.p).length() < 18:
-			p.v = (p.v*p.amount+motion*amount)/(p.amount+amount)
-			p.amount += amount
-			return
-	spawn_particle(kind,at,motion,amount)
+func _emit_material(kind: int, at: Vector2, amount: float, motion: Vector2 = Vector2.ZERO, owner: int = 0) -> void:
+	# Packet merging requires oriented contact, never an emission shortcut.
+	var count := maxi(1,ceili(amount/0.35))
+	for i in count: spawn_particle(kind,at,motion,amount/count,owner)
 
 func step(dt: float) -> void:
 	if player.dead: return
@@ -138,8 +138,9 @@ func step(dt: float) -> void:
 	revision += 1
 	if grid.source_size != particles.size(): grid.rebuild(particles)
 	var mark := Time.get_ticks_usec()
-	fluid.set_camera(player.position,view_half)
+	fluid.set_camera(player.position if camera_follows_player else camera_position,view_half)
 	fluid.step(dt)
+	if revision%6 == 0: acidity.step(dt*6,fluid)
 	active_cells = 0
 	for cell in cells:
 		cell.previous_position = cell.position
@@ -162,22 +163,25 @@ func step(dt: float) -> void:
 		if cell.dead or cell.activity <= 0: continue
 		var local_dt: float = dt*cell.activity
 		cell.animate_resources(local_dt)
+		_clear_receptors(cell,local_dt)
 		_sense(cell,local_dt)
 		_feed(cell)
+		_acid_stress(cell,local_dt)
+		_photosynthesize(cell,local_dt)
 		_metabolize(cell,local_dt)
 		cell.heal(local_dt)
 		for leak in cell.leaks:
 			var normal := Vector2.from_angle(cell.angle+leak.a)
-			_emit_material(NUTRIENT,cell.position+cell.local_point(leak.a).rotated(cell.angle)+normal*12,leak.amount,normal*12)
+			_emit_material(NUTRIENT,cell.position+cell.local_point(leak.a).rotated(cell.angle)+normal*12,leak.amount,normal*12,cell.id)
 		# Tiny continuous emissions are aggregated into material-bearing packets.
-		if cell.waste >= 0.5:
-			spawn_particle(WASTE,cell.position-Vector2.from_angle(cell.angle)*cell.radius,Vector2.ZERO,cell.waste)
+		if cell.waste >= 0.2:
+			_emit_material(WASTE,cell.position-Vector2.from_angle(cell.angle)*(cell.radius+12),cell.waste,Vector2.ZERO,cell.id)
 			cell.waste = 0
 		cell.update_geometry()
 		# Shrinkage can shed crowded organs, releasing their remaining material.
 		while cell.occupied() > cell.perimeter() and not cell.organs.is_empty():
 			var organ: Dictionary = cell.organs.pop_back()
-			spawn_particle(WASTE,cell.organ_position(organ),Vector2.ZERO,organ.material)
+			spawn_particle(WASTE,cell.organ_position(organ),Vector2.ZERO,organ.material,cell.id)
 		var traction := PackedVector2Array()
 		for point in cell.membrane.points:
 			var arm: Vector2 = point.rotated(cell.angle)
@@ -197,8 +201,9 @@ func step(dt: float) -> void:
 		cell.shape_acceleration = ((cell.velocity-before_motion[cell.id])/dt).limit_length(600)
 	profile_usec["motion"] = Time.get_ticks_usec()-mark
 	mark = Time.get_ticks_usec()
-	_intercell_feeding(dt)
+	_spike_contacts(dt)
 	_toxin_contacts()
+	_receptor_contacts()
 	_exclude_particles()
 	for cell in cells.duplicate():
 		if cell.activity > 0 and cell.health <= 0 and not cell.dead: _die(cell)
@@ -207,7 +212,6 @@ func step(dt: float) -> void:
 		spawn_clock -= 0.5
 		particles = particles.filter(func(p): return p.alive)
 		grid.rebuild(particles)
-		_replenish()
 		_replace_population()
 	profile_usec["ecology"] = Time.get_ticks_usec()-mark
 	won = player.processed >= 40 and time+0.000001 >= 90
@@ -223,43 +227,174 @@ func _move_particles(dt: float) -> void:
 		var step_dt = dt*scale
 		particle.updated = revision
 		particle.previous = particle.p
-		particle.p = Medium.wrap_position(particle.p+(particle.v+fluid.sample(particle.p))*step_dt)
+		particle.p = Medium.wrap_position(particle.p+(particle.v+fluid.sample(particle.p))*step_dt+Vector2(rng.randfn(),rng.randfn())*sqrt(12*step_dt))
 		grid.move(index,particle.previous,particle.p)
 		particle.v *= exp(-step_dt*0.8)
 		particle.age += step_dt
-		if particle.life >= 0:
-			particle.life -= step_dt
-			if particle.life <= 0:
-				if particle.kind == TOXIN:
-					particle.kind = WASTE
-					particle.life = -1.0
-				else: particle.alive = false
+		particle.previous_angle = particle.angle
+		particle.angle = wrapf(particle.angle+particle.spin*step_dt+rng.randfn()*sqrt(1.2*step_dt),-PI,PI)
+		particle.direction = Vector2.from_angle(particle.angle)
 
 func _chemistry(dt: float) -> void:
-	# Decomposition requires local oxygen. 0.6 recycled food + 0.4 respired loss.
-	for particle_index in local_particle_ids():
-		var waste: Dictionary = particles[particle_index]
-		if not waste.alive or waste.kind != WASTE or waste.age < 0.8: continue
-		var local_dt = dt*activity_at(waste.p)
+	# Unimolecular decay is stochastic. Pair reactions are deterministic contact
+	# rules: both binding patches must face their partner within 60 degrees.
+	var local_ids := local_particle_ids()
+	reaction_grid.buckets.clear()
+	reaction_grid.source_size = 0
+	for index in local_ids:
+		var p: Dictionary = particles[index]
+		p.reaction_activity = activity_at(p.p) if p.alive else 0.0
+		p.contact_radius = particle_radius(p.kind)*particle_scale(p.amount)
+		if p.reaction_activity > 0: reaction_grid.insert(index,p.p)
+	for index in local_ids:
+		var p: Dictionary = particles[index]
+		if not p.alive: continue
+		var local_dt: float = dt*p.reaction_activity
 		if local_dt <= 0: continue
-		for index in grid.query(waste.p,34):
-			var oxygen: Dictionary = particles[index]
-			if not oxygen.alive or oxygen.kind != OXYGEN or Medium.offset(waste.p,oxygen.p).length() > 34: continue
-			if activity_at(oxygen.p) <= 0: continue
-			var amount = minf(minf(waste.amount,oxygen.amount),minf(local_dt,dt*activity_at(oxygen.p))*1.2)
-			waste.amount -= amount
-			oxygen.amount -= amount
-			if oxygen.amount <= 0.000001: oxygen.alive = false
-			if waste.amount <= 0.000001: waste.alive = false
-			recycled += amount*0.6
-			respiration_loss += amount*0.4
-			# Accumulate products in a packet; do not create a particle per tick.
-			if not waste.has("product"): waste.product = 0.0
-			waste.product += amount*0.6
-			if waste.product >= 0.4 or not waste.alive:
-				spawn_particle(NUTRIENT,waste.p,Vector2.ZERO,waste.product)
-				waste.product = 0.0
-			break
+		if p.kind in [ACID,BUFFER]:
+			var sign_value := 1.0 if p.kind == ACID else -1.0
+			var used := absf(acidity.exchange(p.p,sign_value*minf(p.capacity,local_dt*0.2)))
+			p.capacity -= used
+			if p.capacity <= 0.000001: p.kind = WASTE
+		if chance([0.003,0.008,0.006,0.65,0.1,0.001,0.02,0.015,0.008,0.008,0.08][p.kind],local_dt):
+			if p.kind != OXYGEN and p.kind != DANGER: respiration_loss += p.amount
+			p.alive = false
+			chemistry_events.decay += 1
+			continue
+		if p.kind == DANGER or p.get("reacted",-1) == revision: continue
+		for other_index in reaction_grid.query(p.p,18):
+			if other_index <= index: continue
+			var other: Dictionary = particles[other_index]
+			if not other.alive or other.kind == DANGER or other.get("reacted",-1) == revision: continue
+			var delta := Medium.offset(p.p,other.p)
+			var contact: float = p.contact_radius+other.contact_radius
+			if delta.length_squared() > contact*contact: continue
+			var normal := delta.normalized() if delta.length_squared() > 0.000001 else Vector2.RIGHT
+			var acid := acidity.sample(p.p)
+			var alignment := binding_threshold(p.kind,other.kind,acid)
+			if p.direction.dot(normal) >= alignment and other.direction.dot(-normal) >= alignment and _react_pair(p,other,acid):
+				p.reacted = revision
+				other.reacted = revision
+				break
+			# Unsuccessful contacts separate softly and tumble, giving binding sites
+			# another encounter rather than allowing particles to remain overlaid.
+			var push := normal*(contact-delta.length())*0.25
+			p.v -= push*8
+			other.v += push*8
+
+static func particle_radius(kind: int) -> float:
+	return [4.0,2.5,3.0,2.5,5.0,3.0,4.0,4.0,3.0,3.0,3.5][kind]
+
+static func particle_scale(amount: float) -> float:
+	return clampf(sqrt(amount/0.3),0.8,1.7)
+
+static func binding_threshold(a: int, b: int, acid: float) -> float:
+	if ENZYME in [a,b] and WASTE in [a,b]:
+		# A modeled acid hydrolase has an acidic optimum. This is an affinity
+		# abstraction, not a claim that pH literally widens a molecular patch.
+		return 0.5+0.46*pow(clampf(absf(acid-0.4)/0.4,0,1),2)
+	return 0.5
+
+func _acid_stress(cell, dt: float) -> void:
+	var exposure := acidity.sample(cell.position)
+	var demand: float = maxf(0,exposure-0.15)*dt*5*cell.growth_scale()
+	var spent: float = cell.spend_energy(demand)
+	var overload := maxf(0,exposure-0.5)*0.8+(demand-spent)*0.15/maxf(dt,0.00001)
+	cell.acid_stress = clampf(cell.acid_stress+(overload-0.12)*dt,0,1)
+	if cell.acid_stress > 0.6:
+		cell.health = maxf(0,cell.health-dt*(cell.acid_stress-0.6)*8)
+
+func _react_pair(a: Dictionary, b: Dictionary, acid: float = 0.0) -> bool:
+	if b.kind == ENZYME and a.kind == WASTE: return _react_pair(b,a,acid)
+	if a.kind == ENZYME and b.kind == WASTE and acid < 0.9:
+		b.kind = NUTRIENT
+		recycled += b.amount
+		chemistry_events.enzyme += 1
+		return true
+	if b.kind == ANTITOXIN and a.kind == TOXIN: return _react_pair(b,a,acid)
+	if a.kind == ANTITOXIN and b.kind == TOXIN:
+		a.kind = WASTE
+		a.amount += b.amount
+		b.alive = false
+		chemistry_events.neutralize += 1
+		return true
+	if a.kind in [ACID,BUFFER] and b.kind in [ACID,BUFFER] and a.kind != b.kind:
+		var neutralized: float = minf(a.capacity,b.capacity)
+		a.capacity -= neutralized
+		b.capacity -= neutralized
+		if a.capacity <= 0.000001: a.kind = WASTE
+		if b.capacity <= 0.000001: b.kind = WASTE
+		return true
+	if a.kind == OXYGEN and b.kind in [WASTE,TOXIN]: return _react_pair(b,a,acid)
+	if a.kind == WASTE and b.kind == OXYGEN and b.amount >= a.amount*0.15 and acid < 0.8:
+		var amount: float = a.amount
+		a.kind = NUTRIENT
+		a.amount = amount*0.6
+		b.kind = CARBON
+		b.amount = amount*0.4
+		recycled += amount*0.6
+		chemistry_events.recycle += 1
+		return true
+	if a.kind == TOXIN and b.kind == NUTRIENT: return _react_pair(b,a,acid)
+	if a.kind == NUTRIENT and b.kind == TOXIN:
+		a.kind = WASTE
+		chemistry_events.spoil += 1
+		return true
+	if a.kind == b.kind and a.kind in [NUTRIENT,WASTE,CARBON,OXYGEN] and a.amount+b.amount <= 1.4:
+		if a.kind == TOXIN and a.owner != b.owner: return false
+		a.v = (a.v*a.amount+b.v*b.amount)/(a.amount+b.amount)
+		a.amount += b.amount
+		b.alive = false
+		chemistry_events.combine += 1
+		return true
+	return false
+
+func chance(rate: float, dt: float) -> bool:
+	return rng.randf() < 1.0-exp(-maxf(0,rate)*maxf(0,dt))
+
+func light_at(at: Vector2) -> float:
+	var p := Medium.wrap_position(at)
+	var field := 0.5+0.28*sin(TAU*p.x/WORLD.x*3+0.4)+0.22*cos(TAU*p.y/WORLD.y*3-0.8)
+	return clampf(field*(0.5 if habitat == 1 else 1.25 if habitat == 2 else 1.0),0.02,1.0)
+
+func light_direction(at: Vector2) -> Vector2:
+	var p := Medium.wrap_position(at)
+	return Vector2(0.28*TAU*3/WORLD.x*cos(TAU*p.x/WORLD.x*3+0.4),-0.22*TAU*3/WORLD.y*sin(TAU*p.y/WORLD.y*3-0.8)).normalized()
+
+func _photosynthesize(cell, dt: float) -> void:
+	for organ in cell.organs:
+		if organ.kind != "photosynthesis": continue
+		var light := light_at(cell.organ_position(organ))
+		if not chance(10*light*organ.scale*organ.scale*organ.hp/organ.max_hp,dt): continue
+		# Light drives a coarse dissolved-carbon fixation event. Water is an
+		# implicit medium reservoir; oxygen units are not organic mass units.
+		var amount: float = minf(cell.carbon,0.35)
+		if amount <= 0: continue
+		cell.carbon -= amount
+		cell.biomass += amount*0.35
+		var stored: float = minf(amount*0.35,maxf(0,cell.gut_capacity()-cell.substrate))
+		cell.substrate += stored
+		var food := amount*0.65-stored
+		cell.fixed_carbon += amount
+		cell.oxygen_produced += amount*2.5
+		cell.energy = minf(cell.energy_capacity(),cell.energy+amount*4)
+		var at: Vector2 = cell.organ_position(organ)+cell.local_point(organ.a).normalized().rotated(cell.angle)*16
+		spawn_particle(OXYGEN,at,Vector2.from_angle(rng.randf()*TAU)*12,amount*2.5,cell.id)
+		spawn_particle(NUTRIENT,at,Vector2.from_angle(rng.randf()*TAU)*18,food,cell.id)
+		cell.consumed(organ,amount)
+
+func _seed_cell_products(cell) -> void:
+	# Explicit cell-derived starting stocks, representing earlier metabolism.
+	var food_count := 55 if habitat != 1 else 14
+	cell.carbon += food_count*0.3+24
+	cell.oxygen += 36
+	for i in (food_count+180):
+		var kind := NUTRIENT if i < food_count else CARBON if i < food_count+60 else OXYGEN
+		var amount := 0.3 if kind != CARBON else 0.4
+		if kind == OXYGEN: cell.oxygen -= amount
+		else: cell.carbon -= amount
+		var at: Vector2 = cell.position+Vector2.from_angle(rng.randf()*TAU)*(cell.radius+12+rng.randf()*160)
+		spawn_particle(kind,at,Vector2.ZERO,amount,cell.id)
 
 func _suction(dt: float) -> void:
 	for cell in cells:
@@ -283,23 +418,28 @@ func _sense(cell, dt: float) -> void:
 		var best: Dictionary = {}
 		var best_score := -1.0
 		for organ in cell.organs:
-			if organ.kind not in ["feeding","sensing"]: continue
-			var mode: String = organ.mode
-			var reach := 310.0*sqrt(organ.scale)
+			if organ.kind not in ["feeding","sensing","offensive","photosynthesis"]: continue
+			var mode: String = "hunt" if organ.kind == "offensive" else "light" if organ.kind == "photosynthesis" else organ.mode
+			var reach: float = (760.0 if mode == "hunt" else 310.0)*sqrt(organ.scale)*(1-organ.blocked*0.65)
 			var receptor: Vector2 = cell.organ_position(organ)
+			if mode == "light":
+				var direction := light_direction(receptor)
+				if best_score < 0.7 and direction.length_squared() > 0.01 and light_at(receptor) < 0.98:
+					best_score = 0.7
+					best = {"mode":"light","id":-1,"at":cell.position+direction*150,"a":organ.a,"organ_id":organ.id}
+				continue
 			var food := Vector2.ZERO
 			for index in grid.query(receptor,reach):
 				var p: Dictionary = particles[index]
 				if not p.alive or p.owner == cell.id: continue
 				var distance: float = Medium.offset(receptor,p.p).length()
 				if distance > reach: continue
-				if mode in ["graze","engulf"] and p.kind == NUTRIENT:
+				if mode == "graze" and p.kind == NUTRIENT:
 					food += Medium.offset(cell.position,p.p).normalized()*p.amount/maxf(25,distance)
-				elif p.kind == DANGER and mode in ["engulf","parasite","flee"]:
+				elif p.kind == DANGER and mode in ["hunt","flee"]:
 					var prey = cell_by_id(p.owner)
 					if prey == null: continue
-					if mode == "engulf" and cell.pore_radius(organ) <= prey.radius*0.72: continue
-					if mode == "parasite" and prey.radius <= cell.radius*1.05: continue
+					if mode == "hunt" and prey.organic_mass() >= cell.organic_mass(): continue
 					var score := (100.0 if mode == "flee" else 2.0)+1.0/(1+distance)
 					if prey.id == cell.target_id: score += 0.05
 					if score > best_score:
@@ -324,7 +464,7 @@ func _sense(cell, dt: float) -> void:
 		cell.facing = Medium.offset(cell.position,cell.target_position).normalized()
 		cell.target = -cell.facing if cell.target_mode == "flee" else cell.facing
 		cell.threat = cell.facing if cell.target_id >= 0 else Vector2.ZERO
-		cell.state = {"graze":"FORAGING","engulf":"PURSUING PREY","parasite":"SEEKING HOST","flee":"FLEEING"}.get(cell.target_mode,"EXPLORING")
+		cell.state = {"graze":"FORAGING","hunt":"PURSUING SMALLER CELL","light":"SEEKING LIGHT","flee":"FLEEING"}.get(cell.target_mode,"EXPLORING")
 		var organ: Dictionary = cell.organ_by_id(cell.target_organ_id)
 		cell.target_mouth = cell.local_point(organ.a).angle() if not organ.is_empty() else 0.0
 	else:
@@ -338,7 +478,7 @@ func _sense(cell, dt: float) -> void:
 
 func _feed(cell) -> void:
 	for organ in cell.organs:
-		if organ.kind != "feeding" or organ.mode == "parasite": continue
+		if organ.kind != "feeding": continue
 		var mouth: Vector2 = cell.pore_center(organ)
 		var reach: float = cell.pore_radius(organ)+8
 		for index in grid.query(mouth,reach):
@@ -353,6 +493,11 @@ func _feed(cell) -> void:
 				if p.amount <= 0.000001: p.alive = false
 	for index in grid.query(cell.position,cell.extent()+12):
 		var p: Dictionary = particles[index]
+		if p.alive and p.kind == CARBON and cell.count("photosynthesis") > 0 and activity_at(p.p) > 0 and Medium.offset(cell.position,p.p).length() < cell.extent()+18:
+			var carbon_taken: float = minf(p.amount,maxf(0,30*cell.growth_scale()-cell.carbon))
+			cell.carbon += carbon_taken
+			p.amount -= carbon_taken
+			if p.amount <= 0.000001: p.alive = false
 		if p.alive and p.kind == OXYGEN and activity_at(p.p) > 0 and Medium.offset(cell.position,p.p).length() < cell.support(Medium.offset(cell.position,p.p).angle())+14:
 			var amount = minf(p.amount,maxf(0,cell.oxygen_capacity()-cell.oxygen))
 			cell.oxygen += amount
@@ -360,31 +505,51 @@ func _feed(cell) -> void:
 			if p.amount <= 0.000001: p.alive = false
 
 func _metabolize(cell, dt: float) -> void:
-	var amount = minf(minf(cell.substrate,cell.oxygen),dt*1.8*cell.growth_scale())
+	var amount = minf(minf(cell.substrate,cell.oxygen),dt*1.8*cell.growth_scale()*(1-cell.acid_stress*0.6))
 	cell.substrate -= amount
 	cell.oxygen -= amount
 	cell.energy = minf(cell.energy_capacity(),cell.energy+amount*5.0)
-	cell.biomass += amount*0.8
+	cell.biomass += amount*0.7
+	cell.carbon += amount*0.1
 	cell.waste += amount*0.2
 	cell.processed += amount
 	cell.spend_energy(dt*0.264*cell.growth_scale())
 	if cell.energy <= 0: cell.health = maxf(0,cell.health-dt*2)
 
 func _emit_and_attack(cell, dt: float) -> void:
-	cell.emission_clock += dt
-	if cell.emission_clock >= 0.7:
-		cell.emission_clock -= 0.7
-		for i in 2:
-			var direction = Vector2.from_angle(rng.randf()*TAU)
-			spawn_particle(DANGER,cell.position+direction*cell.radius,direction*16,1,cell.id,cell.radius)
-	cell.attack_clock -= dt
-	if cell.attack_clock > 0 or not cell.sensed or cell.threat.length() < 0.01: return
+	if chance(4.0,dt):
+		var direction := Vector2.from_angle(rng.randf()*TAU)
+		spawn_particle(DANGER,cell.position+direction*(cell.radius+9),direction*20,0.2,cell.id,cell.radius)
+	if cell.carbon > (3.0 if cell.count("photosynthesis") == 0 else 20.0) and chance(5.0,dt):
+		var amount: float = minf(0.3,cell.carbon)
+		cell.carbon -= amount
+		spawn_particle(CARBON,cell.position-Vector2.from_angle(cell.angle)*(cell.radius+12),Vector2.ZERO,amount,cell.id)
 	for organ in cell.organs:
-		if organ.kind != "offensive" or cell.energy < 2 or cell.biomass < 0.15: continue
-		var aim: Vector2 = cell.threat if cell.threat.length() > 0 else cell.target
-		spawn_particle(TOXIN,cell.organ_position(organ),aim*170,0.15,cell.id)
+		var kind: int = {"feeding":ENZYME,"neutralizing":ANTITOXIN,"acidifying":ACID,"regenerative":BUFFER}.get(organ.kind,-1)
+		if kind < 0 or cell.biomass < 0.06 or cell.energy < 0.15: continue
+		var rate := 0.35 if kind == ENZYME else 2.0
+		if not chance(rate*organ.scale*organ.scale,dt): continue
+		cell.biomass -= 0.06
+		cell.spend_energy(0.15,organ)
+		var direction: Vector2 = cell.local_point(organ.a).normalized().rotated(cell.angle)
+		spawn_particle(kind,cell.organ_position(organ)+direction*10,direction*18,0.06,cell.id)
+		particles[-1].capacity = 0.25 if kind in [ACID,BUFFER] else 0.06
+		organ.charge_flash = 1
+	# Cellular stress also releases a material-bearing toxic byproduct.
+	if cell.health < 90 and cell.biomass > 0.08 and chance(0.6,dt):
+		cell.biomass -= 0.08
+		var direction := Vector2.from_angle(rng.randf()*TAU)
+		spawn_particle(TOXIN,cell.position+direction*(cell.radius+12),direction*24,0.08,cell.id)
+
+	cell.attack_clock = maxf(0,cell.attack_clock-dt)
+	if cell.attack_clock > 0 or cell.target_id < 0 or cell.threat.length_squared() < 0.01: return
+	for organ in cell.organs:
+		if organ.kind != "toxin" or cell.energy < 2 or cell.biomass < 0.18: continue
+		spawn_particle(DECOY,cell.organ_position(organ),cell.threat*145,0.03,cell.id)
+		spawn_particle(TOXIN,cell.organ_position(organ),cell.threat*170,0.15,cell.id)
 		cell.spend_energy(2,organ)
-		cell.biomass -= 0.15
+		cell.biomass -= 0.18
+		organ.consume_flash = 1
 	cell.attack_clock = 0.75
 
 func _motion(dt: float) -> void:
@@ -394,9 +559,11 @@ func _motion(dt: float) -> void:
 		var previous: Vector2 = cell.position
 		var steering_power := 0.0
 		for organ in cell.organs:
-			if organ.kind != "propulsion" or cell.energy <= 0: continue
+			if cell.energy <= 0: continue
+			var pursuing: bool = organ.id == cell.target_organ_id and cell.target_mode in ["hunt","light"]
+			if organ.kind != "propulsion" and not pursuing: continue
 			var arm: Vector2 = cell.organ_position(organ)-cell.position
-			var power: float = 2600.0*organ.scale*organ.scale*(organ.hp/organ.max_hp)
+			var power: float = (2600.0 if organ.kind == "propulsion" else 1100.0)*organ.scale*organ.scale*(organ.hp/organ.max_hp)
 			var impulse: Vector2 = cell.target.normalized()*power*local_dt
 			if fluid.deposit(cell.position+arm,-impulse):
 				cell.velocity += impulse/cell.mass
@@ -469,89 +636,32 @@ func _contacts(_dt: float) -> void:
 						body.membrane.points[k] *= 0.96
 						body.membrane.invalidate()
 
-static func polygon_area(polygon: PackedVector2Array) -> float:
-	var area := 0.0
-	for i in polygon.size(): area += polygon[i].cross(polygon[(i+1)%polygon.size()])
-	return absf(area)*0.5
-
-func engulf_coverage(eater, organ: Dictionary, prey) -> float:
-	var center: Vector2 = eater.pore_center(organ)
-	var offset := Medium.offset(center,prey.position)
-	var aperture_radius: float = eater.pore_radius(organ)
-	if offset.length() > aperture_radius+prey.extent(): return 0.0
-	var aperture := PackedVector2Array()
-	for i in 48: aperture.append(Vector2.from_angle(TAU*i/48)*aperture_radius)
-	var outline: PackedVector2Array = Transform2D(prey.angle,offset)*prey.membrane.outline()
-	var covered := 0.0
-	for intersection in Geometry2D.intersect_polygons(aperture,outline): covered += polygon_area(intersection)
-	return clampf(covered/maxf(0.001,polygon_area(outline)),0,1)
-
-func _intercell_feeding(dt: float) -> void:
-	for eater in cells.duplicate():
-		if eater.dead or eater.health <= 0 or eater.activity <= 0: continue
-		eater.feeding_feedback = ""
-		for organ in eater.organs:
-			if organ.kind != "feeding" or organ.mode == "graze": continue
+func _spike_contacts(dt: float) -> void:
+	for attacker in cells:
+		if attacker.dead or attacker.activity <= 0 or attacker.health <= 0: continue
+		attacker.feeding_feedback = ""
+		for organ in attacker.organs:
+			if organ.kind != "offensive": continue
 			organ.feeding = false
-			organ.coverage = 0.0
-			organ.feedback = "Seeking prey / grazing" if organ.mode == "engulf" else "Seeking a larger host"
-			var mouth: Vector2 = eater.pore_center(organ)
-			var touched := false
-			for prey in cells.duplicate():
-				if prey == eater or prey.dead or prey.activity <= 0 or prey.health <= 0: continue
-				var separation := Medium.offset(mouth,prey.position)
-				var reach: float = 52.0*organ.scale if organ.mode == "parasite" else eater.pore_radius(organ)
-				if separation.length() > prey.extent()+reach: continue
-				var surface: float = prey.support((-separation).angle())
-				if separation.length() > surface+reach: continue
-				if organ.mode == "parasite" and prey.radius <= eater.radius*1.05:
-					organ.feedback = "Host must be larger than you"
-					continue
-				if organ.mode == "engulf":
-					organ.coverage = engulf_coverage(eater,organ,prey)
-					organ.feedback = "Coverage %d%% · needs more than 50%%" % roundi(organ.coverage*100)
-					if organ.coverage <= 0.5: continue
-				if eater.substrate >= eater.gut_capacity()-0.001:
-					organ.feedback = "Gut full · digesting"
-					continue
-				if organ.target_id != prey.id: organ.progress = 0.0
-				organ.target_id = prey.id
-				organ.link = Medium.wrap_position(prey.position-separation.normalized()*surface)
-				touched = true
-				var local_dt := dt*minf(eater.activity,prey.activity)
-				var relative: Vector2 = prey.velocity-eater.velocity
-				var inverse_mass: float = 1.0/eater.mass+1.0/prey.mass
-				var impulse := relative*(1-exp(-local_dt*4))/inverse_mass
-				eater.velocity += impulse/eater.mass
-				prey.velocity -= impulse/prey.mass
-				var damage: float = prey.damage(local_dt*(16.0*organ.scale*organ.scale if organ.mode == "parasite" else 26.0),(-separation).angle())
-				prey.waste += damage
+			var base: Vector2 = attacker.organ_position(organ)
+			var direction: Vector2 = attacker.local_point(organ.a).normalized().rotated(attacker.angle)
+			var length: float = 42.0*organ.scale
+			for prey in cells:
+				if prey == attacker or prey.dead or prey.activity <= 0 or prey.health <= 0: continue
+				var d := Medium.offset(base,prey.position)
+				var along := clampf(d.dot(direction),0,length)
+				var contact: Vector2 = base+direction*along
+				var offset := Medium.offset(prey.position,contact)
+				if offset.length() > prey.support(offset.angle())+3*organ.scale: continue
+				var local_dt := dt*minf(attacker.activity,prey.activity)
+				var energy: float = attacker.spend_energy(local_dt*1.2*organ.scale*organ.scale,organ)
+				if energy <= 0: continue
+				prey.waste += prey.damage(energy*12,offset.angle())
 				organ.feeding = true
-				if organ.mode == "parasite":
-					if not prey.punctured_at((-separation).angle()):
-						organ.feedback = "Piercing local armor"
-						break
-					var amount: float = prey.drain(minf(3.5*organ.scale*organ.scale*local_dt,eater.gut_capacity()-eater.substrate))
-					eater.substrate += amount
-					eater.stolen += amount
-					eater.consumed(organ,amount)
-					organ.progress = minf(1,organ.progress+local_dt)
-					organ.feedback = "Draining biomass"
-				else:
-					organ.progress = 1-prey.health/100
-					organ.feedback = "Engulfing · %d%% covered" % roundi(organ.coverage*100)
-					if prey.health <= 0:
-						var taken: float = minf(eater.gut_capacity()-eater.substrate,prey.organic_mass())
-						eater.substrate += taken
-						eater.engulfed += 1
-						eater.eaten += taken
-						eater.consumed(organ,taken)
-						_die(prey,taken)
+				organ.consume_flash = 1
+				organ.link = contact
+				attacker.feeding_feedback = "SPIKE CONTACT"
 				break
-			if not touched:
-				organ.progress = maxf(0,organ.progress-dt)
-				organ.target_id = -1
-			eater.feeding_feedback = organ.feedback
 
 func _exclude_particles() -> void:
 	# Deliberate visual/gameplay projection: external packets never hide inside
@@ -575,6 +685,36 @@ func _exclude_particles() -> void:
 				moved = true
 			if not moved: break
 
+func _clear_receptors(cell, dt: float) -> void:
+	for organ in cell.organs:
+		if organ.blocked <= 0: continue
+		# Basal unbinding never needs energy. ATP-funded cleaning and repair
+		# bodies speed recovery; occupation cannot become a permanent disable.
+		organ.blocked = maxf(0,organ.blocked-dt*0.045)
+		var cleared: float = minf(organ.blocked,dt*0.18*(1+cell.count("regenerative")*1.5))
+		var energy: float = cell.spend_energy(cleared*1.2,organ)
+		organ.blocked = maxf(0,organ.blocked-energy/1.2)
+
+func _receptor_contacts() -> void:
+	for cell in cells:
+		if cell.dead or cell.activity <= 0: continue
+		for organ in cell.organs:
+			if organ.kind not in ["feeding","sensing","offensive"]: continue
+			var at: Vector2 = cell.organ_position(organ)
+			var forward: Vector2 = cell.local_point(organ.a).normalized().rotated(cell.angle)
+			var radius: float = 12*organ.scale
+			for index in grid.query(at,radius+6):
+				var p: Dictionary = particles[index]
+				if not p.alive or p.kind != DECOY or p.owner == cell.id or activity_at(p.p) <= 0: continue
+				var delta := Medium.offset(at,p.p)
+				if delta.length() > radius+particle_radius(p.kind)*particle_scale(p.amount): continue
+				var normal := delta.normalized()
+				if forward.dot(normal) < 0.25 or p.direction.dot(-normal) < 0.5: continue
+				organ.blocked = minf(1,organ.blocked+0.65)
+				cell.waste += p.amount
+				p.alive = false
+				cell.render_revision += 1
+
 func _toxin_contacts() -> void:
 	for index in local_particle_ids():
 		var p: Dictionary = particles[index]
@@ -583,7 +723,7 @@ func _toxin_contacts() -> void:
 			if cell.dead or cell.activity <= 0 or cell.id == p.owner: continue
 			var d = Medium.offset(cell.position,p.p)
 			if d.length() <= cell.support(d.angle())+5:
-				cell.waste += cell.damage(18,d.angle()) + p.amount
+				cell.waste += cell.damage(p.amount*75,d.angle()) + p.amount
 				p.alive = false
 				break
 
@@ -592,9 +732,10 @@ func _die(cell, transferred: float = 0.0) -> void:
 	cell.dead = true
 	cell.health = 0
 	var total: float = maxf(0,cell.organic_mass()-transferred)
-	for i in 24:
-		var direction = Vector2.from_angle(TAU*i/24)
-		spawn_particle(NUTRIENT,cell.position+direction*cell.radius*0.65,direction*16,total/24,cell.id)
+	var count := maxi(24,ceili(total/0.4))
+	for i in count:
+		var direction = Vector2.from_angle(TAU*i/count)
+		spawn_particle(NUTRIENT,cell.position+direction*cell.radius*0.9,direction*24,total/count,cell.id)
 	events.append({"time":time,"type":"death","id":cell.id,"released":total})
 	if cell == player: return
 	kills += 1
@@ -611,7 +752,7 @@ func _replace_population() -> void:
 		for attempt in 24:
 			at = Medium.wrap_position(player.position+Vector2.from_angle(rng.randf()*TAU)*1100)
 			if attempt > 0: at = Vector2(rng.randf()*WORLD.x,rng.randf()*WORLD.y)
-			if Medium.visibility(at,player.position,view_half+Vector2.ONE*160) <= 0:
+			if Medium.visibility(at,player.position if camera_follows_player else camera_position,view_half+Vector2.ONE*160) <= 0:
 				found = true
 				break
 		if not found: continue
@@ -619,21 +760,3 @@ func _replace_population() -> void:
 		external_input += replacement.organic_mass()
 		events.append({"time":time,"type":"population_replacement","id":replacement.id,"replaces":pending.id})
 		pending_replacements.erase(pending)
-
-func _replenish() -> void:
-	# Photosynthetic/external habitat input; frozen regions receive no ordinary spawns.
-	for source in food_sources:
-		if activity_at(source) < 0.45: continue
-		var local_food = 0
-		var local_oxygen = 0
-		for index in grid.query(source,100):
-			if index >= particles.size(): continue
-			var p: Dictionary = particles[index]
-			if p.alive and Medium.offset(source,p.p).length() < 100:
-				if p.kind == NUTRIENT: local_food += 1
-				if p.kind == OXYGEN: local_oxygen += 1
-		var food_pulse := habitat != 1 or roundi(time*2)%8 == 0
-		if food_pulse and local_food < (35 if habitat == 0 else (7 if habitat == 1 else 65)):
-			spawn_particle(NUTRIENT,source+Vector2(rng.randfn(0,30),rng.randfn(0,30)))
-			external_input += 1
-		if local_oxygen < 30: spawn_particle(OXYGEN,source+Vector2(rng.randfn(0,55),rng.randfn(0,55)),Vector2.ZERO,2)

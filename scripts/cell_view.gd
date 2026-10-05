@@ -70,10 +70,12 @@ func _draw_organs() -> void:
 		var at: Vector2 = point+point.normalized()*5*organ.scale
 		var heading := point.angle()
 		Visuals.icon(appendages,at,organ.kind,heading,organ.scale,cell.age,organ.mode,organ.consume_flash)
+		if organ.blocked > 0:
+			appendages.draw_arc(at,15*organ.scale,-PI/2,-PI/2+TAU*organ.blocked,28,Color("cf92e8"),4*organ.scale,true)
 		if organ.charge_flash > 0:
 			appendages.draw_arc(at,11*organ.scale+organ.charge_flash*6,0,TAU,24,Color(0.96,0.84,0.48,organ.charge_flash),2,true)
-		if game.show_senses and organ.kind in ["feeding","sensing"]:
-			appendages.draw_arc(at,310*sqrt(organ.scale),0,TAU,48,Color(0.6,0.55,0.96,0.22),1,true)
+		if game.show_senses and organ.kind in ["feeding","sensing","offensive"]:
+			appendages.draw_arc(at,(760 if organ.kind == "offensive" else 310)*sqrt(organ.scale),0,TAU,48,Color(0.6,0.55,0.96,0.22),1,true)
 		if organ.kind == "feeding" and organ.feeding:
 			var end: Vector2 = game.world.Medium.offset(cell.position,organ.link).rotated(-cell.angle)
 			appendages.draw_line(at,end,Color("fff0b4"),3,true)

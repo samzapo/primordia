@@ -1,5 +1,7 @@
 # Revision 4 — pumping pores and shapeable cells
 
+Historical record: [revision five](REVISION_5.md) supersedes its controls, feeding specializations and environmental chemistry.
+
 This revision implements the owner's twelve-part playtest feedback, the reported CanvasItem polygon-triangulation failure, and player-controlled microtubule placement/tension.
 
 ## Behavior and controls

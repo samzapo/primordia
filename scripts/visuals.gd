@@ -22,10 +22,25 @@ static func icon(c: Node2D, p: Vector2, kind: String, rotation: float, scale: fl
 			c.draw_circle(p, 8 * scale, Color("619fbd"))
 			c.draw_line(p-side*7*scale, p+side*7*scale, Color("d4e9f4"), 2*scale)
 		"offensive":
+			c.draw_colored_polygon(PackedVector2Array([p-side*10*scale,p+forward*42*scale,p+side*10*scale,p-forward*5*scale]),Color("f2909e").lerp(Color.WHITE,pulse))
+			c.draw_line(p,p+forward*35*scale,Color("ffe6b7"),2*scale,true)
+		"photosynthesis":
+			c.draw_set_transform(p,rotation,Vector2(1.25,0.8)*scale)
+			c.draw_circle(Vector2.ZERO,14,Color("88d878").lerp(Color("fff6b7"),pulse))
+			for i in 3:
+				c.draw_line(Vector2(-6+i*6,-7),Vector2(-6+i*6,7),Color("368e69"),3,true)
+			c.draw_set_transform(Vector2.ZERO)
+		"toxin":
 			c.draw_circle(p, 12*scale, Color("f2909e"))
 			c.draw_circle(p-forward*3*scale, 7*scale, Color("b55976"))
 			c.draw_line(p, p+forward*20*scale, Color("ffc78c"), 7*scale, true)
 			c.draw_circle(p+forward*20*scale, 3*scale, Color("fff0b7"))
+		"neutralizing":
+			c.draw_circle(p,13*scale,Color("8dbcf8"))
+			c.draw_arc(p+forward*4*scale,8*scale,rotation+0.8,rotation+TAU-0.8,24,Color("e6f9ff"),4*scale,true)
+		"acidifying":
+			c.draw_circle(p,12*scale,Color("f59db9"))
+			for i in 3: c.draw_circle(p+forward*(5+i*5)*scale+side*sin(i*2)*4*scale,(4-i)*scale,Color("ffe2e9"))
 		"regenerative":
 			c.draw_circle(p, 13*scale, Color("e6a6d7"))
 			c.draw_circle(p, 9*scale, Color("9e72b2"))
@@ -35,18 +50,9 @@ static func icon(c: Node2D, p: Vector2, kind: String, rotation: float, scale: fl
 			var r := 18*scale
 			var center: Vector2 = p+forward*r*0.65
 			var tint := GOLD.lerp(Color.WHITE,pulse*0.9)
-			if mode == "parasite":
-				c.draw_circle(p,11*scale,tint)
-				c.draw_line(p,center+forward*52*scale,tint,5*scale,true)
-				c.draw_line(p,center+forward*51*scale,Color("527e71"),2*scale,true)
-			else:
-				c.draw_circle(center,r,Color(0.45,0.78,0.56,0.36) if mode == "engulf" else Color("527e71"))
-				c.draw_arc(center,r*(1+0.12*pulse),0,TAU,48,tint,4*scale,true)
-				if mode == "engulf":
-					for i in 10:
-						var a := TAU*i/10
-						c.draw_line(center+Vector2.from_angle(a)*r,center+Vector2.from_angle(a)*(r-4*scale),Color("fff0b4"),2*scale,true)
-				else: c.draw_arc(center,r*0.65,rotation+0.8,rotation+TAU-0.8,24,tint,2*scale,true)
+			c.draw_circle(center,r,Color("527e71"))
+			c.draw_arc(center,r*(1+0.12*pulse),0,TAU,48,tint,4*scale,true)
+			c.draw_arc(center,r*0.65,rotation+0.8,rotation+TAU-0.8,24,tint,2*scale,true)
 		"sensing":
 			c.draw_line(p-forward*6*scale, p+forward*13*scale, PURPLE, 5*scale, true)
 			for sign_value in [-1, 1]:

@@ -2,13 +2,18 @@ extends RefCounted
 ## Uniform grid for local chemical/receptor queries. Stable insertion order.
 var buckets: Dictionary = {}
 var source_size := 0
-const SIZE := 64.0
-const COLS := 64
-const ROWS := 40
+var size := 64.0
+var cols := 64
+var rows := 40
+
+func _init(cell_size: float = 64.0) -> void:
+	size = cell_size
+	cols = roundi(4096/size)
+	rows = roundi(2560/size)
 
 func key_for(p: Vector2) -> Vector2i:
-	var cell := Vector2i((p / SIZE).floor())
-	return Vector2i(posmod(cell.x,COLS), posmod(cell.y,ROWS))
+	var cell := Vector2i((p / size).floor())
+	return Vector2i(posmod(cell.x,cols), posmod(cell.y,rows))
 
 func rebuild(particles: Array) -> void:
 	buckets.clear()
@@ -34,10 +39,10 @@ func query(position: Vector2, radius: float) -> Array[int]:
 
 func query_rect(position: Vector2, half_extent: Vector2) -> Array[int]:
 	var found: Array[int] = []
-	var lo := Vector2i(((position-half_extent)/SIZE).floor())
-	var hi := Vector2i(((position+half_extent)/SIZE).floor())
-	for x in range(lo.x,mini(hi.x+1,lo.x+COLS)):
-		for y in range(lo.y,mini(hi.y+1,lo.y+ROWS)):
-			var key := Vector2i(posmod(x,COLS),posmod(y,ROWS))
+	var lo := Vector2i(((position-half_extent)/size).floor())
+	var hi := Vector2i(((position+half_extent)/size).floor())
+	for x in range(lo.x,mini(hi.x+1,lo.x+cols)):
+		for y in range(lo.y,mini(hi.y+1,lo.y+rows)):
+			var key := Vector2i(posmod(x,cols),posmod(y,rows))
 			if buckets.has(key): found.append_array(buckets[key])
 	return found
