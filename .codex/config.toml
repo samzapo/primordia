@@ -1,0 +1,10 @@
+# Primordia-only defaults. Effective only in sessions that load this trusted project configuration.
+# No cross-project generated memory; project records remain in this directory tree.
+[memories]
+generate_memories = false
+use_memories = false
+
+# Account connectors can expose unrelated project data. Keep them disabled here by default.
+# This does not disable every plugin, shell command, browser, or app-native tool.
+[apps._default]
+enabled = false
