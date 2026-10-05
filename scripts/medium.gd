@@ -8,6 +8,7 @@ const NODE_MASS := 22.0
 var velocity := PackedVector2Array()
 var activity := PackedFloat32Array()
 var driven := true
+var local_suction := true
 var active_indices := PackedInt32Array()
 var tide := PackedVector2Array()
 var changes := PackedVector2Array()
@@ -141,7 +142,16 @@ func suction(body, mouth: Vector2, reach: float, power: float, dt: float) -> voi
 	# linear/angular impulse to the pumping cell; other cells feel it via drag.
 	var impulse := Vector2.ZERO
 	var torque := 0.0
-	for i in active_indices:
+	var candidates := active_indices
+	if local_suction:
+		candidates = PackedInt32Array()
+		var lo := Vector2i(((mouth-Vector2.ONE*reach)/SIZE).floor())
+		var hi := Vector2i(((mouth+Vector2.ONE*reach)/SIZE).floor())
+		for y in range(lo.y,mini(hi.y+1,lo.y+ROWS)):
+			for x in range(lo.x,mini(hi.x+1,lo.x+COLS)):
+				var candidate := index(x,y)
+				if activity[candidate] > 0: candidates.append(candidate)
+	for i in candidates:
 		var at := Vector2(i%COLS+0.5,int(i/COLS)+0.5)*SIZE
 		var delta := offset(at,mouth)
 		var distance := delta.length()

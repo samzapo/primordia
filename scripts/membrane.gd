@@ -2,6 +2,8 @@ extends RefCounted
 ## XPBD ring: compliant edge-length and enclosed-area constraints.
 ## Coordinates are local to the organism. Render interpolation is separate.
 const COUNT := 28
+var kernels = preload("res://scripts/backend.gd").create()
+var native_constraints := kernels != null
 const Network = preload("res://scripts/cytoskeleton.gd")
 var skeleton = Network.new()
 var maximum_radius := 47.0
@@ -55,28 +57,38 @@ func step(dt: float, radius: float, acceleration: Vector2, time: float, _aspect:
 	var edge_alpha := 0.0008/(dt*dt)
 	var area_alpha := 0.00001/(dt*dt)
 	for iteration in 6:
-		for i in COUNT:
-			var j := (i+1)%COUNT
-			var delta := points[j]-points[i]
-			var length := delta.length()
-			if length < 0.0001: continue
-			var dl := (-(length-rest_lengths[i])-edge_alpha*edge_lambda[i])/(2+edge_alpha)
-			edge_lambda[i] += dl
-			points[i] -= delta/length*dl
-			points[j] += delta/length*dl
+		if native_constraints:
+			var solved: Array = kernels.membrane_edges(points,rest_lengths,edge_lambda,edge_alpha)
+			points = solved[0]
+			edge_lambda = solved[1]
+		else:
+			for i in COUNT:
+				var j := (i+1)%COUNT
+				var delta := points[j]-points[i]
+				var length := delta.length()
+				if length < 0.0001: continue
+				var dl := (-(length-rest_lengths[i])-edge_alpha*edge_lambda[i])/(2+edge_alpha)
+				edge_lambda[i] += dl
+				points[i] -= delta/length*dl
+				points[j] += delta/length*dl
 		skeleton.solve(self,dt,radius)
-		var denominator := area_alpha
-		var area := 0.0
-		for i in COUNT:
-			var next := points[(i+1)%COUNT]
-			var prev := points[posmod(i-1,COUNT)]
-			area += points[i].cross(next)*0.5
-			gradients[i] = Vector2(next.y-prev.y,prev.x-next.x)*0.5
-			denominator += gradients[i].length_squared()
-		var target := COUNT*radius*radius*sin(TAU/COUNT)*0.5
-		var dl := (-(area-target)-area_alpha*area_lambda)/maxf(denominator,0.0001)
-		area_lambda += dl
-		for i in COUNT: points[i] += gradients[i]*dl
+		if native_constraints:
+			var solved: Array = kernels.membrane_area(points,area_lambda,area_alpha,COUNT*radius*radius*sin(TAU/COUNT)*0.5)
+			points = solved[0]
+			area_lambda = solved[1]
+		else:
+			var denominator := area_alpha
+			var area := 0.0
+			for i in COUNT:
+				var next := points[(i+1)%COUNT]
+				var prev := points[posmod(i-1,COUNT)]
+				area += points[i].cross(next)*0.5
+				gradients[i] = Vector2(next.y-prev.y,prev.x-next.x)*0.5
+				denominator += gradients[i].length_squared()
+			var target := COUNT*radius*radius*sin(TAU/COUNT)*0.5
+			var dl := (-(area-target)-area_alpha*area_lambda)/maxf(denominator,0.0001)
+			area_lambda += dl
+			for i in COUNT: points[i] += gradients[i]*dl
 	# Ordered polar sectors prevent folded edges and invalid render polygons
 	# during compression. This is explicit numerical stabilization of the gel.
 	for i in COUNT:

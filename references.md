@@ -135,3 +135,7 @@ This is a living design record. For each new biological or physical mechanic, re
 ## Light bloom as presentation
 
 The screen bloom is a stylistic optical halo in light-rich regions. It does not add light energy, photosynthesis or chemical activity. The world pass uses a bounded neighborhood of [Godot screen-texture samples](https://docs.godotengine.org/en/stable/tutorials/shaders/screen-reading_shaders.html); the HUD is drawn afterward and stays sharp. This is an inexpensive screen-space approximation, not a simulation of microscope optics or spectral scattering.
+
+## Computational implementation of the existing simulation
+
+Revision seven preserves the biological/physical abstractions above. [Godot C++ bindings](https://docs.godotengine.org/en/stable/tutorials/scripting/cpp/about_godot_cpp.html) provide native batch execution. [Godot compute shaders](https://docs.godotengine.org/en/stable/tutorials/shaders/compute_shaders.html) document RenderingDevice renderer requirements and the synchronization cost relevant to our GPU transport experiment. [GPU Gems: grid fluid simulation](https://developer.nvidia.com/gpugems/gpugems/part-vi-beyond-triangles/chapter-38-fast-fluid-dynamics-simulation-gpu) motivates retaining a field-based fluid representation; Primordia still uses its simpler finite-mass viscous model and does not claim to implement that chapter's pressure projection.

@@ -154,6 +154,7 @@ func _ready() -> void:
 	_apply_fullscreen()
 	get_viewport().size_changed.connect(_layout)
 	if "--settings" in args: settings_panel.show()
+	_configure_backend()
 	_layout()
 	_update_hud()
 	_update_world(1.0)
@@ -244,6 +245,19 @@ func _update_world(alpha: float) -> void:
 			views.erase(identity)
 
 func _sync_particles(alpha: float = 1.0) -> void:
+	if world.native_render:
+		var capacities := PackedInt32Array()
+		for batch in batches: capacities.append(batch.multimesh.instance_count)
+		var result: Array = world.kernels.render_particles(world.particles,world.local_particle_ids(30),world.cells,render_camera,world.view_half,alpha,world.revision,capacities)
+		for kind in Simulation.SPECIES_COUNT:
+			buffers[kind] = result[kind]
+			var count: int = result[-1][kind]
+			var capacity: int = result[kind].size()/12
+			if batches[kind].multimesh.instance_count != capacity: batches[kind].multimesh.instance_count = capacity
+			if count > 0: batches[kind].multimesh.buffer = buffers[kind]
+			batches[kind].multimesh.visible_instance_count = count
+		return
+	if world.spatial_queries: world.cell_index.rebuild(world.cells)
 	var counts := PackedInt32Array([0,0,0,0,0,0,0,0,0,0,0])
 	for index in world.local_particle_ids(30):
 		var p: Dictionary = world.particles[index]
@@ -284,7 +298,8 @@ func _sync_particles(alpha: float = 1.0) -> void:
 
 func _visible_particle_position(at: Vector2, alpha: float) -> Vector2:
 	# Match particle exclusion to interpolated bodies, not only physics poses.
-	for cell in world.cells:
+	for cell_id in world.cell_index.at(at) if world.spatial_queries else range(world.cells.size()):
+		var cell = world.cells[cell_id]
 		if cell.dead or cell.activity <= 0: continue
 		var fraction: float = alpha if cell.activity > 0 else 1.0
 		var center: Vector2 = cell.previous_position+Simulation.Medium.offset(cell.previous_position,cell.position)*fraction
@@ -564,7 +579,7 @@ func _update_hud() -> void:
 	detail_label.text = notice if notice_timer > 0 else "%s · Food %s / %s · Oxygen %s · %d sec · Tab to build" % [Simulation.HABITATS[world.habitat],_quantity(cell.substrate),_quantity(cell.gut_capacity()),_quantity(cell.oxygen),int(world.time)]
 	detail_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	debug_label.visible = show_debug
-	debug_label.text = "%d FPS · sim %.2f ms · prepare %.2f ms · %d active cells / %d particles" % [Engine.get_frames_per_second(),simulation_ms,render_ms,world.active_cells,world.active_particles]
+	debug_label.text = "%s · %d FPS · sim %.2f ms · prepare %.2f ms · %d active cells / %d particles" % ["GPU experiment" if world.gpu_transport != null else "Native CPU" if world.kernels != null else "GDScript",Engine.get_frames_per_second(),simulation_ms,render_ms,world.active_cells,world.active_particles]
 	if selected >= 0:
 		help_label.text = HELP[selected]+"\n\nSize %.2f× · Cost %.1f biomass\nWheel over the cell to resize." % [placement_scale,Simulation.Cell.organ_cost(Simulation.KINDS[selected],placement_scale)]
 	else: help_label.text = "Choose an organ, then click the membrane. Drag between membrane or microtubule points to shape your cell; hover a link and scroll for tension."
@@ -606,7 +621,9 @@ func _scroll_selected() -> void:
 	if selected >= 0: build_scroll.ensure_control_visible(cards[selected])
 
 func _restart(profile: int = -1) -> void:
+	if world.gpu_transport != null: world.gpu_transport.close()
 	world = Simulation.new(world.seed_value,world.habitat if profile < 0 else profile)
+	_configure_backend()
 	_refresh_light_texture()
 	selected = -1
 	camera_locked = true
@@ -773,3 +790,12 @@ func _capture() -> void:
 	var result := get_viewport().get_texture().get_image().save_png(screenshot_path)
 	print("CAPTURE ",screenshot_path," result=",result)
 	get_tree().quit(result)
+
+func _configure_backend() -> void:
+	if "--gpu-transport" not in OS.get_cmdline_user_args(): return
+	var gpu = load("res://scripts/gpu_transport.gd").new()
+	if gpu.initialize(): world.gpu_transport = gpu
+	else: push_warning("GPU transport unavailable; keeping the CPU backend. Use --rendering-method mobile for the experiment.")
+
+func _exit_tree() -> void:
+	if world.gpu_transport != null: world.gpu_transport.close()

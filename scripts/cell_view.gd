@@ -4,6 +4,9 @@ const Visuals = preload("res://scripts/visuals.gd")
 var cell
 var game
 var seen_revision := -1
+var simple_view := false
+var last_draw_tick := -2
+var detail_lod := true
 var label := Label.new()
 var appendages := Node2D.new()
 
@@ -19,8 +22,12 @@ func _ready() -> void:
 func sync(render_position: Vector2, render_angle: float, zoom: float, alpha: float) -> void:
 	position = render_position
 	rotation = render_angle
-	if seen_revision != cell.render_revision or game.show_senses != get_meta("senses",false) or game.build_open != get_meta("assembly",false):
+	var reduced: bool = detail_lod and cell != game.world.player and cell.radius*zoom < 18 and not game.build_open
+	var detail_changed: bool = reduced != simple_view
+	simple_view = reduced
+	if (seen_revision != cell.render_revision and (not reduced or game.world.revision-last_draw_tick >= 2)) or detail_changed or game.show_senses != get_meta("senses",false) or game.build_open != get_meta("assembly",false):
 		seen_revision = cell.render_revision
+		last_draw_tick = game.world.revision
 		set_meta("senses",game.show_senses)
 		set_meta("assembly",game.build_open)
 		queue_redraw()
@@ -51,7 +58,7 @@ func _draw() -> void:
 		draw_line(a,b,hue.lightened(0.45)*Color(1,1,1,(0.5 if game.build_open else 0.16)+link.tension*0.3),1+link.tension*2,true)
 	for junction in cell.membrane.skeleton.junctions.values(): draw_circle(junction.p,3,Color("cce6ee"))
 	# Decorative cytoplasm stays inside the deformed body; it adds no anatomy.
-	for i in 9:
+	for i in (0 if simple_view else 9):
 		var angle := i*2.3
 		var q: Vector2 = Vector2.from_angle(angle)*cell.visible_support(angle)*(0.5+0.12*sin(i*7.0))
 		var vesicle := hue.lightened(0.15 if i%3 == 0 else 0.3)
@@ -64,7 +71,7 @@ func _draw() -> void:
 	draw_circle(nucleus+Vector2(-0.065,-0.07)*cell.radius,cell.radius*0.14,core)
 	draw_circle(nucleus+Vector2(-0.10,-0.11)*cell.radius,cell.radius*0.065,core.lightened(0.5))
 	for packet in cell.signals: draw_circle(packet.p,3,Color("fc8c90") if packet.fear else Color("b5a3f4"))
-	for packet in cell.resource_packets:
+	for packet in ([] if simple_view else cell.resource_packets):
 		if packet.delay > 0: continue
 		var color := Color("f5d47b") if packet.kind == "atp" else Color("ffa8bd")
 		draw_circle(packet.p,5,color.darkened(0.25))

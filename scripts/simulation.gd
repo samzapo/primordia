@@ -1,5 +1,16 @@
 extends RefCounted
 ## Authoritative fixed-step ecology, independent of input and scene nodes.
+const Backend = preload("res://scripts/backend.gd")
+var kernels = Backend.create()
+var gpu_transport = null
+var native_particles := kernels != null
+var native_fluid := kernels != null
+var native_render := kernels != null
+var native_exclusion := kernels != null
+var spatial_queries := true
+var stagger_sensing := true
+var cell_index = preload("res://scripts/cell_index.gd").new()
+
 const Grid = preload("res://scripts/spatial_grid.gd")
 const Cell = preload("res://scripts/cell.gd")
 const Medium = preload("res://scripts/medium.gd")
@@ -92,6 +103,7 @@ func _make_cell(p: Vector2, role: String):
 		cell.add_organ("photosynthesis",0,"graze",false)
 	cell.update_geometry()
 	cell.previous_angle = cell.angle
+	if stagger_sensing: cell.sense_clock = (cell.id%9)/60.0
 	cells.append(cell)
 	return cell
 
@@ -139,8 +151,12 @@ func step(dt: float) -> void:
 	if grid.source_size != particles.size(): grid.rebuild(particles)
 	var mark := Time.get_ticks_usec()
 	fluid.set_camera(player.position if camera_follows_player else camera_position,view_half)
-	fluid.step(dt)
-	if revision%6 == 0: acidity.step(dt*6,fluid)
+	if native_fluid:
+		fluid.velocity = kernels.fluid_step(fluid.velocity,fluid.activity,fluid.tide,dt,fluid.driven)
+		if revision%6 == 0: acidity.values = kernels.acid_step(acidity.values,fluid.velocity,fluid.activity,dt*6)
+	else:
+		fluid.step(dt)
+		if revision%6 == 0: acidity.step(dt*6,fluid)
 	active_cells = 0
 	for cell in cells:
 		cell.previous_position = cell.position
@@ -201,6 +217,7 @@ func step(dt: float) -> void:
 		cell.shape_acceleration = ((cell.velocity-before_motion[cell.id])/dt).limit_length(600)
 	profile_usec["motion"] = Time.get_ticks_usec()-mark
 	mark = Time.get_ticks_usec()
+	if spatial_queries: cell_index.rebuild(cells)
 	_spike_contacts(dt)
 	_toxin_contacts()
 	_receptor_contacts()
@@ -217,6 +234,14 @@ func step(dt: float) -> void:
 	won = player.processed >= 40 and time+0.000001 >= 90
 
 func _move_particles(dt: float) -> void:
+	if gpu_transport != null:
+		active_particles = gpu_transport.step(particles,local_particle_ids(64),fluid.velocity,player.position if camera_follows_player else camera_position,view_half,dt,revision,rng)
+		grid.rebuild(particles)
+		return
+	if native_particles:
+		active_particles = kernels.transport(particles,local_particle_ids(64),fluid.velocity,player.position if camera_follows_player else camera_position,view_half,dt,revision,rng)
+		grid.rebuild(particles)
+		return
 	active_particles = 0
 	for index in local_particle_ids(64):
 		var particle: Dictionary = particles[index]
@@ -236,11 +261,17 @@ func _move_particles(dt: float) -> void:
 		particle.direction = Vector2.from_angle(particle.angle)
 
 func _chemistry(dt: float) -> void:
+	if native_particles:
+		var result: Dictionary = kernels.chemistry(particles,local_particle_ids(),acidity.values,player.position if camera_follows_player else camera_position,view_half,dt,revision,rng)
+		acidity.values = result.acid
+		respiration_loss += result.loss
+		recycled += result.recycled
+		for kind in result.events: chemistry_events[kind] += result.events[kind]
+		return
 	# Unimolecular decay is stochastic. Pair reactions are deterministic contact
 	# rules: both binding patches must face their partner within 60 degrees.
 	var local_ids := local_particle_ids()
-	reaction_grid.buckets.clear()
-	reaction_grid.source_size = 0
+	reaction_grid.clear()
 	for index in local_ids:
 		var p: Dictionary = particles[index]
 		p.reaction_activity = activity_at(p.p) if p.alive else 0.0
@@ -342,7 +373,11 @@ func _react_pair(a: Dictionary, b: Dictionary, acid: float = 0.0) -> bool:
 		return true
 	if a.kind == b.kind and a.kind in [NUTRIENT,WASTE,CARBON,OXYGEN] and a.amount+b.amount <= 1.4:
 		if a.kind == TOXIN and a.owner != b.owner: return false
-		a.v = (a.v*a.amount+b.v*b.amount)/(a.amount+b.amount)
+		var total: float = a.amount+b.amount
+		if total <= 0: return false
+		# Normalize weights before float-vector arithmetic: tiny photosynthetic
+		# remainders can be below float32 range while their ratio is well-defined.
+		a.v = a.v.lerp(b.v,b.amount/total)
 		a.amount += b.amount
 		b.alive = false
 		chemistry_events.combine += 1
@@ -664,6 +699,11 @@ func _spike_contacts(dt: float) -> void:
 				break
 
 func _exclude_particles() -> void:
+	if native_exclusion:
+		kernels.exclude(particles,local_particle_ids(),cells,player.position if camera_follows_player else camera_position,view_half)
+		grid.rebuild(particles)
+		return
+	if spatial_queries: cell_index.rebuild(cells)
 	# Deliberate visual/gameplay projection: external packets never hide inside
 	# cytoplasm. Preserve material, and move bucket/interpolation history too.
 	for index in local_particle_ids():
@@ -671,7 +711,8 @@ func _exclude_particles() -> void:
 		if not p.alive or activity_at(p.p) <= 0: continue
 		for iteration in 3:
 			var moved := false
-			for cell in cells:
+			for cell_id in cell_index.at(p.p) if spatial_queries else range(cells.size()):
+				var cell = cells[cell_id]
 				if cell.dead or cell.activity <= 0: continue
 				var offset := Medium.offset(cell.position,p.p)
 				if offset.length_squared() > pow(cell.extent()+8,2): continue
@@ -716,10 +757,12 @@ func _receptor_contacts() -> void:
 				cell.render_revision += 1
 
 func _toxin_contacts() -> void:
+	if spatial_queries: cell_index.rebuild(cells)
 	for index in local_particle_ids():
 		var p: Dictionary = particles[index]
 		if not p.alive or p.kind != TOXIN or activity_at(p.p) <= 0: continue
-		for cell in cells:
+		for cell_id in cell_index.at(p.p) if spatial_queries else range(cells.size()):
+			var cell = cells[cell_id]
 			if cell.dead or cell.activity <= 0 or cell.id == p.owner: continue
 			var d = Medium.offset(cell.position,p.p)
 			if d.length() <= cell.support(d.angle())+5:

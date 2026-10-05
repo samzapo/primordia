@@ -17,7 +17,7 @@ class SteamLaunchers(unittest.TestCase):
         self.root = Path(self.scratch.name)
         self.steam = self.root / "Steam client"
         (self.steam / "steamapps").mkdir(parents=True)
-        self.env = dict(os.environ, STEAM_DIR=str(self.steam), GODOT_BIN="")
+        self.env = dict(os.environ, STEAM_DIR=str(self.steam), GODOT_BIN="", PRIMORDIA_BACKEND="script")
 
     def install(self, library, binary_name="godot.linuxbsd.editor.x86_64"):
         apps = library / "steamapps"

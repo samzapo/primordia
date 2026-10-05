@@ -62,12 +62,16 @@ Maintain at least one reference to a real motivating phenomenon for biological/p
 
 The owner requested visible particle orientation using branched, forked and rounded shapes, with complement illustrations as a visual reference, then requested a brighter graphics revision. Keep original vector artwork, species readability, particle-authoritative orientation and batched rendering. The owner selected luminous colors like a bright coral reef: blue/teal water and vivid coral/gold/violet/green anatomy, with colorful shadows. The owner explicitly rejected occupation-based body colors: cell bodies share a consistent palette; organelles and their produced particles communicate function. The owner requested bloom in lit areas and water color driven by acidity; bloom remains a presentation effect and buffering reverses the acid tint. New complement mechanics remain suggestions in [the proposal](COMPLEMENT_PROPOSAL.md), not approved gameplay requirements.
 
+## Revision 7 performance direction
+
+The owner reports that normal play requires a wider view than the earlier benchmarks, and that wider views have serious performance problems. All five proposed efficiency approaches are approved targets, with independent measurements of gains and losses. Prioritize compiled simulation kernels, GPU computation experiments and efficient fluid work; also improve spatial query coverage and slower/less detailed updates where behavior permits. Preserve visible oriented chemistry, fluid/cell interaction, indirect control and uncapped growth. Do not hide scaling problems by reducing the active habitat or silently deleting particles. See [revision seven](REVISION_7.md) for implementation, ablations and limits.
+
 ## Proposed expansion areas
 
 - More varied ecosystems and organisms with their own organelle-derived behavior.
 - Richer chemical species and internal signaling, with readable reaction feedback.
 - Improved cell-contact mechanics and an explicitly chosen fluid model.
 - More attachment geometry, organelle costs, progression, and tradeoffs.
-- Profiling on actual target devices before selecting C++ or GPU acceleration.
+- Further native cell/membrane work and a fully resident GPU chemistry design, guided by wide-view benchmarks on actual target devices.
 
 These are future directions, not features already implemented.

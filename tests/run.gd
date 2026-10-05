@@ -17,6 +17,7 @@ func _initialize() -> void:
 	_run.call_deferred()
 
 func _run() -> void:
+	preload("res://tests/acceleration.gd").run(expect)
 	_test_metabolism()
 	_test_anatomy()
 	_test_receptors()
@@ -483,6 +484,21 @@ func _test_ecosystem() -> void:
 func _test_interface() -> void:
 	var scene = load("res://scenes/pond.tscn").instantiate()
 	root.add_child(scene)
+	# Throttled drawings must still refresh after several catch-up ticks.
+	var npc = scene.world.cells[1]
+	var npc_view = scene.views[npc.id]
+	var revision_before: int = scene.world.revision
+	var draw_before: int = npc.render_revision
+	scene.world.revision = 1
+	npc.render_revision += 1
+	npc_view.sync(Vector2.ZERO,0,0.01,1)
+	scene.world.revision += 8
+	npc.render_revision += 8
+	npc_view.sync(Vector2.ZERO,0,0.01,1)
+	expect(npc_view.seen_revision == npc.render_revision,"Small-cell drawing refreshes after an even number of catch-up ticks")
+	scene.world.revision = revision_before
+	npc.render_revision = draw_before
+	scene._update_world(1)
 	await process_frame
 	scene.set_physics_process(false)
 	expect(scene.batches.size() == Sim.SPECIES_COUNT,"Renderer builds all chemical species")

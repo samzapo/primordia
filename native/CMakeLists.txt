@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.20)
+project(primordia LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(GODOTCPP_BUILD_PROFILE "${CMAKE_CURRENT_SOURCE_DIR}/profile.json" CACHE PATH "" FORCE)
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../build/godot-cpp" godot-cpp)
+add_library(primordia SHARED kernels.cpp)
+target_link_libraries(primordia PRIVATE godot-cpp::template_release)
+set_target_properties(primordia PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
