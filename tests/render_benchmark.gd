@@ -14,6 +14,7 @@ func run() -> void:
 		root.add_child(scene)
 		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 		scene.preferences.persist = false
+		scene.diagnostic_zoom = true # Preserve the original wider stress workload.
 		scene.manual_zoom = zoom
 		for i in 60: await process_frame
 		var timings: Array[int] = []

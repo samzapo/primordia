@@ -10,6 +10,7 @@ func run() -> void:
 	scene.preferences.persist = false
 	scene.notice_timer = 0
 	for zoom in [0.5,0.25,0.15]:
+		scene.diagnostic_zoom = true # Preserve the original wider stress workload.
 		scene.manual_zoom = zoom
 		for enabled in [false,true,false,true]:
 			scene.habitat_view.visible = enabled

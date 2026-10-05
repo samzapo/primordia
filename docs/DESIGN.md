@@ -97,3 +97,9 @@ The run director tracks a few scalar exposures and events independently of camer
 The owner approved deeper, spatially varied water beneath saturated anatomy, broad colored membranes, larger simple internals, integrated organ silhouettes, thicker oriented chemistry glyphs, grouped fractal reefs and restrained event-driven animation. Body palettes and internal patterns now vary by seeded lineage, independently of occupation or equipped organs. This supersedes the single shared periwinkle body while preserving the prohibition on occupation-based body colors.
 
 Preserve physical scale, cell-sourced chemistry, existing particle orientation and counts, microtubule-controlled membrane shape, acidity tint, selective light bloom and peripheral blur without a vignette. Wide-view detail reduction is visual only. The art and per-pass measurements are documented in [revision ten](REVISION_10.md); run rules remain in revision nine.
+
+## Camera and cell-centered interface follow-up
+
+The owner set 80% as the widest playable view and removed the zoom-percentage display. Apply that lower bound after growth and build-panel fitting too; do not shrink the view below it to fit a giant cell. Keep a calibrated, adaptive μm marker on the side, with 0.2 μm per world unit. Paused anatomy edits must redraw and relax their geometry before applying.
+
+The owner requested replacing the persistent HUD/build panes with clickable intracellular factories and representing ATP as a sac, biomass as cell size, and AP as spinning tokens. The [structured replacement proposal](CELL_INTERFACE_PROPOSAL.md) covers these controls, closer editing zoom, drafts, offspring reserves and undo. It is proposed, not implemented or an approved change to the resource rules.

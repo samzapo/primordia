@@ -304,6 +304,7 @@ func recycle(index: int) -> float:
 	biomass += material * 0.5
 	organs.remove_at(index)
 	update_geometry()
+	render_revision += 1
 	return material * 0.5
 
 func drain(amount: float) -> float:

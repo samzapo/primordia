@@ -13,6 +13,7 @@ func run() -> void:
 			var scene = load("res://scenes/pond.tscn").instantiate()
 			root.add_child(scene)
 			scene.preferences.persist = false
+			scene.diagnostic_zoom = true # Preserve the original wider stress workload.
 			scene.manual_zoom = zoom
 			var sim = scene.world
 			if fixture == "dense":

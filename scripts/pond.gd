@@ -5,6 +5,8 @@ const Preferences = preload("res://scripts/preferences.gd")
 const OrganCard = preload("res://scripts/organ_card.gd")
 const Visuals = preload("res://scripts/visuals.gd")
 const ParticleArt = preload("res://scripts/particle_art.gd")
+const MIN_ZOOM := 0.8
+const MAX_ZOOM := 3.0
 const PARTICLE_SHADER = preload("res://shaders/particle.gdshader")
 const MINT := Color("80efce")
 const GOLD := Color("f5d47b")
@@ -20,6 +22,7 @@ var currents := Node2D.new()
 var currents_origin := Vector2.ZERO
 var preview := Node2D.new()
 var ui := Control.new()
+var scale_bar := preload("res://scripts/scale_bar.gd").new()
 var hud := PanelContainer.new()
 var build_panel := PanelContainer.new()
 var settings_panel := PanelContainer.new()
@@ -71,6 +74,9 @@ var ui_time := 0.0
 var hud_clock := 0.0
 var zoom := 1.0
 var manual_zoom := 1.0
+# Explicit test harness switch for historical stress fixtures; no gameplay control.
+var diagnostic_zoom := false
+var preview_radius := -1.0
 var camera_screen := Vector2.ZERO
 var render_camera := Vector2.ZERO
 var simulation_ms := 0.0
@@ -151,6 +157,7 @@ func _ready() -> void:
 	canvas.add_child(ui)
 	ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ui.add_child(scale_bar)
 	ui.add_child(tube_hint)
 	tube_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tube_hint.modulate = GOLD
@@ -185,6 +192,16 @@ func _can_edit_tubules() -> bool:
 func _process(dt: float) -> void:
 	ui_time += dt
 	notice_timer = maxf(0,notice_timer-dt)
+	# Relax edited geometry before drawing, without advancing biology or the run.
+	if build_open and not is_equal_approx(preview_radius,world.player.radius):
+		shape_preview_ticks = 60
+	preview_radius = world.player.radius
+	if is_paused():
+		if shape_preview_ticks > 0:
+			for i in mini(4,shape_preview_ticks):
+				world.player.membrane.step(1.0/60,world.player.radius,Vector2.ZERO,world.player.age)
+				shape_preview_ticks -= 1
+			world.player.render_revision += 1
 	var started := Time.get_ticks_usec()
 	var alpha := 1.0 if is_paused() or screenshot_path != "" else Engine.get_physics_interpolation_fraction()
 	_update_world(alpha)
@@ -194,12 +211,6 @@ func _process(dt: float) -> void:
 		hud_clock = 0
 		_update_hud()
 		_layout()
-	if is_paused():
-		if shape_preview_ticks > 0:
-			for i in mini(4,shape_preview_ticks):
-				world.player.membrane.step(1.0/60,world.player.radius,Vector2.ZERO,world.player.age)
-				shape_preview_ticks -= 1
-			world.player.render_revision += 1
 	preview.queue_redraw()
 	var hover := _nearest_tubule(_player_relative(get_global_mouse_position()).rotated(-world.player.angle)) if _can_edit_tubules() else {}
 	tube_hint.visible = not settings_panel.visible and not hover.is_empty() and get_viewport().gui_get_hovered_control() == null
@@ -214,8 +225,11 @@ func _process(dt: float) -> void:
 func _update_world(alpha: float) -> void:
 	var size := get_viewport_rect().size
 	var base_zoom := minf(size.x/Simulation.VIEW.x,size.y/Simulation.VIEW.y)
+	if not diagnostic_zoom: manual_zoom = clampf(manual_zoom,MIN_ZOOM,MAX_ZOOM)
 	zoom = base_zoom*manual_zoom*minf(1.0,150.0/world.player.radius)
 	if build_open: zoom = minf(zoom,(size.x-build_panel.size.x-60)/(world.player.radius*3.2))
+	if not diagnostic_zoom: zoom = maxf(zoom,base_zoom*MIN_ZOOM)
+	scale_bar.configure(size,zoom,preferences.hud_scale)
 	camera_screen = Vector2((size.x-build_panel.size.x-24)*0.5 if build_open else size.x*0.5,size.y*0.52)
 	world.view_half = size/(2*zoom)
 	world.camera_follows_player = camera_locked
@@ -631,13 +645,7 @@ func _update_hud() -> void:
 		detail_label.text += "\nLineage reserve %.0f / %.0f biomass · %.0f / 60 ATP · due 12:00" % [cell.brood_mass,quote.material,cell.brood_energy]
 	detail_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	debug_label.visible = show_debug
-	var viewport_size := get_viewport_rect().size
-	var fitted_zoom := minf(viewport_size.x/Simulation.VIEW.x,viewport_size.y/Simulation.VIEW.y)
-	var effective_zoom := zoom/maxf(fitted_zoom,0.001)
-	var zoom_text := "Zoom %.1f%%" % (effective_zoom*100)
-	if absf(effective_zoom-manual_zoom) >= 0.0005: zoom_text += " (selected %.1f%%)" % (manual_zoom*100)
-	debug_label.text = "%s · %d FPS · %s · sim %.2f ms · prepare %.2f ms · %d active cells / %d particles" % ["GPU experiment" if world.gpu_transport != null else "Native CPU" if world.kernels != null else "GDScript",Engine.get_frames_per_second(),zoom_text,simulation_ms,render_ms,world.active_cells,world.active_particles]
-	debug_label.tooltip_text = "Zoom is relative to the default view (100%). Selected is your wheel setting; growth or the build panel can widen the actual view."
+	debug_label.text = "%s · %d FPS · sim %.2f ms · prepare %.2f ms · %d active cells / %d particles" % ["GPU experiment" if world.gpu_transport != null else "Native CPU" if world.kernels != null else "GDScript",Engine.get_frames_per_second(),simulation_ms,render_ms,world.active_cells,world.active_particles]
 	if selected >= 0:
 		help_label.text = HELP[selected]+"\n\nSize %.2f× · Cost %.1f tissue + %d AP\nWheel over the cell to resize." % [placement_scale,Simulation.Cell.organ_cost(Simulation.KINDS[selected],placement_scale),world.Evolution.install_price(placement_scale)]
 	else: help_label.text = "Choose an organ, then click the membrane. Drag between membrane or microtubule points to shape your cell; hover a link and scroll for tension."
@@ -779,7 +787,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			placement_scale = maxf(0.5,placement_scale*(1.1 if event.button_index == MOUSE_BUTTON_WHEEL_UP else 1/1.1))
 			_update_hud()
 			return
-		manual_zoom = clampf(manual_zoom*(1.12 if event.button_index == MOUSE_BUTTON_WHEEL_UP else 1/1.12),0.15,3)
+		manual_zoom = clampf(manual_zoom*(1.12 if event.button_index == MOUSE_BUTTON_WHEEL_UP else 1/1.12),MIN_ZOOM,MAX_ZOOM)
 		currents.queue_redraw()
 		return
 	if event.button_index == MOUSE_BUTTON_LEFT and build_open and evolution_panel.moving:

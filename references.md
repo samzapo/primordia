@@ -196,3 +196,11 @@ These are gameplay yields, not ATP-per-glucose measurements, universal microbial
 The finite branching and optical presentation references above also motivate this visual revision. Broader stems use matching drawn and collision radii; rounded terminal bracts remain decorative. Loose reef grouping is a level-layout choice.
 
 Seeded colors, stylized nucleus lobes, vesicle patterns, bounded nuclear lag and organ swelling are visual representations, not additional biological processes or measured intracellular mechanics. Color identifies organ/particle function but never cell occupation. The existing membrane, secretion, feeding and lineage systems provide the states being illustrated. Highlight-selective bloom adds no light resource; orientation glyphs add no reaction sites.
+
+## Microscope scale and proposed cellular controls
+
+[Alberts et al., Molecular Biology of the Cell: Looking at the Structure of Cells in the Microscope (2002)](https://www.ncbi.nlm.nih.gov/books/NBK26880/) describes typical animal-cell diameters around 10–20 μm. Primordia adopts **0.2 μm per world unit**, putting its ordinary starting cell near 20 μm across. This is a fixed artistic spatial calibration, not a species identification or a recalibration of physical rate constants. The side scale measures actual displayed world distance, including viewport fitting, zoom and growth-related camera adjustments. Its label uses 1/2/5 steps; text scaling never changes the distance represented.
+
+Particle glyphs remain coarse chemical packets, not literal molecular dimensions. Unbounded gameplay growth can exceed the typical range motivating the initial scale.
+
+[Alberts et al., The Endoplasmic Reticulum (2002)](https://www.ncbi.nlm.nih.gov/books/NBK26841/?report=printable) describes synthesis and insertion of membrane proteins, including proteins destined for the plasma membrane. This motivates the proposed intracellular factory controls. The proposal does not model real organelle biogenesis or claim that all organelles are assembled by the ER. The proposed ATP sac and AP coins are visual metaphors for existing scalar resources, not new biological mechanisms.

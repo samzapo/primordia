@@ -613,9 +613,20 @@ func _test_interface() -> void:
 	click.position = scene.camera_screen+cell.local_point(2.15).rotated(cell.angle)*scene.zoom
 	scene._unhandled_input(click)
 	expect(cell.count("protection") == 1,"Membrane click installs organ while organ placement is selected")
+	scene._update_world(1)
+	var installed_revision: int = scene.views[cell.id].seen_revision
+	expect(installed_revision == cell.render_revision,"Paused placement reaches the cell drawing before Apply")
 	click.button_index = MOUSE_BUTTON_RIGHT
 	scene._unhandled_input(click)
 	expect(cell.count("protection") == 0,"Right-click recycles installed organ")
+	scene._update_world(1)
+	expect(scene.views[cell.id].seen_revision > installed_revision,"Paused recycling invalidates both anatomy drawings before Apply")
+	var geometry: PackedVector2Array = cell.membrane.points.duplicate()
+	var paused_energy: float = cell.energy
+	var paused_age: float = cell.age
+	scene._process(DT)
+	expect(cell.membrane.points != geometry,"Edited cell volume relaxes visibly during the build preview")
+	expect(scene.world.time == time and cell.age == paused_age and cell.energy == paused_energy,"Preview relaxation does not advance the run, aging or ATP use")
 	wheel.position = scene.camera_screen+Vector2(400,0)
 	var zoom: float = scene.manual_zoom
 	scene._unhandled_input(wheel)
@@ -658,6 +669,37 @@ func _test_interface() -> void:
 	# Shader artwork and the binding axis share the real particle angle, including interpolation.
 	scene.world = isolated()
 	scene.build_open = false
+	scene.selected = -1
+	wheel.button_index = MOUSE_BUTTON_WHEEL_DOWN
+	for i in 50: scene._unhandled_input(wheel)
+	scene._update_world(1)
+	var fitted: float = minf(scene.get_viewport_rect().size.x/Sim.VIEW.x,scene.get_viewport_rect().size.y/Sim.VIEW.y)
+	expect(is_equal_approx(scene.manual_zoom,0.8) and is_equal_approx(scene.zoom,0.8*fitted),"Repeated zoom-out stops at the 80% widest view")
+	var usual_radius: float = scene.world.player.radius
+	scene.world.player.radius = 600
+	scene.manual_zoom = 0.15
+	scene._update_world(1)
+	expect(is_equal_approx(scene.zoom,0.8*fitted),"Growth and an out-of-range camera value cannot bypass the widest-view limit")
+	scene.build_open = true
+	scene._update_world(1)
+	expect(is_equal_approx(scene.zoom,0.8*fitted),"Fitting a large cell beside the build panel cannot widen past 80%")
+	scene.build_open = false
+	scene.world.player.radius = usual_radius
+	wheel.button_index = MOUSE_BUTTON_WHEEL_UP
+	for i in 50: scene._unhandled_input(wheel)
+	expect(is_equal_approx(scene.manual_zoom,scene.MAX_ZOOM),"Zooming in remains available and bounded")
+	scene.show_debug = true
+	scene._update_hud()
+	expect("FPS" in scene.debug_label.text and not "Zoom" in scene.debug_label.text and scene.debug_label.tooltip_text.is_empty(),"F3 keeps performance statistics without a zoom percentage or tooltip")
+	for viewport in [Vector2(1440,900),Vector2(1920,1080)]:
+		for factor in [0.8,1.0,3.0]:
+			var pixels_per_unit: float = minf(viewport.x/Sim.VIEW.x,viewport.y/Sim.VIEW.y)*factor
+			scene.scale_bar.configure(viewport,pixels_per_unit,1)
+			var measured: float = scene.scale_bar.length_pixels/pixels_per_unit*scene.scale_bar.MICROMETERS_PER_UNIT
+			expect(is_equal_approx(measured,scene.scale_bar.micrometers),"Scale label matches the world distance at each window size and zoom")
+			var bar_pixels: float = scene.scale_bar.length_pixels
+			scene.scale_bar.configure(viewport,pixels_per_unit,1.75)
+			expect(is_equal_approx(scene.scale_bar.length_pixels,bar_pixels) and scene.scale_bar.font_pixels == 32,"Accessibility enlarges scale text without changing its measured distance")
 	scene.manual_zoom = 1
 	for kind in Sim.SPECIES_COUNT:
 		scene.world.spawn_particle(kind,scene.world.player.position+Vector2(120+kind*16,50),Vector2.ZERO,0.3,0)
@@ -679,6 +721,7 @@ func _test_interface() -> void:
 	var forward := Vector2(scene.buffers[0][0],scene.buffers[0][4]).normalized()
 	expect(forward.distance_to(Vector2.DOWN) < 0.0001,"Quarter-turn particle rotation turns the visible branches")
 	var state: Array = scene.world.particles.duplicate(true)
+	scene.diagnostic_zoom = true # Historical LOD stress view is not a gameplay camera setting.
 	scene.manual_zoom = 0.15
 	scene._update_world(1)
 	for kind in Sim.SPECIES_COUNT:

@@ -20,7 +20,7 @@ The launcher finds Godot in standard Steam locations, custom Steam libraries and
 - **In the build menu (Tab), drag on your cell:** press the left button for the first microtubule point and release for the second. Endpoints can be on the membrane, on another tube, or inside the cell. Hover a tube and **scroll** to adjust tension; a label shows the current setting. Right-click a tube to remove it. No microtubule build card is needed. During selected-organ placement, left click attaches that organ; use **Modify → Shape microtubules** to clear the selection and draw tubes. Creation, tension changes and removal are available only while the build menu is open.
 - **Space:** lock/unlock the camera to your cell's **position**, without changing its rotation or pausing. In free view, drag empty water or middle-drag to pan. Space returns to following the cell.
 - **Escape:** settings, including **Quit game**. Settings pause biology. **F11** toggles fullscreen. Fullscreen, **Light bloom** and **85–175% HUD/text scale** persist. Bloom can be disabled in settings.
-- **Wheel elsewhere:** microscope zoom. **S:** sensing ranges. **F3:** active backend, FPS, zoom percentage and CPU simulation/frame preparation times. Zoom is relative to the default view (100%); when growth or the build panel widens it, the selected wheel setting is also shown. **H:** next habitat. **R:** new life.
+- **Wheel elsewhere:** microscope zoom, from an 80% widest view to 3× close-up. Growth and the build panel cannot widen past that minimum. The side scale shows world distance in μm; there is no zoom-percentage readout. **S:** sensing ranges. **F3:** active backend, FPS and CPU simulation/frame preparation times. **H:** next habitat. **R:** new life.
 
 The world wraps without walls. The microscope center simulates fully, the fringe slows, and offscreen state freezes except for explicit population triggers. The active region follows the actual camera, including free view. Tab/settings remain ways to pause; Space is solely a camera control.
 
@@ -125,3 +125,7 @@ Optional capture flags include `--habitat=0`, `--advance=600`, `--assembly`, `--
 The owner's separate Linux **Steam Godot 4.7.2 / RTX 3090 / Threadripper 2990WX** machine remains unavailable to this task. It is an upper-capacity reference, not minimum hardware. See [revision-seven performance results](docs/REVISION_7.md), [revision-six graphics notes](docs/REVISION_6.md), [architecture](docs/ARCHITECTURE.md) and [persistent design](docs/DESIGN.md).
 
 Only authored source and stable Godot `.uid` identifiers are tracked. `.godot/` imports and caches regenerate automatically. Engine downloads, captures, logs and exports are not committed. No redistribution license has been granted for this private project.
+
+## Next interface proposal
+
+[The cell becomes the interface](docs/CELL_INTERFACE_PROPOSAL.md) proposes intracellular factories, an ATP sac, AP tokens, direct organ editing and a nucleus/offspring interface, replacing the current top, bottom and assembly panels. Those controls are proposed; the current panels remain usable. The camera minimum, micrometer marker and immediate paused recycling/shape preview are implemented.

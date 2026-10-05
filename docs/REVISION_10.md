@@ -87,3 +87,29 @@ PRIMORDIA_BACKEND=script ./tools/test.sh
 ```
 
 Optional switches: `--fixtures=normal,dense,growth`, `--frames=36`, and `--output=/absolute/existing/directory` for the six normal frozen screenshots. Outputs, runtime glyph textures, mipmaps and compiled artifacts are not committed. The authored art paths, procedural rules and benchmark generator are retained.
+
+## Camera and preview follow-up — October 5, 2026
+
+The owner subsequently set **80% as the widest playable view** and removed the zoom-percentage readout. The limit also applies after growth and build-panel fitting. Closer wheel zoom still reaches 3×. An adaptive side marker uses a fixed 0.2 μm/world-unit calibration (normally 20 μm at the widest view); enlarged text changes the label, not the measured distance.
+
+Recycling now invalidates cached cell/appendage art. Paused anatomy size changes relax their membrane preview before drawing, without advancing metabolism, ATP use, age or the run clock. Existing Apply/Cancel transactions remain in place pending the [cell-centered interface proposal](CELL_INTERFACE_PROPOSAL.md).
+
+Native regression: **1,823 assertions, zero failures**. Independent GDScript: **769 assertions, zero failures**. A Compatibility-rendered check verified actual appendage redraw on placement and recycling before Apply, a frozen run clock, the 20 μm/5 μm labels, and no zoom readout. Captures were inspected at ordinary and 175% text scale; editor import completed without script errors.
+
+The following short live samples use the same Godot 4.7.2 / RTX 5080 / Vulkan Mobile / 1440×900 Xvfb setup as above, with 12 warm-up and 36 measured frames after 60 setup ticks. All six measured effective views were 80%, including growth. Values are **bloom off / on**, milliseconds per frame.
+
+| Fixture | Median | p95 |
+| --- | ---: | ---: |
+| Normal | 24.329 / 23.638 | 27.629 / 27.557 |
+| 4× initial packets | 47.556 / 52.204 | 54.060 / 63.689 |
+| 256× biomass | 33.953 / 33.818 | 38.186 / 35.623 |
+
+The 60 FPS target remains unmet in these samples. This is a camera-policy change, not a simulation optimization; the smaller active view is not comparable to the historical 50/25/15% workload. The owner's Steam/RTX 3090 machine remains untested.
+
+Reproduce the current play camera with:
+
+```sh
+./tools/run.sh --rendering-method mobile --script tests/visual_benchmark.gd -- --benchmark --mode=live --camera=play --zooms=0.8
+```
+
+The visual benchmark defaults to explicit diagnostic mode at historical 50/25/15% settings for continuity. Its results now record both camera mode and actual effective zoom; the other historical render harnesses explicitly retain their original wider stress views. Those harness switches are not gameplay options.

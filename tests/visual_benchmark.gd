@@ -11,13 +11,21 @@ func run() -> void:
 	var mode := option("--mode","frozen")
 	var stage := option("--stage","current")
 	var count := int(option("--frames","36"))
+	var camera := option("--camera","diagnostic")
+	var zooms := option("--zooms","0.8" if camera == "play" else "0.5,0.25,0.15").split(",")
 	for fixture in option("--fixtures","normal,dense,growth").split(","):
-		for zoom in [0.5,0.25,0.15]:
+		for value in zooms:
+			var zoom := float(value)
+			if not value.is_valid_float() or not is_finite(zoom) or zoom <= 0:
+				push_error("Benchmark zoom must be a finite positive number")
+				quit(1)
+				return
 			for bloom in [false,true]:
 				var scene = load("res://scenes/pond.tscn").instantiate()
 				root.add_child(scene)
 				scene.preferences.persist = false
 				scene.set_physics_process(false)
+				scene.diagnostic_zoom = camera != "play" # Historical stress views explicitly bypass play limits.
 				scene.manual_zoom = zoom
 				scene.preferences.bloom = bloom
 				scene.microscope_layer.material.set_shader_parameter("bloom_enabled",bloom)
@@ -48,7 +56,7 @@ func run() -> void:
 					elapsed.append(now-prior)
 					prior = now
 				elapsed.sort()
-				print("VISUAL_BENCHMARK ",JSON.stringify({"stage":stage,"mode":mode,"fixture":fixture,"zoom":zoom,"bloom":bloom,"frames":count,"median_ms":elapsed[count/2]/1000.0,"p95_ms":elapsed[mini(count-1,int(count*0.95))]/1000.0,"prepare_ms":scene.render_ms,"tick_ms":scene.simulation_ms,"cells":sim.active_cells,"particles":sim.active_particles,"renderer":RenderingServer.get_video_adapter_name()}))
+				print("VISUAL_BENCHMARK ",JSON.stringify({"stage":stage,"mode":mode,"fixture":fixture,"zoom":zoom,"camera":camera,"effective_zoom":scene.zoom/minf(scene.get_viewport_rect().size.x/sim.VIEW.x,scene.get_viewport_rect().size.y/sim.VIEW.y),"bloom":bloom,"frames":count,"median_ms":elapsed[count/2]/1000.0,"p95_ms":elapsed[mini(count-1,int(count*0.95))]/1000.0,"prepare_ms":scene.render_ms,"tick_ms":scene.simulation_ms,"cells":sim.active_cells,"particles":sim.active_particles,"renderer":RenderingServer.get_video_adapter_name()}))
 				if output != "" and fixture == "normal" and mode == "frozen":
 					await RenderingServer.frame_post_draw
 					root.get_texture().get_image().save_png(output+"/"+stage+"-"+str(int(zoom*100))+"-"+("bloom" if bloom else "flat")+".png")
