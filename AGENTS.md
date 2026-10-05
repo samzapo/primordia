@@ -1,6 +1,6 @@
 # Primordia development
 
-Read `docs/DESIGN.md` before changing gameplay, and `docs/REVISION_3.md` for the current revision (`docs/REVISION_2.md` is historical). Do not treat proposed details or open questions as settled requirements. Preserve no direct cell control, all six organelle categories, particle-driven interactions, and the bright vector-style cellular art direction.
+Read `docs/DESIGN.md` before changing gameplay, and `docs/REVISION_4.md` for the current revision (earlier revision documents are historical). Do not treat proposed details or open questions as settled requirements. Preserve no direct cell control, all six organelle categories, particle-driven interactions, and the bright vector-style cellular art direction.
 
 The user runs Godot through Steam on a separate Linux machine. Keep Steam discovery as the default in both launchers; support custom libraries and Flatpak. The prototype was validated with Godot 4.7.2. Run `tools/test.sh`; `GODOT_BIN` is an optional explicit override. Tests must fail on script errors even when the Godot process exits zero. For launcher changes, also run `python3 tests/test_launchers.py` (isolated fixtures; never alter a real Steam install). Keep the simulation independent of scene-tree and rendering code.
 

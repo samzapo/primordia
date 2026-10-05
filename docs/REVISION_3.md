@@ -1,5 +1,7 @@
 # Revision 3 — readable behavior and smoother play
 
+Historical record: [revision four](REVISION_4.md) supersedes receptor layout, placement, feeding coverage and membrane/tension behavior.
+
 The owner's second playtest requested effective pursuit for engulfing/proboscis mouths, explicit approach/avoid sensing variants, much smoother frames, continued biomass growth, a full-screen microscope, paused Tab assembly, larger adjustable text, fullscreen, and anchored organs. Preserve the successful nutrient-current patterns and two-way fluid interaction. These requirements supersede earlier floating-organ and automatic-avoidance behavior.
 
 ## Delivered behavior

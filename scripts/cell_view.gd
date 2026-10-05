@@ -5,10 +5,14 @@ var cell
 var game
 var seen_revision := -1
 var label := Label.new()
+var appendages := Node2D.new()
 
 func _ready() -> void:
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(label)
+	appendages.z_index = 1
+	add_child(appendages)
+	appendages.draw.connect(_draw_organs)
 
 func sync(render_position: Vector2, render_angle: float, zoom: float, alpha: float) -> void:
 	position = render_position
@@ -17,6 +21,7 @@ func sync(render_position: Vector2, render_angle: float, zoom: float, alpha: flo
 		seen_revision = cell.render_revision
 		set_meta("senses",game.show_senses)
 		queue_redraw()
+		appendages.queue_redraw()
 	label.text = "YOUR CELL" if cell == game.world.player else cell.role.to_upper()
 	label.modulate = Color("80efce") if cell == game.world.player else Color("fc8c90") if cell.role == "hunter" else Color("f5d47b")
 	var font_size := roundi(16*game.preferences.hud_scale)
@@ -36,37 +41,44 @@ func _draw() -> void:
 	var closed := outline.duplicate()
 	closed.append(outline[0])
 	draw_polyline(closed,hue.lightened(0.3),2,true)
-	for ends in cell.membrane.CHORDS:
-		draw_line(cell.membrane.points[ends[0]]*0.92,cell.membrane.points[ends[1]]*0.92,hue.lightened(0.3)*Color(1,1,1,0.36),1.5,true)
-	draw_circle(Vector2(-7,-7),cell.radius*0.3,Color("a99bde"))
-	draw_circle(Vector2(-5,-9),cell.radius*0.2,Color("d7b3e9"))
+	for link in cell.membrane.skeleton.links:
+		var a: Vector2 = cell.membrane.skeleton.point(link.a,cell.membrane)
+		var b: Vector2 = cell.membrane.skeleton.point(link.b,cell.membrane)
+		draw_line(a,b,hue.lightened(0.45)*Color(1,1,1,0.35+link.tension*0.5),1+link.tension*2,true)
+	for junction in cell.membrane.skeleton.junctions.values(): draw_circle(junction.p,3,Color("cce6ee"))
+	draw_circle(Vector2(-0.15,-0.15)*cell.radius,cell.radius*0.3,Color("a99bde"))
+	draw_circle(Vector2(-0.11,-0.19)*cell.radius,cell.radius*0.2,Color("d7b3e9"))
 	for i in 7:
 		var q: Vector2 = Vector2.from_angle(i*2.3)*cell.radius*(0.5+0.13*sin(i*7.0))
 		draw_circle(q,3.5+i%2,hue.lightened(0.2))
 	for packet in cell.signals: draw_circle(packet.p,3,Color("fc8c90") if packet.fear else Color("b5a3f4"))
-	for organ in cell.organs:
-		var at: Vector2 = cell.local_point(organ.a)+Vector2.from_angle(organ.a)*5
-		Visuals.icon(self,at,organ.kind,organ.a,1,cell.age)
-		if organ.kind == "sensing":
-			var color: Color = {"forage":Color("a1e88a"),"hunt":Color("fc8c90"),"host":Color("f5d47b"),"flee":Color("70d6e1")}.get(organ.mode,Color.WHITE)
-			draw_circle(at,3.5,color)
-			if game.show_senses: draw_arc(at,310,0,TAU,48,color*Color(1,1,1,0.25),1,true)
-		if organ.kind == "feeding" and organ.mode != "graze":
-			if organ.mode == "parasite":
-				draw_line(at,at+Vector2.from_angle(organ.a)*52,Color("f5d47b"),5,true)
-				draw_line(at,at+Vector2.from_angle(organ.a)*51,Color("527e71"),2,true)
-			else: draw_arc(at,23,organ.a-1,organ.a+1,20,Color("f5d47b"),4,true)
-			if organ.feeding:
-				var end: Vector2 = game.world.Medium.offset(cell.position,organ.link).rotated(-cell.angle)
-				draw_line(at,end,Color("fff0b4"),4,true)
-				for i in 3:
-					var t := fposmod(cell.age*1.5+i/3.0,1.0)
-					draw_circle(end.lerp(at,t),4,Color("a1e88a"))
-				draw_arc(at,27,-PI/2,-PI/2+TAU*maxf(0.04,organ.progress),32,Color("fff0b4"),3,true)
-		if organ.hp < organ.max_hp: draw_arc(at,19,-PI/2,-PI/2+TAU*organ.hp/organ.max_hp,24,Color("fc8c90"),2,true)
+	for packet in cell.resource_packets:
+		if packet.delay > 0: continue
+		var color := Color("f5d47b") if packet.kind == "atp" else Color("ffa8bd")
+		draw_circle(packet.p,5,color.darkened(0.25))
+		draw_circle(packet.p,3,color.lightened(0.3))
 	for hole in cell.holes:
 		var at: Vector2 = cell.local_point(hole.a)
 		draw_circle(at,3+hole.size*6,Color("102d39"))
 		draw_arc(at,4+hole.size*6,0,TAU,16,Color("fc8c90"),1.5,true)
 	if game.show_senses:
 		draw_line(Vector2.ZERO,cell.target.rotated(-cell.angle)*(cell.radius+80),Color("b5a3f4"),2,true)
+
+func _draw_organs() -> void:
+	for organ in cell.organs:
+		var point: Vector2 = cell.local_point(organ.a)
+		var at: Vector2 = point+point.normalized()*5*organ.scale
+		var heading := point.angle()
+		Visuals.icon(appendages,at,organ.kind,heading,organ.scale,cell.age,organ.mode,organ.consume_flash)
+		if organ.charge_flash > 0:
+			appendages.draw_arc(at,11*organ.scale+organ.charge_flash*6,0,TAU,24,Color(0.96,0.84,0.48,organ.charge_flash),2,true)
+		if game.show_senses and organ.kind in ["feeding","sensing"]:
+			appendages.draw_arc(at,310*sqrt(organ.scale),0,TAU,48,Color(0.6,0.55,0.96,0.22),1,true)
+		if organ.kind == "feeding" and organ.feeding:
+			var end: Vector2 = game.world.Medium.offset(cell.position,organ.link).rotated(-cell.angle)
+			appendages.draw_line(at,end,Color("fff0b4"),3,true)
+			for i in 3:
+				var t := fposmod(cell.age*1.5+i/3.0,1.0)
+				appendages.draw_circle(end.lerp(at,t),4,Color("a1e88a"))
+		if organ.hp < organ.max_hp:
+			appendages.draw_arc(at,19*organ.scale,-PI/2,-PI/2+TAU*organ.hp/organ.max_hp,24,Color("fc8c90"),2,true)

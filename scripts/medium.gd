@@ -132,3 +132,28 @@ func momentum() -> Vector2:
 	var sum = Vector2.ZERO
 	for v in velocity: sum += v * NODE_MASS
 	return sum
+
+func can_couple(p: Vector2) -> bool:
+	return _weights(p) > 0.0001
+
+func suction(body, mouth: Vector2, reach: float, power: float, dt: float) -> void:
+	# ATP-driven local inflow changes the real medium. Return the exact opposite
+	# linear/angular impulse to the pumping cell; other cells feel it via drag.
+	var impulse := Vector2.ZERO
+	var torque := 0.0
+	for i in active_indices:
+		var at := Vector2(i%COLS+0.5,int(i/COLS)+0.5)*SIZE
+		var delta := offset(at,mouth)
+		var distance := delta.length()
+		if distance < 4 or distance >= reach: continue
+		var arm := offset(body.position,at)
+		if arm.length() < body.radius*0.65: continue
+		var falloff := pow(1-distance/reach,2.0)*activity[i]
+		var desired := delta/distance*power
+		var change := (desired-velocity[i])*(1-exp(-dt*2.2*falloff))
+		velocity[i] += change
+		var momentum_change := change*NODE_MASS
+		impulse += momentum_change
+		torque += arm.cross(momentum_change)
+	body.velocity -= impulse/body.mass
+	body.angular_velocity -= torque/body.inertia

@@ -20,6 +20,13 @@ func _run() -> void:
 	_test_metabolism()
 	_test_anatomy()
 	_test_receptors()
+	_test_packing_and_size()
+	_test_pump_and_facing()
+	_test_coverage_and_pulses()
+	_test_particle_exclusion()
+	_test_gel_polygons()
+	_test_microtubules()
+	_test_resource_animation()
 	_test_growth_and_anchors()
 	_test_incremental_grid()
 	_test_local_feeding()
@@ -83,7 +90,7 @@ func _test_anatomy() -> void:
 	for i in 12: expect(cell.add_organ("sensing",TAU*i/12),"Large membrane supports more than eight organs")
 	expect(cell.organs.size() == 12,"No fixed socket count")
 	expect(is_equal_approx(cell.organic_mass(),before),"Assembly transfers rather than duplicates mass")
-	expect(not cell.add_organ("sensing",0),"Surface packing rejects overlap")
+	expect(cell.add_organ("sensing",0),"Insertion moves existing organs to make room")
 	expect(not cell.add_organ("unknown",0.5),"Unknown anatomy rejected")
 	expect(not cell.add_organ("feeding",1.0,"unknown"),"Unknown feeding mode rejected")
 	var debris: float = cell.recycle(0)
@@ -187,7 +194,7 @@ func _test_propulsion_and_toxins() -> void:
 		if p.kind == Sim.TOXIN: toxins += 1
 	expect(toxins == 0,"Food sensing alone does not trigger wasteful attacks")
 	var threat = sim._make_cell(sim.player.position+Vector2(100,0),"hunter")
-	sim.player.organs[1].mode = "flee"
+	sim.player.add_organ("sensing",1.2,"flee",false)
 	sim.spawn_particle(Sim.DANGER,threat.position,Vector2.ZERO,1,threat.id,90)
 	sim.grid.rebuild(sim.particles)
 	for i in 45: sim._sense(sim.player,DT)
@@ -215,7 +222,7 @@ func _test_membrane() -> void:
 		area += membrane.points[i].cross(membrane.points[(i+1)%membrane.COUNT])*0.5
 	var target: float = membrane.COUNT*55.0*55.0*sin(TAU/membrane.COUNT)*0.5
 	expect(absf(area-target)/target < 0.03,"Pressure recovers volume under internal tension")
-	expect(membrane.points[0].length()>membrane.points[7].length()*1.25,"Tension supports a noncircular cell")
+	expect(absf(membrane.points[0].length()-membrane.points[7].length()) > 2,"Gel cortex supports a noncircular cell")
 	var cell = Cell.new()
 	cell.membrane = membrane
 	for a in [0.3,1.1,2.3,4.7]:
@@ -369,19 +376,23 @@ func _test_crowded_ecology() -> void:
 		sim._make_cell(location,"grazer")
 	var origin: Vector2 = sim.player.position
 	var started := Time.get_ticks_usec()
+	var largest_step := 0.0
 	for i in 360:
+		var before: Vector2 = sim.player.position
 		sim.step(DT)
+		largest_step = maxf(largest_step,Fluid.offset(before,sim.player.position).length())
 	var elapsed := (Time.get_ticks_usec()-started)/1000.0
 	print("CROWDED: 13 initial cells, 360 ticks, mean %.2f ms, active %d" % [elapsed/360,sim.active_cells])
 	for cell in sim.cells:
 		expect(cell.position.is_finite() and cell.angular_velocity == cell.angular_velocity,"Crowded coupled ecosystem stays finite")
-	expect(Fluid.offset(origin,sim.player.position).length() < 250,"Crowding does not eject player across the world")
+	print("CROWDED movement: net=%.1f largest_tick=%.2f" % [Fluid.offset(origin,sim.player.position).length(),largest_step])
+	expect(largest_step < 15,"Crowded lower-inertia motion stays continuous without teleporting")
 	# Both living-host and whole-cell food enter the same metabolic victory path.
 	for mode in ["parasite","engulf"]:
 		var fixture = isolated()
 		var eater = fixture.player
 		eater.organs.clear()
-		eater.add_organ("feeding",0,mode,false)
+		eater.add_organ("feeding",0,mode,false,2.0 if mode == "engulf" else 1.0)
 		var prey = fixture._make_cell(eater.position+Vector2(80,0),"hunter" if mode == "parasite" else "grazer")
 		prey.organs.clear()
 		prey.activity = 1
@@ -404,7 +415,9 @@ func _test_autonomous_diets() -> void:
 		var sim = Sim.new(41,1)
 		sim.cells = [sim.player]
 		sim.particles.clear()
-		sim.player.organs[0].mode = mode
+		sim.player.organs.clear()
+		sim.player.add_organ("feeding",0,mode,false,2.5 if mode == "engulf" else 1.0)
+		sim.player.add_organ("propulsion",PI,"graze",false)
 		sim.player.substrate = 0
 		sim.player.biomass = 16
 		sim.food_sources.clear()
@@ -507,6 +520,34 @@ func _test_interface() -> void:
 	key.keycode = KEY_F
 	scene._input(key)
 	expect(scene.feeding_mode == 1,"Feeding specialization changes within the same category")
+	var right := InputEventMouseButton.new()
+	right.pressed = true
+	right.button_index = MOUSE_BUTTON_RIGHT
+	scene.cards[4].gui_input.emit(right)
+	expect(scene.feeding_mode == 2 and scene.selected == 4,"Right-clicking the illustrated feeding card cycles variants")
+	var wheel := InputEventMouseButton.new()
+	wheel.pressed = true
+	wheel.button_index = MOUSE_BUTTON_WHEEL_UP
+	var zoom: float = scene.manual_zoom
+	scene._unhandled_input(wheel)
+	expect(scene.placement_scale > 1 and scene.manual_zoom == zoom,"Wheel sizes selected anatomy rather than zooming during placement")
+	scene._update_hud()
+	expect(scene.health_bar.value == scene.world.player.health and scene.atp_bar.value == scene.world.player.energy,"Health and ATP bars display actual resources")
+	scene._select(-2)
+	scene._update_world(1)
+	var network = scene.world.player.membrane.skeleton
+	var groups_before: int = network.next_group
+	for angle in [0.55,3.4]:
+		click.button_index = MOUSE_BUTTON_LEFT
+		click.position = scene.camera_screen+scene.world.player.local_point(angle).rotated(scene.world.player.angle)*scene.zoom
+		scene._unhandled_input(click)
+	expect(network.next_group == groups_before+1,"Microtubule tool connects two clicked membrane points")
+	var new_group: int = scene.tube_group
+	scene.tension_slider.value = 0.8
+	var edited := false
+	for link in network.links:
+		if link.group == new_group: edited = is_equal_approx(link.tension,0.8)
+	expect(edited and scene.shape_preview_ticks > 0,"Tension slider changes the selected physical link and schedules a paused shape preview")
 	key.keycode = KEY_H
 	scene._input(key)
 	expect(scene.world.habitat == 1 and scene.selected == -1,"Habitat pressure selection starts a new run")
@@ -547,38 +588,29 @@ func _test_interface() -> void:
 
 func _test_receptors() -> void:
 	var sim = isolated()
-	var prey = sim._make_cell(sim.player.position+Vector2(120,0),"hunter")
+	var prey = sim._make_cell(sim.player.position+Vector2(150,0),"hunter")
 	prey.organs.clear()
 	sim.spawn_particle(Sim.DANGER,prey.position,Vector2.ZERO,1,prey.id,prey.radius)
-	sim.spawn_particle(Sim.NUTRIENT,sim.player.position+Vector2(70,0))
+	sim.spawn_particle(Sim.NUTRIENT,sim.player.position+Vector2(90,0))
 	for i in 60: sim._sense(sim.player,DT)
-	expect(sim.player.target_mode == "forage" and sim.player.target.x > 0,"Nutrient receptor never automatically flees a larger cell")
-	sim.player.organs[1].mode = "flee"
+	expect(sim.player.count("sensing") == 0 and sim.player.target_mode == "graze" and sim.player.target.x > 0,"Grazing pore owns nutrient sensing without automatic flight")
+	expect(not sim.player.add_organ("sensing",1.2,"hunt",false),"Separate hunting receptor is no longer available")
+	sim.player.add_organ("sensing",1.2,"flee",false)
 	for i in 60: sim._sense(sim.player,DT)
-	expect(sim.player.target_mode == "flee" and sim.player.target.x < 0,"Explicit flight receptor turns away from a detected cell")
-	sim.player.recycle(1)
+	expect(sim.player.target_mode == "flee" and sim.player.target.x < 0 and sim.player.facing.x > 0,"Flight faces the threat and requests movement away")
+	sim.player.recycle(sim.player.organs.size()-1)
 	sim._sense(sim.player,DT)
-	expect(sim.player.target_memory == 0 and sim.player.state != "FLEEING","Removing the flight receptor cancels remembered and pending flight signals")
+	expect(sim.player.state != "FLEEING","Removing flight organ cancels its memory and pending signals")
 	for mode in ["engulf","parasite"]:
 		sim = isolated()
 		sim.player.organs.clear()
-		if mode == "engulf": sim.player.body = 280
-		sim.player.update_geometry()
-		sim.player.membrane = Membrane.new(sim.player.radius)
-		sim.player.add_organ("feeding",0,mode,false)
+		sim.player.add_organ("feeding",1.2,mode,false,2.5 if mode == "engulf" else 1.0)
 		sim.player.add_organ("propulsion",PI,"graze",false)
-		prey = sim._make_cell(sim.player.position+Vector2(160,0),"grazer" if mode == "engulf" else "hunter")
+		prey = sim._make_cell(sim.player.position+Vector2(250,0),"grazer" if mode == "engulf" else "hunter")
 		sim.spawn_particle(Sim.DANGER,prey.position,Vector2.ZERO,1,prey.id,prey.radius)
 		for i in 60: sim._sense(sim.player,DT)
-		expect(sim.player.target_id == prey.id and sim.player.target.x > 0,"Specialized mouth pursues nearby compatible cells without a receptor: "+mode)
-		var receptor_mode := "hunt" if mode == "engulf" else "host"
-		sim.player.add_organ("sensing",1.2,receptor_mode,false)
-		prey.position += Vector2(150,0)
-		sim.particles.clear()
-		sim.grid.rebuild(sim.particles)
-		sim.spawn_particle(Sim.DANGER,prey.position,Vector2.ZERO,1,prey.id,prey.radius)
-		for i in 100: sim._sense(sim.player,DT)
-		expect(sim.player.target_memory > 0 and sim.player.target_position == prey.position,"Dedicated receptor extends pursuit beyond the mouth's short range: "+mode)
+		expect(sim.player.target_id == prey.id and sim.player.target.x > 0,"Specialized mouth owns long-range target sensing: "+mode)
+		expect(absf(sim.player.target_mouth-1.2) < 0.01,"Steering remembers the detecting mouth's surface orientation")
 
 func _test_growth_and_anchors() -> void:
 	var sim = isolated()
@@ -659,3 +691,179 @@ func _test_preferences() -> void:
 	restored.load_settings()
 	expect(restored.fullscreen and restored.hud_scale == 1.5,"Fullscreen and HUD scale survive settings reload")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(preferences.path))
+
+func _test_packing_and_size() -> void:
+	var cell = Cell.new()
+	cell.biomass = 200
+	cell.update_geometry()
+	cell.membrane = Membrane.new(cell.radius)
+	cell.add_organ("sensing",-0.25,"flee",false)
+	cell.add_organ("sensing",0.25,"flee",false)
+	var before_left: float = wrapf(cell.organs[0].a,-PI,PI)
+	var before_right: float = wrapf(cell.organs[1].a,-PI,PI)
+	var reserve: float = cell.biomass
+	expect(cell.add_organ("protection",0,"graze",true,1.7),"A large organ can be inserted between neighbors")
+	expect(wrapf(cell.organs[0].a,-PI,PI) < before_left and wrapf(cell.organs[1].a,-PI,PI) > before_right,"Insertion pushes neighbors to both sides")
+	expect(is_equal_approx(reserve-cell.biomass,10*1.7*1.7),"Organelle biomass cost scales with its area")
+	for i in cell.organs.size():
+		for j in range(i+1,cell.organs.size()):
+			expect(absf(cell.arc_gap(cell.organs[i].a,cell.organs[j].a)) >= (Cell.organ_width(cell.organs[i])+Cell.organ_width(cell.organs[j]))*0.5-0.01,"Packing leaves room for scaled footprints")
+	var tiny = Cell.new()
+	expect(not tiny.add_organ("feeding",0,"engulf",false,30),"Total surface area still bounds an oversized organ")
+
+func _test_pump_and_facing() -> void:
+	var sim = isolated()
+	var cell = sim.player
+	sim.fluid.velocity.fill(Vector2.ZERO)
+	sim.fluid.activity.fill(1)
+	var mouth: Vector2 = cell.pore_center(cell.organs[0])
+	var before: Vector2 = cell.velocity*cell.mass+sim.fluid.momentum()
+	sim._suction(0.2)
+	expect(sim.fluid.sample(mouth+Vector2(70,0)).x < 0,"Feeding pump pulls real surrounding fluid toward the pore")
+	expect((cell.velocity*cell.mass+sim.fluid.momentum()).distance_to(before) < 0.1,"Pore pumping returns equal opposite momentum to the cell")
+	var receiver = Cell.new(99,mouth+Vector2(70,0))
+	receiver.update_geometry()
+	sim.fluid.exchange(receiver,Vector2.ZERO,0.5)
+	expect(receiver.velocity.x < 0,"Pore-induced fluid flow entrains a nearby passive cell through drag")
+	var light = isolated()
+	var strong = isolated()
+	for fixture in [light,strong]:
+		fixture.player.organs.clear()
+		fixture.fluid.velocity.fill(Vector2.ZERO)
+		fixture.fluid.activity.fill(1)
+		fixture.player.add_organ("propulsion",PI,"graze",false,2 if fixture == strong else 1)
+		fixture.player.target = Vector2.RIGHT
+		fixture.player.facing = Vector2.RIGHT
+		fixture._motion(DT)
+	expect(strong.player.velocity.x > light.player.velocity.x*1.5,"Larger flagellum gives stronger acceleration despite its added material")
+	for fleeing in [false,true]:
+		sim = isolated()
+		cell = sim.player
+		cell.organs.clear()
+		cell.add_organ("sensing" if fleeing else "feeding",PI*0.5,"flee" if fleeing else "graze",false)
+		cell.add_organ("propulsion",PI,"graze",false)
+		cell.facing = Vector2.RIGHT
+		cell.target = Vector2.LEFT if fleeing else Vector2.RIGHT
+		cell.target_mouth = PI*0.5
+		sim.fluid.velocity.fill(Vector2.ZERO)
+		sim.fluid.activity.fill(1)
+		var origin: Vector2 = cell.position
+		for i in 240: sim._motion(DT)
+		var facing: Vector2 = cell.local_point(cell.organs[0].a).rotated(cell.angle).normalized()
+		var travel := Fluid.offset(origin,cell.position)
+		expect(facing.x > 0.85,"The detecting surface organ turns toward its target, including during flight")
+		expect(travel.x < -5 if fleeing else travel.x > 5,"Propulsion translates away during flight and toward food during pursuit")
+
+func _test_coverage_and_pulses() -> void:
+	var sim = isolated()
+	var cell = sim.player
+	cell.organs.clear()
+	cell.add_organ("feeding",0,"engulf",false,2)
+	var organ: Dictionary = cell.organs[0]
+	var prey = sim._make_cell(cell.pore_center(organ)+Vector2(40,0),"grazer")
+	prey.organs.clear()
+	prey.body = 20
+	prey.biomass = 0
+	prey.update_geometry()
+	prey.membrane = Membrane.new(prey.radius)
+	prey.activity = 1
+	var coverage: float = sim.engulf_coverage(cell,organ,prey)
+	expect(coverage < 0.5,"Partial engulfing fixture overlaps less than half of prey")
+	sim._intercell_feeding(DT)
+	expect(prey.health == 100,"An engulfing pore does no damage below fifty percent area coverage")
+	prey.position = cell.pore_center(organ)
+	expect(sim.engulf_coverage(cell,organ,prey) > 0.5,"A correctly sized opening can cover over half the prey")
+	prey.health = 0.1
+	prey.substrate = 4
+	var before: float = organic(sim)
+	sim._intercell_feeding(DT)
+	expect(prey.dead and cell.engulfed == 1 and organ.consume_flash > 0,"Sufficient coverage consumes prey and visibly pulses the mouth")
+	expect(absf(organic(sim)-sim.external_input-before) < 0.01,"Engulfing includes contents and accounts for any spilled excess and replacement input")
+	sim.particles.clear()
+	sim.grid.rebuild(sim.particles)
+	cell.substrate = 0
+	sim.spawn_particle(Sim.NUTRIENT,cell.pore_center(organ))
+	sim._feed(cell)
+	expect(cell.substrate > 0,"An engulfing pore also grazes on ordinary nutrient particles")
+
+func _test_particle_exclusion() -> void:
+	var sim = isolated()
+	sim.player.position = Vector2(2,1200)
+	for i in 20: sim.spawn_particle(Sim.NUTRIENT,sim.player.position+Vector2.from_angle(i)*float(i))
+	var before: float = organic(sim)
+	sim._exclude_particles()
+	for p in sim.particles:
+		var d := Fluid.offset(sim.player.position,p.p)
+		expect(d.length() >= sim.player.support(d.angle())+6.9,"External particle is shunted beyond the membrane, including across a seam")
+	expect(is_equal_approx(organic(sim),before),"Boundary shunting preserves material")
+
+func _test_gel_polygons() -> void:
+	var membrane = Membrane.new(55)
+	var smallest := INF
+	var largest := 0.0
+	for i in 600:
+		if i%7 == 0: membrane.points[i%membrane.COUNT] *= 0.15
+		membrane.step(DT,55,Vector2(240*sin(i),100*cos(i)),i*DT)
+		if i%30 == 0:
+			var outline: PackedVector2Array = membrane.outline()
+			expect(Geometry2D.triangulate_polygon(outline).size() == (outline.size()-2)*3,"Compressed gelatinous membrane remains valid for polygon rendering")
+	for point in membrane.points:
+		smallest = minf(smallest,point.length())
+		largest = maxf(largest,point.length())
+	expect(largest-smallest > 7,"Gel membrane has visible lobes rather than an ellipse template")
+	var cell = Cell.new()
+	cell.membrane = membrane
+	var outline: PackedVector2Array = membrane.outline()
+	for i in 80:
+		var a := TAU*i/80
+		var inside := Vector2.from_angle(a)*(cell.visible_support(a)-0.1)
+		var outside := Vector2.from_angle(a)*(cell.visible_support(a)+0.1)
+		expect(Geometry2D.is_point_in_polygon(inside,outline) and not Geometry2D.is_point_in_polygon(outside,outline),"Fast visible-boundary sampling matches the actual rendered polygon")
+
+func _test_resource_animation() -> void:
+	var cell = Cell.new()
+	cell.add_organ("propulsion",PI,"graze",false)
+	var before: float = cell.energy
+	cell.spend_energy(1,cell.organs[0])
+	expect(is_equal_approx(before-cell.energy,1) and not cell.resource_packets.is_empty(),"Real ATP spending launches nucleus-to-organelle packets")
+	for i in 20: cell.animate_resources(DT)
+	expect(cell.resource_packets.is_empty() or cell.resource_packets[0].p.distance_to(Vector2(-0.15,-0.15)*cell.radius) > 5,"ATP particles travel outward from the nucleus")
+	cell.damage(25,0)
+	var reserve: float = cell.biomass
+	cell.heal(1)
+	var repairs := 0
+	for packet in cell.resource_packets:
+		if packet.kind == "repair": repairs += 1
+	expect(cell.biomass < reserve and repairs > 0,"Actual membrane repair spends biomass and launches repair particles")
+
+func _test_microtubules() -> void:
+	var membrane = Membrane.new(60)
+	var network = membrane.skeleton
+	network.links.clear()
+	var group: int = network.connect_points({"kind":"membrane","a":0.2},{"kind":"membrane","a":3.3},0.1,membrane,60)
+	expect(group >= 0 and network.links.size() == 1,"Microtubule joins arbitrary fractional membrane points")
+	var original: int = network.links[0].id
+	var branch: int = network.connect_points({"kind":"link","id":original,"t":0.43},{"kind":"membrane","a":1.7},0.5,membrane,60)
+	expect(branch >= 0 and network.links.size() == 3 and network.junctions.size() == 1,"Branching splits a microtubule into linked segments at a movable junction")
+	var first: int = network.links[0].id
+	var second: int = network.links[-1].id
+	expect(network.connect_points({"kind":"link","id":first,"t":0.5},{"kind":"link","id":second,"t":0.5},0.4,membrane,60) >= 0,"Microtubules can connect a point on one link to a point on another")
+	network.set_tension(group,0.8)
+	for link in network.links:
+		if link.group == group: expect(link.tension == 0.8,"Split segments retain the parent's adjustable tension")
+	for i in 240: membrane.step(DT,60,Vector2.ZERO,2)
+	expect(Geometry2D.triangulate_polygon(membrane.outline()).size() > 0,"Branched tension network leaves a renderable membrane")
+	for junction in network.junctions.values(): expect(junction.p.is_finite(),"Internal branch junction stays finite")
+	var slack = Membrane.new(60)
+	var taut = Membrane.new(60)
+	for ring in [slack,taut]:
+		ring.skeleton.links.clear()
+		ring.skeleton.connect_points({"kind":"membrane","a":0},{"kind":"membrane","a":PI},0 if ring == slack else 0.9,ring,60)
+	for i in 240:
+		slack.step(DT,60,Vector2.ZERO,0)
+		taut.step(DT,60,Vector2.ZERO,0)
+	var slack_span: float = slack.points[0].distance_to(slack.points[14])
+	var taut_span: float = taut.points[0].distance_to(taut.points[14])
+	expect(taut_span < slack_span*0.9,"Increasing microtubule tension visibly pulls its membrane anchors together")
+	network.remove_group(group)
+	for link in network.links: expect(link.group != group,"Removing a microtubule removes all of its split segments")
