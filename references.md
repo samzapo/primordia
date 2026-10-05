@@ -139,3 +139,11 @@ The screen bloom is a stylistic optical halo in light-rich regions. It does not 
 ## Computational implementation of the existing simulation
 
 Revision seven preserves the biological/physical abstractions above. [Godot C++ bindings](https://docs.godotengine.org/en/stable/tutorials/scripting/cpp/about_godot_cpp.html) provide native batch execution. [Godot compute shaders](https://docs.godotengine.org/en/stable/tutorials/shaders/compute_shaders.html) document RenderingDevice renderer requirements and the synchronization cost relevant to our GPU transport experiment. [GPU Gems: grid fluid simulation](https://developer.nvidia.com/gpugems/gpugems/part-vi-beyond-triangles/chapter-38-fast-fluid-dynamics-simulation-gpu) motivates retaining a field-based fluid representation; Primordia still uses its simpler finite-mass viscous model and does not claim to implement that chapter's pressure projection.
+
+## Recursive branching and plant-like obstacles
+
+**Phenomenon and visual motivation:** repeated branching and self-similar botanical forms can be represented by compact recursive growth rules. [Prusinkiewicz, Graphical applications of L-systems (1986)](https://algorithmicbotany.org/papers/graphical.gi86.html) presents turtle-based rewriting systems that produce both fractal curves and plant-like structures.
+
+**Game implementation:** a bounded recursive branch grammar is repeated around five, six or seven arms to generate original radial colonies. It is inspired by this botanical modeling work; it is not a full L-system interpreter. Shape, layout and color are seeded. Cached artwork preserves fine detail without simulating a leaf as a body. Main stems obstruct and redirect cells and drifting packets, creating passages in the habitat.
+
+**Abstraction:** exact snowflake-like rotational symmetry, static anchored colonies, rigid capsule contact and indestructibility are artistic/gameplay choices, not claims about real microscopic plants or snowflake biology. The finest fronds are permeable decoration. These scenery objects neither photosynthesize nor create particles, preserving the cell-only material sources. Multiscale periodic water color is fractal-style presentation, not a model of light scattering, acidity or additional chemistry; the existing light and acidity fields retain those gameplay roles.

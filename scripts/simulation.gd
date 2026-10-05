@@ -11,6 +11,9 @@ var spatial_queries := true
 var stagger_sensing := true
 var cell_index = preload("res://scripts/cell_index.gd").new()
 
+const Habitat = preload("res://scripts/habitat.gd")
+var habitat_geometry
+
 const Grid = preload("res://scripts/spatial_grid.gd")
 const Cell = preload("res://scripts/cell.gd")
 const Medium = preload("res://scripts/medium.gd")
@@ -73,6 +76,7 @@ func _init(seed_number: int = 20261004, profile: int = 0) -> void:
 	for i in 18:
 		var p = player.position + Vector2.from_angle(i*2.4)* (1050+i*45 if i%5 == 3 else 220 if i == 0 else 340+i*94)
 		_make_cell(Medium.wrap_position(p), "hunter" if i%5 == 3 else "grazer")
+	habitat_geometry = Habitat.new(seed_number,cells)
 	# Initial clouds are retained products of these cells' pre-observation life.
 	# No environmental spawner runs after initialization.
 	for cell in cells: _seed_cell_products(cell)
@@ -172,6 +176,7 @@ func step(dt: float) -> void:
 	profile_usec["fluid"] = Time.get_ticks_usec()-mark
 	mark = Time.get_ticks_usec()
 	_move_particles(dt)
+	habitat_geometry.move_particles(particles,local_particle_ids(64),revision,grid,native_particles)
 	_chemistry(dt)
 	profile_usec["particles"] = Time.get_ticks_usec()-mark
 	mark = Time.get_ticks_usec()
@@ -213,6 +218,11 @@ func step(dt: float) -> void:
 	for substep in 3:
 		_motion(dt/3.0)
 		_contacts(dt/3.0)
+		for cell in cells:
+			if cell.dead or cell.activity <= 0: continue
+			var contact: Array = habitat_geometry.move(cell.position,cell.position,cell.velocity,cell.extent())
+			cell.position = contact[0]
+			cell.velocity = contact[1]
 	for cell in cells:
 		cell.shape_acceleration = ((cell.velocity-before_motion[cell.id])/dt).limit_length(600)
 	profile_usec["motion"] = Time.get_ticks_usec()-mark
@@ -620,7 +630,9 @@ func _motion(dt: float) -> void:
 			var arm = Vector2.from_angle(TAU*i/6.0+cell.angle)*cell.radius
 			fluid.exchange(cell,arm,local_dt,15.0)
 		cell.angle = wrapf(cell.angle+cell.angular_velocity*local_dt,-PI,PI)
-		cell.position = Medium.wrap_position(cell.position+cell.velocity*local_dt)
+		var plant_contact: Array = habitat_geometry.move(previous,Medium.wrap_position(previous+cell.velocity*local_dt),cell.velocity,cell.extent())
+		cell.position = plant_contact[0]
+		cell.velocity = plant_contact[1]
 		# Continuous sweep against other bodies catches high-speed crossings.
 		for other in cells:
 			if other == cell or other.dead: continue
@@ -795,7 +807,7 @@ func _replace_population() -> void:
 		for attempt in 24:
 			at = Medium.wrap_position(player.position+Vector2.from_angle(rng.randf()*TAU)*1100)
 			if attempt > 0: at = Vector2(rng.randf()*WORLD.x,rng.randf()*WORLD.y)
-			if Medium.visibility(at,player.position if camera_follows_player else camera_position,view_half+Vector2.ONE*160) <= 0:
+			if habitat_geometry.clear_at(at,160) and Medium.visibility(at,player.position if camera_follows_player else camera_position,view_half+Vector2.ONE*160) <= 0:
 				found = true
 				break
 		if not found: continue

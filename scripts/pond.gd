@@ -15,6 +15,7 @@ const HELP := ["Larger flagella deliver more thrust. Anatomy chooses travel dire
 var world: Simulation = Simulation.new()
 var preferences = Preferences.new()
 var world_layer := Node2D.new()
+var habitat_view := preload("res://scripts/habitat_view.gd").new()
 var currents := Node2D.new()
 var currents_origin := Vector2.ZERO
 var preview := Node2D.new()
@@ -107,6 +108,10 @@ func _ready() -> void:
 	add_child(light_layer)
 	free_camera = world.player.position
 	add_child(world_layer)
+	world_layer.add_child(habitat_view)
+	habitat_view.z_index = 0
+	habitat_view.configure(world.habitat_geometry)
+	light_material.set_shader_parameter("habitat_seed",float(posmod(world.seed_value,997)))
 	world_layer.add_child(currents)
 	currents.draw.connect(_draw_currents)
 	var particle_material := ShaderMaterial.new()
@@ -222,6 +227,7 @@ func _update_world(alpha: float) -> void:
 	world_layer.scale = Vector2.ONE*zoom
 	currents.position = Simulation.Medium.offset(render_camera,currents_origin)
 	vignette.material.set_shader_parameter("center",camera_screen/size)
+	habitat_view.sync(render_camera,world.view_half)
 	_sync_particles(alpha)
 	var alive_ids: Dictionary = {}
 	for cell in world.cells:
@@ -623,6 +629,7 @@ func _scroll_selected() -> void:
 func _restart(profile: int = -1) -> void:
 	if world.gpu_transport != null: world.gpu_transport.close()
 	world = Simulation.new(world.seed_value,world.habitat if profile < 0 else profile)
+	habitat_view.configure(world.habitat_geometry)
 	_configure_backend()
 	_refresh_light_texture()
 	selected = -1

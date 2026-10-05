@@ -18,6 +18,7 @@ func run() -> void:
 	for zoom_string in option("--zooms","1,0.5,0.25,0.15").split(","):
 		for mode in modes:
 			var sim = Sim.new()
+			sim.habitat_geometry.enabled = option("--plants","on") == "on"
 			if mode in ["native","fluid","all","gpu"] and sim.kernels == null:
 				push_error("Native benchmark requested without compiled extension")
 				quit(1)
@@ -34,7 +35,11 @@ func run() -> void:
 				cell.sense_clock = (cell.id%9)/60.0 if mode in ["schedule","all","gpu"] else 0.0
 				cell.membrane.native_constraints = mode in ["native","all","gpu"]
 			var zoom := float(zoom_string)
-			sim.view_half = Sim.VIEW*0.5/zoom
+			var growth := float(option("--growth","1"))
+			sim.player.biomass *= growth
+			sim.player.update_geometry()
+			if growth != 1: sim.player.membrane = Sim.Cell.Membrane.new(sim.player.radius)
+			sim.view_half = Sim.VIEW*0.5/(zoom*minf(1,150.0/sim.player.radius))
 			var scale := int(option("--scale","1"))
 			var initial: Array = sim.particles.duplicate(true)
 			for copy in range(1,scale):
@@ -61,6 +66,6 @@ func run() -> void:
 				totals += Vector2(sim.active_cells,sim.active_particles)
 				for phase in sim.profile_usec: phases[phase] = phases.get(phase,0.0)+sim.profile_usec[phase]/float(count)
 			timings.sort()
-			print("BENCHMARK ",JSON.stringify({"case":mode,"zoom":zoom,"scale":scale,"samples":count,"median_ms":timings[count/2]/1000.0,"p95_ms":timings[mini(count-1,int(count*.95))]/1000.0,"p99_ms":timings[mini(count-1,int(count*.99))]/1000.0,"mean_active_cells":totals.x/count,"mean_active_particles":totals.y/count,"phase_mean_us":phases,"cpu":OS.get_processor_name(),"gpu_bridge":gpu.metrics if mode=="gpu" else {}}))
+			print("BENCHMARK ",JSON.stringify({"case":mode,"plants":sim.habitat_geometry.enabled,"zoom":zoom,"scale":scale,"growth":growth,"samples":count,"median_ms":timings[count/2]/1000.0,"p95_ms":timings[mini(count-1,int(count*.95))]/1000.0,"p99_ms":timings[mini(count-1,int(count*.99))]/1000.0,"mean_active_cells":totals.x/count,"mean_active_particles":totals.y/count,"phase_mean_us":phases,"cpu":OS.get_processor_name(),"gpu_bridge":gpu.metrics if mode=="gpu" else {}}))
 	if gpu != null: gpu.close()
 	quit()

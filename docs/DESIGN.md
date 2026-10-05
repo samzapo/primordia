@@ -8,6 +8,7 @@ Established by the project owner on October 4, 2026. These requirements persist 
 - The player has no direct control over cell movement or actions.
 - The player may add propulsion, protection, offensive, regenerative, feeding, and sensing organelles.
 - Organelle composition and placement determine cell motion and behavior.
+- Procedural generation and finite fractals are major visual design elements: seeded branching colonies, radial repetition, nested detail and varied habitat color fields. Geometry must remain readable and affordable at wide zoom.
 - The visual reference is Kurzgesagt's immune-system and cellular-biology videos: bright, cartoony, vectorized graphics throughout. Primordia uses its own procedural shapes, palettes, and characters.
 
 ## First playable interpretation (revision 1)
@@ -65,6 +66,12 @@ The owner requested visible particle orientation using branched, forked and roun
 ## Revision 7 performance direction
 
 The owner reports that normal play requires a wider view than the earlier benchmarks, and that wider views have serious performance problems. All five proposed efficiency approaches are approved targets, with independent measurements of gains and losses. Prioritize compiled simulation kernels, GPU computation experiments and efficient fluid work; also improve spatial query coverage and slower/less detailed updates where behavior permits. Preserve visible oriented chemistry, fluid/cell interaction, indirect control and uncapped growth. Do not hide scaling problems by reducing the active habitat or silently deleting particles. See [revision seven](REVISION_7.md) for implementation, ablations and limits.
+
+## Revision 8 procedural habitat direction
+
+The owner selected the large plant obstacles and varied water colors in the supplied Spore cell-stage reference. Add original, seeded, rotationally symmetric branching colonies that affect the playing field. Make procedural generation and fractals a persistent visual design principle, rather than a one-off decoration. Preserve luminous vector-style art, functional organelle/particle colors, light and acid meaning, and the existing anatomy-driven cell control.
+
+The first implementation uses finite recursive branching for plant-like scenery with solid main stems, and periodic fractal noise for water color. Fine fronds are decorative. These are fixed environmental obstacles, not new food sources or organs. See [revision eight](REVISION_8.md) for the collision approximations, performance evidence and remaining limits.
 
 ## Proposed expansion areas
 

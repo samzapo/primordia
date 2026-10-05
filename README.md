@@ -2,7 +2,7 @@
 
 A physics and chemistry simulation game about managing one small cell. Eat, grow and survive predation. **You never steer the cell:** its anatomy controls its behavior.
 
-This seventh playable revision uses **Godot 4.7.2**, a fixed-step simulation, deformable membranes, oriented chemical particles and procedural 2D artwork. Its vector artwork is authored in the project; cached particle textures and mipmaps generate automatically at runtime. The default Linux launcher builds a batched C++ GDExtension automatically; the GDScript reference backend remains available.
+This eighth playable revision uses **Godot 4.7.2**, a fixed-step simulation, deformable membranes, oriented chemical particles and procedural 2D artwork. Its vector artwork is authored in the project; cached particle textures and mipmaps generate automatically at runtime. The default Linux launcher builds a batched C++ GDExtension automatically; the GDScript reference backend remains available.
 
 ## Run with Steam Godot on Linux
 
@@ -75,6 +75,12 @@ Revision seven adds compiled particle transport, orientation chemistry, spatial 
 
 A Vulkan compute transport experiment is included, but **is not enabled by default**: measurements found that the current CPU/GPU transfer bridge costs more than native CPU transport. It can be tried with `./tools/run.sh --rendering-method mobile -- --gpu-transport`. It does not move chemistry or the entire game onto the GPU. See the [benchmark results and remaining limits](docs/REVISION_7.md).
 
+## Procedural habitat
+
+Procedural generation and fractals are now a core visual direction. Large radial plant-like colonies grow from a seeded recursive branching grammar, with five-, six- and sevenfold symmetry. Their stout stems obstruct cells and drifting particles; contact slides along branches without consuming material. Fine fronds are decorative, and the scenery does not add food or oxygen sources.
+
+Water gains broad blue, teal, jade and violet regions from seamless multiscale noise. These patterns stay fixed in world space, with existing light, acidity tint and bloom layered over them. Plant art is cached in six mipmapped textures per habitat. See [revision eight](docs/REVISION_8.md) for collision scope and wide-view benchmarks. These additions do not solve the remaining whole-game frame-rate problem documented in revision seven.
+
 ## Graphics and proposed chemistry
 
 Revision six uses the requested luminous coral-reef palette: blue/teal water, shared periwinkle cell bodies, layered nuclei and clearer membrane rims. Functional colors live on the organelles and emitted particles; cells are not colored by occupation. Brighter presentation preserves the actual light resource and shaded habitat regions. A restrained bloom follows light-rich water and bright world details, while the HUD stays sharp.
@@ -96,7 +102,7 @@ There are no saves, audio, permanent progression or packaged releases yet. Same-
 python3 tests/test_launchers.py
 ```
 
-The test launcher uses the same Steam discovery and fails on assertions or Godot script errors. Native tests build the extension first. Run `PRIMORDIA_BACKEND=script ./tools/test.sh` to verify the independent fallback too. Wide-view performance checks and per-item ablations are described in [revision seven](docs/REVISION_7.md). `tests/profile.gd` is a historical close-view diagnostic, not performance acceptance. F3 during play measures the real frame rate.
+The test launcher uses the same Steam discovery and fails on assertions or Godot script errors. Native tests build the extension first. Run `PRIMORDIA_BACKEND=script ./tools/test.sh` to verify the independent fallback too. Wide-view performance checks and per-item ablations are described in [revision seven](docs/REVISION_7.md) and [revision eight](docs/REVISION_8.md). `tests/profile.gd` is a historical close-view diagnostic, not performance acceptance. F3 during play measures the real frame rate.
 
 For a rendered capture with a display:
 

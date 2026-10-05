@@ -137,11 +137,63 @@ public:
 class PrimordiaKernels : public RefCounted {
   GDCLASS(PrimordiaKernels, RefCounted)
   Keys keys;
+  struct Stem {
+    Vector2 a, b;
+    double radius;
+  };
+  std::vector<Stem> stems;
+  std::array<std::vector<int>, 640> stem_bins;
+  static int stem_key(Vector2 p) {
+    return mod(int(std::floor(p.y / 128)), 20) * 32 +
+           mod(int(std::floor(p.x / 128)), 32);
+  }
+  static Vector2 closest_stem(Vector2 p, Vector2 a, Vector2 b) {
+    Vector2 edge = b - a;
+    return a + edge * std::clamp(
+                          double((p - a).dot(edge)) /
+                              std::max(double(edge.length_squared()), .00001),
+                          0., 1.);
+  }
+  static double circle_time(Vector2 p, Vector2 travel, Vector2 center,
+                            double radius) {
+    Vector2 d = p - center;
+    double a = travel.length_squared(), b = d.dot(travel),
+           c = d.length_squared() - radius * radius;
+    if (c <= 0)
+      return b < 0 ? 0. : 2.;
+    double discriminant = b * b - a * c;
+    if (a < .000001 || discriminant < 0)
+      return 2.;
+    double t = (-b - std::sqrt(discriminant)) / a;
+    return t >= 0 && t <= 1 ? t : 2.;
+  }
+  static double stem_time(Vector2 p, Vector2 travel, Vector2 a, Vector2 b,
+                          double radius) {
+    double t = std::min(circle_time(p, travel, a, radius),
+                        circle_time(p, travel, b, radius));
+    Vector2 axis = (b - a).normalized(), normal(-axis.y, axis.x);
+    double side = (p - a).dot(normal), speed = travel.dot(normal);
+    if (std::abs(speed) > .000001)
+      for (int sign : {-1, 1}) {
+        if (speed * sign >= 0)
+          continue;
+        double hit = (sign * radius - side) / speed,
+               along = (p + travel * hit - a).dot(axis);
+        if (hit >= 0 && hit <= 1 && along >= 0 && along <= a.distance_to(b))
+          t = std::min(t, hit);
+      }
+    return t;
+  }
   std::vector<Particle> scratch;
   std::vector<std::vector<int>> bins;
 
 protected:
   static void _bind_methods() {
+    ClassDB::bind_method(D_METHOD("obstacle_configure", "segments", "bins"),
+                         &PrimordiaKernels::obstacle_configure);
+    ClassDB::bind_method(
+        D_METHOD("obstacle_particles", "particles", "ids", "revision"),
+        &PrimordiaKernels::obstacle_particles);
     ClassDB::bind_method(
         D_METHOD("membrane_edges", "points", "lengths", "lambda", "alpha"),
         &PrimordiaKernels::membrane_edges);
@@ -171,6 +223,102 @@ protected:
   }
 
 public:
+  void obstacle_configure(Array segments, Dictionary source_bins) {
+    stems.clear();
+    for (int i = 0; i < segments.size(); ++i) {
+      Dictionary segment = segments[i];
+      stems.push_back({segment["a"], segment["b"], double(segment["r"])});
+    }
+    for (int i = 0; i < 640; ++i) {
+      stem_bins[i].clear();
+      Array ids = source_bins.get(i, Array());
+      for (int j = 0; j < ids.size(); ++j)
+        stem_bins[i].push_back(int(ids[j]));
+    }
+  }
+  bool obstacle_particles(Array particles, Array ids, int revision) {
+    bool changed = false;
+    std::vector<int> candidates;
+    for (int index = 0; index < ids.size(); ++index) {
+      Dictionary packet = particles[int(ids[index])];
+      if (!bool(packet[keys.alive]) ||
+          int(packet.get(keys.updated, -1)) != revision)
+        continue;
+      Vector2 p = packet[keys.previous], end = packet[keys.p],
+              travel = delta(p, end), velocity = packet[keys.v];
+      candidates.clear();
+      if (stem_key(p) == stem_key(end))
+        candidates = stem_bins[stem_key(p)];
+      else {
+        Vector2 finish = p + travel;
+        int lx = std::floor((std::min(p.x, finish.x) - 4) / 128),
+            hx = std::floor((std::max(p.x, finish.x) + 4) / 128);
+        int ly = std::floor((std::min(p.y, finish.y) - 4) / 128),
+            hy = std::floor((std::max(p.y, finish.y) + 4) / 128);
+        for (int y = ly; y <= hy && y < ly + 20; ++y)
+          for (int x = lx; x <= hx && x < lx + 32; ++x)
+            for (int id : stem_bins[mod(y, 20) * 32 + mod(x, 32)])
+              if (std::find(candidates.begin(), candidates.end(), id) ==
+                  candidates.end())
+                candidates.push_back(id);
+      }
+      if (candidates.empty())
+        continue;
+      bool touched = false;
+      for (int iteration = 0; iteration < 6; ++iteration) {
+        bool pushed = false;
+        for (int id : candidates) {
+          const auto &s = stems[id];
+          Vector2 a = p + delta(p, s.a), b = a + s.b - s.a,
+                  d = p - closest_stem(p, a, b);
+          double reach = 4 + s.radius + .2;
+          if (d.length_squared() >= reach * reach)
+            continue;
+          Vector2 n = d.length_squared() > .000001
+                          ? d.normalized()
+                          : (b - a).orthogonal().normalized();
+          p += n * (reach - d.length());
+          velocity -= n * std::min(0., double(velocity.dot(n)));
+          pushed = true;
+          touched = true;
+        }
+        if (!pushed)
+          break;
+      }
+      for (int iteration = 0; iteration < 4; ++iteration) {
+        double earliest = 2.;
+        Vector2 normal;
+        for (int id : candidates) {
+          const auto &s = stems[id];
+          Vector2 a = p + delta(p, s.a), b = a + s.b - s.a;
+          double t = stem_time(p, travel, a, b, 4 + s.radius + .05);
+          if (t >= earliest)
+            continue;
+          earliest = t;
+          Vector2 at = p + travel * t;
+          normal = (at - closest_stem(at, a, b)).normalized();
+        }
+        if (earliest > 1) {
+          p += travel;
+          break;
+        }
+        touched = true;
+        p += travel * earliest + normal * .08;
+        travel *= 1 - earliest;
+        travel -= normal * std::min(0., double(travel.dot(normal)));
+        velocity -= normal * std::min(0., double(velocity.dot(normal)));
+        if (travel.length_squared() < .000001)
+          break;
+      }
+      if (touched) {
+        packet[keys.p] = wrapv(p);
+        packet[keys.previous] = wrapv(p);
+        packet[keys.v] = velocity;
+        changed = true;
+      }
+    }
+    return changed;
+  }
   Array membrane_edges(PackedVector2Array points,
                        const PackedFloat32Array &lengths,
                        PackedFloat32Array lambda, double alpha) {
