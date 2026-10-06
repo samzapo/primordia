@@ -47,7 +47,12 @@ func sync(render_position: Vector2, render_angle: float, zoom: float, alpha: flo
 		set_meta("assembly",game.build_open)
 		queue_redraw()
 		appendages.queue_redraw()
-	label.hide()
+	label.visible = cell.rival_name != "" and (game.show_senses or get_global_mouse_position().distance_to(global_position) < cell.extent()*zoom+20)
+	if label.visible:
+		label.text = cell.rival_name
+		label.rotation = -rotation
+		label.scale = Vector2.ONE/zoom
+		label.position = Vector2(-label.size.x/2/zoom,-cell.extent()-22/zoom).rotated(-rotation)
 
 func _draw() -> void:
 	if cell == null: return

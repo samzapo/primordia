@@ -40,6 +40,17 @@ func run() -> void:
 							item.previous = item.p
 							sim.particles.append(item)
 					sim.grid.rebuild(sim.particles)
+				elif fixture == "family":
+					# Explicit fixture endowments; each real birth still pays normal costs.
+					for i in 3:
+						var quote: Dictionary = sim.offspring_quote()
+						sim.player.biomass += quote.material
+						sim.player.energy = 100
+						sim.player.reserve(maxf(60,quote.material),quote.material)
+						if not sim.divide_lineage(false,false):
+							push_error("Family benchmark could not place its paid successor")
+							quit(1)
+							return
 				elif fixture == "growth":
 					sim.player.biomass *= 256
 					sim.player.update_geometry()

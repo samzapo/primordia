@@ -236,3 +236,13 @@ These revision-fourteen features sonify existing state: lineage inheritance, the
 An inherited six-note musical contour is a presentation metaphor for the existing lineage signature. Light-to-filter cutoff, acidity-to-saturation/ripple and buffering-to-calmer timbre are authored listening choices, not measured biological acoustics. Audio may observe rendered ecology, but never supplies information to the pheromone-only perception system or changes authoritative particle behavior.
 
 Revision fifteen moves activity falloff entirely outside the visible rectangle; this is a computational boundary, not a biological law. Briefly tracking a magnified particle is likewise an inspection aid, not an added receptor or live source lookup. Dictionary identity survives array compaction under [Godot’s reference comparison semantics](https://docs.godotengine.org/en/stable/classes/class_%40globalscope.html#class-globalscope-method-is-same).
+
+## Dormant reserves and continuing lineages
+
+[Jones and Lennon, Dormancy contributes to the maintenance of microbial diversity (2010)](https://pubmed.ncbi.nlm.nih.gov/20231463/) combines modeling and lake-community observations to study microbial seed banks. Reversible low metabolic activity can preserve organisms through unfavorable conditions and affect future active communities. This motivates Primordia's dormant successors.
+
+The game stores a complete prepaid body outside active physics, with no metabolism, production or damage until hatching. Three storage slots, guaranteed preservation, automatic activation after family loss and one initial founder reserve are game rules, not measured dormancy biology. Extra bodies partition real modeled tissue, oxygen and ATP; the initial reserve belongs to initial inventory. Choosing which relative to manage and inheriting its musical motif are player/presentation conventions.
+
+[Gonzalez and Bell, Evolutionary rescue and adaptation to abrupt environmental change depends upon the history of stress (2013)](https://pmc.ncbi.nlm.nih.gov/articles/PMC3538446/) examines how prior environmental stress affects rescue in yeast populations. It motivates giving a lineage a history of environmental challenges rather than testing only an isolated lifespan.
+
+Primordia compresses those pressures into authored light and rival-anatomy changes. Its three timed crises, survival thresholds, optional AP challenges, named rivals and recalled blueprints are design abstractions. The environment is not intentionally evolving against the player; the director introduces bounded, ordinarily paid variants. Persistent blueprint choices represent player knowledge, not DNA passing between unrelated expeditions, and grant no permanent stat advantage.

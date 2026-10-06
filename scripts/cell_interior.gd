@@ -96,11 +96,16 @@ func _draw() -> void:
 	draw_arc(at,0.16*r,-PI/2,-PI/2+TAU*bud_energy,24,Color("ffd65a"),r*0.032,true)
 	if game.world.evolution.offspring_id >= 0:
 		draw_arc(at,0.16*r,-PI/2,-PI/2+TAU*clampf(game.world.evolution.viable_seconds/60,0,1),24,Color("9cf4b4"),r*0.045,true)
-	# A quiet nucleus rim communicates tides and a ready draft.
-	for i in 6:
-		var a := -PI/2+i*TAU/6
-		var color := Color("b8f0de") if i <= game.world.evolution.tide else Color("547299")
-		draw_arc(anchors.nucleus,r*0.31,a,a+0.72,8,color,r*0.026,true)
+	# Three crisis arcs and tiny dormant bodies show the goal and insurance.
+	for i in 3:
+		var a := -PI/2+i*TAU/3
+		var fraction: float = clampf(game.world.evolution.crisis_seconds[i]/60,0,1)
+		draw_arc(anchors.nucleus,r*0.31,a,a+1.7,16,Color("547299"),r*0.026,true)
+		if fraction > 0: draw_arc(anchors.nucleus,r*0.31,a,a+1.7*fraction,16,Color("b8f0de"),r*0.038,true)
+	for i in game.world.lineage.dormant.size():
+		_ellipse(anchors.bud+Vector2(-0.12+i*0.10,-0.21)*r,Vector2(0.035,0.045)*r,Color("a6ead4"))
+	if bud_material >= 1 and bud_energy >= 1:
+		draw_arc(at,0.21*r,0,TAU,24,Color(1,0.92,0.61,0.5+0.25*sin(game.ui_time*3)),r*0.025,true)
 	if not game.world.evolution.chosen:
 		draw_circle(anchors.nucleus+Vector2(0.22,-0.20)*r,r*(0.04+0.008*sin(game.ui_time*2)),Color("fff19c"))
 	if game.build_open:

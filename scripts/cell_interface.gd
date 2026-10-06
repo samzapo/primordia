@@ -19,6 +19,8 @@ var last_tide := 0
 var last_resistance := ""
 var last_ending := ""
 var last_critical := false
+var last_lineage := 0
+var last_goal := ""
 
 func initialize(owner_game) -> void:
 	game = owner_game
@@ -50,6 +52,8 @@ func reset() -> void:
 	last_resistance = ""
 	last_ending = ""
 	last_critical = false
+	last_lineage = game.world.lineage.serial
+	last_goal = game.world.evolution.goal_key(game.world)
 	interior.previous_coins = -1
 	interior.coin_transfers.clear()
 
@@ -73,7 +77,7 @@ func screen_at(target: Dictionary) -> Vector2:
 		if not record.is_empty():
 			p = cell.local_point(record.a)
 			p += p.normalized()*5*record.scale
-	else: p = interior.anchors.get(target.kind,Vector2.ZERO)
+	else: p = interior.anchors.get("nucleus" if target.kind in ["lineage","archive","past"] else target.kind,Vector2.ZERO)
 	return game.world_layer.to_global(interior.position+p.rotated(interior.rotation))
 
 func targets() -> Array:
@@ -158,16 +162,55 @@ func open_context(target: Dictionary) -> void:
 						game._message("Blueprint kept: "+data.title)
 						open_context(target),data.kind)
 			if run.challenge == "" and run.tide < 6 and run.clock-run.tide*run.TIDE_SECONDS < 90:
-				_choice("Growth risk","+1 AP next tide: ingest and retain 18 new external tissue; finish at ≥60% health.",_challenge.bind("growth"),"","Grow")
-				_choice("Stability risk","+1 AP next tide: finish with 30 steady seconds at ≥60% health and ≥25 ATP.",_challenge.bind("stability"),"","Steady")
+				_choice("Growth risk","+2 AP next tide: ingest and retain 18 new external tissue; finish at ≥60% health.",_challenge.bind("growth"),"","Grow")
+				_choice("Stability risk","+2 AP next tide: finish with 30 steady seconds at ≥60% health and ≥25 ATP.",_challenge.bind("stability"),"","Steady")
+			if run.challenge == "" and run.tide < 6 and run.clock-run.tide*run.TIDE_SECONDS < 90:
+				_choice("Feeding risk","+2 AP next tide: collect 12 external food or fix 12 carbon (or a mixture); finish healthy.",_challenge.bind("metabolism"),"","Feed")
+			_choice("Family & goals",sim.lineage.summary(sim),open_context.bind({"kind":"lineage"}),"","Family")
 		"bud":
-			if run.offspring_id < 0:
-				_choice("Fund offspring","Transfer up to 10 usable tissue and 10 ATP to the offspring reserve.",func():
-					cell.reserve(10,sim.offspring_quote().material)
-					game._message("Reproductive reserves funded."),"","+10")
-				_choice("Reclaim reserves","Withdraw up to 10 tissue and 10 ATP from the offspring reserve.",func():
-					cell.reserve(-10)
-					game._message("Reproductive reserves reclaimed."),"","−10")
+			_choice("Fund offspring","Transfer up to 10 usable tissue and 10 ATP to the reserve.",func():
+				cell.reserve(10,sim.offspring_quote().material)
+				game._message(run.objective(sim)),"","+10")
+			_choice("Reclaim reserves","Withdraw up to 10 tissue and 10 ATP.",func():
+				cell.reserve(-10)
+				game._message(run.objective(sim)),"","−10")
+			var funded: bool = cell.brood_mass >= sim.offspring_quote().material and cell.brood_energy >= 60
+			_choice("Release successor","A paid juvenile lives autonomously nearby. You keep this body until choosing family or dying.",_reproduce.bind(false),"","Divide",funded and sim.lineage.active_family(sim).size() < sim.Lineage.MAX_ACTIVE)
+			_choice("Store dormant successor","Same tissue and ATP cost. A prepaid dormant body hatches if the active family is lost.",_reproduce.bind(true),"","Cyst",funded and sim.lineage.dormant.size() < sim.Lineage.MAX_DORMANT)
+			var family: Array = sim.lineage.active_family(sim)
+			for relative in family:
+				if relative != cell:
+					_choice("Follow generation %d" % relative.generation,"Continue managing this existing family member; the current body stays alive.",_follow.bind(relative.id),"","G%d" % relative.generation)
+					break
+		"lineage":
+			var page: int = int(target.get("page",0))
+			var last: int = maxi(0,sim.lineage.records.size()-page*4)
+			for record in sim.lineage.records.slice(maxi(0,last-4),last):
+				var can_follow: bool = record.state == "living" and not run.terminal()
+				_choice("Cell %d · %s" % [record.id,record.state],sim.lineage.biography(record)+("\nClick to follow this living relative." if can_follow else ""),_follow.bind(record.id) if can_follow else game._message.bind(sim.lineage.biography(record)),"","You" if record.state == "active" else "Zz%d" % record.generation if record.state == "dormant" else "†G%d" % record.generation if record.state == "dead" else "G%d" % record.generation)
+				choices[-1].set_meta("family_id",record.id)
+				choices[-1].set_meta("parent_id",record.parent)
+			_choice("Known blueprints","Recall a discovered blueprint as this tide's one draft choice; installation costs remain.",open_context.bind({"kind":"archive","page":0}),"","Genes")
+			_choice("Earlier history","Cycle this family tree, then previous expeditions.",open_context.bind({"kind":"lineage","page":page+1} if last > 4 else {"kind":"past","page":0}),"","History")
+		"archive":
+			var known: Array = game.archive.discovered.filter(func(gene): return gene not in run.learned)
+			var page: int = int(target.get("page",0))
+			for gene in known.slice(page*3,page*3+3):
+				var data: Dictionary = sim.Genes.DATA[gene]
+				_choice("Recall "+data.title,data.text+"\nUses this tide's draft choice.",func():
+					game._message("Blueprint recalled." if game.archive.recall(run,gene) else "Already chose this tide; recall remains available next tide.")
+					open_context({"kind":"archive","page":page}),data.kind,"",not run.chosen and not run.terminal())
+			if known.size() > 3: _choice("More blueprints","Next page.",open_context.bind({"kind":"archive","page":(page+1)%ceili(known.size()/3.0)}),"","More")
+			_choice("Family tree","Return to your current family.",open_context.bind({"kind":"lineage"}),"","Back")
+		"past":
+			var page: int = int(target.get("page",0))
+			var first: int = maxi(0,game.archive.expeditions.size()-(page+1)*3)
+			for entry in game.archive.expeditions.slice(first,first+3):
+				var description := "Expedition %d · %s · %.0fs\n" % [entry.id+1,entry.status,entry.seconds]
+				for record in entry.family.slice(-4): description += "Generation %d · %s%s\n" % [record.generation,record.state," · "+record.cause if record.state == "dead" else ""]
+				_choice("Expedition %d" % [entry.id+1],description,game._message.bind(description),"",str(entry.id+1))
+			if first > 0: _choice("Earlier expeditions","Previous histories.",open_context.bind({"kind":"past","page":page+1}),"","Older")
+			_choice("Current family","Return.",open_context.bind({"kind":"lineage"}),"","Back")
 	if not choices.is_empty():
 		for i in choices.size():
 			choices[i].focus_neighbor_left = choices[(i-1+choices.size())%choices.size()].get_path()
@@ -175,6 +218,25 @@ func open_context(target: Dictionary) -> void:
 			choices[i].focus_neighbor_top = choices[i].focus_neighbor_left
 			choices[i].focus_neighbor_bottom = choices[i].focus_neighbor_right
 	sync(0)
+
+func _reproduce(dormant: bool) -> void:
+	# Commit the parent's edits before transferring tissue into a separate body.
+	game.world.commit_build()
+	var success: bool = game.world.divide_lineage(dormant,false)
+	game.world.begin_build()
+	close_context()
+	game._message(("Dormant successor secured." if dormant else "Successor released. The family menu lets you follow it.") if success else "Needs full tissue/ATP reserves, feeding anatomy and room for another family member.")
+
+func _follow(identity: int) -> void:
+	game.world.commit_build()
+	if game.world.follow_family(identity):
+		game.camera_locked = true
+		game.camera_offset = Vector2.ZERO
+		game.free_camera = game.world.player.position
+		game._message(game.world.lineage.notices[-1])
+	if game.build_open: game.world.begin_build()
+	close_context()
+	game._update_world(1)
 
 func _challenge(kind: String) -> void:
 	game._message("Challenge accepted: "+kind if game.world.evolution.accept_challenge(kind,game.world.player) else "This tide's challenge window has closed.")
@@ -189,10 +251,11 @@ func describe(target: Dictionary) -> String:
 		"chemistry": return "Chemistry factory\nPhotosynthesis, toxins, neutralizers and acid."
 		"atp": return "ATP %.0f / %.0f\nStored food %.1f · oxygen %.1f\nActive upkeep ≈ %.2f ATP/s before repairs and combat." % [cell.energy,cell.energy_capacity(),cell.substrate,cell.oxygen,cell.operating_budget().steady]
 		"coins": return "%d AP\nEach coin funds one point of adaptation." % run.points
-		"nucleus": return "Nucleus · Tide %d / 6 · %d:%02d\n%s\n%s" % [mini(6,run.tide+1),int(sim.time)/60,int(sim.time)%60,run.forecast(),"Blueprint ready · click to choose." if not run.chosen else "%d blueprints kept · specialize matching organs." % run.learned.size()]
-		"bud":
-			if run.offspring_id >= 0: return "Offspring viability\n%.0f / 60 healthy, active seconds\nKeep feeding through 13:30." % run.viable_seconds
-			return "Offspring reserve\n%.0f / %.0f tissue · %.0f / 60 ATP\nDivide at 12:00; sustain the offspring through 13:30." % [cell.brood_mass,sim.offspring_quote().material,cell.brood_energy]
+		"nucleus": return "%s\n%s\n%s" % [run.objective(sim),run.forecast(),"Blueprint ready · click to choose." if not run.chosen else "%d blueprints kept." % run.learned.size()]
+		"lineage": return "FAMILY TREE\n"+sim.lineage.summary(sim)+"\n"+run.forecast()
+		"archive": return "Known blueprints · %d\nOne draft choice per tide; recalling grants no free anatomy." % game.archive.discovered.size()
+		"past": return "Expedition history · %d recorded\nYour next expedition retains these discoveries, not extra stats." % game.archive.expeditions.size()
+		"bud": return "Offspring reserve\n%.0f / %.0f tissue · %.0f / 60 ATP\n%d living family · %d dormant\nRelease, store or follow a successor at any time.\nDescendant viability: %.0f / 60 s" % [cell.brood_mass,sim.offspring_quote().material,cell.brood_energy,sim.lineage.active_family(sim).size(),sim.lineage.dormant.size(),run.viable_seconds]
 		"organ":
 			var organ: Dictionary = cell.organ_by_id(target.id)
 			if organ.is_empty(): return ""
@@ -214,19 +277,29 @@ func _tooltip(value: String, at: Vector2) -> void:
 		tip.text = value
 		tip_box.reset_size()
 	var extent := tip_box.get_combined_minimum_size()
+	tip_box.size = extent # Shrink after text reflow; stale tall panels otherwise clip at large UI scales.
 	tip_box.position = (at+Vector2(18,18)).clamp(Vector2(12,12),get_viewport_rect().size-extent-Vector2(12,12))
 
 func _events() -> void:
 	var run = game.world.evolution
 	if run.tide != last_tide:
 		last_tide = run.tide
-		game._message("Tide %d · %s\n%s" % [mini(6,run.tide+1),run.TIDES[run.tide].title,run.forecast()])
+		game._message("%s\n%s\n%s" % [run.TIDES[run.tide].title,run.TIDES[run.tide].forecast,run.challenge_result])
 	if run.resistance != last_resistance:
 		last_resistance = run.resistance
-		game._message(run.forecast())
+		game._message("The habitat is adapting to your recent strategy.\nInspect the nucleus for the emerging response.")
+	var family = game.world.lineage
+	if family.serial != last_lineage:
+		last_lineage = family.serial
+		game._message(family.notices[-1])
+	var goal: String = run.goal_key(game.world)
+	if goal != last_goal:
+		last_goal = goal
+		if family.notices.is_empty() or game.notice_timer < 3: game._message(run.objective(game.world))
 	if run.terminal() and run.ending != last_ending:
 		last_ending = run.ending
-		game._message(run.ending+"\nR starts a new life.")
+		game._message(run.ending+"\nEsc → Family history · R starts the next expedition.")
+	if run.terminal(): return
 	var critical: bool = game.world.player.health < 30 or game.world.player.energy < 10
 	if critical and not last_critical: game._message("Critical resources · inspect the ATP sac and damaged membrane.")
 	last_critical = critical
@@ -247,11 +320,16 @@ func sync(_dt: float) -> void:
 	message.add_theme_font_size_override("font_size",roundi(16*s))
 	message.position = (cell_screen+Vector2(-message.size.x*0.5,game.world.player.radius*game.zoom+35)).clamp(Vector2(16,16),size-message.size-Vector2(16,16))
 	edit_hint.visible = game.build_open
-	edit_hint.text = "Paused · Tab / Enter to resume · click a factory" if game.selected < 0 and game.moving_id < 0 else "Place on membrane · right-click to cancel · wheel zooms"
+	edit_hint.text = game.world.evolution.objective(game.world)+"\nPaused · Tab / Enter to resume · click a factory" if game.selected < 0 and game.moving_id < 0 else "Place on membrane · right-click to cancel · wheel zooms"
 	edit_hint.add_theme_font_size_override("font_size",roundi(14*s))
 	edit_hint.size = Vector2(minf(540*s,size.x-32),0)
 	edit_hint.position = Vector2((size.x-edit_hint.size.x)*0.5,14)
-	if not game.build_open and not context.is_empty(): close_context()
+	if not game.build_open and not context.is_empty() and context.kind not in ["lineage","archive","past"]: close_context()
+	if context.get("kind","") == "bud" and choices.size() >= 4:
+		var sim = game.world
+		var funded: bool = sim.player.brood_mass+0.000001 >= sim.offspring_quote().material and sim.player.brood_energy >= 60
+		choices[2].affordable = funded and sim.lineage.active_family(sim).size() < sim.Lineage.MAX_ACTIVE
+		choices[3].affordable = funded and sim.lineage.dormant.size() < sim.Lineage.MAX_DORMANT
 	if not context.is_empty():
 		var anchor := screen_at(context)
 		menu_radius = 106*s if choices.size() > 3 else 88*s
@@ -308,7 +386,12 @@ func _draw() -> void:
 	if game == null or game.settings_panel.visible: return
 	if not context.is_empty():
 		draw_line(screen_at(context),menu_center,Color(0.5,0.91,0.85,0.35),1.5,true)
-		for choice in choices: draw_line(menu_center,choice.position+choice.size*0.5,Color(0.5,0.91,0.85,0.28),1.5,true)
+		for choice in choices:
+			var origin := menu_center
+			if context.kind == "lineage" and choice.has_meta("parent_id"):
+				for parent in choices:
+					if parent.get_meta("family_id",-2) == choice.get_meta("parent_id",-1): origin = parent.position+parent.size*0.5
+			draw_line(origin,choice.position+choice.size*0.5,Color(0.5,0.91,0.85,0.50),2,true)
 	if game.build_open and not hovered.is_empty() and hovered.kind != "body" and game.selected < 0:
 		draw_arc(screen_at(hovered),24*game.preferences.hud_scale,0,TAU,32,Color(0.67,1,0.89,0.8),1.5,true)
 	if game.build_open and not keyboard_target.is_empty():

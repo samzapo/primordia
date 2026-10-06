@@ -9,17 +9,17 @@ func total(sim) -> float:
 		if not cell.dead: mass += cell.organic_mass()
 	for particle in sim.particles:
 		if particle.alive and particle.kind not in [sim.OXYGEN,sim.PHEROMONE]: mass += particle.amount
-	return mass+sim.build_waste
+	return mass+sim.build_waste+sim.lineage.stored_material()
 
 func run(owner_suite) -> void:
 	suite = owner_suite
 	var sim = Sim.new(713)
 	sim.habitat_geometry.enabled = false
 	check(sim.cells.size() == 16 and sim.pending_replacements.size() == 3,"balanced opening reserves three later hunter arrivals")
-	check(sim.pending_replacements.all(func(item): return item.not_before == 240),"hunters are forecasted for Lean Current")
+	check(sim.pending_replacements.map(func(item): return item.not_before) == [150.0,390.0,630.0],"one bounded arrival follows each crisis warning")
 	check(sim.evolution.points == 3 and sim.evolution.offers.size() == 3,"functional starter and initial three-option draft")
-	sim.time = 240
-	sim.evolution.clock = 239.9
+	sim.time = 150
+	sim.evolution.clock = 149.9
 	sim._replace_population()
 	check(sim.cells.size() == 16,"reserved migrants wait for the director to cross the tide boundary")
 	sim.time = 0
@@ -91,15 +91,15 @@ func run(owner_suite) -> void:
 	check(e.offers == offers,"same seed reproduces draft")
 	e.clock = 119.9
 	e.advance(0.11,sim)
-	check(e.tide == 1 and e.points == 6,"tide grants exactly three AP")
+	check(e.tide == 1 and e.points == 5,"tide grants exactly two baseline AP")
 	e.advance(0.1,sim)
-	check(e.points == 6,"milestone reward cannot repeat")
+	check(e.points == 5,"milestone reward cannot repeat")
 	check(e.choose(e.offers[0]) and not e.choose(e.offers[1]),"one blueprint per tide")
 	check(e.accept_challenge("stability",sim.player) and not e.accept_challenge("growth",sim.player),"one optional challenge")
 	e.stable_seconds = 31
 	e.clock = 239.9
 	e.advance(0.11,sim)
-	check(e.points == 10,"one bounded bonus plus ordinary tide allowance")
+	check(e.points == 9,"two earned AP plus the two-point tide allowance")
 	sim.evolution.exposures.toxin = 100
 	sim.evolution.clock = 119.9
 	sim.evolution.advance(0.11,sim)
@@ -128,7 +128,7 @@ func run(owner_suite) -> void:
 	sim.player.biomass += 20 # Fixture represents recovered previously secreted tissue.
 	challenge_run.clock = 119.9
 	challenge_run.advance(0.11,sim)
-	check(challenge_run.points == 6,"growth bonus also requires outside intake")
+	check(challenge_run.points == 5,"growth bonus also requires outside intake")
 	# Division fixture funds reserves explicitly to isolate the transfer, without
 	# representing a playthrough or claiming these resources were earned.
 	sim = Sim.new(29)
@@ -153,7 +153,7 @@ func run(owner_suite) -> void:
 	check(is_equal_approx(parent.energy+parent.brood_energy+sim.player.energy,energy-20),"division spends 20 ATP and transfers 40")
 	check(is_equal_approx(parent.oxygen+sim.player.oxygen,oxygen),"offspring oxygen is transferred")
 	check(sim.external_input == 0,"offspring is not an external population introduction")
-	check(not sim.divide_lineage(),"division cannot duplicate offspring")
+	check(not sim.divide_lineage(),"another offspring still needs a separately funded reserve")
 	check(sim.player.membrane.skeleton != parent.membrane.skeleton,"offspring tension network is independent")
 	check(sim.player.lineage_id() == parent.lineage_id(),"offspring inherits self-recognition")
 	sim.spawn_particle(sim.TOXIN,sim.player.position+Vector2.RIGHT*sim.player.radius,Vector2.ZERO,1,parent.id)
@@ -174,6 +174,7 @@ func run(owner_suite) -> void:
 	sim.evolution.status = "offspring"
 	sim.evolution.tide = 6
 	sim.evolution.clock = 720
+	sim.evolution.crisis_seconds = [60.0,60.0,0.0]
 	for i in 65: sim.evolution.advance(1,sim)
 	check(sim.evolution.viable_seconds == 0,"alive without metabolism is not viability")
 	for i in 10:
@@ -191,10 +192,10 @@ func run(owner_suite) -> void:
 	sim.step(1)
 	check(sim.time == time,"terminal run stops the simulation")
 	sim = Sim.new(29)
-	sim.evolution.clock = 749
+	sim.evolution.clock = 809
 	sim.evolution.tide = 6
 	sim.evolution.advance(1,sim)
-	check(sim.evolution.status == "lost","unfunded lineage fails by division deadline")
+	check(sim.evolution.status == "lost","the final deadline requires a prepared lineage and completed crises")
 
 	var anaerobic = Sim.new(31)
 	anaerobic.habitat_geometry.enabled = false
@@ -269,6 +270,8 @@ func run(owner_suite) -> void:
 	sim.player.oxygen = 24
 	sim.evolution.clock = 719.99
 	sim.time = 719.99
+	sim.evolution.crisis_seconds = [60.0,60.0,0.0] # Earlier crises are explicit fixture preconditions.
+	check(sim.divide_lineage(),"a funded successor can be released before dusk")
 	var donor = Cell.new(1001,sim.Medium.wrap_position(sim.player.position+Vector2(1700,1000)))
 	donor.body = 500
 	donor.oxygen = 200

@@ -2,7 +2,7 @@
 
 A physics and chemistry simulation game about managing one small cell. Eat, grow and survive predation. **You never steer the cell:** its anatomy controls its behavior.
 
-This fifteenth playable revision uses **Godot 4.7.2**, a fixed-step simulation, deformable membranes, oriented chemical particles and procedural 2D artwork. Its vector artwork is authored in the project; cached particle textures and mipmaps generate automatically at runtime. The default Linux launcher builds a batched C++ GDExtension automatically; the GDScript reference backend remains available.
+This sixteenth playable revision uses **Godot 4.7.2**, a fixed-step simulation, deformable membranes, oriented chemical particles and procedural 2D artwork. Its vector artwork is authored in the project; cached particle textures and mipmaps generate automatically at runtime. The default Linux launcher builds a batched C++ GDExtension automatically; the GDScript reference backend remains available.
 
 ## Run with Steam Godot on Linux
 
@@ -19,12 +19,12 @@ The launcher finds Godot in standard Steam locations, custom Steam libraries and
 - **Tab:** pause and zoom inside your cell; press Tab again to keep edits and resume. Enter also resumes when no choice or placement is active. There are no Undo, Apply or Cancel-plan controls. **Escape** opens settings without discarding edits.
 - **Click an intracellular factory:** the folded assembly ribbons offer six physical organs; the chamber cluster offers the four chemistry organs. Choose a picture, then click the membrane. New organs have one fixed size and neighbors move aside. **1–9 / 0** remain construction shortcuts.
 - **Click an installed organ:** move, recycle or apply an already-kept matching blueprint. There is no resizing during placement or afterward. Recycling returns half the tissue and never refunds AP. Click a damaged attachment scar to restore its original anatomy.
-- **Click the nucleus:** choose a blueprint and accept an optional challenge. Hover it for tide timing and forecasts. **Click the offspring bud:** fund or reclaim reproductive reserves; after division it reports viability.
+- **Click the nucleus:** choose a blueprint and accept an optional challenge. Hover it for the next objective, crisis progress and forecasts; its family tree also offers known blueprints. **Click the offspring bud:** fund/reclaim reserves, release a juvenile, store a dormant successor or follow a living relative.
 - **In edit mode, drag on bare cell surface:** place a microtubule between membrane, interior or existing-link points. Hover an unobstructed tube and scroll to adjust tension; right-click it to remove it. Factories and organ controls take precedence. **Right-click** cancels a held organ/move or closes local choices.
 - **Wheel:** zoom around the cursor, from the 80% widest view to 12×. It never resizes organs. **Middle-drag** pans while editing or in free view. **Space** toggles position-follow without pausing or rotating the world. Leaving edit restores the previous observation view.
 - **Hover particles:** a temporary local lens magnifies the surrounding scene and shows the particle's name and role. The sharp enlarged glyph follows its actual orientation. Moving away dismisses the effect; simulation continues.
 - **Keyboard editing:** **[ / ]** cycles cell targets, **Enter** opens/activates a choice, and arrow keys navigate the local choices or position a held organ around the membrane. Microtubules retain their direct mouse gestures.
-- **Escape:** settings with Quit, fullscreen, bloom, and persistent **85–175% text/interaction size**. **F11:** fullscreen. **S:** sensing ranges. **F3:** optional backend/FPS/timing diagnostics, without a zoom percentage. **H:** next habitat. **R:** new life.
+- **Escape:** settings with Quit, fullscreen, bloom, and persistent **85–175% text/interaction size**. **F11:** fullscreen. **S:** sensing ranges. **F3:** optional backend/FPS/timing diagnostics, without a zoom percentage. **H:** next habitat. **R:** new expedition, retaining family history and discovered blueprints. Settings also opens **Family history**, including after defeat.
 
 ATP is the fill of an internal sac; AP are spinning coins; biomass is cell size. Hover for resource details or membrane health. Only the micrometer scale remains permanently at the edge; brief cell-local hints replace the screen panels. The scale measures the ordinary view, outside the temporary inspection lens.
 
@@ -34,9 +34,17 @@ The world wraps without walls. The entire rectangular view simulates at full spe
 
 Start with **36 biomass and 3 adaptation points**. New fixed-size anatomy costs biomass and adaptation; existing damage repair, repositioning and microtubules do not cost adaptation. Keep one of three mutation blueprints each tide, then pay to specialize a matching organ. Local choices show costs; hover the ATP sac for stored fuel and an active-upkeep estimate.
 
-Six two-minute tides forecast changing light, population pressure and costly opponent adaptations. Gain 3 AP per transition before the finale; optional risks can earn at most one extra. The clock pauses during cell editing or settings, but continues when the free camera looks elsewhere.
+The goal is to **establish your lineage through three crises**: Lean Current (2:00–6:00), Chemical Bloom (6:00–10:00), and Long Dusk (10:00–13:30). Each requires 60 observed seconds with at least 50% health, 10 ATP and recent feeding or carbon fixation. The final crisis must be earned by a descendant, who must also be healthy at the finish. The nucleus shows three progress arcs, exact requirements and the next useful action.
 
-Fund an offspring's quoted additional tissue and **60 ATP** before **12:00**. Up to **12 oxygen** transfers if available; fermentation permits oxygen-poor reproduction. Division partitions existing body tissue and transfers real reproductive reserves and the camera follows the offspring. Sustain it for at least 60 healthy, metabolically active seconds through the **13:30** finale to establish a lineage. Death or missing the objective ends the run; **R** restarts. [Revision 9](docs/REVISION_9.md) lists every cost, mutation, counter and victory rule.
+Two-minute tides forecast changing light, arrivals and costly opponent adaptations. Gain **2 AP** at each of the first five transitions; a chosen feeding, growth or stability challenge can earn **2 more** at its deadline, including the transition into the finale. There is one blueprint choice per tide, before the finale. Editing, settings and family history pause biology; looking elsewhere with the free camera does not pause the crisis clock or earn dormant-cell viability.
+
+Reproduction is available **as soon as you can fund it**. The bud quotes the additional tissue and **60 ATP** needed to inherit the current anatomy. Release a living juvenile or store a dormant successor. You can keep managing the parent or follow a living relative; anatomy still chooses its movement. Up to 12 oxygen transfers if available, and 20 of the reserved ATP pays division.
+
+**Death continues in the same habitat.** Control passes to an existing living family member, or a prepaid dormant body hatches. AP, drafts, crisis progress, enemies and the family melody continue. One generation-zero reserve is included in the initial population; extra reserves cost real resources. There can be four living family members and three dormant reserves. Exhausting them ends the expedition.
+
+Family history records generations and causes of death. Discovered blueprints persist locally and can replace a later expedition's ordinary draft choice; installing them still costs tissue/AP. No permanent stat bonuses are granted. See [revision sixteen](docs/REVISION_16.md) for current rules; [revision nine](docs/REVISION_9.md) preserves the original economy and mutation catalog.
+
+**Shared biology, player-specific expedition:** other cells use the same physiology, particle interactions, anatomical costs and pheromone perception. AP, blueprint drafts, family management, dormant reserves and persistent discoveries are player-lineage systems. NPCs do not reproduce or maintain seed banks in this revision; bounded habitat arrivals/replacements maintain their population. They do not have a reproductive behavior tree.
 
 ## Anatomy
 
@@ -91,7 +99,7 @@ Decoys temporarily reduce chemical sensing range. Every affected receptor automa
 
 Pores pulse on consumption. The ATP sac shows current energy; damaged membranes/organs and hover descriptions show health. Yellow sac-to-surface packets illustrate ATP spending; pink nucleus-to-surface packets illustrate biomass-funded repair. External particles are shunted to the membrane edge instead of rendering underneath cells.
 
-The former 90-second food milestone has been replaced by lineage victory. The starting anatomy is a starting point for adaptation, not a guaranteed unattended win. Balanced habitat delays its first three hunter arrivals until Lean Current; lean and rich profiles retain their opening hunters.
+The former 90-second food milestone has been replaced by lineage victory. The starting anatomy is a starting point for adaptation, not a guaranteed unattended win. Balanced habitat stages three reserved hunter arrivals after the first warning in each crisis; lean and rich profiles retain their opening hunters.
 
 ## Performance revision
 
@@ -111,7 +119,7 @@ Water gains broad blue, teal, jade and violet regions from seamless multiscale n
 
 [Complement-inspired mechanics](docs/COMPLEMENT_PROPOSAL.md) are proposed next: surface tags, cooperative pore assembly and protective inhibitors. They are not enabled in this graphics revision.
 
-[Action economy proposal](docs/ACTION_ECONOMY_PROPOSAL.md) retains the approved design rationale and future alternative endings. Its first prototype is implemented in [Revision 9](docs/REVISION_9.md).
+[Action economy proposal](docs/ACTION_ECONOMY_PROPOSAL.md) retains the approved design rationale and future alternative endings. Its first prototype is documented in [Revision 9](docs/REVISION_9.md); [revision sixteen](docs/REVISION_16.md) introduces the current crisis and succession rules.
 
 ## Science and scope
 
@@ -119,7 +127,7 @@ Water gains broad blue, teal, jade and violet regions from seamless multiscale n
 
 This is a coarse 2D game, not molecular dynamics or a full biochemical network. “Microtubules” are generic tension links; real microtubules also bear compression. The membrane remains star-shaped for stable rendering. Fluid is a finite-mass viscous grid, not an incompressible Navier–Stokes solver. Acidity is an acid-equivalent field, not calibrated pH. Growth, repair, metabolism and reactions use explicit coarse material accounting rather than atom-by-atom stoichiometry.
 
-There are no saves, permanent progression or packaged releases yet. Same-seed reproducibility is checked on one engine/platform, not promised across platforms. Diet balance, dense chemistry and long authored networks need playtesting.
+Family history and discovered blueprint options save locally to Godot's user data directory. The live habitat is not saved across application restarts, and there are no permanent stat upgrades or packaged releases yet. Same-seed reproducibility is checked on one engine/platform, not promised across platforms. Diet balance, dense chemistry and long authored networks need playtesting.
 
 ## Verification
 

@@ -17,6 +17,8 @@ var music := preload("res://scripts/music_director.gd").new()
 var music_slider := HSlider.new()
 var pulse_slider := HSlider.new()
 var world: Simulation = Simulation.new()
+var archive_error := ""
+var archive = preload("res://scripts/lineage_archive.gd").new()
 var preferences = Preferences.new()
 var world_layer := Node2D.new()
 var habitat_view := preload("res://scripts/habitat_view.gd").new()
@@ -75,13 +77,16 @@ var simulation_ms := 0.0
 var render_ms := 0.0
 var screenshot_path := ""
 var capture_frame := 0
-var notice := "Tab to enter your cell · hover particles to inspect · Esc for settings."
-var notice_timer := 8.0
+var notice := "Establish a lineage through three crises.\nFirst: feed, then fund a successor at the offspring bud.\nTab enters your cell · the nucleus explains your goal."
+var notice_timer := 12.0
 
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
 	preferences.persist = DisplayServer.get_name() != "headless" and not Array(args).any(func(a): return a.begins_with("--capture=") or a == "--benchmark")
 	preferences.load_settings()
+	archive.persist = preferences.persist
+	archive.load_history()
+	archive.begin()
 	for arg in args:
 		if arg.begins_with("--capture="):
 			screenshot_path = arg.trim_prefix("--capture=")
@@ -174,15 +179,16 @@ func _physics_process(dt: float) -> void:
 	var identity: int = world.player.id
 	world.step(dt)
 	if identity != world.player.id:
+		cell_ui.close_context()
 		camera_locked = true
 		camera_offset = Vector2.ZERO
 		free_camera = world.player.position
-		_message("Division complete. You now follow the offspring; keep it healthy and feeding through dusk.")
+		_message(world.lineage.notices[-1] if not world.lineage.notices.is_empty() else world.evolution.objective(world))
 	simulation_ms = lerpf(simulation_ms,(Time.get_ticks_usec()-started)/1000.0,0.15)
 	if world.revision%4 == 0: currents.queue_redraw()
 
 func is_paused() -> bool:
-	return build_open or settings_panel.visible or world.player.dead or world.evolution.terminal()
+	return build_open or settings_panel.visible or cell_ui.context.get("kind","") in ["lineage","archive","past"] or world.evolution.terminal()
 
 func _can_edit_tubules() -> bool:
 	return build_open and not settings_panel.visible and not world.player.dead and not world.evolution.terminal()
@@ -210,6 +216,10 @@ func _process(dt: float) -> void:
 	hud_clock += dt
 	if hud_clock >= 0.1:
 		hud_clock = 0
+		archive.sync(world)
+		if archive.last_error != archive_error:
+			archive_error = archive.last_error
+			if archive_error != "": _message(archive_error+"\nHistory remains in memory for this session; saving will retry.")
 		_update_hud()
 		_layout()
 	cell_ui.sync(dt)
@@ -502,7 +512,10 @@ func _build_ui() -> void:
 	_button(options,"Sense view [S]",func(): show_senses = not show_senses)
 	_button(options,"Performance overlay [F3]",func(): show_debug = not show_debug)
 	_button(options,"Next habitat [H]",func(): _restart((world.habitat+1)%3))
-	_button(options,"New life [R]",func(): _restart())
+	_button(options,"Family history",func():
+		settings_panel.hide()
+		cell_ui.open_context({"kind":"lineage"}))
+	_button(options,"New expedition [R]",func(): _restart())
 	_label(options,"Tab: enter cell / keep edits and resume\nClick factories, nucleus, bud or installed organs\nNew organs have a fixed size · no Undo\nRight-click: cancel a held organ or close choices\nIn edit: drag microtubules; hover + wheel: tension\nWheel elsewhere: zoom · middle-drag: pan\nSpace: follow / free camera\n[ / ]: cycle cell targets · Enter: choose / place\nArrow keys: navigate choices or membrane placement\nHover particles: inspect through a local lens\nNo movement keys: anatomy steers.",MUTED)
 	_button(options,"Close [Esc]",_toggle_settings)
 	options.add_child(quit_button)
@@ -665,6 +678,8 @@ func _select(index: int) -> void:
 	tube_start.clear()
 
 func _restart(profile: int = -1) -> void:
+	archive.sync(world)
+	archive.begin()
 	if world.gpu_transport != null: world.gpu_transport.close()
 	world = Simulation.new(world.seed_value,world.habitat if profile < 0 else profile)
 	habitat_view.configure(world.habitat_geometry)
@@ -690,7 +705,7 @@ func _restart(profile: int = -1) -> void:
 	tube_group = -1
 	shape_preview_ticks = 0
 	_layout()
-	_message("A new life. Organs are anchored; flight requires a flight receptor.")
+	_message("New expedition · family history and known blueprints retained.\nEstablish a lineage through three crises. First: establish feeding.")
 
 func _message(value: String) -> void:
 	notice = value
@@ -746,6 +761,9 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT and not cell_ui.context.is_empty():
+		cell_ui.close_context()
+		return
 	if not _can_edit_tubules(): tube_start.clear()
 	if settings_panel.visible or world.player.dead or world.evolution.terminal(): return
 	if event is InputEventMouseMotion and camera_dragging:

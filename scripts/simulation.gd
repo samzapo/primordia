@@ -1,6 +1,8 @@
 extends RefCounted
 ## Authoritative fixed-step ecology, independent of input and scene nodes.
 const Evolution = preload("res://scripts/evolution.gd")
+const Lineage = preload("res://scripts/lineage.gd")
+var lineage = Lineage.new()
 const Genes = preload("res://scripts/mutations.gd")
 var evolution
 var build_original = null
@@ -96,7 +98,7 @@ func _init(seed_number: int = 20261004, profile: int = 0) -> void:
 	# Whole habitats are stored. Only organisms inside the microscope advance.
 	for i in 18:
 		if habitat == 0 and i%5 == 3:
-			pending_replacements.append({"role":"hunter","id":-1,"not_before":240.0})
+			pending_replacements.append({"role":"hunter","id":-1,"not_before":150.0+240.0*(i/5)})
 			continue
 		var p = player.position + Vector2.from_angle(i*2.4)* (1050+i*45 if i%5 == 3 else 220 if i == 0 else 340+i*94)
 		_make_cell(Medium.wrap_position(p), "hunter" if i%5 == 3 else "grazer")
@@ -106,6 +108,7 @@ func _init(seed_number: int = 20261004, profile: int = 0) -> void:
 	for cell in cells: _seed_cell_products(cell)
 	grid.rebuild(particles)
 	fluid.set_camera(player.position if camera_follows_player else camera_position,view_half)
+	lineage.initialize(self)
 
 func _make_cell(p: Vector2, role: String):
 	var cell = Cell.new(next_id,p)
@@ -230,7 +233,8 @@ func _emit_material(kind: int, at: Vector2, amount: float, motion: Vector2 = Vec
 	for i in count: spawn_particle(kind,at,motion,amount/count,owner)
 
 func step(dt: float) -> void:
-	if player.dead or evolution.terminal() or build_original != null: return
+	if evolution.terminal() or build_original != null: return
+	if player.dead and not evolution.enabled: return
 	time += dt
 	revision += 1
 	if grid.source_size != particles.size(): grid.rebuild(particles)
@@ -326,6 +330,9 @@ func step(dt: float) -> void:
 		_replace_population()
 	profile_usec["ecology"] = Time.get_ticks_usec()-mark
 	mark = Time.get_ticks_usec()
+	if evolution.enabled and (player.dead or player.health <= 0):
+		if not player.dead: _die(player)
+		lineage.recover(self,dt)
 	evolution.advance(dt,self)
 	profile_usec["evolution"] = Time.get_ticks_usec()-mark
 	won = evolution.status == "won"
@@ -436,6 +443,7 @@ func _acid_stress(cell, dt: float) -> void:
 	cell.acid_stress = clampf(cell.acid_stress+(overload-0.12)*dt,0,1)
 	if cell.acid_stress > 0.6:
 		cell.health = maxf(0,cell.health-dt*(cell.acid_stress-0.6)*8)
+		cell.death_hint = "Acid stress overwhelmed the membrane"
 
 func _react_pair(a: Dictionary, b: Dictionary, acid: float = 0.0) -> bool:
 	if b.kind == ENZYME and a.kind == WASTE: return _react_pair(b,a,acid)
@@ -694,7 +702,9 @@ func _metabolize(cell, dt: float) -> void:
 		cell.fermentation_activity = 2
 	cell.spend_energy(dt*0.264*cell.growth_scale())
 	for organ in cell.organs: cell.spend_energy(dt*organ.scale*organ.scale*Genes.factor(organ,"upkeep",0.0),organ)
-	if cell.energy <= 0: cell.health = maxf(0,cell.health-dt*2)
+	if cell.energy <= 0:
+		cell.health = maxf(0,cell.health-dt*2)
+		cell.death_hint = "ATP exhaustion; feeding and repair could not sustain this body"
 
 func _secretion_needed(cell, organ: Dictionary, kind: int) -> bool:
 	if kind == BUFFER: return acidity.sample(cell.organ_position(organ)) > 0.02 or cell.acid_stress > 0.03
@@ -863,6 +873,7 @@ func _spike_contacts(dt: float) -> void:
 				var energy: float = attacker.spend_energy(local_dt*1.2*organ.scale*organ.scale*Genes.factor(organ,"attack_cost"),organ)
 				if energy <= 0: continue
 				prey.waste += prey.damage(energy*12*Genes.factor(organ,"damage"),offset.angle())
+				prey.death_hint = "Membrane failed after spike wounds"
 				if attacker == player: evolution.record("spike",energy*12*Genes.factor(organ,"damage"))
 				organ.feeding = true
 				organ.consume_flash = 1
@@ -939,12 +950,14 @@ func _toxin_contacts() -> void:
 			var d = Medium.offset(cell.position,p.p)
 			if d.length() <= cell.support(d.angle())+5:
 				cell.waste += cell.damage(p.amount*75,d.angle()) + p.amount
+				cell.death_hint = "Membrane failed after toxin exposure"
 				if p.owner == player.id: evolution.record("toxin",p.amount*75)
 				p.alive = false
 				break
 
 func _die(cell, transferred: float = 0.0) -> void:
 	if cell.dead: return
+	if evolution.enabled: lineage.died(cell,self)
 	cell.dead = true
 	cell.health = 0
 	var total: float = maxf(0,cell.organic_mass()-transferred)
@@ -961,7 +974,7 @@ func _die(cell, transferred: float = 0.0) -> void:
 		spawn_particle(OXYGEN,cell.position+direction*cell.radius*0.9,direction*24,oxygen/oxygen_packets,cell.id)
 	events.append({"time":time,"type":"death","id":cell.id,"released":total,"oxygen_released":oxygen})
 	if cell == player: return
-	if cell.role == "ancestor":
+	if cell.role == "ancestor" or cell.lineage_id() == 0:
 		cells.erase(cell)
 		return
 	kills += 1
@@ -987,8 +1000,7 @@ func _replace_population() -> void:
 				break
 		if not found: continue
 		var role: String = pending.role
-		if evolution.enabled and evolution.tide == 1: role = "grazer"
-		elif evolution.enabled and evolution.tide >= 2 and evolution.newcomer_count%2 == 0: role = "hunter"
+		if evolution.enabled and evolution.tide >= 1 and evolution.newcomer_count%2 == 0: role = "hunter"
 		var replacement = _make_cell(at,role)
 		evolution.newcomer(replacement,self)
 		evolution.arrival_budget = maxi(0,evolution.arrival_budget-1)
@@ -1004,7 +1016,7 @@ func _build_debris(amount: float) -> void:
 func begin_build() -> void:
 	if build_original != null or player.dead or evolution.terminal(): return
 	build_original = player
-	build_state = {"points":evolution.points,"learned":evolution.learned.duplicate(),"chosen":evolution.chosen,"spending":evolution.spending.duplicate(true),"challenge":evolution.challenge,"challenge_mass":evolution.challenge_mass,"challenge_intake":evolution.challenge_intake,"stable_seconds":evolution.stable_seconds}
+	build_state = {"points":evolution.points,"offers":evolution.offers.duplicate(),"learned":evolution.learned.duplicate(),"chosen":evolution.chosen,"spending":evolution.spending.duplicate(true),"challenge":evolution.challenge,"challenge_mass":evolution.challenge_mass,"challenge_intake":evolution.challenge_intake,"challenge_fixed":evolution.challenge_fixed,"challenge_cell":evolution.challenge_cell,"stable_seconds":evolution.stable_seconds}
 	var index := cells.find(player)
 	player = Cell.clone_state(player)
 	cells[index] = player
@@ -1062,22 +1074,19 @@ func safe_birth_position(at: Vector2, radius: float) -> bool:
 		if not cell.dead and Medium.offset(cell.position,at).length() < cell.extent()+radius+20: return false
 	return true
 
-func divide_lineage() -> bool:
-	if evolution.offspring_id >= 0 or player.dead: return false
-	var quote := offspring_quote()
-	if player.brood_mass+0.000001 < quote.material or player.brood_energy < quote.energy: return false
-	if player.count("feeding")+player.count("photosynthesis") == 0: return false
+func make_offspring(parent, quote: Dictionary):
 	var child = Cell.new(next_id)
-	child.role = "player"
-	child.lineage = player.lineage_id()
+	child.role = "descendant"
+	child.generation = parent.generation+1
+	child.lineage = parent.lineage_id()
 	child.body = quote.body
 	child.biomass = quote.biomass
 	child.substrate = 6
 	child.carbon = 8
-	child.oxygen = minf(player.oxygen,quote.oxygen)
+	child.oxygen = minf(parent.oxygen,quote.oxygen)
 	child.energy = 40
-	child.organs = player.organs.duplicate(true)
-	child.next_organ_id = player.next_organ_id
+	child.organs = parent.organs.duplicate(true)
+	child.next_organ_id = parent.next_organ_id
 	for organ in child.organs:
 		organ.hp = organ.max_hp
 		organ.material = organ.max_material
@@ -1092,29 +1101,61 @@ func divide_lineage() -> bool:
 		organ.consumed_total = 0.0
 	child.update_geometry()
 	child.membrane = Cell.Membrane.new(child.radius)
-	child.membrane.skeleton = Cell.clone_state(player.membrane.skeleton)
+	child.membrane.skeleton = Cell.clone_state(parent.membrane.skeleton)
 	child.membrane.skeleton.begin(child.radius)
-	var found := false
-	for i in 32:
-		child.position = Medium.wrap_position(player.position+Vector2.from_angle(player.angle+TAU*i/32)*(player.extent()+child.extent()+45))
-		if safe_birth_position(child.position,child.extent()):
-			found = true
-			break
+	return child
+
+func divide_lineage(dormant: bool = false, follow: bool = true) -> bool:
+	if player.dead or evolution.terminal() or build_original != null: return false
+	if dormant and lineage.dormant.size() >= Lineage.MAX_DORMANT: return false
+	if not dormant and lineage.active_family(self).size() >= Lineage.MAX_ACTIVE: return false
+	var quote := offspring_quote()
+	if player.brood_mass+0.000001 < quote.material or player.brood_energy < quote.energy: return false
+	if player.count("feeding")+player.count("photosynthesis") == 0: return false
+	var child = make_offspring(player,quote)
+	child.position = player.position
+	var found := dormant
+	if not dormant:
+		for i in 32:
+			child.position = Medium.wrap_position(player.position+Vector2.from_angle(player.angle+TAU*i/32)*(player.extent()+child.extent()+45))
+			if safe_birth_position(child.position,child.extent()):
+				found = true
+				break
 	if not found: return false
-	player.brood_mass -= quote.material
-	player.body -= quote.body_transfer
-	player.brood_energy -= quote.energy
-	player.oxygen -= child.oxygen
-	player.role = "ancestor"
-	player.update_geometry()
+	var parent = player
+	parent.brood_mass -= quote.material
+	parent.body -= quote.body_transfer
+	parent.brood_energy -= quote.energy
+	parent.oxygen -= child.oxygen
+	parent.update_geometry()
 	child.previous_position = child.position
-	child.angle = player.angle
+	child.angle = parent.angle
 	child.previous_angle = child.angle
-	cells.append(child)
 	inherited_lineages[child.id] = child.lineage_id()
-	player = child
 	next_id += 1
-	evolution.offspring_id = child.id
-	_record_sound("division",child.position,child.id)
-	events.append({"type":"division","id":child.id,"time":time,"material":quote.total_material,"reserve_used":quote.material,"body_transferred":quote.body_transfer,"oxygen_transferred":child.oxygen,"atp_used":20})
+	lineage.births += 1
+	lineage.register(child,parent.id,child.generation,"dormant" if dormant else "active" if follow else "living",time)
+	if dormant:
+		lineage.dormant.append(child)
+	else:
+		cells.append(child)
+		if follow:
+			var record := lineage.record_for(parent.id)
+			if not record.is_empty(): record.state = "living"
+			parent.role = "ancestor"
+			child.role = "player"
+			player = child
+			evolution.observe_successor(child)
+	evolution.offspring_id = child.id if not dormant else evolution.offspring_id
+	_record_sound("division",parent.position,parent.id)
+	lineage.notify("Dormant successor funded · family safety costs real tissue and ATP." if dormant else "Successor released · the family now has another living branch.")
+	events.append({"type":"division","id":child.id,"parent":parent.id,"dormant":dormant,"time":time,"material":quote.total_material,"reserve_used":quote.material,"body_transferred":quote.body_transfer,"oxygen_transferred":child.oxygen,"atp_used":20})
 	return true
+
+func follow_family(identity: int) -> bool:
+	if build_original != null or evolution.terminal(): return false
+	for cell in lineage.active_family(self):
+		if cell.id == identity and cell != player:
+			lineage.adopted(cell,self,false)
+			return true
+	return false

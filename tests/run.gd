@@ -55,6 +55,7 @@ func _run() -> void:
 	_test_replay()
 	_test_ecosystem()
 	preload("res://tests/evolution.gd").new().run(self)
+	preload("res://tests/lineage.gd").run(expect)
 	await preload("res://tests/interface.gd").new().run(self)
 	print("RESULT: %d assertions, %d failures" % [assertions,failures])
 	quit(0 if failures == 0 else 1)
@@ -67,7 +68,7 @@ func isolated():
 	return sim
 
 func organic(sim) -> float:
-	var total := 0.0
+	var total: float = sim.lineage.stored_material()
 	for cell in sim.cells:
 		if not cell.dead: total += cell.organic_mass()
 	for p in sim.particles:

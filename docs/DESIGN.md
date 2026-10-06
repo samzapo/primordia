@@ -135,3 +135,15 @@ The owner reports organisms freezing inside the view. The full rectangular viewp
 Add fern-shaped fractals and other distinct families to the existing radial colonies. Preserve bounded generation, cached vector artwork, solid main stems, permeable fine foliage and cell-only chemical sources.
 
 The owner also requests less flicker from particle inspection. Briefly retain and follow the actual selected particle after activation, keeping its orientation and current identity; intentional pointer movement should release it. Inspection remains presentation-only. See [revision fifteen](REVISION_15.md) for implementation and evidence.
+
+## Revision 16: a continuing lineage with clear crises
+
+The owner approved making the goal clearer, increasing challenge and treating ordinary death as continuation. The implemented objective is to establish a lineage through Lean Current, Chemical Bloom and Long Dusk. Give a concrete immediate goal through the nucleus and temporary cell-local cues, keeping the habitat free of persistent panels.
+
+Allow early resource-funded reproduction, living descendants and a bounded dormant reserve. Prefer an existing living relative on death, otherwise hatch actual prepaid tissue in the same habitat. One founder reserve belongs to the initial inventory; additional reserves cost the quoted material and ATP. Preserve the expedition clock, AP/draft decisions, crisis achievements, ecology and inherited musical motif across succession. Exhaustion can end an expedition, but family history and discovered blueprint choices remain. Recalling knowledge replaces an ordinary draft choice and never grants free organs, currency or permanent stat multipliers.
+
+Shift some adaptation income from waiting to optional bounded growth, feeding and stability accomplishments. Stage clearly forecasted light/predation/chemistry pressures through existing rules and give a few introduced rivals recognizable paid anatomy. No new sense may bypass pheromones and no rival gains hidden immunity. Grazing, hunting and photosynthetic/hybrid strategies remain intended paths; automated policies do not establish human balance.
+
+The first implementation retains the 13:30 expedition length, three crisis milestones, bounded histories and local discovery persistence. Full habitat save/resume and a larger campaign are deferred. [Revision sixteen](REVISION_16.md) states exact thresholds, controls, scientific abstractions and validation.
+
+The owner explicitly accepts distinguishing player-only progression from shared cell rules, and asks that distinction be clear. NPCs currently share physiology and anatomy-derived behavior, but do not use the player's AP/drafts, succession, dormant bank or persistent knowledge. Their population uses bounded introductions/replacements. NPC reproductive AI is a future feature, not part of revision sixteen.

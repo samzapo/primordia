@@ -140,7 +140,7 @@ func run(test_host) -> void:
 	expect(cell.brood_mass == reserved and cell.brood_energy == reserved_atp,"Offspring reserves can still be reclaimed")
 	scene.world.evolution.offspring_id = cell.id
 	scene.cell_ui.open_context({"kind":"bud"})
-	expect(scene.cell_ui.choices.is_empty() and "viability" in scene.cell_ui.describe({"kind":"bud"}),"After division the bud reports viability rather than funding another offspring")
+	expect(scene.cell_ui.choices.size() >= 4 and "viability" in scene.cell_ui.describe({"kind":"bud"}),"The bud retains reproduction choices and reports independent viability after division")
 	scene.world.evolution.offspring_id = -1
 	scene.cell_ui.close_context()
 	cell.energy = 0
@@ -203,6 +203,7 @@ func run(test_host) -> void:
 	for factor in [0.8,3.0,12.0]:
 		scene.scale_bar.configure(Vector2(1440,900),fitted*factor,1.75)
 		expect(is_equal_approx(scene.scale_bar.length_pixels/(fitted*factor)*0.2,scene.scale_bar.micrometers),"Physical scale stays calibrated through close editing and accessibility scaling")
+	await _lineage()
 	await _particles()
 	scene.queue_free()
 	await host.process_frame
@@ -373,3 +374,106 @@ func _track_particle() -> void:
 	sim.particles.push_front(removed)
 	sim.grid.rebuild(sim.particles)
 	inspector.update_lens(0,cursor,1,false)
+
+func _lineage() -> void:
+	# Exercise the real UI transitions: no hidden build clone may swallow a birth.
+	scene.world = Sim.new(821)
+	var sim = scene.world
+	sim.habitat_geometry.enabled = false
+	sim.pending_replacements.clear()
+	sim.cells = [sim.player]
+	sim.particles.clear()
+	sim.grid.clear()
+	scene.build_open = false
+	scene.settings_panel.hide()
+	scene.cell_ui.reset()
+	scene.show_debug = false
+	scene.camera_locked = true
+	scene.camera_offset = Vector2.ZERO
+	scene.manual_zoom = 0.8
+	scene._update_world(1)
+	key(KEY_TAB)
+	settle()
+	var parent = sim.player
+	var quote: Dictionary = sim.offspring_quote()
+	parent.biomass += quote.material+50 # Explicit fixture endowment; actions still pay.
+	parent.energy = 100
+	parent.reserve(maxf(60,quote.material),quote.material)
+	var mass: float = parent.organic_mass()
+	var points: int = sim.evolution.points
+	scene.cell_ui.open_context({"kind":"bud"})
+	parent.brood_energy = 50
+	scene.cell_ui.sync(0)
+	expect(not scene.cell_ui.choices[2].affordable,"The bud marks an unfunded successor")
+	parent.brood_energy = 60
+	scene.cell_ui.sync(0)
+	expect(scene.cell_ui.choices[2].affordable,"Funding refreshes readiness while the bud choices remain open")
+	scene.cell_ui.choices[2].pressed.emit()
+	scene._update_world(1)
+	expect(sim.lineage.births == 1 and sim.cells.size() == 2 and sim.player.id == parent.id,"Release from the bud creates a real autonomous family member")
+	expect(scene.build_open and sim.build_original != null and sim.player.organic_mass() < mass and sim.evolution.points == points,"Birth commits paid anatomy and resumes editing the depleted parent")
+	var child = sim.cells[-1]
+	expect(scene.views.has(child.id) and scene.views[sim.player.id].cell == sim.player,"Parent and offspring drawings update immediately during editing")
+	scene.cell_ui.open_context({"kind":"bud"})
+	scene.cell_ui.choices[-1].pressed.emit()
+	expect(sim.player.id == child.id and scene.camera_locked and sim.build_original != null,"Following a released successor attaches the camera and correct build clone")
+	key(KEY_TAB)
+	settle()
+	expect(sim.build_original == null and not scene.is_paused(),"Resuming after handoff cannot leave the world trapped in a hidden build")
+	# Family history is also available without entering edit mode.
+	scene.cell_ui.open_context({"kind":"lineage"})
+	for choice in scene.cell_ui.choices:
+		if choice.get_meta("family_id",-1) == parent.id: choice.pressed.emit(); break
+	expect(sim.player.id == parent.id and not scene.build_open and sim.build_original == null and not scene.is_paused(),"A family-tree handoff outside edit mode preserves active simulation")
+	expect(sim.lineage.record_for(child.id).state == "living" and sim.lineage.record_for(parent.id).state == "active","Family cards distinguish the current body from living relatives")
+	var identity: int = sim.player.id
+	var time: float = sim.time
+	var learned: Array = sim.evolution.learned.duplicate()
+	scene.music.frame_cursor = 137123
+	var score_clock: int = scene.music.frame_cursor
+	sim.player.health = 0
+	scene._physics_process(DT)
+	scene._process(DT)
+	expect(scene.world == sim and sim.player.id != identity and sim.time > time and not sim.evolution.terminal(),"The scene continues the same habitat after fatal damage")
+	expect(sim.evolution.points == points and sim.evolution.learned == learned,"Scene handoff keeps the expedition economy")
+	expect(scene.music.frame_cursor >= score_clock,"Succession does not reset the musical transport")
+	scene.cell_ui.open_context({"kind":"lineage"})
+	scene._process(DT)
+	expect(scene.is_paused() and scene.cell_ui.visible and not scene.build_open,"History can pause observation without enabling anatomical edits")
+	var bounds := Rect2(Vector2.ZERO,scene.get_viewport_rect().size)
+	for choice in scene.cell_ui.choices:
+		expect(bounds.encloses(choice.get_global_rect()),"Family choices fit the screen at 175% UI scale")
+	click(Vector2.ZERO,MOUSE_BUTTON_RIGHT)
+	expect(not scene.is_paused() and scene.cell_ui.context.is_empty(),"Right-click dismisses observation history and resumes")
+	# Large goal text reflows; panel bounds must shrink with the text.
+	scene.cell_ui.keyboard_target = {"kind":"nucleus"}
+	for i in 4:
+		scene._process(DT)
+		await host.process_frame
+	expect(bounds.encloses(scene.cell_ui.tip_box.get_global_rect()),"Nucleus goals remain inside the viewport after 175% text reflow")
+	sim.evolution.clock = 620
+	sim.evolution.tide = 5
+	sim.evolution.resistance = "spike"
+	for i in 4:
+		scene._process(DT)
+		await host.process_frame
+	expect(bounds.encloses(scene.cell_ui.tip_box.get_global_rect()),"Late-crisis forecasts and resistance details also fit at 175%")
+	scene.cell_ui.keyboard_target.clear()
+	# Exhaust the fixture's actual family and bank; terminal feedback must win over death notices.
+	sim.lineage.dormant.clear()
+	for cell in sim.cells.duplicate():
+		if cell != sim.player: sim._die(cell)
+	sim.player.health = 0
+	scene._physics_process(DT)
+	scene._process(DT)
+	expect(sim.evolution.status == "lost" and scene.notice.begins_with("EXPEDITION ENDED"),"Last-family loss gives an actionable expedition ending")
+	scene.cell_ui.open_context({"kind":"lineage"})
+	scene._process(DT)
+	expect(scene.cell_ui.choices.size() > 2 and scene.is_paused(),"Family history remains readable after terminal loss")
+	var gene: String = sim.evolution.offers[0]
+	scene.archive.discovered.append(gene)
+	scene.archive.sync(sim)
+	scene._restart()
+	expect(scene.world != sim and gene in scene.archive.discovered and not scene.archive.expeditions.is_empty(),"An explicit new expedition retains history and blueprint discoveries")
+	expect(scene.world.evolution.points == 3 and scene.world.evolution.learned.is_empty(),"Discoveries never create a free starting stat or AP advantage")
+	await host.process_frame
