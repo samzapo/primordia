@@ -67,7 +67,7 @@ func dispatch(count: int, dt: float, repeats: int = 1) -> void:
 	rd.sync()
 func download(count: int) -> PackedFloat32Array:
 	return rd.buffer_get_data(state,0,count*48).to_float32_array()
-func step(particles: Array, ids: Array[int], velocity: PackedVector2Array, camera: Vector2, half: Vector2, dt: float, revision: int, rng: RandomNumberGenerator) -> int:
+func step(particles: Array, ids: Array[int], velocity: PackedVector2Array, camera: Vector2, half: Vector2, dt: float, revision: int, rng: RandomNumberGenerator, clock: float = -1.0) -> int:
 	var begin := Time.get_ticks_usec()
 	var active: Array[int] = []
 	data.resize(ids.size()*12)
@@ -76,11 +76,13 @@ func step(particles: Array, ids: Array[int], velocity: PackedVector2Array, camer
 		if not p.alive: continue
 		var visibility := Medium.visibility(p.p,camera,half)
 		if visibility <= 0: continue
+		var elapsed := dt if clock < 0 else maxf(0,clock-float(p.get("transport_at",clock-dt)))
+		if elapsed <= 0: continue
 		var k := active.size()*12
 		active.append(id)
 		data[k]=p.p.x; data[k+1]=p.p.y; data[k+2]=p.angle; data[k+3]=p.spin
 		data[k+4]=p.v.x; data[k+5]=p.v.y; data[k+6]=p.age; data[k+7]=p.kind
-		data[k+8]=rng.randfn(); data[k+9]=rng.randfn(); data[k+10]=rng.randfn(); data[k+11]=visibility
+		data[k+8]=rng.randfn(); data[k+9]=rng.randfn(); data[k+10]=rng.randfn(); data[k+11]=elapsed/dt
 	data.resize(active.size()*12)
 	if active.is_empty(): return 0
 	var packed := Time.get_ticks_usec()
@@ -91,6 +93,8 @@ func step(particles: Array, ids: Array[int], velocity: PackedVector2Array, camer
 	for i in active.size():
 		var p: Dictionary = particles[active[i]]
 		var k := i*12
+		p.transport_jump = (dt if clock < 0 else clock-float(p.get("transport_at",clock-dt))) > 0.05
+		if clock >= 0: p.transport_at=clock
 		p.previous=p.p; p.previous_angle=p.angle; p.updated=revision
 		p.p=Vector2(data[k],data[k+1]); p.angle=data[k+2]
 		p.v=Vector2(data[k+4],data[k+5]); p.age=data[k+6]

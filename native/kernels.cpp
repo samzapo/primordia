@@ -58,6 +58,8 @@ struct Keys {
   const Variant reaction_activity = String("reaction_activity");
   const Variant contact_radius = String("contact_radius");
   const Variant reacted = String("reacted");
+  const Variant transport_at = String("transport_at");
+  const Variant transport_jump = String("transport_jump");
 };
 struct Particle {
   Dictionary d;
@@ -211,8 +213,8 @@ protected:
         D_METHOD("exclude", "particles", "ids", "bodies", "camera", "half"),
         &PrimordiaKernels::exclude);
     ClassDB::bind_method(D_METHOD("transport", "particles", "ids", "flow",
-                                  "camera", "half", "dt", "revision", "rng"),
-                         &PrimordiaKernels::transport);
+                                  "camera", "half", "dt", "revision", "rng", "clock", "background"),
+                         &PrimordiaKernels::transport, DEFVAL(-1.0), DEFVAL(false));
     ClassDB::bind_method(D_METHOD("chemistry", "particles", "ids", "acid",
                                   "camera", "half", "dt", "revision", "rng"),
                          &PrimordiaKernels::chemistry);
@@ -571,34 +573,43 @@ public:
   }
   int transport(Array particles, TypedArray<int64_t> ids,
                 const PackedVector2Array &flow, Vector2 camera, Vector2 half,
-                double dt, int revision, Ref<RandomNumberGenerator> rng) {
+                double dt, int revision, Ref<RandomNumberGenerator> rng,
+                double clock, bool background) {
     int count = 0;
     for (int k = 0; k < ids.size(); ++k) {
       Dictionary p = particles[int64_t(ids[k])];
-      if (!bool(p[keys.alive]))
-        continue;
+      if (!bool(p[keys.alive])) continue;
       Vector2 at = p[keys.p];
-      double a = activity(at, camera, half);
-      if (a <= 0)
-        continue;
+      if ((activity(at, camera, half) > 0) == background) continue;
+      double t = clock < 0 ? dt : std::max(0., clock - double(p.get(keys.transport_at, clock-dt)));
+      if (t <= 0) continue;
       ++count;
-      double t = dt * a;
       bool tracer = int(p[keys.kind]) == 3;
       Vector2 v = tracer ? Vector2() : Vector2(p[keys.v]);
       double angle = p[keys.angle];
       p[keys.updated] = revision;
       p[keys.previous] = at;
+      p[keys.transport_jump] = t > .05;
+      if (clock >= 0) p[keys.transport_at] = clock;
       // Keep RNG call order explicit, matching the reference backend.
       double nx = rng->randfn(0, 1), ny = rng->randfn(0, 1);
-      p[keys.p] = wrapv(at + (v + sample(flow, at)) * t +
-                        Vector2(nx, ny) * std::sqrt((tracer ? 240 : 12) * t));
+      if (t <= .05) {
+        at = wrapv(at + (v + sample(flow, at)) * t);
+      } else {
+        int steps = std::clamp(int(std::ceil(t / .25)), 1, 8);
+        double h = t / steps, damping = std::exp(-.8*h);
+        Vector2 launch = v;
+        for (int j = 0; j < steps; ++j) {
+          Vector2 midpoint = at + sample(flow, at)*(h*.5) + launch*((1-std::exp(-.4*h))/.8);
+          at = wrapv(at + sample(flow, midpoint)*h + launch*((1-damping)/.8));
+          launch *= damping;
+        }
+      }
+      p[keys.p] = wrapv(at + Vector2(nx, ny)*std::sqrt((tracer ? 240 : 12)*t));
       p[keys.v] = v * std::exp(-t * .8);
       p[keys.age] = double(p[keys.age]) + t;
       p[keys.previous_angle] = angle;
-      angle = wrap(angle + double(p[keys.spin]) * t +
-                       rng->randfn(0, 1) * std::sqrt(1.2 * t) + PI,
-                   TAU) -
-              PI;
+      angle = wrap(angle + double(p[keys.spin])*t + rng->randfn(0, 1)*std::sqrt(1.2*t) + PI, TAU) - PI;
       if (tracer) angle = 0;
       p[keys.angle] = angle;
       p[keys.direction] = tracer ? Vector2() : Vector2(std::cos(angle), std::sin(angle));

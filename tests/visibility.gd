@@ -60,7 +60,7 @@ static func _transport_and_chemistry(check: Callable) -> void:
 		var a: Dictionary = fast.particles[i]
 		var b: Dictionary = slow.particles[i]
 		check.call(a.p.distance_to(b.p) < 0.001 and absf(a.age-b.age) < 0.000001,"Native/reference edge transport agrees, including corner, fringe and dormancy")
-		check.call(absf(a.age-([0.02,0.02,0.02,0.01,0.0][i])) < 0.000001,"Particle age follows full visible speed, offscreen fade and far dormancy")
+		check.call(absf(a.age-([0.02,0.02,0.02,0.02,0.0][i])) < 0.000001,"Transport retains full elapsed time throughout the foreground halo")
 	for world in [fast,slow]:
 		world.particles.clear()
 		world.grid.rebuild(world.particles)

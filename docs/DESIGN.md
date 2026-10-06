@@ -155,3 +155,10 @@ The owner requests more physical interaction among cells, plant obstacles and sp
 Contacts transfer linear and angular motion, resist tangential slipping and compress the local pressure membrane. Spikes obstruct cells and stems and puncture on impact. The owner accepts prey bouncing away and requests that a few good hits can kill; damage therefore scales with actual normal impulse. Stronger mobility and useful weapon placement help hunters earn repeated impacts. No special predator speed or damage bonus is introduced. Slow sustained contact retains its small ATP-funded injury.
 
 The factory offers the separate fixed-size receptor for six tissue and one AP; V selects it. Existing NPC hunters receive the same receptor organ. Preserve family-only progression, chemical perception, continuous fluid coupling, finite contact cost and widest-view benchmarking. [Revision seventeen](REVISION_17.md) documents numerical limits and validation.
+
+
+## Revision 18: transport beyond the camera
+
+The owner reports isolated particle clouds and empty gaps because offscreen motion freezes. Keep current-driven transport and diffusion running over the whole habitat at reduced computational resolution. Visible packets and the existing transport halo use full elapsed time; distant packets are staggered across roughly half-second updates. Coarse steps follow the cached current with midpoint samples, integrate launch drag, and scale Brownian displacement with the square root of elapsed time. Maintain the far fluid field cheaply rather than retaining frozen wakes.
+
+Cell biology, sensing, emission and chemistry retain their local activity rules. Material transport alone must not create resources, refresh emitted metadata or perform live source lookup. Pheromone expiry remains global. Camera entry catches up once, with swept solid-stem contact and no long interpolation trails. [Revision eighteen](REVISION_18.md) documents validation and explicitly limits the model: this is coarse Lagrangian transport, not a full offscreen ecosystem.

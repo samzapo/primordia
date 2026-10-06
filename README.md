@@ -28,7 +28,7 @@ The launcher finds Godot in standard Steam locations, custom Steam libraries and
 
 ATP is the fill of an internal sac; AP are spinning coins; biomass is cell size. Hover for resource details or membrane health. Only the micrometer scale remains permanently at the edge; brief cell-local hints replace the screen panels. The scale measures the ordinary view, outside the temporary inspection lens.
 
-The world wraps without walls. The entire rectangular view simulates at full speed, including its corners and a short margin outside the screen. Slowdown starts offscreen; farther state freezes except for explicit population triggers and pheromone expiry. The active region follows the actual camera, including free view. Tab/settings pause biology; Space is solely a camera control.
+The world wraps without walls. The entire rectangular view simulates at full speed, including its corners and a short margin outside the screen. Cell behavior and chemistry slow only outside the screen, then become dormant. Particles keep flowing and diffusing throughout the habitat: distant packets advance in staggered half-second steps, with coarse background fluid refresh. Pheromone expiry still uses real elapsed time. See [revision eighteen](docs/REVISION_18.md) for transport accuracy, cost and remaining approximations. The active region follows the actual camera, including free view. Tab/settings pause biology; Space is solely a camera control.
 
 ## Adapt and establish a lineage
 

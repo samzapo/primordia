@@ -11,6 +11,7 @@ var build_waste := 0.0
 const Backend = preload("res://scripts/backend.gd")
 var kernels = Backend.create()
 var gpu_transport = null
+const Transport = preload("res://scripts/particle_transport.gd")
 var native_particles := kernels != null
 var native_fluid := kernels != null
 var native_render := kernels != null
@@ -47,6 +48,16 @@ const DECOY := 10
 const SPECIES_COUNT := 11
 const Acidity = preload("res://scripts/acidity.gd")
 const HABITATS := ["BALANCED TIDE", "LEAN HUNTING GROUNDS", "RICH / ARMORED HUNTERS"]
+# Transport changes resolution outside the view, never the rate of elapsed time.
+var background_transport := true
+var background_period := 0.5 # Benchmark override; ordinary play uses 2 Hz.
+var transport_clock := 0.0
+var background_cursor := 0
+var background_credit := 0.0
+var background_particles := 0
+var foreground_particle_ids: Array[int] = []
+var background_field_clock := 0.0
+var background_rng := RandomNumberGenerator.new()
 var rng := RandomNumberGenerator.new()
 var grid = Grid.new()
 var reaction_grid = Grid.new(16.0)
@@ -87,6 +98,7 @@ var chemistry_events := {"decay":0,"combine":0,"recycle":0,"detox":0,"spoil":0,"
 func _init(seed_number: int = 20261004, profile: int = 0) -> void:
 	seed_value = seed_number
 	rng.seed = seed_number
+	background_rng.seed = seed_number ^ 0x51a7
 	evolution = Evolution.new(seed_number)
 	habitat = clampi(profile,0,2)
 	player.role = "player"
@@ -186,6 +198,7 @@ func spawn_particle(kind: int, p: Vector2, v: Vector2 = Vector2.ZERO, amount: fl
 		particles[-1].direction = Vector2.ZERO
 		particles[-1].expires_at = time-log(maxf(rng.randf(),0.000000001))/PHEROMONE_DECAY
 		pheromones.append(particles[-1])
+	particles[-1].transport_at = transport_clock
 	grid.insert(particles.size()-1,particles[-1].p)
 
 func _record_sound(kind: String, at: Vector2, source: int, amount: float = 1.0) -> void:
@@ -250,6 +263,7 @@ func step(dt: float) -> void:
 	else:
 		fluid.step(dt)
 		if revision%6 == 0: acidity.step(dt*6,fluid)
+	_step_background_fluid(dt)
 	active_cells = 0
 	for cell in cells:
 		cell.previous_position = cell.position
@@ -266,7 +280,13 @@ func step(dt: float) -> void:
 	mark = Time.get_ticks_usec()
 	_expire_pheromones()
 	_move_particles(dt)
-	habitat_geometry.move_particles(particles,local_particle_ids(64),revision,grid,native_particles)
+	habitat_geometry.move_particles(particles,foreground_particle_ids,revision,grid,native_particles)
+	for index in foreground_particle_ids:
+		var p: Dictionary = particles[index]
+		if p.get("transport_jump",false):
+			p.previous = p.p
+			p.previous_angle = p.angle
+			p.transport_jump = false
 	_chemistry(dt)
 	profile_usec["particles"] = Time.get_ticks_usec()-mark
 	mark = Time.get_ticks_usec()
@@ -333,7 +353,7 @@ func step(dt: float) -> void:
 	if spawn_clock >= 0.5:
 		spawn_clock -= 0.5
 		pheromones = pheromones.filter(func(p): return p.alive)
-		particles = particles.filter(func(p): return p.alive)
+		_compact_particles()
 		grid.rebuild(particles)
 		_replace_population()
 	profile_usec["ecology"] = Time.get_ticks_usec()-mark
@@ -345,36 +365,97 @@ func step(dt: float) -> void:
 	profile_usec["evolution"] = Time.get_ticks_usec()-mark
 	won = evolution.status == "won"
 
+func _step_background_fluid(dt: float) -> void:
+	if not background_transport: return
+	background_field_clock += dt
+	if background_field_clock < 0.25: return
+	# Complement the foreground field activity. Small, stable coarse field steps
+	# relax old wakes and carry the maintained tide throughout the torus.
+	var saved_activity: PackedFloat32Array = fluid.activity
+	var saved_indices: PackedInt32Array = fluid.active_indices
+	var far_activity := PackedFloat32Array()
+	var far_indices := PackedInt32Array()
+	far_activity.resize(saved_activity.size())
+	for i in far_activity.size():
+		far_activity[i] = 1.0-saved_activity[i]
+		if far_activity[i] > 0: far_indices.append(i)
+	while background_field_clock >= 0.25:
+		background_field_clock -= 0.25
+		if native_fluid:
+			fluid.velocity = kernels.fluid_step(fluid.velocity,far_activity,fluid.tide,0.25,fluid.driven)
+		else:
+			fluid.activity = far_activity
+			fluid.active_indices = far_indices
+			fluid.step(0.25)
+	fluid.activity = saved_activity
+	fluid.active_indices = saved_indices
+
+func _compact_particles() -> void:
+	# Retain the next survivor in the round-robin sweep when indices shift.
+	var kept: Array = []
+	var before_cursor := 0
+	for i in particles.size():
+		if not particles[i].alive: continue
+		if i < background_cursor: before_cursor += 1
+		kept.append(particles[i])
+	particles = kept
+	background_cursor = before_cursor%particles.size() if not particles.is_empty() else 0
+
+func _background_ids(dt: float) -> Array[int]:
+	var ids: Array[int] = []
+	if not background_transport or particles.is_empty(): return ids
+	background_credit += particles.size()*dt/maxf(background_period,dt)
+	var visits := mini(particles.size(),floori(background_credit+0.0000001))
+	background_credit -= visits
+	background_cursor %= particles.size()
+	for i in visits:
+		var index := background_cursor
+		background_cursor = (background_cursor+1)%particles.size()
+		var p: Dictionary = particles[index]
+		if p.alive and activity_at(p.p) <= 0 and p.get("transport_at",0.0) < transport_clock:
+			ids.append(index)
+	return ids
+
+func _transport_reference(ids: Array[int], dt: float, random: RandomNumberGenerator, background: bool) -> int:
+	var count := 0
+	for index in ids:
+		var p: Dictionary = particles[index]
+		if not p.alive or (activity_at(p.p) > 0) == background: continue
+		var elapsed := maxf(0,transport_clock-float(p.get("transport_at",transport_clock-dt)))
+		if elapsed <= 0: continue
+		Transport.advance(p,fluid,elapsed,revision,random)
+		p.transport_at = transport_clock
+		grid.move(index,p.previous,p.p)
+		count += 1
+	return count
+
 func _move_particles(dt: float) -> void:
+	transport_clock += dt
+	var camera: Vector2 = player.position if camera_follows_player else camera_position
+	var ids := local_particle_ids(64)
+	# Keep the starting IDs for swept contacts, even if catch-up leaves the halo.
+	foreground_particle_ids = ids
 	if gpu_transport != null:
-		active_particles = gpu_transport.step(particles,local_particle_ids(64),fluid.velocity,player.position if camera_follows_player else camera_position,view_half,dt,revision,rng)
-		grid.rebuild(particles)
-		return
+		active_particles = gpu_transport.step(particles,ids,fluid.velocity,camera,view_half,dt,revision,rng,transport_clock)
+	elif native_particles:
+		active_particles = kernels.transport(particles,ids,fluid.velocity,camera,view_half,dt,revision,rng,transport_clock,false)
+	else:
+		active_particles = _transport_reference(ids,dt,rng,false)
+	var mark := Time.get_ticks_usec()
+	var far_ids := _background_ids(dt)
 	if native_particles:
-		active_particles = kernels.transport(particles,local_particle_ids(64),fluid.velocity,player.position if camera_follows_player else camera_position,view_half,dt,revision,rng)
-		grid.rebuild(particles)
-		return
-	active_particles = 0
-	for index in local_particle_ids(64):
-		var particle: Dictionary = particles[index]
-		if not particle.alive: continue
-		var scale = activity_at(particle.p)
-		if scale <= 0: continue
-		active_particles += 1
-		var step_dt = dt*scale
-		particle.updated = revision
-		particle.previous = particle.p
-		var tracer: bool = particle.kind == PHEROMONE
-		var diffusion := PHEROMONE_DIFFUSION if tracer else 6.0
-		var drift: Vector2 = fluid.sample(particle.p)+(Vector2.ZERO if tracer else particle.v)
-		particle.p = Medium.wrap_position(particle.p+drift*step_dt+Vector2(rng.randfn(),rng.randfn())*sqrt(2*diffusion*step_dt))
-		grid.move(index,particle.previous,particle.p)
-		particle.v = Vector2.ZERO if tracer else particle.v*exp(-step_dt*0.8)
-		particle.age += step_dt
-		particle.previous_angle = particle.angle
-		particle.angle = wrapf(particle.angle+particle.spin*step_dt+rng.randfn()*sqrt(1.2*step_dt),-PI,PI)
-		if tracer: particle.angle = 0.0
-		particle.direction = Vector2.ZERO if tracer else Vector2.from_angle(particle.angle)
+		background_particles = kernels.transport(particles,far_ids,fluid.velocity,camera,view_half,dt,revision,background_rng,transport_clock,true)
+	else:
+		background_particles = _transport_reference(far_ids,dt,background_rng,true)
+	# Swept stem contacts also apply to coarse material transport. Signals pass
+	# through every solid as before. No distant cell/chemistry work is scheduled.
+	habitat_geometry.move_particles(particles,far_ids,revision,grid,native_particles)
+	for index in far_ids:
+		var p: Dictionary = particles[index]
+		p.previous = p.p
+		p.previous_angle = p.angle
+	profile_usec["background_transport"] = Time.get_ticks_usec()-mark
+	if native_particles or gpu_transport != null: grid.rebuild(particles)
 
 func _chemistry(dt: float) -> void:
 	if native_particles:

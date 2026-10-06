@@ -31,6 +31,20 @@ func run() -> void:
 		gpu.close()
 		quit(1)
 		return
+	# Promotion after a dormant interval uses the same coarse integrator.
+	for sim in [cpu,accelerated]:
+		sim.transport_clock += 0.5
+	cpu._move_particles(1.0/60)
+	accelerated._move_particles(1.0/60)
+	error = 0.0
+	for i in cpu.particles.size():
+		error = maxf(error,Sim.Medium.offset(cpu.particles[i].p,accelerated.particles[i].p).length())
+	print("GPU_COARSE_PARITY ",JSON.stringify({"max_position_error":error}))
+	if error > 0.008:
+		push_error("GPU coarse promotion diverged")
+		gpu.close()
+		quit(1)
+		return
 	# Resident work is a transport-only throughput ceiling, not whole-game FPS.
 	for count in [4096,16384,65536]:
 		var data := PackedFloat32Array()
@@ -73,7 +87,7 @@ func edge_parity(gpu) -> bool:
 	var age_error := 0.0
 	for i in cpu.particles.size():
 		error = maxf(error,Sim.Medium.offset(cpu.particles[i].p,accelerated.particles[i].p).length())
-		age_error = maxf(age_error,absf(accelerated.particles[i].age-[0.02,0.02,0.02,0.01,0.0][i]))
+		age_error = maxf(age_error,absf(accelerated.particles[i].age-[0.02,0.02,0.02,0.02,0.0][i]))
 	var passed: bool = error < 0.005 and age_error < 0.000001 and accelerated.active_particles == 4
 	print("GPU_EDGE_PARITY ",JSON.stringify({"max_position_error":error,"max_age_error":age_error,"active":accelerated.active_particles,"passed":passed}))
 	if not passed: push_error("GPU viewport corners, offscreen fade or wrapped halo diverged")

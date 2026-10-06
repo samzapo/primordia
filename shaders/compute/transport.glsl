@@ -13,7 +13,19 @@ void main(){
  Particle p=particles[i]; float dt=params.dt*p.thermal.w; if(dt<=0.)return;
  bool tracer=p.motion.w==3.;
  float diffusion=tracer ? 240. : 12.;
- p.pose.xy=mod(p.pose.xy+((tracer ? vec2(0.) : p.motion.xy)+sample_flow(p.pose.xy))*dt+p.thermal.xy*sqrt(diffusion*dt),WORLD);
+ vec2 launch=tracer ? vec2(0.) : p.motion.xy;
+ if(dt<=.05) {
+  p.pose.xy=mod(p.pose.xy+(launch+sample_flow(p.pose.xy))*dt,WORLD);
+ } else {
+  int steps=clamp(int(ceil(dt/.25)),1,8);
+  float h=dt/float(steps), damping=exp(-.8*h);
+  for(int j=0;j<steps;j++){
+   vec2 midpoint=p.pose.xy+sample_flow(p.pose.xy)*(h*.5)+launch*((1.-exp(-.4*h))/.8);
+   p.pose.xy=mod(p.pose.xy+sample_flow(midpoint)*h+launch*((1.-damping)/.8),WORLD);
+   launch*=damping;
+  }
+ }
+ p.pose.xy=mod(p.pose.xy+p.thermal.xy*sqrt(diffusion*dt),WORLD);
  p.motion.xy=tracer ? vec2(0.) : p.motion.xy*exp(-dt*.8); p.motion.z+=dt;
  p.pose.z=mod(p.pose.z+p.pose.w*dt+p.thermal.z*sqrt(1.2*dt)+3.14159265359,6.28318530718)-3.14159265359;
  if(tracer)p.pose.z=0.;
