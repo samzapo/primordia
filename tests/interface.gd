@@ -61,6 +61,20 @@ func run(test_host) -> void:
 	scene.world.revision = revision
 	npc.render_revision = draw_revision
 	scene._update_world(1)
+	# Bounded diagnostics aggregate catch-up ticks without changing ecology.
+	var before_trace: int = hash(scene.world.particles)
+	var before_time: float = scene.world.time
+	scene.begin_frame_trace()
+	scene.begin_frame_trace() # Idempotent; never duplicate render callbacks.
+	scene.frame_trace.tick(1000,DT)
+	scene.frame_trace.tick(2000,DT)
+	scene.frame_trace.work("music",250)
+	scene.frame_trace._pre()
+	scene.frame_trace._post()
+	var trace: Array[Dictionary] = scene.end_frame_trace()
+	expect(trace.size() == 1 and trace[0].ticks == 2 and is_equal_approx(trace[0].sim_dt,DT*2) and trace[0].phases_ms.ticks == 3.0 and trace[0].phases_ms.music == 0.25,"Frame trace accounts for every catch-up tick and separately measures music")
+	expect(trace[0].counts.has("pheromone_queries") and trace[0].counts.has("cell_contacts"),"Frame traces retain explicit zero workload counters")
+	expect(not scene.world.profiling and hash(scene.world.particles) == before_trace and scene.world.time == before_time,"Stopping diagnostics restores the unprofiled simulation without ecological changes")
 	# The only permanent pane is settings, which starts hidden.
 	var panes := 0
 	for node in scene.ui.get_children():

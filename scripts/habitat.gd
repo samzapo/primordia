@@ -5,6 +5,7 @@ const BIN := 128.0
 const COLS := 32
 const ROWS := 20
 var plants: Array = []
+var native_bounds := true
 var forms: Array = []
 var segments: Array = []
 var bins: Dictionary = {}
@@ -259,6 +260,10 @@ func move_cell(cell, start: Vector2, end: Vector2, dt: float) -> void:
 			var segment: Dictionary = segments[id]
 			var a: Vector2 = cell.position+Medium.offset(cell.position,segment.a)
 			var b: Vector2 = a+segment.b-segment.a
+			if native_bounds:
+				var reach: float = cell.extent()+segment.r+0.2
+				var finish: Vector2 = cell.position+travel
+				if maxf(cell.position.x,finish.x) < minf(a.x,b.x)-reach or minf(cell.position.x,finish.x) > maxf(a.x,b.x)+reach or maxf(cell.position.y,finish.y) < minf(a.y,b.y)-reach or minf(cell.position.y,finish.y) > maxf(a.y,b.y)+reach: continue
 			var near := closest(cell.position,a,b)
 			var toward: Vector2 = near-cell.position
 			var distance := toward.length()
@@ -301,7 +306,7 @@ func move_cell(cell, start: Vector2, end: Vector2, dt: float) -> void:
 func move_particles(particles: Array, ids: Array, revision: int, grid, native: bool = true) -> void:
 	if not enabled: return
 	if native and accelerator != null:
-		if accelerator.obstacle_particles(particles,ids,revision): grid.rebuild(particles)
+		if accelerator.obstacle_particles(particles,ids,revision,native_bounds): grid.update(particles,ids)
 		return
 	for index in ids:
 		var packet: Dictionary = particles[index]

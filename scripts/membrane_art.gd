@@ -2,7 +2,9 @@ extends RefCounted
 ## Explicit radial mesh follows the actual star-shaped membrane, including dents.
 ## Rings give the shader an exact boundary coordinate without triangulating polygons.
 const RINGS := [0.76,0.90,1.0,1.42]
-static func arrays(outline: PackedVector2Array) -> Array:
+static var kernels = preload("res://scripts/backend.gd").create()
+static func arrays(outline: PackedVector2Array, native: bool = true) -> Array:
+	if native and kernels != null: return kernels.membrane_mesh(outline)
 	var points := PackedVector2Array([Vector2.ZERO])
 	var uv := PackedVector2Array([Vector2.ZERO])
 	var colors := PackedColorArray([Color(0.5,0.5,0,1)])
@@ -30,7 +32,7 @@ static func arrays(outline: PackedVector2Array) -> Array:
 	result[Mesh.ARRAY_COLOR] = colors
 	result[Mesh.ARRAY_INDEX] = indices
 	return result
-static func mesh(outline: PackedVector2Array) -> ArrayMesh:
+static func mesh(outline: PackedVector2Array, native: bool = true) -> ArrayMesh:
 	var result := ArrayMesh.new()
-	result.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,arrays(outline))
+	result.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,arrays(outline,native))
 	return result

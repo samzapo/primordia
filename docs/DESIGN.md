@@ -177,3 +177,10 @@ Preserve time across camera transitions, timestep-scaled event hazards, mass acc
 The owner requests more depth on membranes, ripples/wakes around cells and plants, and animated flow streamers inspired by Earth Nullschool instead of background vectors. Keep luminous lineage colors and the vector reef character. Rounded membrane shading must follow the actual pressure/microtubule outline; it must not replace deformability with an ellipse or imply extra collision coverage.
 
 Streamers read the authoritative fluid cache and move along its bends. Their direction and extent communicate flow; they are presentation geometry, not chemical particles. Subtle downstream glints around slipping cells and stout plant stems help show the medium. Pause them with the simulation. Bound GPU batches and upload frequency, preserve toroidal continuity, and compare rendering ablations at the 80% play limit, including dense particles, large cells and music. These cues do not add obstacle-fluid forces or a water-surface wave simulation. See [revision twenty](REVISION_20.md).
+
+
+## Revision 21: whole-frame performance
+
+The owner requests phase timings for dense live frames and a frame-rate repair before the next playtest. Measure all catch-up ticks, view synchronization, membrane geometry, draw submission/render and music, with workload counts and audio underruns. Preserve 60 Hz physics, eight-step catch-up, full screen plus margin, finite resource rules, orientation chemistry, pheromone-only perception and the complete Revision 20 visual treatment.
+
+Reduce repeated indexing and script/native crossings through matched native batches. Preserve sequential collision order, packet identity/timestamps and random streams; compare native/reference rules and both backends. Separate equal-simulation-time CPU ablations from wall-clock rendered FPS, test dense/grown/crowded scenes at 80%, and retain shared-host uncertainty. See [revision twenty-one](REVISION_21.md).

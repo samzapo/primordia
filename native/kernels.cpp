@@ -3,12 +3,15 @@
 #include <array>
 #include <cmath>
 #include <godot_cpp/classes/random_number_generator.hpp>
+#include <godot_cpp/classes/mesh.hpp>
 #include <godot_cpp/classes/ref_counted.hpp>
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/godot.hpp>
 #include <godot_cpp/variant/packed_float32_array.hpp>
+#include <godot_cpp/variant/packed_color_array.hpp>
 #include <godot_cpp/variant/packed_vector2_array.hpp>
 #include <godot_cpp/variant/typed_array.hpp>
+#include <godot_cpp/variant/callable.hpp>
 #include <vector>
 using namespace godot;
 namespace {
@@ -60,13 +63,17 @@ struct Keys {
   const Variant reacted = String("reacted");
   const Variant transport_at = String("transport_at");
   const Variant transport_jump = String("transport_jump");
+  const Variant chemical_at = String("chemical_at");
 };
 struct Particle {
   Dictionary d;
   Vector2 p, v, dir;
-  double amount, capacity, active, radius;
+  double amount, capacity, active, radius, elapsed;
   int kind, identity;
-  bool alive, reacted;
+  bool alive, reacted, initial_alive, initial_reacted;
+  Vector2 initial_v;
+  double initial_amount, initial_capacity;
+  int initial_kind;
 };
 } // namespace
 class PrimordiaGrid : public RefCounted {
@@ -75,6 +82,8 @@ class PrimordiaGrid : public RefCounted {
   double size = 64;
   int cols = 64, rows = 40;
   std::vector<std::vector<int>> bins = std::vector<std::vector<int>>(2560);
+  std::vector<int> locations;
+  std::vector<int> moved_bins;
   int key(Vector2 p) const {
     return mod(int(std::floor(p.y / size)), rows) * cols +
            mod(int(std::floor(p.x / size)), cols);
@@ -87,10 +96,14 @@ protected:
     ClassDB::bind_method(D_METHOD("clear"), &PrimordiaGrid::clear);
     ClassDB::bind_method(D_METHOD("rebuild", "particles"),
                          &PrimordiaGrid::rebuild);
+    ClassDB::bind_method(D_METHOD("update", "particles", "ids"),
+                         &PrimordiaGrid::update);
     ClassDB::bind_method(D_METHOD("insert", "id", "position"),
                          &PrimordiaGrid::insert);
     ClassDB::bind_method(D_METHOD("move", "id", "old", "position"),
                          &PrimordiaGrid::move);
+    ClassDB::bind_method(D_METHOD("query_kind_rect", "particles", "position", "half", "kind"),
+                         &PrimordiaGrid::query_kind_rect);
     ClassDB::bind_method(D_METHOD("query_rect", "position", "half"),
                          &PrimordiaGrid::query_rect);
   }
@@ -102,8 +115,12 @@ public:
     rows = int(std::round(2560 / s));
     bins.clear();
     bins.resize(cols * rows);
+    locations.clear();
+    moved_bins.clear();
   }
   void clear() {
+    locations.clear();
+    moved_bins.clear();
     for (auto &b : bins)
       b.clear();
   }
@@ -114,7 +131,35 @@ public:
       insert(i, p[keys.p]);
     }
   }
-  void insert(int id, Vector2 p) { bins[key(p)].push_back(id); }
+  void insert(int id, Vector2 p) {
+    if (id >= int(locations.size())) locations.resize(id + 1, -1);
+    locations[id] = key(p);
+    bins[locations[id]].push_back(id);
+  }
+  void update(Array particles, Array ids) {
+    // Read only moved packets. Match a full rebuild's stable identity order,
+    // including when a hybrid reference operation used move() beforehand.
+    for (int k = 0; k < ids.size(); ++k) {
+      int id = int(ids[k]);
+      Dictionary p = particles[id];
+      int to = key(p[keys.p]);
+      int from = locations[id];
+      if (from == to) continue;
+      auto &old = bins[from];
+      auto found = std::find(old.begin(), old.end(), id);
+      if (found != old.end()) old.erase(found);
+      bins[to].push_back(id);
+      locations[id] = to;
+      std::sort(bins[from].begin(), bins[from].end());
+      std::sort(bins[to].begin(), bins[to].end());
+    }
+    // A hybrid reference move may already have changed locations. Repair its
+    // insertion order even when update() now sees from == to.
+    std::sort(moved_bins.begin(), moved_bins.end());
+    moved_bins.erase(std::unique(moved_bins.begin(), moved_bins.end()), moved_bins.end());
+    for (int id : moved_bins) std::sort(bins[id].begin(),bins[id].end());
+    moved_bins.clear();
+  }
   void move(int id, Vector2 old, Vector2 p) {
     int a = key(old), b = key(p);
     if (a == b)
@@ -124,6 +169,22 @@ public:
     if (it != v.end())
       v.erase(it);
     bins[b].push_back(id);
+    locations[id] = b;
+    moved_bins.push_back(a); moved_bins.push_back(b);
+  }
+  TypedArray<int64_t> query_kind_rect(Array particles, Vector2 p, Vector2 h, int kind) const {
+    TypedArray<int64_t> out;
+    int lx = std::floor((p.x-h.x)/size), ly = std::floor((p.y-h.y)/size),
+        hx = std::floor((p.x+h.x)/size), hy = std::floor((p.y+h.y)/size);
+    for (int x=lx;x<std::min(hx+1,lx+cols);++x)
+      for (int y=ly;y<std::min(hy+1,ly+rows);++y)
+        for (int id : bins[mod(y,rows)*cols+mod(x,cols)]) {
+          Dictionary packet = particles[id];
+          // Read current chemistry, never cache a species tag across reactions.
+          if (int(packet[keys.kind]) == kind && bool(packet[keys.alive]))
+            out.push_back(id);
+        }
+    return out;
   }
   TypedArray<int64_t> query_rect(Vector2 p, Vector2 h) const {
     TypedArray<int64_t> out;
@@ -190,14 +251,18 @@ class PrimordiaKernels : public RefCounted {
   }
   std::vector<Particle> scratch;
   std::vector<std::vector<int>> bins;
+  std::vector<int> occupied_bins;
 
 protected:
   static void _bind_methods() {
     ClassDB::bind_method(D_METHOD("obstacle_configure", "segments", "bins"),
                          &PrimordiaKernels::obstacle_configure);
     ClassDB::bind_method(
-        D_METHOD("obstacle_particles", "particles", "ids", "revision"),
-        &PrimordiaKernels::obstacle_particles);
+        D_METHOD("obstacle_particles", "particles", "ids", "revision", "bounds"),
+        &PrimordiaKernels::obstacle_particles, DEFVAL(true));
+    ClassDB::bind_method(D_METHOD("membrane_mesh", "outline"), &PrimordiaKernels::membrane_mesh);
+    ClassDB::bind_method(D_METHOD("membrane_compress", "points", "previous", "angle", "depth", "radius"),
+                         &PrimordiaKernels::membrane_compress);
     ClassDB::bind_method(
         D_METHOD("membrane_edges", "points", "lengths", "lambda", "alpha"),
         &PrimordiaKernels::membrane_edges);
@@ -209,15 +274,24 @@ protected:
                                   "bodies", "camera", "half", "alpha",
                                   "revision", "capacities"),
                          &PrimordiaKernels::render_particles);
+    ClassDB::bind_method(D_METHOD("feed", "particles", "ids", "body", "organ", "camera", "half"),
+                         &PrimordiaKernels::feed);
+    ClassDB::bind_method(D_METHOD("coarse_feed", "particles", "ids", "body", "organ", "rates", "camera", "half", "rng", "habitat"),
+                         &PrimordiaKernels::coarse_feed);
+    ClassDB::bind_method(D_METHOD("contacts_pass", "bodies", "pair", "dt", "deform"),
+                         &PrimordiaKernels::contacts_pass);
     ClassDB::bind_method(
         D_METHOD("exclude", "particles", "ids", "bodies", "camera", "half"),
         &PrimordiaKernels::exclude);
+    ClassDB::bind_method(D_METHOD("compact_particles", "particles", "cursor"), &PrimordiaKernels::compact_particles);
+    ClassDB::bind_method(D_METHOD("background_ids", "particles", "cursor", "visits", "camera", "half", "clock"), &PrimordiaKernels::background_ids);
+    ClassDB::bind_method(D_METHOD("settle_transport", "particles", "ids", "background"), &PrimordiaKernels::settle_transport);
     ClassDB::bind_method(D_METHOD("transport", "particles", "ids", "flow",
                                   "camera", "half", "dt", "revision", "rng", "clock", "background"),
                          &PrimordiaKernels::transport, DEFVAL(-1.0), DEFVAL(false));
     ClassDB::bind_method(D_METHOD("chemistry", "particles", "ids", "acid",
-                                  "camera", "half", "dt", "revision", "rng"),
-                         &PrimordiaKernels::chemistry);
+                                  "camera", "half", "dt", "revision", "rng", "clock", "background", "dirty_writes"),
+                         &PrimordiaKernels::chemistry, DEFVAL(-1.0), DEFVAL(false), DEFVAL(true));
     ClassDB::bind_method(
         D_METHOD("fluid_step", "velocity", "activity", "tide", "dt", "driven"),
         &PrimordiaKernels::fluid_step);
@@ -240,7 +314,7 @@ public:
         stem_bins[i].push_back(int(ids[j]));
     }
   }
-  bool obstacle_particles(Array particles, Array ids, int revision) {
+  bool obstacle_particles(Array particles, Array ids, int revision, bool bounds) {
     bool changed = false;
     std::vector<int> candidates;
     for (int index = 0; index < ids.size(); ++index) {
@@ -273,9 +347,11 @@ public:
         bool pushed = false;
         for (int id : candidates) {
           const auto &s = stems[id];
-          Vector2 a = p + delta(p, s.a), b = a + s.b - s.a,
-                  d = p - closest_stem(p, a, b);
+          Vector2 a = p + delta(p, s.a), b = a + s.b - s.a;
           double reach = 4 + s.radius + .2;
+          if (bounds && (p.x < std::min(a.x,b.x)-reach || p.x > std::max(a.x,b.x)+reach ||
+              p.y < std::min(a.y,b.y)-reach || p.y > std::max(a.y,b.y)+reach)) continue;
+          Vector2 d = p - closest_stem(p, a, b);
           if (d.length_squared() >= reach * reach)
             continue;
           Vector2 n = d.length_squared() > .000001
@@ -295,6 +371,12 @@ public:
         for (int id : candidates) {
           const auto &s = stems[id];
           Vector2 a = p + delta(p, s.a), b = a + s.b - s.a;
+          double reach = 4 + s.radius + .05;
+          Vector2 end = p + travel;
+          if (bounds && (std::max(p.x,end.x) < std::min(a.x,b.x)-reach ||
+              std::min(p.x,end.x) > std::max(a.x,b.x)+reach ||
+              std::max(p.y,end.y) < std::min(a.y,b.y)-reach ||
+              std::min(p.y,end.y) > std::max(a.y,b.y)+reach)) continue;
           double t = stem_time(p, travel, a, b, 4 + s.radius + .05);
           if (t >= earliest)
             continue;
@@ -322,6 +404,66 @@ public:
       }
     }
     return changed;
+  }
+  Array membrane_mesh(const PackedVector2Array &outline) {
+    // Same four explicit rings and triangles as the reference artwork. Batching
+    // removes temporary script arrays; there is no silhouette or LOD change.
+    static const double rings[] = {.76,.90,1.,1.42};
+    int n = outline.size();
+    PackedVector2Array vertices, uv;
+    PackedColorArray colors;
+    PackedInt32Array indices;
+    vertices.resize(1+4*n); uv.resize(1+4*n); colors.resize(1+4*n);
+    indices.resize(n*21);
+    Vector2 *v = vertices.ptrw(), *t = uv.ptrw();
+    Color *c = colors.ptrw(); int32_t *ix = indices.ptrw();
+    v[0] = Vector2(); t[0] = Vector2(); c[0] = Color(.5,.5,0,1);
+    for (int ring=0;ring<4;++ring)
+      for (int i=0;i<n;++i) {
+        int at = 1+ring*n+i;
+        v[at] = outline[i]*rings[ring]; t[at] = Vector2(rings[ring],0);
+        Vector2 normal = outline[i].normalized();
+        c[at] = Color(normal.x*.5+.5,normal.y*.5+.5,0,1);
+      }
+    int cursor = 0;
+    for (int i=0;i<n;++i) {
+      int next = (i+1)%n;
+      ix[cursor++] = 0; ix[cursor++] = 1+i; ix[cursor++] = 1+next;
+      for (int ring=1;ring<4;++ring) {
+        int a=1+(ring-1)*n+i, b=1+(ring-1)*n+next,
+            c=1+ring*n+i, d=1+ring*n+next;
+        for (int index : {a,c,d,a,d,b}) ix[cursor++] = index;
+      }
+    }
+    Array out; out.resize(Mesh::ARRAY_MAX);
+    out[Mesh::ARRAY_VERTEX] = vertices; out[Mesh::ARRAY_TEX_UV] = uv;
+    out[Mesh::ARRAY_COLOR] = colors; out[Mesh::ARRAY_INDEX] = indices;
+    return out;
+  }
+  Array membrane_compress(PackedVector2Array points, PackedVector2Array previous,
+                          double angle, double depth, double radius) {
+    double before = 0, after = 0;
+    int count = points.size();
+    for (int i=0;i<count;++i) before += points[i].cross(points[(i+1)%count])*.5;
+    for (int i=0;i<count;++i) {
+      double distance = std::abs(wrap(points[i].angle()-angle+PI,TAU)-PI);
+      if (distance >= .65) continue;
+      double weight = .5+.5*std::cos(PI*distance/.65);
+      Vector2 corrected = points[i].normalized()*std::max(radius*.58,points[i].length()-depth*weight);
+      previous.set(i,previous[i]+(corrected-points[i]));
+      points.set(i,corrected);
+    }
+    for (int i=0;i<count;++i) after += points[i].cross(points[(i+1)%count])*.5;
+    double scale = std::sqrt(std::max(.001,before)/std::max(.001,after)), maximum = 0;
+    for (int i=0;i<count;++i) {
+      Vector2 corrected = points[i]*scale;
+      previous.set(i,previous[i]+(corrected-points[i]));
+      points.set(i,corrected);
+      maximum = std::max(maximum,double(corrected.length()));
+    }
+    Array result;
+    result.push_back(points); result.push_back(previous); result.push_back(maximum);
+    return result;
   }
   Array membrane_edges(PackedVector2Array points,
                        const PackedFloat32Array &lengths,
@@ -485,6 +627,154 @@ public:
     out.push_back(counts);
     return out;
   }
+  Vector2i contacts_pass(Array bodies, Callable pair, double dt, bool deform) {
+    struct Body { Object *object, *membrane; Vector2 p; double reach; bool dead, active; };
+    std::vector<Body> cells;
+    for (int i=0;i<bodies.size();++i) {
+      Object *o = bodies[i], *m = o->get("membrane");
+      cells.push_back({o,m,o->get("position"),double(m->get("maximum_radius"))*1.05,
+                       bool(o->get("dead")),double(o->get("activity"))>0});
+    }
+    int checks = 0, hits = 0;
+    for (int i=0;i<int(cells.size());++i) {
+      auto &a = cells[i];
+      if (a.dead) continue;
+      for (int j=i+1;j<int(cells.size());++j) {
+        auto &b = cells[j];
+        if (b.dead || (!a.active && !b.active)) continue;
+        ++checks;
+        double reach = a.reach+b.reach+.2;
+        if (delta(a.p,b.p).length_squared() > reach*reach) continue;
+        if (bool(pair.call(a.object,b.object,dt,deform))) {
+          ++hits;
+          // Only this pair can move/dent during the unchanged narrow phase.
+          // Refresh both immediately, retaining sequential traversal exactly.
+          a.p = a.object->get("position"); b.p = b.object->get("position");
+          a.reach = double(a.membrane->get("maximum_radius"))*1.05;
+          b.reach = double(b.membrane->get("maximum_radius"))*1.05;
+        }
+      }
+    }
+    return Vector2i(checks,hits);
+  }
+  double coarse_feed(Array particles, TypedArray<int64_t> ids, Object *body, Dictionary mouth,
+                     Dictionary rates, Vector2 camera, Vector2 half,
+                     Ref<RandomNumberGenerator> rng, Object *habitat) {
+    Vector2 center = body->get("position");
+    double radius = rates["radius"], dt = rates["dt"], intake = rates["intake"],
+           substrate = body->get("substrate"), eaten = body->get("eaten"),
+           foreign = body->get("foreign_intake"), oxygen = body->get("oxygen"),
+           carbon = body->get("carbon"), gut = body->call("gut_capacity"),
+           oxygen_cap = body->call("oxygen_capacity"), carbon_cap = 30 * double(body->call("growth_scale"));
+    int owner = body->get("id");
+    bool photo = int(body->call("count","photosynthesis")) > 0;
+    bool solid = habitat->get("enabled");
+    for (int k=0;k<ids.size();++k) {
+      Dictionary p = particles[int64_t(ids[k])];
+      int kind = p[keys.kind];
+      if (!bool(p[keys.alive]) || (kind != 0 && kind != 1 && kind != 5)) continue;
+      Vector2 at = p[keys.p];
+      if (activity(at,camera,half) > 0 || delta(center,at).length() > radius) continue;
+      double capacity = 0, rate = 0;
+      if (kind == 0 && !mouth.is_empty()) {
+        capacity = std::max(0.,gut-substrate); rate = rates["nutrient"];
+      } else if (kind == 1) {
+        capacity = std::max(0.,oxygen_cap-oxygen); rate = rates["oxygen"];
+      } else if (kind == 5 && photo) {
+        capacity = std::max(0.,carbon_cap-carbon); rate = rates["carbon"];
+      }
+      if (capacity <= 0 || rng->randf() >= 1-std::exp(-std::max(0.,rate)*std::max(0.,dt))) continue;
+      // Only accepted encounters need the original swept solid-path check.
+      if (solid) {
+        Array moved = habitat->call("move",center,at,Vector2(),0.,Array());
+        if (bool(moved[2])) continue;
+      }
+      double taken = std::min(double(p[keys.amount]),capacity);
+      p[keys.amount] = double(p[keys.amount])-taken;
+      if (double(p[keys.amount]) <= .000001) p[keys.alive] = false;
+      if (kind == 1) oxygen += taken;
+      else if (kind == 5) {
+        carbon += taken;
+        if (int(p.get("owner",-1)) != owner) foreign += taken;
+      } else {
+        substrate += taken; eaten += taken; intake += taken;
+        if (int(p.get("owner",-1)) != owner) foreign += taken;
+        body->call("consumed",mouth,taken);
+      }
+    }
+    body->set("substrate",substrate); body->set("eaten",eaten);
+    body->set("foreign_intake",foreign); body->set("oxygen",oxygen); body->set("carbon",carbon);
+    return intake;
+  }
+  void feed(Array particles, TypedArray<int64_t> ids, Object *body, Dictionary organ,
+            Vector2 camera, Vector2 half) {
+    bool mouth = !organ.is_empty();
+    Vector2 center = mouth ? Vector2(body->call("pore_center",organ)) : Vector2(body->get("position"));
+    double reach = mouth ? double(body->call("pore_radius",organ)) + 8 : 0;
+    double substrate = body->get("substrate"), eaten = body->get("eaten"),
+           foreign = body->get("foreign_intake"), oxygen = body->get("oxygen"),
+           carbon = body->get("carbon"), gut = body->call("gut_capacity"),
+           oxygen_cap = body->call("oxygen_capacity"), carbon_cap = 30 * double(body->call("growth_scale"));
+    int owner = body->get("id");
+    bool photo = int(body->call("count","photosynthesis")) > 0;
+    double angle = body->get("angle"), extent = body->call("extent");
+    Object *membrane = body->get("membrane");
+    PackedVector2Array outline = membrane->get("points");
+    for (int k = 0; k < ids.size(); ++k) {
+      Dictionary p = particles[int64_t(ids[k])];
+      int kind = p[keys.kind];
+      if (!bool(p[keys.alive]) || (mouth ? kind != 0 : kind != 1 && kind != 5)) continue;
+      Vector2 at = p[keys.p];
+      if (activity(at,camera,half) <= 0) continue;
+      Vector2 d = delta(center,at);
+      double distance = d.length(), taken = 0;
+      bool handled = false;
+      if (mouth && distance <= reach) {
+        handled = true;
+        taken = std::min(double(p[keys.amount]), std::max(0.,gut-substrate));
+        substrate += taken;
+        eaten += taken;
+        if (int(p.get("owner",-1)) != owner) foreign += taken;
+        if (taken > 0) body->call("consumed",organ,taken);
+      } else if (!mouth && kind == 5 && photo && distance < extent+18) {
+        handled = true;
+        taken = std::min(double(p[keys.amount]), std::max(0.,carbon_cap-carbon));
+        carbon += taken;
+        if (int(p.get("owner",-1)) != owner) foreign += taken;
+      } else if (!mouth && kind == 1) {
+        // Same ordered radial ray intersection as Cell.support(), without a
+        // VM call for every oxygen packet.
+        double local = d.angle()-angle, radius = 0;
+        Vector2 ray(std::cos(local), std::sin(local));
+        bool found = false;
+        for (int i=0;i<outline.size();++i) {
+          Vector2 a = outline[i], edge = outline[(i+1)%outline.size()]-a;
+          double denom = ray.cross(edge);
+          if (std::abs(denom) < .00001) continue;
+          double along = a.cross(ray)/denom, length = a.cross(edge)/denom;
+          if (along >= 0 && along <= 1 && length >= 0) {
+            radius = a.lerp(outline[(i+1)%outline.size()],along).length();
+            found = true; break;
+          }
+        }
+        if (!found) {
+          double phase = wrap(local,TAU)/TAU*outline.size();
+          int i = int(phase);
+          radius = outline[i].lerp(outline[(i+1)%outline.size()],phase-i).length();
+        }
+        if (distance < radius+14) {
+          handled = true;
+          taken = std::min(double(p[keys.amount]), std::max(0.,oxygen_cap-oxygen));
+          oxygen += taken;
+        }
+      }
+      if (!handled) continue;
+      if (taken > 0) p[keys.amount] = double(p[keys.amount])-taken;
+      if (double(p[keys.amount]) <= .000001) p[keys.alive] = false;
+    }
+    body->set("substrate",substrate); body->set("eaten",eaten);
+    body->set("foreign_intake",foreign); body->set("oxygen",oxygen); body->set("carbon",carbon);
+  }
   void exclude(Array particles, TypedArray<int64_t> ids, Array bodies,
                Vector2 camera, Vector2 half) {
     struct Body {
@@ -571,6 +861,39 @@ public:
       }
     }
   }
+  Array compact_particles(Array particles, int cursor) {
+    Array kept;
+    int before = 0;
+    for (int i=0;i<particles.size();++i) {
+      Dictionary p = particles[i];
+      if (!bool(p[keys.alive])) continue;
+      if (i < cursor) ++before;
+      kept.push_back(p);
+    }
+    Array out; out.push_back(kept); out.push_back(kept.is_empty() ? 0 : before%kept.size());
+    return out;
+  }
+  TypedArray<int64_t> background_ids(Array particles, int cursor, int visits,
+                                      Vector2 camera, Vector2 half, double clock) {
+    TypedArray<int64_t> out;
+    for (int k=0;k<visits;++k) {
+      int id = (cursor+k)%particles.size();
+      Dictionary p = particles[id];
+      if (bool(p[keys.alive]) && activity(p[keys.p],camera,half) <= 0 &&
+          double(p.get(keys.transport_at,0.)) < clock) out.push_back(id);
+    }
+    return out;
+  }
+  void settle_transport(Array particles, TypedArray<int64_t> ids, bool background) {
+    for (int k=0;k<ids.size();++k) {
+      Dictionary p = particles[int64_t(ids[k])];
+      if (background || bool(p.get(keys.transport_jump,false))) {
+        p[keys.previous] = p[keys.p];
+        p[keys.previous_angle] = p[keys.angle];
+        if (!background) p[keys.transport_jump] = false;
+      }
+    }
+  }
   int transport(Array particles, TypedArray<int64_t> ids,
                 const PackedVector2Array &flow, Vector2 camera, Vector2 half,
                 double dt, int revision, Ref<RandomNumberGenerator> rng,
@@ -619,7 +942,7 @@ public:
   Dictionary chemistry(Array particles, TypedArray<int64_t> ids,
                        PackedFloat32Array acid, Vector2 camera, Vector2 half,
                        double dt, int revision,
-                       Ref<RandomNumberGenerator> rng) {
+                       Ref<RandomNumberGenerator> rng, double clock, bool background, bool dirty_writes) {
     static const double radii[] = {4, 2.5, 3, 2.5, 5, 3, 4, 4, 3, 3, 3.5};
     static const double decay[] = {.003, .008, .006, 0.0,  .1, .001,
                                    .02,  .015, .008, .008, .08};
@@ -632,8 +955,8 @@ public:
     scratch.reserve(ids.size());
     if (bins.empty())
       bins.resize(256 * 160);
-    for (auto &b : bins)
-      b.clear();
+    for (int id : occupied_bins) bins[id].clear();
+    occupied_bins.clear();
     for (int k = 0; k < ids.size(); ++k) {
       Dictionary d = particles[int64_t(ids[k])];
       Particle p;
@@ -647,21 +970,28 @@ public:
       p.kind = int(d[keys.kind]);
       p.alive = d[keys.alive];
       p.reacted = int(d.get(keys.reacted, -1)) == revision;
-      p.active = p.alive ? activity(p.p, camera, half) : 0;
+      p.initial_v = p.v; p.initial_amount = p.amount; p.initial_capacity = p.capacity;
+      p.initial_kind = p.kind; p.initial_alive = p.alive; p.initial_reacted = p.reacted;
+      p.active = p.alive ? (background ? 1. : activity(p.p, camera, half)) : 0;
+      p.elapsed = background ? std::max(0., clock - double(d.get(keys.chemical_at, clock))) : dt * p.active;
+      if (clock >= 0 && !background) d[keys.chemical_at] = clock;
       p.radius = radii[p.kind] * std::clamp(std::sqrt(p.amount / .3), .8, 1.7);
       d[keys.reaction_activity] = p.active;
       d[keys.contact_radius] = p.radius;
       scratch.push_back(p);
-      if (p.active > 0 && p.kind != 3)
-        bins[mod(int(std::floor(p.p.y / 16)), 160) * 256 +
-             mod(int(std::floor(p.p.x / 16)), 256)]
-            .push_back(k);
+      if (p.active > 0 && p.kind != 3) {
+        int id = mod(int(std::floor(p.p.y / 16)),160)*256 + mod(int(std::floor(p.p.x / 16)),256);
+        if (bins[id].empty()) occupied_bins.push_back(id);
+        bins[id].push_back(k);
+      }
     }
     for (int i = 0; i < int(scratch.size()); ++i) {
       auto &p = scratch[i];
       if (!p.alive || p.active <= 0 || p.kind == 3)
         continue;
-      double t = dt * p.active;
+      double t = p.elapsed;
+      if (clock >= 0 && background) p.d[keys.chemical_at] = clock;
+      if (t <= 0) continue;
       if (p.kind == 8 || p.kind == 9) {
         int n = node(std::floor(p.p.x / 64), std::floor(p.p.y / 64));
         double before = acid[n];
@@ -782,12 +1112,12 @@ public:
           }
     }
     for (auto &p : scratch) {
-      p.d[keys.v] = p.v;
-      p.d[keys.kind] = p.kind;
-      p.d[keys.amount] = p.amount;
-      p.d[keys.capacity] = p.capacity;
-      p.d[keys.alive] = p.alive;
-      if (p.reacted)
+      if (!dirty_writes || p.v != p.initial_v) p.d[keys.v] = p.v;
+      if (!dirty_writes || p.kind != p.initial_kind) p.d[keys.kind] = p.kind;
+      if (!dirty_writes || p.amount != p.initial_amount) p.d[keys.amount] = p.amount;
+      if (!dirty_writes || p.capacity != p.initial_capacity) p.d[keys.capacity] = p.capacity;
+      if (!dirty_writes || p.alive != p.initial_alive) p.d[keys.alive] = p.alive;
+      if (p.reacted && (!dirty_writes || !p.initial_reacted))
         p.d[keys.reacted] = revision;
     }
     Dictionary out;

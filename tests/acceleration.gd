@@ -9,6 +9,8 @@ static func run(check: Callable) -> void:
 	slow.native_particles = false
 	slow.native_exclusion = false
 	slow.native_fluid = false
+	slow.native_feeding = false
+	slow.native_contacts = false
 	slow.spatial_queries = false
 	slow.grid.native_enabled = false
 	slow.reaction_grid.native_enabled = false

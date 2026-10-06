@@ -19,9 +19,16 @@ var coarse_event_at := 0.0
 var ecology_rng := RandomNumberGenerator.new()
 const Transport = preload("res://scripts/particle_transport.gd")
 var native_particles := kernels != null
+var native_background_chemistry := kernels != null
+var native_chemical_timestamps := true
+var native_chemistry_writes := true
+var native_transport_bookkeeping := kernels != null
+var native_particle_compaction := kernels != null
 var native_fluid := kernels != null
 var native_render := kernels != null
 var native_exclusion := kernels != null
+var native_feeding := kernels != null
+var native_contacts := kernels != null
 var spatial_queries := true
 var stagger_sensing := true
 var cell_index = preload("res://scripts/cell_index.gd").new()
@@ -97,6 +104,8 @@ var active_particles := 0
 var view_half := VIEW*0.5
 var revision := 0
 var profile_usec: Dictionary = {}
+var profiling := false
+var profile_counts: Dictionary = {}
 var camera_position := Vector2(2048,1280)
 var camera_follows_player := true
 var chemistry_events := {"decay":0,"combine":0,"recycle":0,"detox":0,"spoil":0,"enzyme":0,"neutralize":0}
@@ -176,6 +185,10 @@ func local_particle_ids(margin: float = 0.0) -> Array[int]:
 func visible_particle_ids(margin: float = 0.0) -> Array[int]:
 	if grid.source_size != particles.size(): grid.rebuild(particles)
 	return grid.query_rect(player.position if camera_follows_player else camera_position,view_half+Vector2.ONE*margin)
+
+func local_particle_kind(kind: int) -> Array[int]:
+	if grid.source_size != particles.size(): grid.rebuild(particles)
+	return grid.query_kind_rect(particles,player.position if camera_follows_player else camera_position,view_half+Vector2.ONE*(Medium.ACTIVE_PAD+Medium.ACTIVE_FADE),kind)
 
 func install(kind: String, local_angle: float, mode: String = "graze", size: float = 1.0) -> bool:
 	var cost := Evolution.install_price(size)
@@ -264,6 +277,16 @@ func _emit_material(kind: int, at: Vector2, amount: float, motion: Vector2 = Vec
 func step(dt: float) -> void:
 	if evolution.terminal() or build_original != null: return
 	if player.dead and not evolution.enabled: return
+	if profiling:
+		profile_counts.clear()
+		profile_usec["sensing"] = 0
+		profile_usec["membrane"] = 0
+		profile_usec["coarse_chemistry"] = 0
+		profile_usec["coarse_feeding"] = 0
+		profile_usec["coarse_motion"] = 0
+		profile_usec["feeding"] = 0
+		profile_usec["organ_geometry"] = 0
+		profile_usec["traction"] = 0
 	time += dt
 	revision += 1
 	if grid.source_size != particles.size(): grid.rebuild(particles)
@@ -293,14 +316,14 @@ func step(dt: float) -> void:
 	mark = Time.get_ticks_usec()
 	_expire_pheromones()
 	_move_particles(dt)
+	if profiling: profile_usec["transport"] = Time.get_ticks_usec()-mark
+	var plant_mark := Time.get_ticks_usec() if profiling else 0
 	habitat_geometry.move_particles(particles,foreground_particle_ids,revision,grid,native_particles)
-	for index in foreground_particle_ids:
-		var p: Dictionary = particles[index]
-		if p.get("transport_jump",false):
-			p.previous = p.p
-			p.previous_angle = p.angle
-			p.transport_jump = false
+	_settle_transport(foreground_particle_ids,false)
+	if profiling: profile_usec["particle_plants"] = Time.get_ticks_usec()-plant_mark
+	var chem_mark := Time.get_ticks_usec() if profiling else 0
 	_chemistry(dt)
+	if profiling: profile_usec["chemistry"] = Time.get_ticks_usec()-chem_mark
 	profile_usec["particles"] = Time.get_ticks_usec()-mark
 	mark = Time.get_ticks_usec()
 	if background_biology: offscreen_ecology.step(self,dt)
@@ -311,8 +334,12 @@ func step(dt: float) -> void:
 		var local_dt: float = dt*cell.activity
 		cell.animate_resources(local_dt)
 		_clear_receptors(cell,local_dt)
+		var sense_mark := Time.get_ticks_usec() if profiling else 0
 		_sense(cell,local_dt)
+		if profiling: profile_usec["sensing"] = profile_usec.get("sensing",0)+Time.get_ticks_usec()-sense_mark
+		var feed_mark := Time.get_ticks_usec() if profiling else 0
 		_feed(cell)
+		if profiling: profile_usec["feeding"] = profile_usec.get("feeding",0)+Time.get_ticks_usec()-feed_mark
 		_acid_stress(cell,local_dt)
 		_photosynthesize(cell,local_dt)
 		_metabolize(cell,local_dt)
@@ -324,22 +351,31 @@ func step(dt: float) -> void:
 		if cell.waste >= 0.2:
 			_emit_material(WASTE,cell.position-Vector2.from_angle(cell.angle)*(cell.radius+12),cell.waste,Vector2.ZERO,cell.id)
 			cell.waste = 0
+		var organ_mark := Time.get_ticks_usec() if profiling else 0
 		cell.update_geometry()
 		# Shrinkage can shed crowded organs, releasing their remaining material.
 		while cell.occupied() > cell.perimeter() and not cell.organs.is_empty():
 			var organ: Dictionary = cell.organs.pop_back()
 			cell.lost_organs.append(organ.duplicate(true))
 			spawn_particle(WASTE,cell.organ_position(organ),Vector2.ZERO,organ.material,cell.id)
+		if profiling: profile_usec["organ_geometry"] = profile_usec.get("organ_geometry",0)+Time.get_ticks_usec()-organ_mark
+		var traction_mark := Time.get_ticks_usec() if profiling else 0
 		var traction := PackedVector2Array()
 		for point in cell.membrane.points:
 			var arm: Vector2 = point.rotated(cell.angle)
 			traction.append((fluid.sample(cell.position+arm)-cell.velocity-arm.orthogonal()*cell.angular_velocity).rotated(-cell.angle).limit_length(90))
+		if profiling: profile_usec["traction"] = profile_usec.get("traction",0)+Time.get_ticks_usec()-traction_mark
+		var membrane_mark := Time.get_ticks_usec() if profiling else 0
 		cell.membrane.step(local_dt,cell.radius,cell.shape_acceleration.rotated(-cell.angle),cell.age+cell.id*1.7,1.0,traction)
+		if profiling:
+			profile_usec["membrane"] = profile_usec.get("membrane",0)+Time.get_ticks_usec()-membrane_mark
+			profile_counts["membrane_updates"] = profile_counts.get("membrane_updates",0)+1
 		cell.render_revision += 1
 		_emit_and_attack(cell,local_dt)
 	profile_usec["biology"] = Time.get_ticks_usec()-mark
 	mark = Time.get_ticks_usec()
 	# Short motion substeps plus swept contacts avoid crossing from one side to the other.
+	var contacts_us := 0
 	var before_motion: Dictionary = {}
 	for cell in cells: before_motion[cell.id] = cell.velocity
 	for cell in cells:
@@ -350,19 +386,24 @@ func step(dt: float) -> void:
 		var starts: Dictionary = {}
 		for cell in cells: starts[cell.id] = {"p":cell.position,"angle":cell.angle}
 		_motion(dt/3.0)
+		var contact_mark := Time.get_ticks_usec() if profiling else 0
 		_contacts(dt/3.0)
+		if profiling: contacts_us += Time.get_ticks_usec()-contact_mark
 		_spike_contacts(dt/3.0,starts)
 		for cell in cells:
 			if cell.dead or cell.activity <= 0: continue
 			habitat_geometry.move_cell(cell,cell.position,cell.position,dt/3.0)
 	for cell in cells:
 		cell.shape_acceleration = ((cell.velocity-before_motion[cell.id])/dt).limit_length(600)
+	if profiling: profile_usec["contacts"] = contacts_us
 	profile_usec["motion"] = Time.get_ticks_usec()-mark
 	mark = Time.get_ticks_usec()
 	if spatial_queries: cell_index.rebuild(cells)
 	_toxin_contacts()
 	_receptor_contacts()
+	var exclude_mark := Time.get_ticks_usec() if profiling else 0
 	_exclude_particles()
+	if profiling: profile_usec["exclusion"] = Time.get_ticks_usec()-exclude_mark
 	for cell in cells.duplicate():
 		if cell.activity > 0 and cell.health <= 0 and not cell.dead: _die(cell)
 	spawn_clock += dt
@@ -409,6 +450,11 @@ func _step_background_fluid(dt: float) -> void:
 	fluid.active_indices = saved_indices
 
 func _compact_particles() -> void:
+	if native_particle_compaction:
+		var result: Array = kernels.compact_particles(particles,background_cursor)
+		particles = result[0]
+		background_cursor = result[1]
+		return
 	# Retain the next survivor in the round-robin sweep when indices shift.
 	var kept: Array = []
 	var before_cursor := 0
@@ -426,6 +472,10 @@ func _background_ids(dt: float) -> Array[int]:
 	var visits := mini(particles.size(),floori(background_credit+0.0000001))
 	background_credit -= visits
 	background_cursor %= particles.size()
+	if native_particles and native_transport_bookkeeping:
+		ids = kernels.background_ids(particles,background_cursor,visits,player.position if camera_follows_player else camera_position,view_half,transport_clock)
+		background_cursor = (background_cursor+visits)%particles.size()
+		return ids
 	for i in visits:
 		var index := background_cursor
 		background_cursor = (background_cursor+1)%particles.size()
@@ -433,6 +483,17 @@ func _background_ids(dt: float) -> Array[int]:
 		if p.alive and activity_at(p.p) <= 0 and p.get("transport_at",0.0) < transport_clock:
 			ids.append(index)
 	return ids
+
+func _settle_transport(ids: Array[int], background: bool) -> void:
+	if native_particles and native_transport_bookkeeping:
+		kernels.settle_transport(particles,ids,background)
+		return
+	for index in ids:
+		var p: Dictionary = particles[index]
+		if background or p.get("transport_jump",false):
+			p.previous = p.p
+			p.previous_angle = p.angle
+			if not background: p.transport_jump = false
 
 func _transport_reference(ids: Array[int], dt: float, random: RandomNumberGenerator, background: bool) -> int:
 	var count := 0
@@ -468,22 +529,25 @@ func _move_particles(dt: float) -> void:
 	# Swept stem contacts also apply to coarse material transport. Signals pass
 	# through every solid as before. Coarse biology/chemistry runs separately.
 	habitat_geometry.move_particles(particles,far_ids,revision,grid,native_particles)
-	for index in far_ids:
-		var p: Dictionary = particles[index]
-		p.previous = p.p
-		p.previous_angle = p.angle
+	_settle_transport(far_ids,true)
 	profile_usec["background_transport"] = Time.get_ticks_usec()-mark
-	if native_particles or gpu_transport != null: grid.rebuild(particles)
+	var grid_mark := Time.get_ticks_usec() if profiling else 0
+	if native_particles or gpu_transport != null:
+		if grid.incremental:
+			grid.update(particles,ids)
+			grid.update(particles,far_ids)
+		else: grid.rebuild(particles)
+	if profiling: profile_usec["transport_grid"] = Time.get_ticks_usec()-grid_mark
 
 func _chemistry(dt: float, patch: Array[int] = [], background: bool = false) -> void:
-	if native_particles and not background:
-		var result: Dictionary = kernels.chemistry(particles,local_particle_ids(),acidity.values,player.position if camera_follows_player else camera_position,view_half,dt,revision,rng)
+	if native_particles and (not background or native_background_chemistry):
+		var result: Dictionary = kernels.chemistry(particles,patch if background else local_particle_ids(),acidity.values,player.position if camera_follows_player else camera_position,view_half,dt,revision,rng,time if native_chemical_timestamps and (background_biology or background) else -1.0,background,native_chemistry_writes)
 		acidity.values = result.acid
 		respiration_loss += result.loss
 		recycled += result.recycled
 		for kind in result.events: chemistry_events[kind] += result.events[kind]
 		for cue in result.get("neutralizations",[]): _record_sound("neutralize",cue.at,cue.source,cue.amount)
-		if background_biology:
+		if background_biology and not background and not native_chemical_timestamps:
 			for index in local_particle_ids(): particles[index].chemical_at = time
 		return
 	# Unimolecular decay is stochastic. Pair reactions are deterministic contact
@@ -693,7 +757,12 @@ func _sense(cell, dt: float) -> void:
 				continue
 			var food := Vector2.ZERO
 			var reports: Dictionary = {}
-			for index in grid.query(receptor,reach):
+			var candidates: Array = grid.query_kind(particles,receptor,reach,NUTRIENT if mode == "graze" else PHEROMONE)
+			if profiling:
+				profile_counts["receptor_queries"] = profile_counts.get("receptor_queries",0)+1
+				profile_counts["receptor_candidates"] = profile_counts.get("receptor_candidates",0)+candidates.size()
+				if mode in ["hunt","flee"]: profile_counts["pheromone_queries"] = profile_counts.get("pheromone_queries",0)+1
+			for index in candidates:
 				var p: Dictionary = particles[index]
 				if not p.alive or p.owner == cell.id: continue
 				var distance: float = Medium.offset(receptor,p.p).length()
@@ -752,6 +821,14 @@ func _sense(cell, dt: float) -> void:
 
 func _feed(cell) -> void:
 	var before: float = cell.eaten
+	if native_feeding:
+		var camera: Vector2 = player.position if camera_follows_player else camera_position
+		for organ in cell.organs:
+			if organ.kind == "feeding":
+				kernels.feed(particles,grid.query(cell.pore_center(organ),cell.pore_radius(organ)+8),cell,organ,camera,view_half)
+		kernels.feed(particles,grid.query(cell.position,cell.extent()+12),cell,{},camera,view_half)
+		if cell.eaten > before: _record_sound("feeding",cell.position,cell.id,cell.eaten-before)
+		return
 	for organ in cell.organs:
 		if organ.kind != "feeding": continue
 		var mouth: Vector2 = cell.pore_center(organ)
@@ -944,6 +1021,15 @@ func _motion_cell(cell, local_dt: float) -> void:
 			if hit >= 0 and hit <= 1: cell.position = Medium.wrap_position(previous+travel*hit)
 
 func _contacts(dt: float) -> void:
+	if native_contacts:
+		for iteration in 5:
+			var result: Vector2i = kernels.contacts_pass(cells,Contacts.pair,dt,iteration == 0)
+			if profiling:
+				profile_counts["cell_pair_checks"] = profile_counts.get("cell_pair_checks",0)+result.x
+				profile_counts["cell_contacts"] = profile_counts.get("cell_contacts",0)+result.y
+		return
+	var checks := 0
+	var hits := 0
 	for iteration in 5:
 		for i in cells.size():
 			var a = cells[i]
@@ -951,7 +1037,13 @@ func _contacts(dt: float) -> void:
 			for j in range(i+1,cells.size()):
 				var b = cells[j]
 				if b.dead or (a.activity <= 0 and b.activity <= 0): continue
-				Contacts.pair(a,b,dt,iteration == 0)
+				var contact: bool = Contacts.pair(a,b,dt,iteration == 0)
+				if profiling:
+					checks += 1
+					if contact: hits += 1
+	if profiling:
+		profile_counts["cell_pair_checks"] = profile_counts.get("cell_pair_checks",0)+checks
+		profile_counts["cell_contacts"] = profile_counts.get("cell_contacts",0)+hits
 
 func _spike_contacts(dt: float, starts: Dictionary = {}) -> void:
 	for attacker in cells:
@@ -1011,6 +1103,7 @@ func _spike_contacts(dt: float, starts: Dictionary = {}) -> void:
 				if penetration < -0.2: continue
 				var at: Vector2 = shaft+normal*3*organ.scale
 				var speed := maxf(0,-(Contacts.velocity_at(prey,at)-Contacts.velocity_at(attacker,at)).dot(normal))
+				if profiling: profile_counts["spike_contacts"] = profile_counts.get("spike_contacts",0)+1
 				var impact := Contacts.solve(attacker,prey,at,normal,penetration)
 				Contacts.dent(prey,at,maxf(0,penetration)*0.18+speed*dt*0.65)
 				Contacts.dent(attacker,base,speed*dt*0.12)
@@ -1055,8 +1148,9 @@ func _spike_plants(cell, organ: Dictionary, before: Dictionary, dt: float) -> vo
 
 func _exclude_particles() -> void:
 	if native_exclusion:
-		kernels.exclude(particles,local_particle_ids(),cells,player.position if camera_follows_player else camera_position,view_half)
-		grid.rebuild(particles)
+		var ids := local_particle_ids()
+		kernels.exclude(particles,ids,cells,player.position if camera_follows_player else camera_position,view_half)
+		grid.update(particles,ids)
 		return
 	if spatial_queries: cell_index.rebuild(cells)
 	# Deliberate visual/gameplay projection: external packets never hide inside
@@ -1099,7 +1193,7 @@ func _receptor_contacts() -> void:
 			var at: Vector2 = cell.organ_position(organ)
 			var forward: Vector2 = cell.local_point(organ.a).normalized().rotated(cell.angle)
 			var radius: float = 12*organ.scale
-			for index in grid.query(at,radius+6):
+			for index in grid.query_kind(particles,at,radius+6,DECOY):
 				var p: Dictionary = particles[index]
 				if not p.alive or p.kind != DECOY or inherited_lineages.get(p.owner,p.owner) == cell.lineage_id() or activity_at(p.p) <= 0: continue
 				var delta := Medium.offset(at,p.p)
@@ -1113,7 +1207,7 @@ func _receptor_contacts() -> void:
 
 func _toxin_contacts() -> void:
 	if spatial_queries: cell_index.rebuild(cells)
-	for index in local_particle_ids():
+	for index in local_particle_kind(TOXIN):
 		var p: Dictionary = particles[index]
 		if not p.alive or p.kind != TOXIN or activity_at(p.p) <= 0: continue
 		for cell_id in cell_index.at(p.p) if spatial_queries else range(cells.size()):

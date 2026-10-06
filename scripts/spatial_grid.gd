@@ -4,6 +4,8 @@ var buckets: Dictionary = {}
 var native = null
 var native_enabled := true
 var source_size := 0
+var incremental := true
+var kind_queries := true
 var size := 64.0
 var cols := 64
 var rows := 40
@@ -29,6 +31,18 @@ func rebuild(particles: Array) -> void:
 	source_size = 0
 	for i in particles.size(): insert(i,particles[i].p)
 
+func update(particles: Array, ids: Array) -> void:
+	# Packet history may already be projected to a solid edge; native locations
+	# remember the actual bucket, independent of interpolation history.
+	if source_size != particles.size():
+		rebuild(particles)
+		return
+	if native != null and native_enabled and incremental:
+		native.update(particles,ids)
+	else:
+		# This path is only needed for hybrid acceleration switches.
+		rebuild(particles)
+
 func insert(i: int, p: Vector2) -> void:
 	if native != null and native_enabled:
 		native.insert(i,p)
@@ -49,6 +63,15 @@ func move(i: int, old: Vector2, p: Vector2) -> void:
 	if buckets.has(from): buckets[from].erase(i)
 	if not buckets.has(to): buckets[to] = []
 	buckets[to].append(i)
+
+func query_kind_rect(particles: Array, position: Vector2, half_extent: Vector2, kind: int) -> Array[int]:
+	if native != null and native_enabled and kind_queries:
+		return native.query_kind_rect(particles,position,half_extent,kind)
+	# Callers retain ordinary live/type checks; fallback preserves its traversal.
+	return query_rect(position,half_extent)
+
+func query_kind(particles: Array, position: Vector2, radius: float, kind: int) -> Array[int]:
+	return query_kind_rect(particles,position,Vector2.ONE*radius,kind)
 
 func query(position: Vector2, radius: float) -> Array[int]:
 	return query_rect(position,Vector2.ONE*radius)

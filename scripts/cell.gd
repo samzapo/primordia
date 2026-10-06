@@ -123,18 +123,25 @@ func local_point(a: float) -> Vector2:
 	var i = int(phase)
 	return membrane.points[i].lerp(membrane.points[(i+1) % membrane.COUNT], phase-i)
 
+var fast_support := true
+
 func surface_parameter(local_angle: float) -> float:
-	# Ray intersection maps a screen/contact angle onto the deformed boundary.
+	# Stabilized nodes stay in ordered polar sectors. The ray can intersect
+	# only a neighboring edge; preserve global edge order at the wrapping seam.
+	# An imported/test outline outside those sectors still gets a full search.
 	var ray := Vector2.from_angle(local_angle)
-	for i in membrane.COUNT:
-		var a: Vector2 = membrane.points[i]
-		var edge: Vector2 = membrane.points[(i+1)%membrane.COUNT]-a
-		var denominator := ray.cross(edge)
-		if absf(denominator) < 0.00001: continue
-		var along := a.cross(ray)/denominator
-		var distance := a.cross(edge)/denominator
-		if along >= 0 and along <= 1 and distance >= 0:
-			return TAU*(i+along)/membrane.COUNT
+	var guess := floori(fposmod(local_angle,TAU)/TAU*membrane.COUNT)
+	var neighbors := range(membrane.COUNT) if not fast_support else [0,1,membrane.COUNT-1] if guess == 0 else [0,membrane.COUNT-2,membrane.COUNT-1] if guess == membrane.COUNT-1 else [guess-1,guess,guess+1]
+	for pass_index in 2:
+		for i in neighbors if pass_index == 0 else range(membrane.COUNT):
+			var a: Vector2 = membrane.points[i]
+			var edge: Vector2 = membrane.points[(i+1)%membrane.COUNT]-a
+			var denominator := ray.cross(edge)
+			if absf(denominator) < 0.00001: continue
+			var along := a.cross(ray)/denominator
+			var distance := a.cross(edge)/denominator
+			if along >= 0 and along <= 1 and distance >= 0:
+				return TAU*(i+along)/membrane.COUNT
 	return fposmod(local_angle,TAU)
 
 func arc_coordinate(a: float) -> float:

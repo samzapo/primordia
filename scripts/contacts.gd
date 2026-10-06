@@ -55,14 +55,14 @@ static func dent(cell, at: Vector2, depth: float) -> void:
 	cell.membrane.compress(Medium.offset(cell.position,at).rotated(-cell.angle).angle(),minf(depth,cell.radius*0.075),cell.radius)
 	cell.render_revision += 1
 
-static func pair(a, b, dt: float, deform: bool) -> void:
+static func pair(a, b, dt: float, deform: bool) -> bool:
 	var delta := Medium.offset(a.position,b.position)
-	if delta.length_squared() > pow(a.extent()+b.extent()+0.2,2): return
+	if delta.length_squared() > pow(a.extent()+b.extent()+0.2,2): return false
 	var radial := delta.normalized() if delta.length_squared() > 0.000001 else Vector2.RIGHT
 	var sa := surface(a,radial)
 	var sb := surface(b,-radial)
 	var gap := Medium.offset(sa.at,sb.at)
-	if gap.dot(radial) > 0.15: return
+	if gap.dot(radial) > 0.15: return false
 	var normal: Vector2 = (sa.normal-sb.normal).normalized()
 	if normal.dot(radial) < 0.65: normal = radial
 	var at: Vector2 = sa.at+gap*0.5
@@ -73,3 +73,5 @@ static func pair(a, b, dt: float, deform: bool) -> void:
 		var compression := minf(minf(a.radius,b.radius)*0.06,depth*0.18+closing*dt*0.65)
 		dent(a,sa.at,compression)
 		dent(b,sb.at,compression)
+
+	return true

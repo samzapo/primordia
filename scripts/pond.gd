@@ -78,6 +78,8 @@ var diagnostic_zoom := false
 var preview_radius := -1.0
 var camera_screen := Vector2.ZERO
 var render_camera := Vector2.ZERO
+var frame_trace
+var native_geometry := true
 var simulation_ms := 0.0
 var render_ms := 0.0
 var screenshot_path := ""
@@ -190,6 +192,7 @@ func _physics_process(dt: float) -> void:
 		camera_offset = Vector2.ZERO
 		free_camera = world.player.position
 		_message(world.lineage.notices[-1] if not world.lineage.notices.is_empty() else world.evolution.objective(world))
+	if frame_trace != null: frame_trace.tick(Time.get_ticks_usec()-started,dt)
 	simulation_ms = lerpf(simulation_ms,(Time.get_ticks_usec()-started)/1000.0,0.15)
 	if not flow_streamers and world.revision%4 == 0: currents.queue_redraw()
 
@@ -200,6 +203,7 @@ func _can_edit_tubules() -> bool:
 	return build_open and not settings_panel.visible and not world.player.dead and not world.evolution.terminal()
 
 func _process(dt: float) -> void:
+	var process_start := Time.get_ticks_usec() if frame_trace != null else 0
 	ui_time += dt
 	if focus_animating:
 		camera_zoom = lerpf(camera_zoom,manual_zoom,1-exp(-dt*10))
@@ -219,6 +223,7 @@ func _process(dt: float) -> void:
 	var alpha := 1.0 if is_paused() or screenshot_path != "" else Engine.get_physics_interpolation_fraction()
 	_update_world(alpha)
 	render_ms = lerpf(render_ms,(Time.get_ticks_usec()-started)/1000.0,0.15)
+	var ui_start := Time.get_ticks_usec() if frame_trace != null else 0
 	hud_clock += dt
 	if hud_clock >= 0.1:
 		hud_clock = 0
@@ -229,11 +234,15 @@ func _process(dt: float) -> void:
 		_update_hud()
 		_layout()
 	cell_ui.sync(dt)
+	if frame_trace != null: frame_trace.work("ui",Time.get_ticks_usec()-ui_start)
+	var music_start := Time.get_ticks_usec() if frame_trace != null else 0
 	music.update_music(dt)
+	if frame_trace != null: frame_trace.work("music",Time.get_ticks_usec()-music_start)
 	var particle_material: ShaderMaterial = batches[0].material
 	particle_material.set_shader_parameter("beat_pulse",music.pulse())
 	particle_material.set_shader_parameter("pulse_sources",music.pulse_sources)
 	particle_material.set_shader_parameter("canvas_aspect",get_viewport_rect().size.y/get_viewport_rect().size.x)
+	var inspection_start := Time.get_ticks_usec() if frame_trace != null else 0
 	var cursor := get_global_mouse_position()
 	var inspect_allowed := get_viewport_rect().has_point(cursor) and not settings_panel.visible and not camera_dragging and selected < 0 and moving_id < 0 and tube_start.is_empty() and cell_ui.context.is_empty() and get_viewport().gui_get_hovered_control() == null
 	inspector.update_lens(dt,cursor,alpha,inspect_allowed)
@@ -244,11 +253,15 @@ func _process(dt: float) -> void:
 		var link: Dictionary = world.player.membrane.skeleton.link_by_id(hover.id)
 		tube_hint.text = "%d%% tension · scroll to adjust" % roundi(link.tension*100)
 		tube_hint.position = (get_global_mouse_position()+Vector2(16,20)).clamp(Vector2(8,8),get_viewport_rect().size-tube_hint.size-Vector2(8,8))
+	if frame_trace != null:
+		frame_trace.work("inspection",Time.get_ticks_usec()-inspection_start)
+		frame_trace.work("process",Time.get_ticks_usec()-process_start)
 	if screenshot_path != "":
 		capture_frame += 1
 		if capture_frame == 30: _capture.call_deferred()
 
 func _update_world(alpha: float) -> void:
+	var sync_start := Time.get_ticks_usec() if frame_trace != null else 0
 	var size := get_viewport_rect().size
 	var base_zoom := minf(size.x/Simulation.VIEW.x,size.y/Simulation.VIEW.y)
 	if not diagnostic_zoom: manual_zoom = clampf(manual_zoom,MIN_ZOOM,MAX_ZOOM)
@@ -281,7 +294,11 @@ func _update_world(alpha: float) -> void:
 		if particle_lod[kind] != simplified:
 			particle_lod[kind] = simplified
 			batches[kind].texture = ParticleArt.texture(kind,bool(simplified))
+	if frame_trace != null: frame_trace.work("field_sync",Time.get_ticks_usec()-sync_start)
+	var particle_start := Time.get_ticks_usec() if frame_trace != null else 0
 	_sync_particles(alpha)
+	if frame_trace != null: frame_trace.work("particle_sync",Time.get_ticks_usec()-particle_start)
+	var cells_start := Time.get_ticks_usec() if frame_trace != null else 0
 	var alive_ids: Dictionary = {}
 	for cell in world.cells:
 		var offset: Vector2 = Simulation.Medium.offset(render_camera,cell.position)
@@ -305,6 +322,7 @@ func _update_world(alpha: float) -> void:
 			views[identity].queue_free()
 			views.erase(identity)
 	cell_ui.interior.sync()
+	if frame_trace != null: frame_trace.work("cell_sync",Time.get_ticks_usec()-cells_start)
 
 func _sync_particles(alpha: float = 1.0) -> void:
 	if world.native_render:
@@ -595,7 +613,7 @@ func _update_hud() -> void:
 		light_factor_shown = world.evolution.light_factor
 	if acidity_texture.get_width() > 0: acidity_texture.update(Image.create_from_data(64,40,false,Image.FORMAT_RF,world.acidity.values.to_byte_array()))
 	debug_label.visible = show_debug and not settings_panel.visible
-	debug_label.text = "%s · %d FPS · sim %.2f ms · prepare %.2f ms\n%d active cells / %d particles" % ["GPU experiment" if world.gpu_transport != null else "Native CPU" if world.kernels != null else "GDScript",Engine.get_frames_per_second(),simulation_ms,render_ms,world.active_cells,world.active_particles]
+	debug_label.text = "%s · %d FPS · tick %.2f ms · view sync %.2f ms\n%d active cells / %d particles" % ["GPU experiment" if world.gpu_transport != null else "Native CPU" if world.kernels != null else "GDScript",Engine.get_frames_per_second(),simulation_ms,render_ms,world.active_cells,world.active_particles]
 	if music.ready_bank: debug_label.text += "\nMusic mix %.2f ms · underruns %d" % [music.render_usec/1000.0,music.skips]
 	debug_label.position = Vector2(16,16 if not build_open else 52*preferences.hud_scale)
 	debug_label.add_theme_font_size_override("font_size",roundi(15*preferences.hud_scale))
@@ -903,4 +921,18 @@ func _configure_backend() -> void:
 	else: push_warning("GPU transport unavailable; keeping the CPU backend. Use --rendering-method mobile for the experiment.")
 
 func _exit_tree() -> void:
+	if frame_trace != null: frame_trace.stop()
 	if world.gpu_transport != null: world.gpu_transport.close()
+
+
+func begin_frame_trace() -> void:
+	if frame_trace != null: return
+	frame_trace = preload("res://scripts/frame_trace.gd").new()
+	frame_trace.start(self)
+
+func end_frame_trace() -> Array[Dictionary]:
+	if frame_trace == null: return []
+	var rows: Array[Dictionary] = frame_trace.rows.duplicate(true)
+	frame_trace.stop()
+	frame_trace = null
+	return rows

@@ -58,6 +58,7 @@ func advance(sim, cell, elapsed: float, hidden: bool = true) -> void:
 	sim.coarse_mode = true
 	sim.fluid.global_coupling = true
 	cell.activity = 1.0
+	var mark := Time.get_ticks_usec() if sim.profiling else 0
 	if hidden:
 		var patch: Array[int] = []
 		for index in sim.grid.query(cell.position,cell.extent()+FEED_MARGIN+60):
@@ -66,6 +67,7 @@ func advance(sim, cell, elapsed: float, hidden: bool = true) -> void:
 		# Same oriented contact rules; timestamped unary chemistry prevents two
 		# nearby cells from charging the same packet twice for elapsed time.
 		sim._chemistry(0,patch,true)
+	if sim.profiling: sim.profile_usec["coarse_chemistry"] = sim.profile_usec.get("coarse_chemistry",0)+Time.get_ticks_usec()-mark
 	var left := elapsed
 	while left > 0.0000001 and not cell.dead:
 		var h := minf(SUBSTEP,left)
@@ -77,7 +79,9 @@ func advance(sim, cell, elapsed: float, hidden: bool = true) -> void:
 		sim._clear_receptors(cell,h)
 		sim._sense(cell,h) # Only received particles supply inter-cell information.
 		if hidden:
+			mark = Time.get_ticks_usec() if sim.profiling else 0
 			_feed(sim,cell,h)
+			if sim.profiling: sim.profile_usec["coarse_feeding"] = sim.profile_usec.get("coarse_feeding",0)+Time.get_ticks_usec()-mark
 			_exposure(sim,cell,h)
 		if cell.health <= 0:
 			_kill(sim,cell)
@@ -102,7 +106,9 @@ func advance(sim, cell, elapsed: float, hidden: bool = true) -> void:
 			if organ.kind != "feeding" or cell.energy <= 0: continue
 			sim.fluid.suction(cell,cell.pore_center(organ),110*sqrt(organ.scale),24*organ.scale*organ.hp/organ.max_hp*Genes.factor(organ,"suction"),h)
 			cell.spend_energy(h*0.18*organ.scale*organ.scale,organ)
+		mark = Time.get_ticks_usec() if sim.profiling else 0
 		sim._motion_cell(cell,h)
+		if sim.profiling: sim.profile_usec["coarse_motion"] = sim.profile_usec.get("coarse_motion",0)+Time.get_ticks_usec()-mark
 		if hidden: _hunt(sim,cell,h)
 		if cell.health <= 0 and not cell.dead: _kill(sim,cell)
 	cell.previous_position = cell.position
@@ -151,6 +157,14 @@ func _feed(sim, cell, dt: float) -> void:
 		var pump: float = 24*organ.scale*organ.hp/organ.max_hp*Genes.factor(organ,"suction") if cell.energy > 0 else 0.0
 		capture += 2*(cell.pore_radius(organ)+8)*(relative+pump+4)
 	var area: float = PI*maxf(1,radius*radius-cell.radius*cell.radius)
+	if sim.native_feeding:
+		var rates := {"radius":radius,"dt":dt,"intake":intake,
+			"nutrient":COLLECTION_SWEEP*capture/area,
+			"oxygen":COLLECTION_SWEEP*2*(cell.extent()+14)*(relative+4)/area,
+			"carbon":COLLECTION_SWEEP*2*(cell.extent()+18)*(relative+4)/area}
+		intake = sim.kernels.coarse_feed(sim.particles,sim.grid.query(cell.position,radius),cell,mouth,rates,
+			sim.player.position if sim.camera_follows_player else sim.camera_position,sim.view_half,sim.rng,sim.habitat_geometry)
+		return
 	for index in sim.grid.query(cell.position,radius):
 		var p: Dictionary = sim.particles[index]
 		if not p.alive or p.kind not in [sim.NUTRIENT,sim.OXYGEN,sim.CARBON] or sim.activity_at(p.p) > 0: continue

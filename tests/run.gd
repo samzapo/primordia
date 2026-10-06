@@ -18,6 +18,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	preload("res://tests/acceleration.gd").run(expect)
+	preload("res://tests/performance.gd").run(expect)
 	preload("res://tests/habitat.gd").run(expect)
 	preload("res://tests/art.gd").run(expect)
 	_test_metabolism()

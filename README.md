@@ -2,7 +2,7 @@
 
 A physics and chemistry simulation game about managing one small cell. Eat, grow and survive predation. **You never steer the cell:** its anatomy controls its behavior.
 
-This twentieth playable revision uses **Godot 4.7.2**, a fixed-step simulation, deformable membranes, oriented chemical particles and procedural 2D artwork. Its vector artwork is authored in the project; cached particle textures and mipmaps generate automatically at runtime. The default Linux launcher builds a batched C++ GDExtension automatically; the GDScript reference backend remains available.
+This twenty-first playable revision uses **Godot 4.7.2**, a fixed-step simulation, deformable membranes, oriented chemical particles and procedural 2D artwork. Its vector artwork is authored in the project; cached particle textures and mipmaps generate automatically at runtime. The default Linux launcher builds a batched C++ GDExtension automatically; the GDScript reference backend remains available.
 
 ## Run with Steam Godot on Linux
 
@@ -109,6 +109,8 @@ Pores pulse on consumption. The ATP sac shows current energy; damaged membranes/
 The former 90-second food milestone has been replaced by lineage victory. The starting anatomy is a starting point for adaptation, not a guaranteed unattended win. Balanced habitat stages three reserved hunter arrivals after the first warning in each crisis; lean and rich profiles retain their opening hunters.
 
 ## Performance revision
+
+Revision twenty-one profiles complete live frames and batches particle indexing, hidden chemistry, feeding, contact rejection, membrane dents, scheduling and mesh generation. It retains 60 Hz simulation, the full visible halo, particle populations, music and all visual effects. See [whole-frame results and reproducible commands](docs/REVISION_21.md) for dense 80% view, grown-cell and hunter-encounter measurements; F3 labels CPU tick and view-sync costs separately.
 
 Revision seven adds compiled particle transport, orientation chemistry, spatial grids, membrane exclusion, edge/pressure constraints and particle drawing buffers. Fluid viscosity and acidity transport run in native batches, and feeding pumps visit only nearby fluid nodes. Tiny distant cells use less decorative drawing; contact and chemistry still advance at the fixed simulation rate.
 

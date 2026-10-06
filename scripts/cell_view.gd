@@ -73,12 +73,16 @@ func sync(render_position: Vector2, render_angle: float, zoom: float, alpha: flo
 
 func _sync_surface(render_angle: float, changed: bool) -> void:
 	if surface_revision != seen_revision or changed:
+		var mark := Time.get_ticks_usec() if game.frame_trace != null else 0
 		var outline: PackedVector2Array = cell.membrane.outline()
 		if simple_view:
 			var reduced := PackedVector2Array()
 			for i in range(0,outline.size(),4): reduced.append(outline[i])
 			outline = reduced
-		surface.mesh = Surface.mesh(outline)
+		surface.mesh = Surface.mesh(outline,game.native_geometry)
+		if game.frame_trace != null:
+			game.frame_trace.work("geometry",Time.get_ticks_usec()-mark)
+			game.frame_trace.count("mesh_updates")
 		surface_revision = seen_revision
 		for pair in [["edge",0],["body",1],["gel",2],["rim",3],["shine",4]]:
 			surface.material.set_shader_parameter(pair[0],art.colors[pair[1]])
@@ -90,6 +94,7 @@ func _sync_surface(render_angle: float, changed: bool) -> void:
 	surface.material.set_shader_parameter("wakes",game.flow_wakes)
 
 func _draw() -> void:
+	var mark := Time.get_ticks_usec() if game.frame_trace != null else 0
 	if cell == null: return
 	var palette: Array = art.colors
 	var hue: Color = palette[1]
@@ -155,7 +160,10 @@ func _draw() -> void:
 	if game.show_senses:
 		draw_line(Vector2.ZERO,cell.target.rotated(-cell.angle)*(cell.radius+80),Color("b5a3f4"),2,true)
 
+	if game.frame_trace != null: game.frame_trace.work("cell_draw_commands",Time.get_ticks_usec()-mark)
+
 func _draw_organs() -> void:
+	var mark := Time.get_ticks_usec() if game.frame_trace != null else 0
 	for organ in cell.organs:
 		var point: Vector2 = cell.local_point(organ.a)
 		var at: Vector2 = point+point.normalized()*5*organ.scale
@@ -179,3 +187,5 @@ func _draw_organs() -> void:
 				appendages.draw_circle(end.lerp(at,t),4,Color("a1e88a"))
 		if organ.hp < organ.max_hp:
 			appendages.draw_arc(at,19*organ.scale,-PI/2,-PI/2+TAU*organ.hp/organ.max_hp,24,Color("fc8c90"),2,true)
+
+	if game.frame_trace != null: game.frame_trace.work("organ_draw_commands",Time.get_ticks_usec()-mark)

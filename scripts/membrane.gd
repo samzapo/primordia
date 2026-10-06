@@ -4,6 +4,7 @@ extends RefCounted
 const COUNT := 28
 var kernels = preload("res://scripts/backend.gd").create()
 var native_constraints := kernels != null
+var native_compression := true
 const Network = preload("res://scripts/cytoskeleton.gd")
 var skeleton = Network.new()
 var maximum_radius := 47.0
@@ -118,6 +119,13 @@ func step(dt: float, radius: float, acceleration: Vector2, time: float, _aspect:
 		points[i] = corrected
 
 func compress(local_angle: float, depth: float, radius: float) -> void:
+	if native_constraints and native_compression:
+		var solved: Array = kernels.membrane_compress(points,previous,local_angle,depth,radius)
+		points = solved[0]
+		previous = solved[1]
+		maximum_radius = solved[2]
+		invalidate()
+		return
 	# Spread dents across nodes, redistribute area, preserve polar ordering and
 	# shift Verlet history so positional correction creates no launch velocity.
 	var before_area := 0.0
