@@ -258,6 +258,29 @@ func _particles() -> void:
 	expect(scene.inspector.hovered.is_empty() and scene.inspector.lens_amount == 0 and not scene.inspector.box.visible,"Moving off particles dismisses their magnifier and tooltip")
 	sim.spawn_particle(Sim.TOXIN,sim.player.position)
 	expect(scene.inspector.pick(scene.camera_screen,1).is_empty(),"Covered particles cannot be picked through a cell body")
+	var tracer: Dictionary = sim._emit_pheromone(sim.player)
+	tracer.p = sim.player.position
+	tracer.previous = tracer.p
+	sim.grid.rebuild(sim.particles)
+	tracer.expires_at = sim.time+10
+	scene._update_world(1)
+	for native in [false,true] if sim.kernels != null else [false]:
+		sim.native_render = native
+		scene._sync_particles(1)
+		var buffer: PackedFloat32Array = scene.buffers[Sim.PHEROMONE]
+		var found := false
+		for i in scene.batches[Sim.PHEROMONE].multimesh.visible_instance_count:
+			if Vector2(buffer[i*12+3],buffer[i*12+7]).length() < 0.01: found = true
+		expect(found,"Pheromone artwork stays at its true location inside the cell in both rendering paths")
+	var through_cell: Dictionary = scene.inspector.pick(scene.camera_screen,1)
+	expect(not through_cell.is_empty() and through_cell.kind == Sim.PHEROMONE,"Pheromones remain inspectable through cell interiors")
+	scene.inspector.update_lens(0.2,scene.camera_screen,1,true)
+	expect(scene.inspector.label.text.contains("Reported size:") and scene.inspector.label.text.contains("unarmed"),"The local tooltip describes the emitted metadata")
+	var prior_text: String = scene.inspector.label.text
+	tracer.report.hostile = true
+	scene.inspector.update_lens(0.2,scene.camera_screen,1,true)
+	expect(scene.inspector.label.text != prior_text and scene.inspector.label.text.contains("armed"),"Inspection reads the packet rather than the live unarmed cell")
+	expect(scene.batches[Sim.PHEROMONE].z_index > scene.batches[Sim.NUTRIENT].z_index,"Point tracers are drawn above physical cells")
 	scene.camera_locked = false
 	scene.free_camera = Vector2(4090,1000)
 	sim.player.position = Vector2(2000,1200)

@@ -115,3 +115,9 @@ There are no persistent top/bottom/build panes. Editing supports magnification u
 The owner made engaging music a core component, naming Crypt of the NecroDancer and Dicey Dungeons as particular favorites, plus Neophyte and Nova Drift. Preserve original progressive-techno composition with anatomy-derived instruments, proximity-driven audibility and density, and lower registers for larger biomass. Large entering organisms announce themselves quietly in bass and become louder as they approach the viewer center. Audio and visual beat response must remain separate from authoritative chemistry and motion.
 
 Starting cells now have 0–4 randomly tensioned original links, constructed sequentially so later links can join earlier ones as well as the membrane. Seeded replay and inherited edited anatomy remain intact. The implemented sound system, visual response and prospective immersion features are documented in [revision twelve](REVISION_12.md).
+
+## Revision 13: pheromones are the sole inter-cell sense
+
+The owner requires every creature to emit short-lived, current-advected and diffusing point pheromones carrying source location, size and hostility metadata. Receptors learn about other creatures exclusively by receiving these particles; no live source lookup may refresh the information. Pheromones ignore other particles and solids. Grazing and light sensing keep their existing resource inputs.
+
+Preserve emitted metadata snapshots, local receptor sampling, explicit flight, independent probabilistic expiry, down-current plumes and pass-through transport in every backend. These points are non-oriented signal tracers, an explicit exception to material-particle exclusion and binding-face graphics. See [revision thirteen](REVISION_13.md).

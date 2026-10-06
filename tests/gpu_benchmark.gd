@@ -9,6 +9,8 @@ func run() -> void:
 		return
 	var cpu = Sim.new(713)
 	var accelerated = Sim.new(713)
+	for sim in [cpu,accelerated]:
+		for i in 120: sim.spawn_particle(Sim.PHEROMONE,sim.player.position+Vector2(i*3-180,i%7*11))
 	cpu.view_half=Vector2(4000,3000)
 	accelerated.view_half=cpu.view_half
 	accelerated.gpu_transport=gpu

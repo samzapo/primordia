@@ -5,7 +5,7 @@ const DETAILS := [
 	"Food collected by grazing pores.",
 	"Supports efficient respiration.",
 	"Enzymes can convert it into food.",
-	"A cell's chemical trail; spikes and flight receptors sense it.",
+	"A drifting cell report. Spikes and flight receptors read its last-known location, size and hostility.",
 	"Damages foreign cells; antitoxin can neutralize it.",
 	"Photosynthesis uses it in bright water.",
 	"Reuses waste as food when its binding face aligns.",
@@ -47,7 +47,8 @@ func pick(screen: Vector2, alpha: float) -> Dictionary:
 	var sim = game.world
 	var at: Vector2 = sim.Medium.wrap_position(game.render_camera+(screen-game.camera_screen)/game.zoom)
 	candidates_examined = 0
-	# Reject covered water before querying chemistry, including interpolated cell poses.
+	# Material stays outside cells; dissolved pheromones remain visible through them.
+	var covered := false
 	for cell in sim.cells:
 		if cell.dead: continue
 		var fraction: float = alpha if cell.activity > 0 else 1.0
@@ -55,14 +56,16 @@ func pick(screen: Vector2, alpha: float) -> Dictionary:
 		var d: Vector2 = sim.Medium.offset(center,at)
 		if d.length_squared() > pow(cell.extent()+8,2): continue
 		var heading := lerp_angle(cell.previous_angle,cell.angle,fraction)
-		if d.length() < cell.visible_support(d.angle()-heading): return {}
+		if d.length() < cell.visible_support(d.angle()-heading):
+			covered = true
+			break
 	if sim.grid.source_size != sim.particles.size(): sim.grid.rebuild(sim.particles)
 	var best := INF
 	var result := {}
 	# One neighboring-bucket query, with padding for one interpolated transport step.
 	for index in sim.grid.query(at,16/game.zoom+64):
 		var particle: Dictionary = sim.particles[index]
-		if not particle.alive: continue
+		if not sim._pheromone_alive(particle) or (covered and particle.kind != sim.PHEROMONE): continue
 		candidates_examined += 1
 		var p: Vector2 = particle.p
 		var angle: float = particle.angle
@@ -73,7 +76,7 @@ func pick(screen: Vector2, alpha: float) -> Dictionary:
 		var radius: float = sim.particle_radius(particle.kind)*sim.particle_scale(particle.amount)*game.zoom
 		var tolerance: float = maxf(radius+3,7)
 		if screen.distance_to(screen_point) > tolerance+10: continue
-		p = game._visible_particle_position(p,alpha)
+		if particle.kind != sim.PHEROMONE: p = game._visible_particle_position(p,alpha)
 		screen_point = game.camera_screen+sim.Medium.offset(game.render_camera,p)*game.zoom
 		var distance := screen.distance_to(screen_point)
 		if distance <= tolerance and distance < best:
@@ -106,6 +109,11 @@ func update_lens(dt: float, screen: Vector2, alpha: float, allowed: bool) -> voi
 	box.visible = active and lens_amount > 0.15
 	if box.visible:
 		var value: String = Art.NAMES[hovered.kind]+"\n"+DETAILS[hovered.kind]
+		if hovered.kind == game.world.PHEROMONE:
+			var packet: Dictionary = game.world.particles[hovered.index]
+			var report: Dictionary = packet.get("report",{})
+			if not report.is_empty():
+				value += "\nReported size: %.0f μm across · %s\nSignal age: %.1f s" % [report.radius*2*game.scale_bar.MICROMETERS_PER_UNIT,"armed" if report.hostile else "unarmed",maxf(0,game.world.time-report.emitted_at)]
 		label.custom_minimum_size.x = minf(260*game.preferences.hud_scale,get_viewport_rect().size.x-36)
 		label.add_theme_font_size_override("font_size",roundi(15*game.preferences.hud_scale))
 		if label.text != value:

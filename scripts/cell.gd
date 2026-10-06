@@ -13,6 +13,7 @@ var previous_position := Vector2.ZERO
 var previous_angle := 0.0
 var target_id := -1
 var target_memory := 0.0
+var target_expires_at := INF
 var target_position := Vector2.ZERO
 var target_mode := "graze"
 var target_mouth := 0.0

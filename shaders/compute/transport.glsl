@@ -11,8 +11,11 @@ vec2 sample_flow(vec2 p) { vec2 q=mod(p,WORLD)/64.-.5; ivec2 lo=ivec2(floor(q));
 void main(){
  uint i=gl_GlobalInvocationID.x; if(i>=params.count)return;
  Particle p=particles[i]; float dt=params.dt*p.thermal.w; if(dt<=0.)return;
- p.pose.xy=mod(p.pose.xy+(p.motion.xy+sample_flow(p.pose.xy))*dt+p.thermal.xy*sqrt(12.*dt),WORLD);
- p.motion.xy*=exp(-dt*.8); p.motion.z+=dt;
+ bool tracer=p.motion.w==3.;
+ float diffusion=tracer ? 240. : 12.;
+ p.pose.xy=mod(p.pose.xy+((tracer ? vec2(0.) : p.motion.xy)+sample_flow(p.pose.xy))*dt+p.thermal.xy*sqrt(diffusion*dt),WORLD);
+ p.motion.xy=tracer ? vec2(0.) : p.motion.xy*exp(-dt*.8); p.motion.z+=dt;
  p.pose.z=mod(p.pose.z+p.pose.w*dt+p.thermal.z*sqrt(1.2*dt)+3.14159265359,6.28318530718)-3.14159265359;
+ if(tracer)p.pose.z=0.;
  particles[i]=p;
 }

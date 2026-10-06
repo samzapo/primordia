@@ -79,7 +79,7 @@ func step(particles: Array, ids: Array[int], velocity: PackedVector2Array, camer
 		var k := active.size()*12
 		active.append(id)
 		data[k]=p.p.x; data[k+1]=p.p.y; data[k+2]=p.angle; data[k+3]=p.spin
-		data[k+4]=p.v.x; data[k+5]=p.v.y; data[k+6]=p.age; data[k+7]=0
+		data[k+4]=p.v.x; data[k+5]=p.v.y; data[k+6]=p.age; data[k+7]=p.kind
 		data[k+8]=rng.randfn(); data[k+9]=rng.randfn(); data[k+10]=rng.randfn(); data[k+11]=visibility
 	data.resize(active.size()*12)
 	if active.is_empty(): return 0
@@ -94,7 +94,7 @@ func step(particles: Array, ids: Array[int], velocity: PackedVector2Array, camer
 		p.previous=p.p; p.previous_angle=p.angle; p.updated=revision
 		p.p=Vector2(data[k],data[k+1]); p.angle=data[k+2]
 		p.v=Vector2(data[k+4],data[k+5]); p.age=data[k+6]
-		p.direction=Vector2.from_angle(p.angle)
+		p.direction=Vector2.ZERO if p.kind == 3 else Vector2.from_angle(p.angle)
 	metrics={"pack_us":packed-begin,"gpu_roundtrip_us":transferred-packed,"unpack_us":Time.get_ticks_usec()-transferred}
 	return active.size()
 func close() -> void:

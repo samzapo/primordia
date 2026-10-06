@@ -12,7 +12,7 @@ const GOLD := Color("f5d47b")
 const TEXT := Color("e5f5ec")
 const MUTED := Color("a3bfc5")
 const TITLES := ["Flagellum","Protective cortex","Hunting spike","Repair body","Grazing pore","Flight receptor","Photosynthesis","Toxin vesicle","Toxin neutralizer","Acid gland"]
-const HELP := ["Flagella provide thrust. Anatomy chooses travel direction.","Protects the membrane directly beneath it. Coverage follows its membrane attachment.","Senses lower total biomass cells at long range, turns toward them and pulls you into pursuit. Its physical tip punctures on contact.","Uses biomass and ATP to repair organs and close punctures faster. Releases buffers that neutralize local acidity and accelerates receptor cleaning.","Senses and pumps nutrients into its opening. Secretes reusable enzymes that turn waste into food when aligned.","Faces a detected cell while propelling you away. This is the only organ that triggers flight.","Seeks brighter water. Light fixes dissolved carbon into biomass and food, releasing oxygen. Works best in bright habitat patches.","Spends ATP and biomass to fire toxins and receptor-blocking decoys at a cell detected by a spike or flight receptor.","Releases complementary particles that bind toxin into harmless waste. Costs small amounts of biomass and ATP.","Releases acidifying particles. Moderate acidity favors digestive enzymes; excess acidity costs ATP and stresses cells. Repair bodies release buffers."]
+const HELP := ["Flagella provide thrust. Anatomy chooses travel direction.","Protects the membrane directly beneath it. Coverage follows its membrane attachment.","Reads nearby pheromones reporting smaller cells, turns toward their last reported location and pulls you into pursuit. Its physical tip punctures on contact.","Uses biomass and ATP to repair organs and close punctures faster. Releases buffers that neutralize local acidity and accelerates receptor cleaning.","Senses and pumps nutrients into its opening. Secretes reusable enzymes that turn waste into food when aligned.","Reads nearby pheromones reporting larger or armed cells and retreats from their last reported location. This is the only organ that triggers flight.","Seeks brighter water. Light fixes dissolved carbon into biomass and food, releasing oxygen. Works best in bright habitat patches.","Spends ATP and biomass to fire toxins and receptor-blocking decoys toward a pheromone report received by a spike or flight receptor.","Releases complementary particles that bind toxin into harmless waste. Costs small amounts of biomass and ATP.","Releases acidifying particles. Moderate acidity favors digestive enzymes; excess acidity costs ATP and stresses cells. Repair bodies release buffers."]
 var music := preload("res://scripts/music_director.gd").new()
 var music_slider := HSlider.new()
 var pulse_slider := HSlider.new()
@@ -129,6 +129,7 @@ func _ready() -> void:
 		instance.texture = ParticleArt.texture(kind)
 		instance.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 		instance.material = particle_material
+		instance.z_index = 2 if kind == Simulation.PHEROMONE else 0
 		world_layer.add_child(instance)
 		batches.append(instance)
 		particle_lod.append(0)
@@ -307,7 +308,7 @@ func _sync_particles(alpha: float = 1.0) -> void:
 		if not p.alive: continue
 		var at: Vector2 = p.p
 		if p.get("updated",-1) == world.revision: at = p.previous+Simulation.Medium.offset(p.previous,p.p)*alpha
-		at = _visible_particle_position(at,alpha)
+		if p.kind != Simulation.PHEROMONE: at = _visible_particle_position(at,alpha)
 		at = Simulation.Medium.offset(render_camera,at)
 		if absf(at.x)>world.view_half.x+20 or absf(at.y)>world.view_half.y+20: continue
 		var kind: int = p.kind
@@ -316,7 +317,7 @@ func _sync_particles(alpha: float = 1.0) -> void:
 			batches[kind].multimesh.instance_count *= 2
 			buffers[kind].resize(batches[kind].multimesh.instance_count*12)
 		var color := Color.WHITE
-		color.a = 0.6 if kind in [Simulation.OXYGEN,Simulation.DANGER] else 1.0
+		color.a = 0.6 if kind in [Simulation.OXYGEN,Simulation.PHEROMONE] else 1.0
 		var offset := slot*12
 		# Transform2D row-major (8 floats), followed by RGBA (4 floats).
 		var heading: float = lerp_angle(p.previous_angle,p.angle,alpha) if p.get("updated",-1) == world.revision else p.angle

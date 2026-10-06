@@ -1,12 +1,12 @@
 extends RefCounted
 ## Authored vector paths; raster textures and mipmaps are generated once at runtime.
 ## Every glyph faces +X, the same axis used by Simulation's binding direction.
-const NAMES := ["Nutrient", "Oxygen", "Waste", "Cell trace", "Toxin", "Carbon", "Enzyme", "Antitoxin", "Acid", "Buffer", "Decoy"]
+const NAMES := ["Nutrient", "Oxygen", "Waste", "Pheromone", "Toxin", "Carbon", "Enzyme", "Antitoxin", "Acid", "Buffer", "Decoy"]
 const GLYPHS := [
 	{"color":"91f04c", "shade":"268457", "path":"M -28 0 H -6 L 24 -21 M -6 0 L 24 21", "tips":"M 23 -21 H 26 M 23 21 H 26"},
 	{"color":"22d7f2", "shade":"278cb9", "path":"M -23 0 H 25", "lobes":"<circle cx='-20' cy='0' r='15'/><circle cx='23' cy='0' r='11'/>", "tips":"M 23 -2 H 27"},
 	{"color":"a955d0", "shade":"67458d", "path":"M -28 -16 L -12 16 L 7 -14 L 27 4", "tips":"M 25 2 L 28 5"},
-	{"color":"ff637d", "shade":"b7467b", "path":"M -25 -19 L -3 0 L -25 19 M -3 0 H 29", "tips":"M 26 0 H 30"},
+	{"color":"ffb9cb", "shade":"b7467b", "point":true, "path":"", "tips":""},
 	{"color":"ff407b", "shade":"b34379", "path":"M -28 0 H 29 M -8 0 L 18 -23 M -8 0 L 18 23", "tips":"M 25 0 H 29"},
 	{"color":"f4a755", "shade":"a87960", "path":"M -26 -19 L -8 0 L -26 19 M -8 0 H 24", "lobes":"<circle cx='22' cy='0' r='12'/>", "tips":"M 22 -2 H 27"},
 	{"color":"ffe34a", "shade":"8b9951", "path":"M -25 -23 V 23 M -25 -23 H 23 M -25 0 H 13 M -25 23 H 23", "tips":"M 21 -23 H 25 M 21 23 H 25"},
@@ -45,6 +45,8 @@ static func texture(kind: int, simplified: bool = false) -> Texture2D:
 	return textures[kind]
 
 static func _svg(glyph: Dictionary, simplified: bool = false) -> String:
+	if glyph.get("point",false):
+		return "<svg xmlns='http://www.w3.org/2000/svg' width='96' height='96' viewBox='-48 -48 96 96'><circle r='38' fill='#%s'/><circle r='22' fill='#fff4df'/></svg>" % glyph.color
 	# A dark underside, saturated body and short bright front make rotation legible.
 	# Decorative branches do not add extra reaction sites or collision geometry.
 	var path := "<path d='%s' fill='none'/>" % glyph.path

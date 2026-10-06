@@ -2,7 +2,7 @@
 
 A physics and chemistry simulation game about managing one small cell. Eat, grow and survive predation. **You never steer the cell:** its anatomy controls its behavior.
 
-This twelfth playable revision uses **Godot 4.7.2**, a fixed-step simulation, deformable membranes, oriented chemical particles and procedural 2D artwork. Its vector artwork is authored in the project; cached particle textures and mipmaps generate automatically at runtime. The default Linux launcher builds a batched C++ GDExtension automatically; the GDScript reference backend remains available.
+This thirteenth playable revision uses **Godot 4.7.2**, a fixed-step simulation, deformable membranes, oriented chemical particles and procedural 2D artwork. Its vector artwork is authored in the project; cached particle textures and mipmaps generate automatically at runtime. The default Linux launcher builds a batched C++ GDExtension automatically; the GDScript reference backend remains available.
 
 ## Run with Steam Godot on Linux
 
@@ -44,10 +44,10 @@ Fund an offspring's quoted additional tissue and **60 ATP** before **12:00**. Up
 | --- | --- | ---: | --- |
 | 1 | Flagellum | 8 | Supplies extra thrust and turns the detecting organ toward its target. |
 | 2 | Protective cortex | 10 | Absorbs local damage before the membrane. |
-| 3 | Hunting spike | 12 | Senses lower **total biomass** cells at long range, pulls toward them and punctures with its tip. |
+| 3 | Hunting spike | 12 | Reads local pheromones from lower **total biomass** cells, pursues their reported location and punctures with its tip. |
 | 4 | Repair body | 10 | Repairs damage, speeds receptor cleaning and releases acid buffers. |
 | 5 | Grazing pore | 8 | Senses nutrients, pumps surrounding fluid, eats particles and secretes reusable digestive enzymes. |
-| 6 | Flight receptor | 6 | Faces a sensed threat while requesting travel away. Only this organ triggers flight. |
+| 6 | Flight receptor | 6 | Reads pheromones reporting larger or armed cells, faces their reported location and requests travel away. Only this organ triggers flight. |
 | 7 | Photosynthesis | 12 | Seeks brighter water, fixes dissolved carbon into organic resources and releases oxygen. |
 | 8 | Toxin vesicle | 12 | Fires damaging toxin and receptor-blocking decoy particles toward a chemically sensed cell. |
 | 9 | Toxin neutralizer | 10 | Releases particles that bind toxin and make harmless material. |
@@ -67,7 +67,9 @@ Escape settings offer independent **Music volume** and **Particle beat response*
 
 **Cells are the only sources of external particles.** The initial clouds represent products of the existing cells' earlier life, with source-cell identifiers. There is no automatic food/oxygen habitat spawner. Respiration, lower-yield fermentation, photosynthesis, secretion, wounds, recycling and death sustain the particle economy. Replacing a dead NPC is an explicit population event with accounted material input. Hidden replacement remains preferred; forecasted tides can admit a bounded number of arrivals into safe visible space when wide zoom leaves no hidden habitat.
 
-Eleven particle types are visible: nutrient, oxygen, waste, cell trace, toxin, dissolved carbon, digestive enzyme, antitoxin, acidifying carrier, buffer and decoy. Forks, hooks, combs and linked lobes distinguish species; their bright tips rotate with the actual particle orientation. Compatible faces must touch and point toward each other to react; there is no additional reaction success roll. Thermal motion tumbles particles, and decay uses a per-second hazard instead of a fixed lifetime. Neighbor searches use spatial grids rather than all-pairs testing.
+**Cells only learn about other cells through pheromones.** Every active creature releases small signal points that drift with current, diffuse and decay rapidly (mean lifetime 5 seconds). They pass through cells, reefs and other particles. Nearby receptors read the source's location, size and hostile anatomy **as they were at release**; a distant plume may be stale, and losing it ends pursuit. No live target tracking bypasses the trail. Hover a point to inspect its reported size, armed status and age. [Revision 13](docs/REVISION_13.md) describes the rules and validation.
+
+Eleven particle types are visible: nutrient, oxygen, waste, pheromone, toxin, dissolved carbon, digestive enzyme, antitoxin, acidifying carrier, buffer and decoy. Forks, hooks, combs and linked lobes distinguish reacting species; their bright tips rotate with the actual particle orientation. Pheromones are non-oriented points. Compatible faces must touch and point toward each other to react; there is no additional reaction success roll. Thermal motion tumbles particles, and decay uses a per-second hazard instead of a fixed lifetime. Neighbor searches use spatial grids rather than all-pairs testing.
 
 | Encounter | Result |
 | --- | --- |

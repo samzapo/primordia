@@ -180,7 +180,7 @@ func move_particles(particles: Array, ids: Array, revision: int, grid, native: b
 		return
 	for index in ids:
 		var packet: Dictionary = particles[index]
-		if not packet.alive or packet.get("updated",-1) != revision: continue
+		if not packet.alive or packet.get("kind",0) == 3 or packet.get("updated",-1) != revision: continue # Pheromones pass through solids.
 		var candidates := query(packet.previous,packet.p,4.0)
 		if candidates.is_empty(): continue
 		var result := move(packet.previous,packet.p,packet.v,4.0,candidates)

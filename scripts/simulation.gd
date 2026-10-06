@@ -30,7 +30,10 @@ const COST := Cell.COST
 const NUTRIENT := 0
 const OXYGEN := 1
 const WASTE := 2
-const DANGER := 3
+const PHEROMONE := 3
+const PHEROMONE_RATE := 8.0
+const PHEROMONE_DECAY := 0.2 # Exponential lifetime: mean 5 s, half-life 3.47 s.
+const PHEROMONE_DIFFUSION := 120.0 # World units squared / second (material: 6).
 const TOXIN := 4
 const CARBON := 5
 const ENZYME := 6
@@ -49,6 +52,8 @@ var acidity = Acidity.new()
 var player = Cell.new(0,Vector2(2048,1280))
 var cells: Array = []
 var particles: Array = []
+# References to signal packets only; expiry never scans all material each tick.
+var pheromones: Array = []
 var events: Array = []
 var pending_replacements: Array = []
 var next_id := 1
@@ -135,11 +140,6 @@ func local_particle_ids(margin: float = 0.0) -> Array[int]:
 	if grid.source_size != particles.size(): grid.rebuild(particles)
 	return grid.query_rect(player.position if camera_follows_player else camera_position,view_half+Vector2.ONE*margin)
 
-func cell_by_id(identity: int):
-	for cell in cells:
-		if cell.id == identity and not cell.dead: return cell
-	return null
-
 func install(kind: String, local_angle: float, mode: String = "graze", size: float = 1.0) -> bool:
 	var cost := Evolution.install_price(size)
 	if evolution.terminal() or (evolution.enabled and evolution.points < cost): return false
@@ -159,7 +159,41 @@ func spawn_particle(kind: int, p: Vector2, v: Vector2 = Vector2.ZERO, amount: fl
 	particles.append({"kind":kind,"p":Medium.wrap_position(p),"previous":Medium.wrap_position(p),"v":v,"amount":amount,"age":0.0,"alive":true,"owner":owner,"source_radius":source_radius,"angle":rng.randf()*TAU,"previous_angle":0.0,"spin":rng.randfn(0,0.8),"direction":Vector2.RIGHT,"capacity":amount})
 	particles[-1].previous_angle = particles[-1].angle
 	particles[-1].direction = Vector2.from_angle(particles[-1].angle)
+	if kind == PHEROMONE:
+		# Dissolved point tracers have no momentum, binding face or material budget.
+		particles[-1].v = Vector2.ZERO
+		particles[-1].angle = 0.0
+		particles[-1].previous_angle = 0.0
+		particles[-1].spin = 0.0
+		particles[-1].direction = Vector2.ZERO
+		particles[-1].expires_at = time-log(maxf(rng.randf(),0.000000001))/PHEROMONE_DECAY
+		pheromones.append(particles[-1])
 	grid.insert(particles.size()-1,particles[-1].p)
+
+func _emit_pheromone(cell) -> Dictionary:
+	var direction := Vector2.from_angle(rng.randf()*TAU)
+	var at: Vector2 = cell.position+cell.local_point(direction.angle()).rotated(cell.angle)
+	spawn_particle(PHEROMONE,at,Vector2.ZERO,0.2,cell.id,cell.radius)
+	var p: Dictionary = particles[-1]
+	var hostile := false
+	for organ in cell.organs:
+		if organ.kind in ["offensive","toxin"] and organ.hp > 0: hostile = true
+	# Value snapshots, never a Cell reference. Coordinates are deliberately old
+	# once the source moves; size and hostile anatomy can only update via new cues.
+	p.report = {"id":cell.id,"lineage":cell.lineage_id(),"at":cell.position,
+		"mass":cell.organic_mass(),"radius":cell.radius,"hostile":hostile,"emitted_at":time}
+	return p
+
+func _pheromone_alive(p: Dictionary) -> bool:
+	return p.alive and (p.kind != PHEROMONE or p.get("expires_at",0.0) > time)
+
+func _expire_pheromones() -> void:
+	# Only signal references are visited, including offscreen ones. Global-clock
+	# expiry prevents dormant clouds from reviving obsolete reports.
+	for p in pheromones:
+		if p.alive and p.expires_at <= time:
+			p.alive = false
+			chemistry_events.decay += 1
 
 func _emit_material(kind: int, at: Vector2, amount: float, motion: Vector2 = Vector2.ZERO, owner: int = 0) -> void:
 	# Packet merging requires oriented contact, never an emission shortcut.
@@ -193,6 +227,7 @@ func step(dt: float) -> void:
 	_suction(dt)
 	profile_usec["fluid"] = Time.get_ticks_usec()-mark
 	mark = Time.get_ticks_usec()
+	_expire_pheromones()
 	_move_particles(dt)
 	habitat_geometry.move_particles(particles,local_particle_ids(64),revision,grid,native_particles)
 	_chemistry(dt)
@@ -256,6 +291,7 @@ func step(dt: float) -> void:
 	spawn_clock += dt
 	if spawn_clock >= 0.5:
 		spawn_clock -= 0.5
+		pheromones = pheromones.filter(func(p): return p.alive)
 		particles = particles.filter(func(p): return p.alive)
 		grid.rebuild(particles)
 		_replace_population()
@@ -284,13 +320,17 @@ func _move_particles(dt: float) -> void:
 		var step_dt = dt*scale
 		particle.updated = revision
 		particle.previous = particle.p
-		particle.p = Medium.wrap_position(particle.p+(particle.v+fluid.sample(particle.p))*step_dt+Vector2(rng.randfn(),rng.randfn())*sqrt(12*step_dt))
+		var tracer: bool = particle.kind == PHEROMONE
+		var diffusion := PHEROMONE_DIFFUSION if tracer else 6.0
+		var drift: Vector2 = fluid.sample(particle.p)+(Vector2.ZERO if tracer else particle.v)
+		particle.p = Medium.wrap_position(particle.p+drift*step_dt+Vector2(rng.randfn(),rng.randfn())*sqrt(2*diffusion*step_dt))
 		grid.move(index,particle.previous,particle.p)
-		particle.v *= exp(-step_dt*0.8)
+		particle.v = Vector2.ZERO if tracer else particle.v*exp(-step_dt*0.8)
 		particle.age += step_dt
 		particle.previous_angle = particle.angle
 		particle.angle = wrapf(particle.angle+particle.spin*step_dt+rng.randfn()*sqrt(1.2*step_dt),-PI,PI)
-		particle.direction = Vector2.from_angle(particle.angle)
+		if tracer: particle.angle = 0.0
+		particle.direction = Vector2.ZERO if tracer else Vector2.from_angle(particle.angle)
 
 func _chemistry(dt: float) -> void:
 	if native_particles:
@@ -308,10 +348,10 @@ func _chemistry(dt: float) -> void:
 		var p: Dictionary = particles[index]
 		p.reaction_activity = activity_at(p.p) if p.alive else 0.0
 		p.contact_radius = particle_radius(p.kind)*particle_scale(p.amount)
-		if p.reaction_activity > 0: reaction_grid.insert(index,p.p)
+		if p.reaction_activity > 0 and p.kind != PHEROMONE: reaction_grid.insert(index,p.p)
 	for index in local_ids:
 		var p: Dictionary = particles[index]
-		if not p.alive: continue
+		if not p.alive or p.kind == PHEROMONE: continue
 		var local_dt: float = dt*p.reaction_activity
 		if local_dt <= 0: continue
 		if p.kind in [ACID,BUFFER]:
@@ -319,16 +359,16 @@ func _chemistry(dt: float) -> void:
 			var used := absf(acidity.exchange(p.p,sign_value*minf(p.capacity,local_dt*0.2)))
 			p.capacity -= used
 			if p.capacity <= 0.000001: p.kind = WASTE
-		if chance([0.003,0.008,0.006,0.65,0.1,0.001,0.02,0.015,0.008,0.008,0.08][p.kind],local_dt):
-			if p.kind != OXYGEN and p.kind != DANGER: respiration_loss += p.amount
+		if chance([0.003,0.008,0.006,0.0,0.1,0.001,0.02,0.015,0.008,0.008,0.08][p.kind],local_dt):
+			if p.kind != OXYGEN: respiration_loss += p.amount
 			p.alive = false
 			chemistry_events.decay += 1
 			continue
-		if p.kind == DANGER or p.get("reacted",-1) == revision: continue
+		if p.get("reacted",-1) == revision: continue
 		for other_index in reaction_grid.query(p.p,18):
 			if other_index <= index: continue
 			var other: Dictionary = particles[other_index]
-			if not other.alive or other.kind == DANGER or other.get("reacted",-1) == revision: continue
+			if not other.alive or other.kind == PHEROMONE or other.get("reacted",-1) == revision: continue
 			var delta := Medium.offset(p.p,other.p)
 			var contact: float = p.contact_radius+other.contact_radius
 			if delta.length_squared() > contact*contact: continue
@@ -476,8 +516,8 @@ func _suction(dt: float) -> void:
 
 func _sense(cell, dt: float) -> void:
 	# A memory or in-flight signal cannot outlive its source organ.
-	cell.signals = cell.signals.filter(func(packet): return not cell.organ_by_id(packet.organ_id).is_empty())
-	if cell.organ_by_id(cell.target_organ_id).is_empty(): cell.target_memory = 0
+	cell.signals = cell.signals.filter(func(packet): return packet.get("expires_at",INF) > time and not cell.organ_by_id(packet.organ_id).is_empty())
+	if cell.organ_by_id(cell.target_organ_id).is_empty() or cell.target_expires_at <= time: cell.target_memory = 0
 	cell.sense_clock -= dt
 	cell.target_memory = maxf(0,cell.target_memory-dt)
 	if cell.sense_clock <= 0:
@@ -488,7 +528,7 @@ func _sense(cell, dt: float) -> void:
 		for organ in cell.organs:
 			if organ.kind not in ["feeding","sensing","offensive","photosynthesis"]: continue
 			var mode: String = "hunt" if organ.kind == "offensive" else "light" if organ.kind == "photosynthesis" else organ.mode
-			var reach: float = (760.0 if mode == "hunt" else 310.0)*sqrt(organ.scale)*(1-organ.blocked*0.65)*Genes.factor(organ,"sense")
+			var reach: float = (120.0 if mode == "hunt" else 90.0 if mode == "flee" else 310.0)*sqrt(organ.scale)*(1-organ.blocked*0.65)*Genes.factor(organ,"sense")
 			var receptor: Vector2 = cell.organ_position(organ)
 			if mode == "light":
 				var direction := light_direction(receptor)
@@ -497,6 +537,7 @@ func _sense(cell, dt: float) -> void:
 					best = {"mode":"light","id":-1,"at":cell.position+direction*150,"a":organ.a,"organ_id":organ.id}
 				continue
 			var food := Vector2.ZERO
+			var reports: Dictionary = {}
 			for index in grid.query(receptor,reach):
 				var p: Dictionary = particles[index]
 				if not p.alive or p.owner == cell.id: continue
@@ -504,21 +545,30 @@ func _sense(cell, dt: float) -> void:
 				if distance > reach: continue
 				if mode == "graze" and p.kind == NUTRIENT:
 					food += Medium.offset(cell.position,p.p).normalized()*p.amount/maxf(25,distance)
-				elif p.kind == DANGER and mode in ["hunt","flee"]:
-					var prey = cell_by_id(p.owner)
-					if prey == null or prey.lineage_id() == cell.lineage_id(): continue
-					if mode == "hunt" and prey.organic_mass() >= cell.organic_mass(): continue
-					var score := (100.0 if mode == "flee" else 2.0)+1.0/(1+distance)
-					if prey.id == cell.target_id: score += 0.05
-					if score > best_score:
-						best_score = score
-						best = {"mode":mode,"id":prey.id,"at":prey.position,"a":organ.a,"organ_id":organ.id}
+				elif p.kind == PHEROMONE and mode in ["hunt","flee"] and _pheromone_alive(p):
+					var report: Dictionary = p.get("report",{})
+					if report.is_empty() or report.lineage == cell.lineage_id(): continue
+					# The newest locally received report from a source supersedes an
+					# older one, including a report that it is now too big to attack.
+					if reports.has(report.id) and reports[report.id].report.emitted_at >= report.emitted_at: continue
+					reports[report.id] = {"report":report,"distance":distance,"expires_at":p.expires_at}
+			for detected in reports.values():
+				var report: Dictionary = detected.report
+				if mode == "hunt" and report.mass >= cell.organic_mass(): continue
+				if mode == "flee" and not report.hostile and report.mass <= cell.organic_mass(): continue
+				var age: float = maxf(0,time-report.emitted_at)
+				var score: float = (100.0 if mode == "flee" else 2.0)+1.0/(1+age)+0.1/(1+detected.distance)
+				if mode == "flee" and report.hostile: score += 1.0
+				if report.id == cell.target_id: score += 0.05
+				if score > best_score:
+					best_score = score
+					best = {"mode":mode,"id":report.id,"at":report.at,"a":organ.a,"organ_id":organ.id,"expires_at":detected.expires_at}
 			if food.length() > 0.001 and best_score < 1:
 				best_score = 1
 				best = {"mode":"graze","id":-1,"at":cell.position+food.normalized()*100,"a":organ.a,"organ_id":organ.id}
 		if not best.is_empty():
 			cell.sensed = true
-			cell.signals.append({"p":cell.local_point(best.a)*0.75,"mode":best.mode,"id":best.id,"at":best.at,"fear":best.mode == "flee","organ_id":best.organ_id})
+			cell.signals.append({"p":cell.local_point(best.a)*0.75,"mode":best.mode,"id":best.id,"at":best.at,"fear":best.mode == "flee","organ_id":best.organ_id,"expires_at":best.get("expires_at",INF)})
 	for packet in cell.signals:
 		packet.p = packet.p.move_toward(Vector2.ZERO,dt*(220+cell.radius*2))
 		if packet.p.length() < 5:
@@ -526,7 +576,8 @@ func _sense(cell, dt: float) -> void:
 			cell.target_position = packet.at
 			cell.target_mode = packet.mode
 			cell.target_organ_id = packet.organ_id
-			cell.target_memory = 1.2
+			cell.target_expires_at = packet.expires_at
+			cell.target_memory = minf(1.2,packet.expires_at-time)
 	cell.signals = cell.signals.filter(func(packet): return packet.p.length() >= 5)
 	if cell.target_memory > 0:
 		cell.facing = Medium.offset(cell.position,cell.target_position).normalized()
@@ -625,9 +676,11 @@ func _secretion_needed(cell, organ: Dictionary, kind: int) -> bool:
 	return false
 
 func _emit_and_attack(cell, dt: float) -> void:
-	if chance(4.0,dt):
-		var direction := Vector2.from_angle(rng.randf()*TAU)
-		spawn_particle(DANGER,cell.position+direction*(cell.radius+9),direction*20,0.2,cell.id,cell.radius)
+	# Every living active creature signals, independently of energy or anatomy.
+	cell.emission_clock -= dt
+	while cell.emission_clock <= 0:
+		cell.emission_clock += 1.0/PHEROMONE_RATE
+		_emit_pheromone(cell)
 	if cell.carbon > (3.0 if cell.count("photosynthesis") == 0 else 20.0) and chance(5.0,dt):
 		var amount: float = minf(0.3,cell.carbon)
 		cell.carbon -= amount
@@ -793,7 +846,7 @@ func _exclude_particles() -> void:
 	# cytoplasm. Preserve material, and move bucket/interpolation history too.
 	for index in local_particle_ids():
 		var p: Dictionary = particles[index]
-		if not p.alive or activity_at(p.p) <= 0: continue
+		if not p.alive or p.kind == PHEROMONE or activity_at(p.p) <= 0: continue
 		for iteration in 3:
 			var moved := false
 			for cell_id in cell_index.at(p.p) if spatial_queries else range(cells.size()):

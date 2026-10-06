@@ -23,6 +23,7 @@ func _run() -> void:
 	_test_metabolism()
 	_test_anatomy()
 	_test_receptors()
+	preload("res://tests/pheromones.gd").run(expect)
 	_test_packing_and_size()
 	_test_pump_and_facing()
 	_test_coverage_and_pulses()
@@ -69,7 +70,7 @@ func organic(sim) -> float:
 	for cell in sim.cells:
 		if not cell.dead: total += cell.organic_mass()
 	for p in sim.particles:
-		if p.alive and p.kind not in [Sim.OXYGEN,Sim.DANGER]: total += p.amount + p.get("product",0.0)
+		if p.alive and p.kind not in [Sim.OXYGEN,Sim.PHEROMONE]: total += p.amount + p.get("product",0.0)
 	return total
 
 func _test_metabolism() -> void:
@@ -204,7 +205,7 @@ func _test_propulsion_and_toxins() -> void:
 	expect(toxins == 0,"Food sensing alone does not trigger wasteful attacks")
 	var threat = sim._make_cell(sim.player.position+Vector2(100,0),"hunter")
 	sim.player.add_organ("sensing",1.2,"flee",false)
-	sim.spawn_particle(Sim.DANGER,threat.position,Vector2.ZERO,1,threat.id,90)
+	preload("res://tests/pheromones.gd").deliver(sim,threat)
 	sim.grid.rebuild(sim.particles)
 	for i in 45: sim._sense(sim.player,DT)
 	var energy: float = sim.player.energy
@@ -498,12 +499,14 @@ func _test_receptors() -> void:
 	var sim = isolated()
 	var prey = sim._make_cell(sim.player.position+Vector2(150,0),"hunter")
 	prey.organs.clear()
-	sim.spawn_particle(Sim.DANGER,prey.position,Vector2.ZERO,1,prey.id,prey.radius)
+	preload("res://tests/pheromones.gd").deliver(sim,prey)
 	sim.spawn_particle(Sim.NUTRIENT,sim.player.position+Vector2(90,0))
 	for i in 60: sim._sense(sim.player,DT)
 	expect(sim.player.count("sensing") == 0 and sim.player.target_mode == "graze" and sim.player.target.x > 0,"Grazing pore owns nutrient sensing without automatic flight")
 	expect(not sim.player.add_organ("sensing",1.2,"hunt",false),"Separate hunting receptor is no longer available")
 	sim.player.add_organ("sensing",1.2,"flee",false)
+	sim.particles[0].p = sim.player.organ_position(sim.player.organs[-1])+Vector2(20,0)
+	sim.grid.rebuild(sim.particles)
 	for i in 60: sim._sense(sim.player,DT)
 	expect(sim.player.target_mode == "flee" and sim.player.target.x < 0 and sim.player.facing.x > 0,"Flight faces the threat and requests movement away")
 	sim.player.recycle(sim.player.organs.size()-1)
@@ -513,11 +516,13 @@ func _test_receptors() -> void:
 	sim.player.organs.clear()
 	sim.player.add_organ("offensive",1.2,"graze",false)
 	prey = sim._make_cell(sim.player.position+Vector2(600,0),"grazer")
-	sim.spawn_particle(Sim.DANGER,prey.position,Vector2.ZERO,1,prey.id,prey.radius)
+	preload("res://tests/pheromones.gd").deliver(sim,prey)
 	for i in 60: sim._sense(sim.player,DT)
-	expect(sim.player.target_id == prey.id and sim.player.target.x > 0,"Spike senses lower-biomass prey at 600 units")
+	expect(sim.player.target_id == prey.id and sim.player.target.x > 0,"Spike learns about distant lower-biomass prey from a locally delivered pheromone")
 	expect(absf(sim.player.target_mouth-1.2) < 0.01,"Pursuit faces the spike toward the prey")
 	prey.body = 500
+	sim.time += 0.1
+	preload("res://tests/pheromones.gd").deliver(sim,prey)
 	for i in 100: sim._sense(sim.player,DT)
 	expect(sim.player.target_id == -1,"Spike stops pursuing prey with higher total biomass")
 	expect(not sim.player.add_organ("feeding",0,"engulf",false) and not sim.player.add_organ("feeding",0,"parasite",false),"Removed feeding specializations cannot be installed")

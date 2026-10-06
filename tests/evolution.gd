@@ -8,7 +8,7 @@ func total(sim) -> float:
 	for cell in sim.cells:
 		if not cell.dead: mass += cell.organic_mass()
 	for particle in sim.particles:
-		if particle.alive and particle.kind not in [sim.OXYGEN,sim.DANGER]: mass += particle.amount
+		if particle.alive and particle.kind not in [sim.OXYGEN,sim.PHEROMONE]: mass += particle.amount
 	return mass+sim.build_waste
 
 func run(owner_suite) -> void:

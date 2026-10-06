@@ -242,7 +242,7 @@ public:
     std::vector<int> candidates;
     for (int index = 0; index < ids.size(); ++index) {
       Dictionary packet = particles[int(ids[index])];
-      if (!bool(packet[keys.alive]) ||
+      if (!bool(packet[keys.alive]) || int(packet.get(keys.kind, 0)) == 3 ||
           int(packet.get(keys.updated, -1)) != revision)
         continue;
       Vector2 p = packet[keys.previous], end = packet[keys.p],
@@ -415,37 +415,40 @@ public:
         double old = p[keys.previous_angle];
         heading = old + (wrap(heading - old + PI, TAU) - PI) * alpha;
       }
-      for (int c : near[mod(int(std::floor(at.y / 128)), 20) * 32 +
-                        mod(int(std::floor(at.x / 128)), 32)]) {
-        const Body &b = cells[c];
-        Vector2 d = delta(b.p, at);
-        double len = d.length();
-        if (len * len > std::pow(b.extent + 8, 2))
-          continue;
-        double angle = d.angle(), local = angle - b.angle;
-        Vector2 ray(std::cos(local), std::sin(local));
-        int guess = int(std::floor(wrap(local, TAU) / TAU * 28)) * 4;
-        double radius = -1;
-        for (int phase = guess - 4; phase < guess + 8; ++phase) {
-          int n = mod(phase, b.outline.size());
-          Vector2 point = b.outline[n],
-                  edge = b.outline[(n + 1) % b.outline.size()] - point;
-          double denom = ray.cross(edge);
-          if (std::abs(denom) < .000001)
+      // Dissolved pheromones are drawn at their true position, even inside cells.
+      if (int(p[keys.kind]) != 3) {
+        for (int c : near[mod(int(std::floor(at.y / 128)), 20) * 32 +
+                          mod(int(std::floor(at.x / 128)), 32)]) {
+          const Body &b = cells[c];
+          Vector2 d = delta(b.p, at);
+          double len = d.length();
+          if (len * len > std::pow(b.extent + 8, 2))
             continue;
-          double t = point.cross(ray) / denom,
-                 distance = point.cross(edge) / denom;
-          if (t >= -.00001 && t <= 1.00001 && distance >= 0) {
-            radius = distance;
-            break;
+          double angle = d.angle(), local = angle - b.angle;
+          Vector2 ray(std::cos(local), std::sin(local));
+          int guess = int(std::floor(wrap(local, TAU) / TAU * 28)) * 4;
+          double radius = -1;
+          for (int phase = guess - 4; phase < guess + 8; ++phase) {
+            int n = mod(phase, b.outline.size());
+            Vector2 point = b.outline[n],
+                    edge = b.outline[(n + 1) % b.outline.size()] - point;
+            double denom = ray.cross(edge);
+            if (std::abs(denom) < .000001)
+              continue;
+            double t = point.cross(ray) / denom,
+                   distance = point.cross(edge) / denom;
+            if (t >= -.00001 && t <= 1.00001 && distance >= 0) {
+              radius = distance;
+              break;
+            }
           }
+          if (radius < 0)
+            radius = double(b.object->call(
+                "support", local + double(b.object->get("angle"))));
+          radius += 7;
+          if (len < radius)
+            at = b.p + Vector2(std::cos(angle), std::sin(angle)) * radius;
         }
-        if (radius < 0)
-          radius = double(b.object->call(
-              "support", local + double(b.object->get("angle"))));
-        radius += 7;
-        if (len < radius)
-          at = b.p + Vector2(std::cos(angle), std::sin(angle)) * radius;
       }
       at = delta(camera, at);
       if (std::abs(at.x) > half.x + 20 || std::abs(at.y) > half.y + 20)
@@ -513,7 +516,7 @@ public:
     for (int k = 0; k < ids.size(); ++k) {
       int id = ids[k];
       Dictionary p = particles[id];
-      if (!bool(p[keys.alive]))
+      if (!bool(p[keys.alive]) || int(p[keys.kind]) == 3)
         continue;
       Vector2 at = p[keys.p];
       if (activity(at, camera, half) <= 0)
@@ -579,14 +582,15 @@ public:
         continue;
       ++count;
       double t = dt * a;
-      Vector2 v = p[keys.v];
+      bool tracer = int(p[keys.kind]) == 3;
+      Vector2 v = tracer ? Vector2() : Vector2(p[keys.v]);
       double angle = p[keys.angle];
       p[keys.updated] = revision;
       p[keys.previous] = at;
       // Keep RNG call order explicit, matching the reference backend.
       double nx = rng->randfn(0, 1), ny = rng->randfn(0, 1);
       p[keys.p] = wrapv(at + (v + sample(flow, at)) * t +
-                        Vector2(nx, ny) * std::sqrt(12 * t));
+                        Vector2(nx, ny) * std::sqrt((tracer ? 240 : 12) * t));
       p[keys.v] = v * std::exp(-t * .8);
       p[keys.age] = double(p[keys.age]) + t;
       p[keys.previous_angle] = angle;
@@ -594,8 +598,9 @@ public:
                        rng->randfn(0, 1) * std::sqrt(1.2 * t) + PI,
                    TAU) -
               PI;
+      if (tracer) angle = 0;
       p[keys.angle] = angle;
-      p[keys.direction] = Vector2(std::cos(angle), std::sin(angle));
+      p[keys.direction] = tracer ? Vector2() : Vector2(std::cos(angle), std::sin(angle));
     }
     return count;
   }
@@ -604,7 +609,7 @@ public:
                        double dt, int revision,
                        Ref<RandomNumberGenerator> rng) {
     static const double radii[] = {4, 2.5, 3, 2.5, 5, 3, 4, 4, 3, 3, 3.5};
-    static const double decay[] = {.003, .008, .006, .65,  .1, .001,
+    static const double decay[] = {.003, .008, .006, 0.0,  .1, .001,
                                    .02,  .015, .008, .008, .08};
     static const char *names[] = {"decay", "combine", "recycle",   "detox",
                                   "spoil", "enzyme",  "neutralize"};
@@ -634,14 +639,14 @@ public:
       d[keys.reaction_activity] = p.active;
       d[keys.contact_radius] = p.radius;
       scratch.push_back(p);
-      if (p.active > 0)
+      if (p.active > 0 && p.kind != 3)
         bins[mod(int(std::floor(p.p.y / 16)), 160) * 256 +
              mod(int(std::floor(p.p.x / 16)), 256)]
             .push_back(k);
     }
     for (int i = 0; i < int(scratch.size()); ++i) {
       auto &p = scratch[i];
-      if (!p.alive || p.active <= 0)
+      if (!p.alive || p.active <= 0 || p.kind == 3)
         continue;
       double t = dt * p.active;
       if (p.kind == 8 || p.kind == 9) {
