@@ -1,5 +1,7 @@
 # Living cell architecture
 
+These early architecture notes include historical simulation/interface details. See [persistent design](DESIGN.md), the current README and revision documents for subsequent gameplay changes.
+
 ## Authoritative simulation
 
 `simulation.gd` advances at 60 Hz independently of scene/input code. Player and NPCs share anatomy, resources, pressure membranes, sensing, secretion, feeding, damage and death. Fixed seeds are checked for reproducibility on the same engine/platform.
@@ -73,3 +75,12 @@ Numerical aggregation normalizes material weights before multiplying float vecto
 A persistent 128-unit periodic segment index serves swept disc/capsule collisions. Cell motion uses its conservative membrane extent and slides along stems; penetration projection handles growth or displaced contacts. Particles use a four-unit collision disc, keep their amount/owner/species and update their spatial buckets after collision. Only packets advanced in the current tick are tested. Native particle batches cache static branch records and bins once; the independent GDScript solver remains available. Four sweep iterations and six initial-overlap passes bound work. This is fixed terrain contact, not a joint soft-body/plant/fluid solver: plants have no metabolism or breakage, fine foliage is permeable, water is not pressure-projected around the stems, and extreme crowded/grown cells can still exceed this proxy's fidelity.
 
 `habitat_view.gd` rasterizes original SVG paths into six 512-pixel mipmapped textures once per habitat. Each visible periodic colony image is a sprite, not a hierarchy of leaf nodes. Cached neighboring torus images cover normal camera zoom ranges. No art textures are checked into source control. `light.gdshader` uses four octaves of periodic value noise, anchored in world coordinates, to vary cool water colors. Light still sets illumination; acidity applies afterward and retains its distinct warm tint. The noise is an art field, not an extra chemical resource. World bloom also covers lit plant artwork.
+
+
+## Revision 20 presentation path
+
+Each CellView owns a MeshInstance2D that draws immediately behind its own contents, at the same cell layer. An explicit center/ring triangle mesh maps the actual membrane outline into a normalized boundary coordinate. This avoids polygon triangulation for the membrane surface and lets a canvas shader shade a rounded colored lip and soft gel interior. The viewing light stays fixed as the organism turns; nucleus, organs, resources and microtubules retain their independent artwork and input geometry. Meshes refresh with the existing render revision/LOD policy.
+
+FlowView owns two bounded MultiMeshInstance2D batches: at most 640 streamer strips and 30 stout-stem disturbance quads. A signed 64×40 RGF texture copies the authoritative fluid velocities at most 15 times per simulated second. The prior/current textures interpolate in the shader to reduce field-update flicker. Periodic presentation hashes seed trails without ecological random draws. Each strip's 26 vertices use twelve midpoint advection steps in the cached field; fixed-width fading trails show direction and flow magnitude. The camera changes offsets, not world identities.
+
+The cell surface shader also draws a small exterior glint band whose strength follows body/fluid slip. A separate plant shader samples local flow and draws downstream contours behind solid stems. These effects are optical abstractions, not fluid obstacles or surface waves. All three shaders use simulation time, so editing/settings pause them. No additional chemical particles, collision queries, CPU trail integration or new authoritative state is introduced. The visual benchmark retains independent flat/depth, arrows/streamers and wake switches for cost comparison.

@@ -24,6 +24,9 @@ func run() -> void:
 				var scene = load("res://scenes/pond.tscn").instantiate()
 				root.add_child(scene)
 				scene.preferences.persist = false
+				scene.membrane_depth = option("--membrane","depth") != "flat"
+				scene.flow_streamers = option("--flow","streamers") != "arrows"
+				scene.flow_wakes = option("--wakes","on") != "off"
 				scene.music.enabled = option("--music","off") == "on"
 				scene.set_physics_process(false)
 				scene.diagnostic_zoom = camera != "play" # Historical stress views explicitly bypass play limits.
@@ -57,6 +60,10 @@ func run() -> void:
 					sim.player.biomass *= 256
 					sim.player.update_geometry()
 					sim.player.membrane = sim.Cell.Membrane.new(sim.player.radius)
+				if option("--center","player") == "plant":
+					scene.camera_locked = false
+					scene.free_camera = sim.habitat_geometry.plants[0].p
+					scene._update_world(1.0)
 				for i in 60: sim.step(1.0/60)
 				scene._update_world(1.0)
 				scene.ui.hide()
@@ -70,7 +77,7 @@ func run() -> void:
 					elapsed.append(now-prior)
 					prior = now
 				elapsed.sort()
-				print("VISUAL_BENCHMARK ",JSON.stringify({"stage":stage,"mode":mode,"fixture":fixture,"zoom":zoom,"camera":camera,"effective_zoom":scene.zoom/minf(scene.get_viewport_rect().size.x/sim.VIEW.x,scene.get_viewport_rect().size.y/sim.VIEW.y),"bloom":bloom,"frames":count,"median_ms":elapsed[count/2]/1000.0,"p95_ms":elapsed[mini(count-1,int(count*0.95))]/1000.0,"prepare_ms":scene.render_ms,"tick_ms":scene.simulation_ms,"cells":sim.active_cells,"particles":sim.active_particles,"biology":sim.background_biology,"biology_us":sim.profile_usec.get("offscreen_biology",0),"background":sim.background_transport,"background_particles":sim.background_particles,"renderer":RenderingServer.get_video_adapter_name(),"music":scene.music.enabled,"music_ms":scene.music.render_usec/1000.0,"music_peak_ms":scene.music.peak_render_usec/1000.0,"audio_skips":scene.music.skips,"music_ready":scene.music.ready_bank}))
+				print("VISUAL_BENCHMARK ",JSON.stringify({"stage":stage,"mode":mode,"fixture":fixture,"zoom":zoom,"camera":camera,"effective_zoom":scene.zoom/minf(scene.get_viewport_rect().size.x/sim.VIEW.x,scene.get_viewport_rect().size.y/sim.VIEW.y),"bloom":bloom,"frames":count,"median_ms":elapsed[count/2]/1000.0,"p95_ms":elapsed[mini(count-1,int(count*0.95))]/1000.0,"membrane":scene.membrane_depth,"streamers":scene.flow_streamers,"wakes":scene.flow_wakes,"streamer_count":scene.flow_view.streamers.multimesh.visible_instance_count,"flow_prepare_ms":scene.flow_view.prepare_usec/1000.0,"prepare_ms":scene.render_ms,"tick_ms":scene.simulation_ms,"cells":sim.active_cells,"particles":sim.active_particles,"biology":sim.background_biology,"biology_us":sim.profile_usec.get("offscreen_biology",0),"background":sim.background_transport,"background_particles":sim.background_particles,"renderer":RenderingServer.get_video_adapter_name(),"music":scene.music.enabled,"music_ms":scene.music.render_usec/1000.0,"music_peak_ms":scene.music.peak_render_usec/1000.0,"audio_skips":scene.music.skips,"music_ready":scene.music.ready_bank}))
 				if output != "" and fixture == "normal" and mode == "frozen":
 					await RenderingServer.frame_post_draw
 					root.get_texture().get_image().save_png(output+"/"+stage+"-"+str(int(zoom*100))+"-"+("bloom" if bloom else "flat")+".png")

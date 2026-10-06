@@ -1,6 +1,7 @@
 extends Node2D
 ## Cached local drawing, with native Node2D transform interpolation between ticks.
 const Art = preload("res://scripts/cell_art.gd")
+const Surface = preload("res://scripts/membrane_art.gd")
 const Visuals = preload("res://scripts/visuals.gd")
 var cell
 var art: Dictionary = {}
@@ -14,8 +15,17 @@ var last_draw_tick := -2
 var detail_lod := true
 var label := Label.new()
 var appendages := Node2D.new()
+var surface := MeshInstance2D.new()
+var surface_revision := -1
+var depth_style := false
 
 func _ready() -> void:
+	# Keep each shaded body immediately behind its own contents, so another
+	# cell can still occlude both instead of exposing every nucleus above all bodies.
+	surface.show_behind_parent = true
+	surface.material = ShaderMaterial.new()
+	surface.material.shader = preload("res://shaders/membrane.gdshader")
+	add_child(surface)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	label.add_theme_color_override("font_outline_color",Color("21375d"))
 	label.add_theme_constant_override("outline_size",4)
@@ -37,6 +47,11 @@ func sync(render_position: Vector2, render_angle: float, zoom: float, alpha: flo
 	nucleus_lag = nucleus_lag.lerp(drift,1-exp(-elapsed*6))
 	position = render_position
 	rotation = render_angle
+	if depth_style != game.membrane_depth:
+		depth_style = game.membrane_depth
+		seen_revision = -1
+		surface_revision = -1
+		surface.visible = depth_style
 	var reduced: bool = detail_lod and cell.radius*zoom < 18 and not game.build_open
 	var detail_changed: bool = reduced != simple_view
 	simple_view = reduced
@@ -47,12 +62,32 @@ func sync(render_position: Vector2, render_angle: float, zoom: float, alpha: flo
 		set_meta("assembly",game.build_open)
 		queue_redraw()
 		appendages.queue_redraw()
+	if depth_style:
+		_sync_surface(render_angle,detail_changed)
 	label.visible = cell.rival_name != "" and (game.show_senses or get_global_mouse_position().distance_to(global_position) < cell.extent()*zoom+20)
 	if label.visible:
 		label.text = cell.rival_name
 		label.rotation = -rotation
 		label.scale = Vector2.ONE/zoom
 		label.position = Vector2(-label.size.x/2/zoom,-cell.extent()-22/zoom).rotated(-rotation)
+
+func _sync_surface(render_angle: float, changed: bool) -> void:
+	if surface_revision != seen_revision or changed:
+		var outline: PackedVector2Array = cell.membrane.outline()
+		if simple_view:
+			var reduced := PackedVector2Array()
+			for i in range(0,outline.size(),4): reduced.append(outline[i])
+			outline = reduced
+		surface.mesh = Surface.mesh(outline)
+		surface_revision = seen_revision
+		for pair in [["edge",0],["body",1],["gel",2],["rim",3],["shine",4]]:
+			surface.material.set_shader_parameter(pair[0],art.colors[pair[1]])
+	var slip: Vector2 = cell.velocity-game.world.fluid.sample(cell.position)
+	surface.material.set_shader_parameter("heading",render_angle)
+	surface.material.set_shader_parameter("hurt",cell.hurt_flash)
+	surface.material.set_shader_parameter("clock",game.world.time)
+	surface.material.set_shader_parameter("slip",slip)
+	surface.material.set_shader_parameter("wakes",game.flow_wakes)
 
 func _draw() -> void:
 	if cell == null: return
@@ -63,23 +98,24 @@ func _draw() -> void:
 		var reduced_outline := PackedVector2Array()
 		for i in range(0,outline.size(),4): reduced_outline.append(outline[i])
 		outline = reduced_outline
-	draw_colored_polygon(Transform2D(0,Vector2.ONE*1.025,0,Vector2(0,3))*outline,Color(palette[0],0.55))
-	draw_colored_polygon(outline,palette[0])
-	draw_colored_polygon(Transform2D(0,Vector2.ONE*0.96,0,Vector2.ZERO)*outline,hue.lerp(Color.WHITE,cell.hurt_flash*0.55))
-	draw_colored_polygon(Transform2D(0,Vector2.ONE*0.78,0,Vector2(0,cell.radius*0.018))*outline,palette[2])
-	# Colored rim stays inside the actual outline; it cannot imply extra armor.
-	var rim := PackedVector2Array()
-	for point in outline: rim.append(point*0.90)
-	rim.append(rim[0])
-	draw_polyline(rim,palette[3],cell.radius*0.085,true)
-	var highlight := PackedVector2Array()
-	for point in outline:
-		if point.normalized().rotated(rotation).dot(Vector2(-0.707,-0.707)) > 0.60:
-			highlight.append(point*0.92)
-		else:
-			if highlight.size() > 1: draw_polyline(highlight,palette[4],cell.radius*0.068,true)
-			highlight.clear()
-	if highlight.size() > 1: draw_polyline(highlight,palette[4],cell.radius*0.068,true)
+	if not depth_style:
+		draw_colored_polygon(Transform2D(0,Vector2.ONE*1.025,0,Vector2(0,3))*outline,Color(palette[0],0.55))
+		draw_colored_polygon(outline,palette[0])
+		draw_colored_polygon(Transform2D(0,Vector2.ONE*0.96,0,Vector2.ZERO)*outline,hue.lerp(Color.WHITE,cell.hurt_flash*0.55))
+		draw_colored_polygon(Transform2D(0,Vector2.ONE*0.78,0,Vector2(0,cell.radius*0.018))*outline,palette[2])
+		# Colored rim stays inside the actual outline; it cannot imply extra armor.
+		var rim := PackedVector2Array()
+		for point in outline: rim.append(point*0.90)
+		rim.append(rim[0])
+		draw_polyline(rim,palette[3],cell.radius*0.085,true)
+		var highlight := PackedVector2Array()
+		for point in outline:
+			if point.normalized().rotated(rotation).dot(Vector2(-0.707,-0.707)) > 0.60:
+				highlight.append(point*0.92)
+			else:
+				if highlight.size() > 1: draw_polyline(highlight,palette[4],cell.radius*0.068,true)
+				highlight.clear()
+		if highlight.size() > 1: draw_polyline(highlight,palette[4],cell.radius*0.068,true)
 	for link in ([] if simple_view else cell.membrane.skeleton.links):
 		var a: Vector2 = cell.membrane.skeleton.point(link.a,cell.membrane)
 		var b: Vector2 = cell.membrane.skeleton.point(link.b,cell.membrane)

@@ -170,3 +170,10 @@ Living offscreen cells must keep up through real resource encounters, not increa
 The owner questioned automatic corpse consumption during implementation. Prefer lysis into actual nutrient/oxygen packets, followed by ordinary absorption: predators and scavengers compete for the same finite material. This removes the extra reward path and keeps feeding organs relevant.
 
 Preserve time across camera transitions, timestep-scaled event hazards, mass accounting and editing pause. Photosynthesis/secretion must count multiple possible events in a coarse interval. Nearby chemistry retains oriented binding, real antitoxin/acid/buffer resources and a per-packet chemical clock; coarse acid-field transport continues globally. Banked successors remain truly dormant, and NPC reproduction/AP/lineage progression remain separate from this change. [Revision nineteen](REVISION_19.md) records paired balance measurements and the remaining spatial/chemical approximations.
+
+
+## Revision 20: dimensional membranes and visible flow
+
+The owner requests more depth on membranes, ripples/wakes around cells and plants, and animated flow streamers inspired by Earth Nullschool instead of background vectors. Keep luminous lineage colors and the vector reef character. Rounded membrane shading must follow the actual pressure/microtubule outline; it must not replace deformability with an ellipse or imply extra collision coverage.
+
+Streamers read the authoritative fluid cache and move along its bends. Their direction and extent communicate flow; they are presentation geometry, not chemical particles. Subtle downstream glints around slipping cells and stout plant stems help show the medium. Pause them with the simulation. Bound GPU batches and upload frequency, preserve toroidal continuity, and compare rendering ablations at the 80% play limit, including dense particles, large cells and music. These cues do not add obstacle-fluid forces or a water-surface wave simulation. See [revision twenty](REVISION_20.md).

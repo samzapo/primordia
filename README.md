@@ -2,7 +2,7 @@
 
 A physics and chemistry simulation game about managing one small cell. Eat, grow and survive predation. **You never steer the cell:** its anatomy controls its behavior.
 
-This seventeenth playable revision uses **Godot 4.7.2**, a fixed-step simulation, deformable membranes, oriented chemical particles and procedural 2D artwork. Its vector artwork is authored in the project; cached particle textures and mipmaps generate automatically at runtime. The default Linux launcher builds a batched C++ GDExtension automatically; the GDScript reference backend remains available.
+This twentieth playable revision uses **Godot 4.7.2**, a fixed-step simulation, deformable membranes, oriented chemical particles and procedural 2D artwork. Its vector artwork is authored in the project; cached particle textures and mipmaps generate automatically at runtime. The default Linux launcher builds a batched C++ GDExtension automatically; the GDScript reference backend remains available.
 
 ## Run with Steam Godot on Linux
 
@@ -67,6 +67,10 @@ Proboscis and engulfing pores have been removed. The spike and toxin vesicle are
 New player organs have a fixed size. Surface area, biomass and adaptation constrain new construction; existing NPC/inherited anatomy keeps its physical dimensions. Biomass growth has no arbitrary upper cap, although the finite toroidal habitat remains a geometric limit. Hydrostatic pressure, a soft cortex and the player-authored tension network control shape. New cells start with 0–4 seeded, randomly tensioned links; later links can branch from earlier ones. Offspring inherit edited networks. Internal unattached junctions move freely; connect them to the membrane/network to transmit useful shape forces.
 
 Cells now push, spin and slide against one another and solid plant stems. Membranes compress locally and recover under pressure; spikes physically catch cells and stems before the body reaches them. Impact damage depends on actual impulse, so a few strong hits can kill exposed prey; armor still takes damage first. Place spikes around a hunting receptor and invest in propulsion to line up repeated strikes. A poorly aligned or slow hunter may only push prey away. See [revision seventeen](docs/REVISION_17.md) for the contact model and evidence.
+
+## Membranes and visible flow
+
+Cells have rounded, shaded membrane lips and a soft gel interior that follow their actual deformed outline. Lineage colors remain independent of diet or occupation. Pale animated streamers replace the background flow vectors; longer trails show faster current and their bright ends show direction. Faint downstream glints appear around cells moving relative to the water and around sturdy plant stems. These are bounded presentation effects, not extra chemical particles or new fluid forces. [Revision twenty](docs/REVISION_20.md) records the implementation and wide-view rendering checks.
 
 ## Living techno
 

@@ -1,5 +1,6 @@
 extends Node2D
 const Simulation = preload("res://scripts/simulation.gd")
+const FlowView = preload("res://scripts/flow_view.gd")
 const CellView = preload("res://scripts/cell_view.gd")
 const Preferences = preload("res://scripts/preferences.gd")
 const Visuals = preload("res://scripts/visuals.gd")
@@ -23,6 +24,10 @@ var preferences = Preferences.new()
 var world_layer := Node2D.new()
 var habitat_view := preload("res://scripts/habitat_view.gd").new()
 var currents := Node2D.new()
+var flow_view := FlowView.new()
+var membrane_depth := true
+var flow_streamers := true
+var flow_wakes := true
 var currents_origin := Vector2.ZERO
 var preview := Node2D.new()
 var ui := Control.new()
@@ -112,6 +117,7 @@ func _ready() -> void:
 	add_child(light_layer)
 	free_camera = world.player.position
 	add_child(world_layer)
+	world_layer.add_child(flow_view)
 	world_layer.add_child(habitat_view)
 	habitat_view.z_index = 0
 	habitat_view.configure(world.habitat_geometry)
@@ -185,7 +191,7 @@ func _physics_process(dt: float) -> void:
 		free_camera = world.player.position
 		_message(world.lineage.notices[-1] if not world.lineage.notices.is_empty() else world.evolution.objective(world))
 	simulation_ms = lerpf(simulation_ms,(Time.get_ticks_usec()-started)/1000.0,0.15)
-	if world.revision%4 == 0: currents.queue_redraw()
+	if not flow_streamers and world.revision%4 == 0: currents.queue_redraw()
 
 func is_paused() -> bool:
 	return build_open or settings_panel.visible or cell_ui.context.get("kind","") in ["lineage","archive","past"] or world.evolution.terminal()
@@ -267,6 +273,8 @@ func _update_world(alpha: float) -> void:
 	world_layer.scale = Vector2.ONE*zoom
 	currents.position = Simulation.Medium.offset(render_camera,currents_origin)
 	habitat_view.sync(render_camera,world.view_half)
+	currents.visible = not flow_streamers
+	flow_view.sync(world,render_camera,world.view_half,zoom,flow_streamers,flow_wakes)
 	# Cached glyph variants preserve facing while dropping subpixel embellishment.
 	for kind in batches.size():
 		var simplified := int(2*Simulation.particle_radius(kind)*zoom < 6)

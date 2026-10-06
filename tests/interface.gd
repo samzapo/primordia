@@ -31,6 +31,21 @@ func run(test_host) -> void:
 	scene.set_physics_process(false)
 	scene.set_process(false)
 	await host.process_frame
+	# Presentation reads the actual field without drawing RNG or changing ecology.
+	var states: Array = [scene.world.rng.state,scene.world.background_rng.state,scene.world.ecology_rng.state]
+	var fluid_bytes: PackedByteArray = scene.world.fluid.velocity.to_byte_array()
+	var particle_hash: int = hash(scene.world.particles)
+	var visual_clock: float = scene.world.time
+	scene.flow_view.sync(scene.world,scene.world.player.position,Vector2(632,395),1.0,true,true)
+	scene.flow_view.sync(scene.world,scene.world.player.position+Sim.Medium.WORLD,Vector2(632,395),1.0,true,true)
+	expect(states == [scene.world.rng.state,scene.world.background_rng.state,scene.world.ecology_rng.state] and fluid_bytes == scene.world.fluid.velocity.to_byte_array() and particle_hash == hash(scene.world.particles) and visual_clock == scene.world.time,"Streamers and wakes do not change fluid, particles, time or random streams")
+	expect(scene.flow_view.streamers.material.get_shader_parameter("clock") == scene.world.time,"Flow animation uses simulation time and stops when paused")
+	var other = Sim.new(48)
+	other.fluid.velocity.fill(Vector2(17,-23))
+	scene.flow_view.sync(other,other.player.position,Vector2(632,395),1.0,true,true)
+	var new_pixel: Color = scene.flow_view.cached_field.get_pixel(0,0)
+	expect(Vector2(new_pixel.r,new_pixel.g) == Vector2(17,-23),"A restart at the same clock immediately replaces the old flow display")
+	scene.flow_view.sync(scene.world,scene.world.player.position,Vector2(632,395),1.0,true,true)
 	# Preserve redraw throttling coverage from the previous presentation suite.
 	var npc = scene.world.cells[1]
 	var npc_view = scene.views[npc.id]
