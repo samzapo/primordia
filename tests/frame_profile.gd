@@ -24,6 +24,7 @@ func run() -> void:
 	scene.set_physics_process(false)
 	scene.music.enabled = option("--music","on") == "on"
 	scene.manual_zoom = 0.8
+	scene.show_reaction_sparks = option("--sparks","on") == "on"
 	var sim = scene.world
 	var switches := option("--hotpaths","all").split(",")
 	if "legacy" in switches or "geometry" in switches: scene.native_geometry = false
@@ -112,7 +113,7 @@ func run() -> void:
 	var result := {"rows":rows,"seconds":seconds,"hotpaths":option("--hotpaths","all"),"mode":option("--mode","live"),"fixture":option("--fixture","dense"),"music":scene.music.enabled,
 		"engine":Engine.get_version_info().string,"cpu":OS.get_processor_name(),"gpu":RenderingServer.get_video_adapter_name(),
 		"display":DisplayServer.get_name(),"viewport":str(root.size),"zoom":scene.manual_zoom,"max_steps":Engine.max_physics_steps_per_frame,
-		"bloom":scene.preferences.bloom,"music_volume":scene.preferences.music_volume,"tick_rate":Engine.physics_ticks_per_second}
+		"sparks":scene.show_reaction_sparks,"bloom":scene.preferences.bloom,"music_volume":scene.preferences.music_volume,"tick_rate":Engine.physics_ticks_per_second}
 	if not save_result(result,output):
 		scene.queue_free()
 		quit(1)

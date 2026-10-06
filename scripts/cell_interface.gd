@@ -2,8 +2,10 @@ extends Control
 ## Cell-local entry points replace the HUD and assembly/modify panes.
 const Interior = preload("res://scripts/cell_interior.gd")
 const Action = preload("res://scripts/cell_action.gd")
+const Biomass = preload("res://scripts/biomass_preview.gd")
 var game
 var interior := Interior.new()
+var biomass_view := Biomass.new()
 var choices: Array[Button] = []
 var context: Dictionary = {}
 var hovered: Dictionary = {}
@@ -29,6 +31,8 @@ func initialize(owner_game) -> void:
 	interior.game = game
 	interior.z_index = 3
 	game.world_layer.add_child(interior)
+	biomass_view.game = game
+	add_child(biomass_view)
 	add_child(tip_box)
 	tip_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tip.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -64,6 +68,7 @@ func close_context() -> void:
 		choice.queue_free()
 	choices.clear()
 	tip_box.hide()
+	biomass_view.sync()
 	queue_redraw()
 
 func screen_at(target: Dictionary) -> Vector2:
@@ -76,7 +81,7 @@ func screen_at(target: Dictionary) -> Vector2:
 				if scar.id == target.id: record = scar; break
 		if not record.is_empty():
 			p = cell.local_point(record.a)
-			p += p.normalized()*5*record.scale
+			p += cell.local_normal(record.a)*5*record.scale
 	else: p = interior.anchors.get("nucleus" if target.kind in ["lineage","archive","past"] else target.kind,Vector2.ZERO)
 	return game.world_layer.to_global(interior.position+p.rotated(interior.rotation))
 
@@ -138,6 +143,17 @@ func open_context(target: Dictionary) -> void:
 				sim.remove(cell.organs.find(organ))
 				close_context()
 				game._message("Organelle recycled · no AP refund."),"","Recycle")
+			if sim.Cell.tunable_steering(organ):
+				var strength: float = sim.Cell.steering_strength(organ)
+				var label: String = "Off" if strength == 0 else "%d%%" % roundi(strength*100)
+				var details := "Click to cycle Off / 25 / 50 / 100 / 200 / 400%. Changes steering priority; flight always wins."
+				if organ.kind == "feeding": details += "\nSuction, digestion and absorption still work even with steering Off."
+				elif organ.kind == "photosynthesis": details += "\nPhotosynthesis still works with steering Off."
+				_choice("Steering "+label,details,func():
+					var steps: Array = sim.Cell.STEERING_STEPS
+					var index: int = steps.find(strength)
+					cell.set_steering_strength(organ.id,steps[(index+1)%steps.size()])
+					open_context(target),"",label)
 			if organ.get("mutation","") == "":
 				for gene in run.learned:
 					var data: Dictionary = sim.Genes.DATA[gene]
@@ -260,6 +276,9 @@ func describe(target: Dictionary) -> String:
 			var organ: Dictionary = cell.organ_by_id(target.id)
 			if organ.is_empty(): return ""
 			var result: String = game.TITLES[sim.KINDS.find(organ.kind)]+"\nHealth %d%%" % roundi(100*organ.hp/organ.max_hp)
+			if sim.Cell.tunable_steering(organ):
+				var strength: float = sim.Cell.steering_strength(organ)
+				result += "\nSteering "+("Off" if strength == 0 else "%d%%" % roundi(strength*100))
 			if organ.blocked > 0.05: result += "\nReceptors blocked · cleaning in progress."
 			if organ.get("mutation","") != "": result += "\n"+sim.Genes.DATA[organ.mutation].title
 			return result+"\n"+game.HELP[sim.KINDS.find(organ.kind)]
@@ -307,6 +326,7 @@ func _events() -> void:
 func sync(_dt: float) -> void:
 	if game == null: return
 	_events()
+	biomass_view.sync()
 	var active: bool = not game.settings_panel.visible
 	visible = active
 	if not active: return

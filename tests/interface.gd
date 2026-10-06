@@ -134,6 +134,46 @@ func run(test_host) -> void:
 	scene._update_world(1)
 	expect(cell.count("protection") == 0 and scene.views[cell.id].seen_revision > seen,"Recycling refreshes the paused drawing before resuming")
 	expect(scene.world.evolution.points == points,"Recycling does not refund AP")
+	# Steering lives on the organ; preview quantities are usable tissue only.
+	var pore: Dictionary = cell.organs.filter(func(item):return item.kind == "feeding")[0]
+	scene.cell_ui.open_context({"kind":"organ","id":pore.id})
+	expect(scene.cell_ui.choices.size() == 3 and scene.cell_ui.choices[2].caption == "Steering 100%","A pore exposes its signal strength as a local anatomical choice")
+	var resource_state: Array = [cell.biomass,cell.energy,scene.world.evolution.points]
+	for i in 3: scene.cell_ui.choices[2].pressed.emit()
+	expect(Sim.Cell.steering_strength(pore) == 0 and scene.cell_ui.choices[2].caption == "Steering Off","Clicking the local strength choice cycles to steering Off")
+	expect(resource_state == [cell.biomass,cell.energy,scene.world.evolution.points],"Local tuning spends no physical resource or adaptation point")
+	expect(scene.cell_ui.describe({"kind":"organ","id":pore.id}).contains("Steering Off"),"Organ inspection immediately reports its steering setting")
+	for i in 3: scene.cell_ui.choices[2].pressed.emit()
+	scene.cell_ui.close_context()
+	scene.selected = 4
+	scene.cell_ui.sync(0)
+	var stock = scene.cell_ui.biomass_view
+	var quote: Dictionary = stock.quote
+	expect(stock.visible and quote.available == cell.biomass and quote.cost == Sim.Cell.organ_cost("feeding"),"The build preview compares usable biomass with the selected fixed-size organ cost")
+	expect(is_equal_approx(pow(quote.cost_radius/quote.stock_radius,2),quote.cost/quote.available),"Available and required blobs use the same area scale")
+	var usable: float = cell.biomass
+	cell.biomass = 100000
+	stock.sync()
+	expect(stock.quote.stock_radius <= stock.quote.maximum+0.0001 and is_equal_approx(pow(stock.quote.cost_radius/stock.quote.stock_radius,2),stock.quote.cost/stock.quote.available),"Huge reserves fit the viewport while preserving the comparison ratio")
+	cell.biomass = 0
+	stock.sync()
+	expect(stock.quote.stock_radius == 0 and stock.quote.cost_radius > 0 and not stock.quote.enough,"Zero usable biomass renders empty while retaining the full cost blob")
+	cell.biomass = 8
+	stock.sync()
+	expect(stock.quote.enough and is_equal_approx(stock.quote.stock_radius,stock.quote.cost_radius),"Exactly enough tissue produces equal-size blobs")
+	cell.biomass = 7.9
+	stock.sync()
+	expect(not stock.quote.enough,"Even a small tissue shortfall is explicitly signalled")
+	cell.biomass = usable
+	var reserve_before: float = cell.brood_mass
+	cell.reserve(4)
+	stock.sync()
+	expect(stock.quote.available == usable-4 and stock.quote.available != cell.organic_mass(),"Reserved and structural tissue are excluded from the usable biomass blob")
+	cell.reserve(-4)
+	expect(cell.brood_mass == reserve_before,"Preview fixture restores the paid offspring reserve")
+	scene.selected = -1
+	stock.sync()
+	expect(stock.quote.cost == 0,"Cancelling placement removes its cost blob without changing biomass")
 	var geometry: PackedVector2Array = cell.membrane.points.duplicate()
 	var age: float = cell.age
 	var energy: float = cell.energy
@@ -144,6 +184,7 @@ func run(test_host) -> void:
 	key(KEY_ESCAPE)
 	expect(scene.build_open and scene.world.evolution.points == points,"Closing settings returns to the same paused cell")
 	key(KEY_TAB)
+	expect(not scene.cell_ui.biomass_view.visible,"Biomass comparison disappears during ordinary play")
 	expect(not scene.build_open and scene.world.build_original == null and scene.world.evolution.points == points,"Tab keeps edits without an Apply or Undo button")
 	settle()
 	expect(is_equal_approx(scene.manual_zoom,0.8),"Leaving edit restores the observation magnification")
@@ -202,6 +243,16 @@ func run(test_host) -> void:
 	for fraction in [0.1,0.2,0.7,0.85]:
 		var point: Vector2 = cell.membrane.skeleton.point(link.a,cell.membrane).lerp(cell.membrane.skeleton.point(link.b,cell.membrane),fraction)
 		if scene.cell_ui.hit(at(point)).is_empty(): hover = at(point); break
+	var link_a: Vector2 = cell.membrane.skeleton.point(link.a,cell.membrane)
+	var link_b: Vector2 = cell.membrane.skeleton.point(link.b,cell.membrane)
+	var mid: Vector2 = link_a.lerp(link_b,0.5)
+	var offset: Vector2 = (link_b-link_a).orthogonal().normalized()*12/scene.zoom
+	var wider: Dictionary = scene._nearest_tubule(mid+offset)
+	expect(not wider.is_empty(),"Microtubule hover reaches 12 screen pixels away, outside the old 8-pixel tolerance")
+	var saved_scale: float = scene.preferences.hud_scale
+	scene.preferences.hud_scale = 1.75
+	expect(not scene._nearest_tubule(mid+offset*2).is_empty(),"Microtubule hit width follows accessibility scaling")
+	scene.preferences.hud_scale = saved_scale
 	var tension: float = link.tension
 	click(hover,MOUSE_BUTTON_WHEEL_UP)
 	expect(link.tension > tension,"Wheel over an unobstructed microtubule still changes tension")
@@ -310,12 +361,32 @@ func _particles() -> void:
 			if Vector2(buffer[i*12+3],buffer[i*12+7]).length() < 0.01: found = true
 		expect(found,"Pheromone artwork stays at its true location inside the cell in both rendering paths")
 	var through_cell: Dictionary = scene.inspector.pick(scene.camera_screen,1)
-	expect(not through_cell.is_empty() and through_cell.kind == Sim.PHEROMONE,"Pheromones remain inspectable through cell interiors")
-	scene.inspector.update_lens(0.2,scene.camera_screen,1,true)
+	expect(through_cell.is_empty(),"Pheromones cannot activate the lens through a cell interior")
+	tracer.p = sim.player.position+Vector2(190,-170)
+	tracer.previous = tracer.p
+	sim.grid.rebuild(sim.particles)
+	var tracer_screen: Vector2 = scene.camera_screen+Sim.Medium.offset(scene.render_camera,tracer.p)*scene.zoom
+	scene.inspector.update_lens(0.2,tracer_screen,1,true)
 	expect(scene.inspector.label.text.contains("Reported size:") and scene.inspector.label.text.contains("unarmed"),"The local tooltip describes the emitted metadata")
+	sim.spawn_particle(Sim.NUTRIENT,sim.player.position+Vector2(sim.player.visible_support(0)+10/scene.zoom,0))
+	var close_packet: Dictionary = sim.particles[-1]
+	sim.grid.rebuild(sim.particles)
+	var close_screen: Vector2 = scene.camera_screen+Sim.Medium.offset(scene.render_camera,close_packet.p)*scene.zoom
+	expect(scene.inspector.pick(close_screen,1).is_empty(),"Particles just outside a membrane cannot activate the lens")
+	var npc = Sim.Cell.new(900001)
+	sim.cells.append(npc)
+	var saved_pose: Array = [npc.position,npc.previous_position]
+	npc.position = tracer.p
+	npc.previous_position = tracer.p
+	scene.inspector.update_lens(0.01,tracer_screen,1,true)
+	expect(scene.inspector.hovered.is_empty() and scene.inspector.lens_amount == 0,"A cell entering a tracked particle's quiet zone immediately dismisses magnification")
+	npc.position = saved_pose[0]
+	npc.previous_position = saved_pose[1]
+	sim.cells.erase(npc)
+	scene.inspector.update_lens(0.2,tracer_screen,1,true)
 	var prior_text: String = scene.inspector.label.text
 	tracer.report.hostile = true
-	scene.inspector.update_lens(0.2,scene.camera_screen,1,true)
+	scene.inspector.update_lens(0.2,tracer_screen,1,true)
 	expect(scene.inspector.label.text != prior_text and scene.inspector.label.text.contains("armed"),"Inspection reads the packet rather than the live unarmed cell")
 	expect(scene.batches[Sim.PHEROMONE].z_index > scene.batches[Sim.NUTRIENT].z_index,"Point tracers are drawn above physical cells")
 	scene.camera_locked = false

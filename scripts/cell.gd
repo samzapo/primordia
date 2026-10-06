@@ -6,6 +6,7 @@ const COST := [8.0, 10.0, 12.0, 10.0, 8.0, 6.0, 12.0, 12.0, 10.0, 12.0, 6.0]
 const WIDTH := [19.0, 34.0, 26.0, 27.0, 36.0, 20.0, 30.0, 26.0, 26.0, 26.0, 20.0]
 const SENSE_MODES := ["flee"]
 const MODES := ["graze"]
+const STEERING_STEPS := [0.0,0.25,0.5,1.0,2.0,4.0]
 var id := 0
 var lineage := -1
 var generation := 0
@@ -15,7 +16,10 @@ var role := "grazer"
 var previous_position := Vector2.ZERO
 var previous_angle := 0.0
 var target_id := -1
+var target_lineage := -1
 var target_memory := 0.0
+var target_score := 0.0 # Unweighted salience, evaluated with current anatomy settings.
+var target_sample_at := -INF
 var target_expires_at := INF
 var target_position := Vector2.ZERO
 var target_mode := "graze"
@@ -123,6 +127,19 @@ func local_point(a: float) -> Vector2:
 	var i = int(phase)
 	return membrane.points[i].lerp(membrane.points[(i+1) % membrane.COUNT], phase-i)
 
+func local_normal(a: float) -> Vector2:
+	# Smooth normals of the same ordered curve used by membrane artwork.
+	var curve: PackedVector2Array = membrane.outline()
+	var phase: float = fposmod(a,TAU)/TAU*curve.size()
+	var i := int(phase)
+	var tangent_a: Vector2 = curve[(i+1)%curve.size()]-curve[posmod(i-1,curve.size())]
+	var tangent_b: Vector2 = curve[(i+2)%curve.size()]-curve[i]
+	var tangent := tangent_a.lerp(tangent_b,phase-i)
+	return Vector2(tangent.y,-tangent.x).normalized() if tangent.length_squared() > 0.000001 else local_point(a).normalized()
+
+func organ_normal(organ: Dictionary) -> Vector2:
+	return local_normal(organ.a)
+
 var fast_support := true
 
 func surface_parameter(local_angle: float) -> float:
@@ -155,7 +172,7 @@ func arc_gap(a: float, b: float) -> float:
 	return wrapf(arc_coordinate(a)-arc_coordinate(b),-length*0.5,length*0.5)
 
 func organ_position(organ: Dictionary) -> Vector2:
-	return position + (local_point(organ.a) + local_point(organ.a).normalized()*5*organ.scale).rotated(angle)
+	return position + (local_point(organ.a) + organ_normal(organ)*5*organ.scale).rotated(angle)
 
 func support(world_angle: float) -> float:
 	return local_point(surface_parameter(world_angle-angle)).length()
@@ -248,6 +265,24 @@ func _make_room(anchor: float, width: float, length: float) -> void:
 		end = item.x-item.half
 	for item in items: item.organ.a = parameter_at_arc(origin+item.x*original_length/length)
 
+static func tunable_steering(organ: Dictionary) -> bool:
+	return organ.get("kind","") in ["feeding","hunting","photosynthesis"]
+
+static func steering_strength(organ: Dictionary) -> float:
+	return clampf(float(organ.get("steering",1.0)),0.0,4.0) if tunable_steering(organ) else 0.0
+
+func set_steering_strength(identity: int, strength: float) -> bool:
+	var organ: Dictionary = organ_by_id(identity)
+	if dead or not tunable_steering(organ) or not is_finite(strength): return false
+	organ.steering = clampf(strength,0.0,4.0)
+	# Disabling a drive invalidates both memory and signals already travelling.
+	if organ.steering == 0:
+		signals = signals.filter(func(packet): return packet.organ_id != identity)
+		if target_organ_id == identity: target_memory = 0
+	sense_clock = 0
+	render_revision += 1
+	return true
+
 func add_organ(kind: String, a: float, mode: String = "graze", paid: bool = true, size: float = 1.0) -> bool:
 	var k := KINDS.find(kind)
 	if dead or k < 0 or not can_fit(kind,a,size,paid): return false
@@ -262,7 +297,7 @@ func add_organ(kind: String, a: float, mode: String = "graze", paid: bool = true
 	_make_room(a,WIDTH[k]*size+4,length)
 	if paid: biomass -= cost
 	var max_health := (70.0 if kind == "protection" else 25.0)*size*size
-	organs.append({"id":next_organ_id,"kind":kind,"a":fposmod(a,TAU),"scale":size,"mode":mode,"hp":max_health,"max_hp":max_health,"material":cost,"max_material":cost,"mutation":"","growth_spent":size*size,"ap_spent":maxi(1,ceili(size*size-0.000001)),"target_id":-1,"progress":0.0,"coverage":0.0,"feeding":false,"link":Vector2.ZERO,"feedback":"","consume_flash":0.0,"consume_clock":0.0,"charge_flash":0.0,"consumed_total":0.0,"blocked":0.0})
+	organs.append({"id":next_organ_id,"kind":kind,"a":fposmod(a,TAU),"scale":size,"mode":mode,"hp":max_health,"max_hp":max_health,"material":cost,"max_material":cost,"mutation":"","steering":1.0,"growth_spent":size*size,"ap_spent":maxi(1,ceili(size*size-0.000001)),"target_id":-1,"progress":0.0,"coverage":0.0,"feeding":false,"link":Vector2.ZERO,"feedback":"","consume_flash":0.0,"consume_clock":0.0,"charge_flash":0.0,"consumed_total":0.0,"blocked":0.0})
 	next_organ_id += 1
 	update_geometry()
 	render_revision += 1
@@ -272,7 +307,7 @@ func pore_radius(organ: Dictionary) -> float:
 	return 18.0*organ.scale*Genes.factor(organ,"intake")
 
 func pore_center(organ: Dictionary) -> Vector2:
-	return organ_position(organ)+local_point(organ.a).normalized().rotated(angle)*pore_radius(organ)*0.65
+	return organ_position(organ)+organ_normal(organ).rotated(angle)*pore_radius(organ)*0.65
 
 func consumed(organ: Dictionary, amount: float) -> void:
 	if amount <= 0: return

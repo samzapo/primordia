@@ -2,7 +2,7 @@
 
 A physics and chemistry simulation game about managing one small cell. Eat, grow and survive predation. **You never steer the cell:** its anatomy controls its behavior.
 
-This twenty-first playable revision uses **Godot 4.7.2**, a fixed-step simulation, deformable membranes, oriented chemical particles and procedural 2D artwork. Its vector artwork is authored in the project; cached particle textures and mipmaps generate automatically at runtime. The default Linux launcher builds a batched C++ GDExtension automatically; the GDScript reference backend remains available.
+This twenty-second playable revision uses **Godot 4.7.2**, a fixed-step simulation, deformable membranes, oriented chemical particles and procedural 2D artwork. Its vector artwork is authored in the project; cached particle textures and mipmaps generate automatically at runtime. The default Linux launcher builds a batched C++ GDExtension automatically; the GDScript reference backend remains available.
 
 ## Run with Steam Godot on Linux
 
@@ -18,13 +18,15 @@ The launcher finds Godot in standard Steam locations, custom Steam libraries and
 
 - **Tab:** pause and zoom inside your cell; press Tab again to keep edits and resume. Enter also resumes when no choice or placement is active. There are no Undo, Apply or Cancel-plan controls. **Escape** opens settings without discarding edits.
 - **Click an intracellular factory:** the folded assembly ribbons offer seven physical organs; the chamber cluster offers the four chemistry organs. Choose a picture, then click the membrane. New organs have one fixed size and neighbors move aside. **1–9 / 0** remain construction shortcuts; **V** selects the hunting receptor.
-- **Click an installed organ:** move, recycle or apply an already-kept matching blueprint. There is no resizing during placement or afterward. Recycling returns half the tissue and never refunds AP. Click a damaged attachment scar to restore its original anatomy.
+- **Click an installed organ:** move, recycle or apply an already-kept matching blueprint. Grazing pores, hunting receptors and photosynthetic organs also offer **Steering**: click to cycle Off, 25%, 50%, 100%, 200% and 400%. This changes directional preference, not size, power or feeding throughput. There is no resizing during placement or afterward. Recycling returns half the tissue and never refunds AP. Click a damaged attachment scar to restore its original anatomy.
 - **Click the nucleus:** choose a blueprint and accept an optional challenge. Hover it for the next objective, crisis progress and forecasts; its family tree also offers known blueprints. **Click the offspring bud:** fund/reclaim reserves, release a juvenile, store a dormant successor or follow a living relative.
-- **In edit mode, drag on bare cell surface:** place a microtubule between membrane, interior or existing-link points. Hover an unobstructed tube and scroll to adjust tension; right-click it to remove it. Factories and organ controls take precedence. **Right-click** cancels a held organ/move or closes local choices.
+- **In edit mode, drag on bare cell surface:** place a microtubule between membrane, interior or existing-link points. Hover within 16 screen pixels of an unobstructed tube (scaled with text size) and scroll to adjust tension; right-click it to remove it. Factories and organ controls take precedence. **Right-click** cancels a held organ/move or closes local choices.
 - **Wheel:** zoom around the cursor, from the 80% widest view to 12×. It never resizes organs. **Middle-drag** pans while editing or in free view. **Space** toggles position-follow without pausing or rotating the world. Leaving edit restores the previous observation view.
-- **Hover particles:** a temporary local lens magnifies the surrounding scene and shows the particle's name and role. The sharp enlarged glyph follows its actual orientation. Moving away dismisses the effect; simulation continues.
+- **Hover particles:** a temporary local lens magnifies the surrounding scene and shows the particle's name and role. The sharp enlarged glyph follows its actual orientation. Moving away dismisses the effect; simulation continues. Cell interiors and a UI-scaled 24-pixel margin around every living membrane suppress the lens, including already tracked particles.
 - **Keyboard editing:** **[ / ]** cycles cell targets, **Enter** opens/activates a choice, and arrow keys navigate the local choices or position a held organ around the membrane. Microtubules retain their direct mouse gestures.
 - **Escape:** settings with Quit, fullscreen, bloom, and persistent **85–175% text/interaction size**. **F11:** fullscreen. **S:** sensing ranges. **F3:** optional backend/FPS/timing diagnostics, without a zoom percentage. **H:** next habitat. **R:** new expedition, retaining family history and discovered blueprints. Settings also opens **Family history**, including after defeat.
+
+**While editing**, a translucent blob at the top right shows usable biomass. Selecting an organ adds a required-tissue blob on the same area scale. Equal blobs mean exactly enough tissue; pink means a shortfall. Reserved offspring tissue and existing body mass are excluded. The blobs disappear during play.
 
 ATP is the fill of an internal sac; AP are spinning coins; biomass is cell size. Hover for resource details or membrane health. Only the micrometer scale remains permanently at the edge; brief cell-local hints replace the screen panels. The scale measures the ordinary view, outside the temporary inspection lens.
 
@@ -83,6 +85,12 @@ Escape settings offer independent **Music volume** and **Particle beat response*
 ## Living chemistry
 
 **Cells are the only sources of external particles.** The initial clouds represent products of the existing cells' earlier life, with source-cell identifiers. There is no automatic food/oxygen habitat spawner. Respiration, lower-yield fermentation, photosynthesis, secretion, wounds, recycling and death sustain the particle economy. Replacing a dead NPC is an explicit population event with accounted material input. Hidden replacement remains preferred; forecasted tides can admit a bounded number of arrivals into safe visible space when wide zoom leaves no hidden habitat.
+
+**Combining hunting and grazing:** try hunting at 200% and grazing at 25%. Weights select one organ and direction, with a 20% switching margin to prevent near-tie oscillation. Stronger valid hunting cues retain pursuit even when an older food signal reaches the nucleus later. Once hunting memory expires, grazing can steer toward released nutrients. Grazing steering Off keeps suction, digestion and absorption active, but does not navigate toward food. Explicit flight always wins. Family pheromones, delayed internal family signals and remembered family targets are ignored; parent/offspring spikes still collide physically without tissue injury. See [Revision 22](docs/REVISION_22.md).
+
+Membrane organs, placement previews, pore mouths, weapon shafts and secretion outlets use the local outward membrane normal. Deforming the cell changes their mounting direction. Reversible flagella apply force along their mounted axis, and the selected receptor's normal defines its facing request.
+
+Successful two-particle reactions produce a brief white-gold contact spark. These bounded visual effects do not change chemistry or diffusion.
 
 **Cells only learn about other cells through pheromones.** Every active creature releases small signal points that drift with current, diffuse and decay rapidly (mean lifetime 5 seconds). They pass through cells, reefs and other particles. Nearby receptors read the source's location, size, hostile anatomy and defense status **as they were at release**; a distant plume may be stale, and losing it ends pursuit. No live target tracking bypasses the trail. Hover a point to inspect its reported size, armed/defended status and age. [Revision 13](docs/REVISION_13.md) describes the rules and validation.
 

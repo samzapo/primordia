@@ -184,3 +184,17 @@ Streamers read the authoritative fluid cache and move along its bends. Their dir
 The owner requests phase timings for dense live frames and a frame-rate repair before the next playtest. Measure all catch-up ticks, view synchronization, membrane geometry, draw submission/render and music, with workload counts and audio underruns. Preserve 60 Hz physics, eight-step catch-up, full screen plus margin, finite resource rules, orientation chemistry, pheromone-only perception and the complete Revision 20 visual treatment.
 
 Reduce repeated indexing and script/native crossings through matched native batches. Preserve sequential collision order, packet identity/timestamps and random streams; compare native/reference rules and both backends. Separate equal-simulation-time CPU ablations from wall-clock rendered FPS, test dense/grown/crowded scenes at 80%, and retain shared-host uncertainty. See [revision twenty-one](REVISION_21.md).
+
+## Revision 22: coherent steering and anatomical editing
+
+The owner reports grazing steering interrupting hunting and requests a way to balance the signals. Use adjustable per-organ strength with a coherent selected drive and bounded hysteresis, rather than averaging opposing directions. Grazing, hunting and light steering can be tuned anatomically without resizing or granting more power; disabling steering leaves collection/photosynthesis intact. Explicit flight has priority. Retain pheromone-only discovery and immutable reported coordinates; delayed weak signals must not overwrite a stronger valid target.
+
+The owner requires hunting to avoid offspring. Preserve inherited self-recognition across paid birth, editing and successor adoption. Carry emission-time family signatures through internal signals and remembered targets, reject own-lineage signals at delivery, and retain harmless physical family/spike contacts. Family protection does not grant immunity to environmental hazards or unrelated predators.
+
+In edit mode only, show usable tissue as a translucent top-right blob. A separate selected-organ cost blob uses identical area per tissue unit, updates after purchases/recycling/reserving, and signals a shortfall without a numeric biomass counter. No permanent HUD pane returns. Keep AP affordability distinct from tissue.
+
+Membrane attachments and placement previews face the local outward normal of the rendered deformed outline, including suction/intake offsets, spike shafts, secretion and receptor facing. Flagellar force follows that mounted axis with reversible strokes. Widen microtubule interaction to a UI-scaled 16-pixel tolerance while preserving edit-only gating and factory priority. Suppress particle magnification inside and immediately around all living cells, including tracked particles, without changing simulation or particle visibility.
+
+The owner requests a spark when two particles react. Sample successful pair contacts through both chemistry backends and display brief capped instanced flashes. A rejected collision, unary decay or particle source is not a successful pair reaction. Keep these effects independent of ecology, audio and random streams.
+
+[Revision 22](REVISION_22.md) records controls, regression checks and playtest limits.

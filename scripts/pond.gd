@@ -1,6 +1,7 @@
 extends Node2D
 const Simulation = preload("res://scripts/simulation.gd")
 const FlowView = preload("res://scripts/flow_view.gd")
+const ReactionSparks = preload("res://scripts/reaction_sparks.gd")
 const CellView = preload("res://scripts/cell_view.gd")
 const Preferences = preload("res://scripts/preferences.gd")
 const Visuals = preload("res://scripts/visuals.gd")
@@ -25,6 +26,8 @@ var world_layer := Node2D.new()
 var habitat_view := preload("res://scripts/habitat_view.gd").new()
 var currents := Node2D.new()
 var flow_view := FlowView.new()
+var reaction_view := ReactionSparks.new()
+var show_reaction_sparks := true
 var membrane_depth := true
 var flow_streamers := true
 var flow_wakes := true
@@ -120,6 +123,7 @@ func _ready() -> void:
 	free_camera = world.player.position
 	add_child(world_layer)
 	world_layer.add_child(flow_view)
+	world_layer.add_child(reaction_view)
 	world_layer.add_child(habitat_view)
 	habitat_view.z_index = 0
 	habitat_view.configure(world.habitat_geometry)
@@ -288,6 +292,7 @@ func _update_world(alpha: float) -> void:
 	habitat_view.sync(render_camera,world.view_half)
 	currents.visible = not flow_streamers
 	flow_view.sync(world,render_camera,world.view_half,zoom,flow_streamers,flow_wakes)
+	reaction_view.sync(world,render_camera,world.view_half,zoom,show_reaction_sparks)
 	# Cached glyph variants preserve facing while dropping subpixel embellishment.
 	for kind in batches.size():
 		var simplified := int(2*Simulation.particle_radius(kind)*zoom < 6)
@@ -417,9 +422,10 @@ func _draw_preview() -> void:
 	var organ: Dictionary = cell.organ_by_id(moving_id)
 	var size: float = organ.scale if not organ.is_empty() else 1.0
 	var kind: String = organ.kind if not organ.is_empty() else Simulation.KINDS[selected]
-	var point: Vector2 = (local+local.normalized()*5*size).rotated(cell.angle)
+	var normal: Vector2 = cell.local_normal(a)
+	var point: Vector2 = (local+normal*5*size).rotated(cell.angle)
 	var fits: bool = moving_id >= 0 or (cell.can_fit(kind,a) and cell.biomass >= Simulation.Cell.organ_cost(kind) and world.evolution.points >= 1)
-	Visuals.icon(preview,point,kind,local.angle()+cell.angle,size,ui_time)
+	Visuals.icon(preview,point,kind,normal.angle()+cell.angle,size,ui_time)
 	preview.draw_arc(point,22*size,0,TAU,32,MINT if fits else Color("fc8c90"),2/zoom,true)
 	if selected >= 0:
 		var cost := minf(cell.biomass,Simulation.Cell.organ_cost(kind))
@@ -864,7 +870,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func _nearest_tubule(local: Vector2) -> Dictionary:
 	var membrane = world.player.membrane
 	var best: Dictionary = {}
-	var distance := 8.0/zoom
+	var distance: float = 16.0*preferences.hud_scale/zoom
 	for link in membrane.skeleton.links:
 		var a: Vector2 = membrane.skeleton.point(link.a,membrane)
 		var b: Vector2 = membrane.skeleton.point(link.b,membrane)

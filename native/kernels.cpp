@@ -950,6 +950,7 @@ public:
                                   "spoil", "enzyme",  "neutralize"};
     std::array<int, 7> events{};
     Array neutralizations;
+    PackedVector2Array reaction_points;
     double loss = 0, recycled = 0;
     scratch.clear();
     scratch.reserve(ids.size());
@@ -1103,6 +1104,9 @@ public:
               }
             }
             if (reacted) {
+              // Capped presentation samples do not skip or alter chemistry.
+              if (reaction_points.size() < 64)
+                reaction_points.push_back(wrapv(p.p + d * .5));
               p.reacted = b.reacted = true;
               break;
             }
@@ -1129,6 +1133,7 @@ public:
       e[names[i]] = events[i];
     out["events"] = e;
     out["neutralizations"] = neutralizations;
+    out["reaction_points"] = reaction_points;
     return out;
   }
   PackedVector2Array fluid_step(const PackedVector2Array &v,

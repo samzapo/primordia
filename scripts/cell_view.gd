@@ -166,8 +166,9 @@ func _draw_organs() -> void:
 	var mark := Time.get_ticks_usec() if game.frame_trace != null else 0
 	for organ in cell.organs:
 		var point: Vector2 = cell.local_point(organ.a)
-		var at: Vector2 = point+point.normalized()*5*organ.scale
-		var heading := point.angle()
+		var normal: Vector2 = cell.organ_normal(organ)
+		var at: Vector2 = point+normal*5*organ.scale
+		var heading := normal.angle()
 		var charge: float = organ.charge_flash
 		if organ.kind == "toxin" and cell.target_id >= 0 and cell.threat.length_squared() > 0.01 and cell.energy >= 12 and cell.biomass >= 0.18*organ.scale*organ.scale*cell.Genes.factor(organ,"burst"):
 			charge = maxf(charge,clampf(1-float(organ.get("burst_clock",0))/(0.75*cell.Genes.factor(organ,"cooldown")),0,1))

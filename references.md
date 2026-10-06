@@ -80,7 +80,7 @@ This is a living design record. For each new biological or physical mechanic, re
 
 **Source:** [High-throughput 3D tracking of bacteria on a standard phase contrast microscope](https://www.nature.com/articles/ncomms9776) (2015), experimental measurements of bacterial swimming and run/tumble trajectories.
 
-**Game:** pores, spikes and flight receptors send internal signals that guide motion. Anatomy, rather than direct player steering, determines behavior.
+**Game:** pores, hunting/flight receptors and light-sensitive organs send internal signals that guide motion. Anatomy, rather than direct player steering, determines behavior.
 
 **Abstraction:** sampling a gradient, orienting a particular organ toward a target, long-range traces and choosing lower total biomass prey are readable game rules, not a reproduction of bacterial chemotaxis circuitry.
 
@@ -280,3 +280,16 @@ Primordia compresses those pressures into authored light and rival-anatomy chang
 **Physical motivation:** [Purcell, Life at low Reynolds number (1977)](https://doi.org/10.1119/1.10903), also available as an [author-text reprint](https://www.physics.brocku.ca/Courses/1P92_Kaur/SolidsFluids/Life-at-low-R/), explains why viscosity dominates micron-scale swimming. This motivates showing local relative flow rather than treating the medium as empty space.
 
 **Game and limits:** streamers integrate the existing cached two-dimensional velocity field. Cell disturbance glints brighten with body/fluid slip; plant glints sample flow at a few solid stems. Rounded membrane shading follows the actual deformable boundary with a fixed viewing light. The rings are stylized optical cues for submerged disturbance, not literal capillary waves, turbulent vortex shedding, calibrated low-Reynolds-number wakes, or new forces on particles. Plants do not gain fluid coupling in this art revision; their existing solid contacts are unchanged.
+
+
+## Competing chemical cues and anatomical signal strength
+
+**Phenomenon:** changing relative chemoreceptor abundance can change which of two opposing chemical gradients bacteria favor. [Kalinin et al., Responses of Escherichia coli bacteria to two opposing chemoattractant gradients depend on the chemoreceptor ratio (2010)](https://pubmed.ncbi.nlm.nih.gov/20118262/) measures this using methyl-aspartate and serine in a microfluidic device.
+
+**Game:** grazing, hunting and light-seeking organs have adjustable directional weights. A coherent selected drive gets a 20% switching margin; arriving signals are checked against current anatomy and the remembered drive. Short memory still expires when cues disappear. Pores with zero steering continue pumping, digesting and absorbing. The inherited self-recognition reference above motivates retaining family signatures throughout the signal path.
+
+**Abstraction:** these controls represent fictional receptor expression/gain, not measured receptor counts. Discrete percentages, scalar salience, winner-takes-direction selection, hysteresis, automatic safety priority and unchanged metabolic costs are game choices. This experiment does not establish those constants, predator sensing or phototaxis. No live-source lookup or awareness of a prey's death is added.
+
+Mounting artwork and forces to a local membrane normal is a geometric/game abstraction. Purcell's microswimming work and the feeding-current study cited above still motivate appendage/fluid coupling; reversible axial propulsion is not a calibrated flagellar motor model. Paired tissue blobs compare areas representing existing material, not extra biomass or literal three-dimensional volume. Wider microtubule picking and the cell-adjacent lens exclusion are interface choices.
+
+The reaction spark visualizes a successful existing orientation-dependent pair rule, described above. It is not a claim that microscopic biochemical reactions make visible sparks, generate heat/light in this model, or transfer momentum. Its capped instanced shader adds no chemical species or random draw.

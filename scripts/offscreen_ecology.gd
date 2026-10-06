@@ -218,7 +218,7 @@ func _exposure(sim, cell, dt: float) -> void:
 				if organ.kind not in ["feeding","sensing","hunting"]: continue
 				var contact := Medium.offset(cell.organ_position(organ),p.p)
 				if contact.length() > 12*organ.scale+sim.particle_radius(p.kind)*sim.particle_scale(p.amount): continue
-				var forward: Vector2 = cell.local_point(organ.a).normalized().rotated(cell.angle)
+				var forward: Vector2 = cell.organ_normal(organ).rotated(cell.angle)
 				var normal := contact.normalized()
 				if forward.dot(normal) < 0.25 or p.direction.dot(-normal) < 0.5: continue
 				organ.blocked = minf(1,organ.blocked+0.65)
@@ -237,7 +237,7 @@ static func kill_rate(attacker, prey) -> float:
 	var weapon := 0.0
 	for organ in attacker.organs:
 		if organ.kind != "offensive" or organ.hp <= 0: continue
-		var facing: Vector2 = attacker.local_point(organ.a).normalized().rotated(attacker.angle)
+		var facing: Vector2 = attacker.organ_normal(organ).rotated(attacker.angle)
 		weapon += organ.scale*organ.scale*organ.hp/organ.max_hp*Genes.factor(organ,"damage")*maxf(0,facing.dot(direction))
 	if weapon <= 0: return 0.0
 	var protection := 0.0
@@ -271,7 +271,7 @@ func _hunt(sim, attacker, dt: float) -> void:
 		var direction := Medium.offset(attacker.position,prey.position).normalized()
 		for organ in attacker.organs:
 			if organ.kind != "offensive" or organ.hp <= 0: continue
-			var facing: Vector2 = attacker.local_point(organ.a).normalized().rotated(attacker.angle)
+			var facing: Vector2 = attacker.organ_normal(organ).rotated(attacker.angle)
 			# Charge the expected working contact, not every spike on the body.
 			demand += dt*1.2*organ.scale*organ.scale*Genes.factor(organ,"attack_cost")*maxf(0,facing.dot(direction))
 		demand *= CONTACT_DUTY

@@ -50,29 +50,35 @@ func initialize(owner_game) -> void:
 	glyph.material = detail_material
 	glyph.hide()
 
-func pick(screen: Vector2, alpha: float) -> Dictionary:
+func _near_cell(at: Vector2, alpha: float) -> bool:
 	var sim = game.world
-	var at: Vector2 = sim.Medium.wrap_position(game.render_camera+(screen-game.camera_screen)/game.zoom)
-	candidates_examined = 0
-	# Material stays outside cells; dissolved pheromones remain visible through them.
-	var covered := false
+	var padding: float = 24*game.preferences.hud_scale/game.zoom
 	for cell in sim.cells:
 		if cell.dead: continue
 		var fraction: float = alpha if cell.activity > 0 else 1.0
 		var center: Vector2 = cell.previous_position+sim.Medium.offset(cell.previous_position,cell.position)*fraction
-		var d: Vector2 = sim.Medium.offset(center,at)
-		if d.length_squared() > pow(cell.extent()+8,2): continue
+		var offset: Vector2 = sim.Medium.offset(center,at)
+		if offset.length_squared() > pow(cell.extent()+padding,2): continue
 		var heading := lerp_angle(cell.previous_angle,cell.angle,fraction)
-		if d.length() < cell.visible_support(d.angle()-heading):
-			covered = true
-			break
+		if offset.length() <= cell.visible_support(offset.angle()-heading)+padding: return true
+	return false
+
+func _world_at(screen: Vector2) -> Vector2:
+	return game.world.Medium.wrap_position(game.render_camera+(screen-game.camera_screen)/game.zoom)
+
+func pick(screen: Vector2, alpha: float) -> Dictionary:
+	var sim = game.world
+	var at: Vector2 = sim.Medium.wrap_position(game.render_camera+(screen-game.camera_screen)/game.zoom)
+	candidates_examined = 0
+	# Keep anatomy and feeding clouds visually quiet, including pheromones.
+	if _near_cell(at,alpha): return {}
 	if sim.grid.source_size != sim.particles.size(): sim.grid.rebuild(sim.particles)
 	var best := INF
 	var result := {}
 	# One neighboring-bucket query, with padding for one interpolated transport step.
 	for index in sim.grid.query(at,16/game.zoom+64):
 		var particle: Dictionary = sim.particles[index]
-		if not sim._pheromone_alive(particle) or (covered and particle.kind != sim.PHEROMONE): continue
+		if not sim._pheromone_alive(particle): continue
 		candidates_examined += 1
 		var p: Vector2 = particle.p
 		var angle: float = particle.angle
@@ -86,7 +92,7 @@ func pick(screen: Vector2, alpha: float) -> Dictionary:
 		if particle.kind != sim.PHEROMONE: p = game._visible_particle_position(p,alpha)
 		screen_point = game.camera_screen+sim.Medium.offset(game.render_camera,p)*game.zoom
 		var distance := screen.distance_to(screen_point)
-		if distance <= tolerance and distance < best:
+		if distance <= tolerance and distance < best and not _near_cell(p,alpha):
 			best = distance
 			result = {"index":index,"packet":particle,"kind":particle.kind,"screen":screen_point,"angle":angle,"radius":radius}
 	return result
@@ -112,11 +118,12 @@ func _tracked_pose(alpha: float) -> Dictionary:
 		angle = lerp_angle(tracked_packet.previous_angle,angle,alpha)
 	if tracked_packet.kind != sim.PHEROMONE: p = game._visible_particle_position(p,alpha)
 	var screen: Vector2 = game.camera_screen+sim.Medium.offset(game.render_camera,p)*game.zoom
-	if not get_viewport_rect().has_point(screen): return {}
+	if not get_viewport_rect().has_point(screen) or _near_cell(p,alpha): return {}
 	return {"index":tracked_index,"packet":tracked_packet,"kind":tracked_packet.kind,"screen":screen,"angle":angle,
 		"radius":sim.particle_radius(tracked_packet.kind)*sim.particle_scale(tracked_packet.amount)*game.zoom}
 
 func update_lens(dt: float, screen: Vector2, alpha: float, allowed: bool) -> void:
+	if allowed and _near_cell(_world_at(screen),alpha): allowed = false
 	var following := {}
 	if allowed and track_remaining > 0 and screen.distance_to(cursor_anchor) <= CURSOR_RELEASE*game.preferences.hud_scale:
 		following = _tracked_pose(alpha)
@@ -142,7 +149,7 @@ func update_lens(dt: float, screen: Vector2, alpha: float, allowed: bool) -> voi
 		tracked_index = -1
 		track_remaining = 0
 	lens_amount = move_toward(lens_amount,1.0 if active else 0.0,dt*9)
-	if not allowed: lens_amount = 0
+	if not allowed or (not active and lens_amount > 0 and _near_cell(_world_at(lens_center),alpha)): lens_amount = 0
 	var material: ShaderMaterial = game.microscope_layer.material
 	material.set_shader_parameter("lens_center",lens_center/get_viewport_rect().size)
 	material.set_shader_parameter("lens_amount",lens_amount)
