@@ -1,6 +1,6 @@
 # Proposal — the cell becomes the interface
 
-Status: proposed replacement for the current HUD and assembly panels. The camera/scale/preview fixes below are implemented separately; the factories and resource displays described here are not yet implemented.
+Status: implemented in [Revision 11](REVISION_11.md), with owner amendments: no Undo/Redo/discard-plan control and no organ resizing, including placement sizing. The owner also requested and received a temporary particle magnifier and local identification tooltip. The text below preserves the original proposal; where it mentions Undo, resize or unimplemented controls, the revision-eleven specification supersedes it.
 
 ## Observe, then enter the cell
 

@@ -103,3 +103,9 @@ Preserve physical scale, cell-sourced chemistry, existing particle orientation a
 The owner set 80% as the widest playable view and removed the zoom-percentage display. Apply that lower bound after growth and build-panel fitting too; do not shrink the view below it to fit a giant cell. Keep a calibrated, adaptive μm marker on the side, with 0.2 μm per world unit. Paused anatomy edits must redraw and relax their geometry before applying.
 
 The owner requested replacing the persistent HUD/build panes with clickable intracellular factories and representing ATP as a sac, biomass as cell size, and AP as spinning tokens. The [structured replacement proposal](CELL_INTERFACE_PROPOSAL.md) covers these controls, closer editing zoom, drafts, offspring reserves and undo. It is proposed, not implemented or an approved change to the resource rules.
+
+## Revision 11: cell-centered controls and particle inspection
+
+The owner approved the cell-interface proposal, then removed Undo controls and all user organ resizing. The implemented interface uses two intracellular factories, direct organ/restore actions, an ATP sac, AP coins, body-size biomass, nucleus drafts/challenges and offspring reserves. Tab commits and resumes; Escape preserves edits while opening settings. Right-click cancels only held construction/movement or local choices. Existing paid blueprint traits remain; no replacement organ-power system was added.
+
+There are no persistent top/bottom/build panes. Editing supports magnification up to 12×, cursor-centered wheel zoom and camera panning, while the widest view remains 80%. Growth remains visible rather than triggering automatic play-camera retreat. Particle hover temporarily magnifies the local scene and names the actual species, retaining displayed orientation without changing chemistry. The micrometer scale measures the surrounding ordinary view. See [revision eleven](REVISION_11.md) for the implemented controls and validation.

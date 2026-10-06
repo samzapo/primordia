@@ -47,14 +47,7 @@ func sync(render_position: Vector2, render_angle: float, zoom: float, alpha: flo
 		set_meta("assembly",game.build_open)
 		queue_redraw()
 		appendages.queue_redraw()
-	label.text = "YOUR CELL" if cell == game.world.player else ""
-	label.modulate = Color("edf6ff")
-	var font_size := roundi(16*game.preferences.hud_scale)
-	if label.get_theme_font_size("font_size") != font_size: label.add_theme_font_size_override("font_size",font_size)
-	label.scale = Vector2.ONE/zoom
-	label.rotation = -rotation
-	label.position = Vector2(-label.size.x/(2*zoom),-cell.radius*cell.aspect-30/zoom).rotated(-rotation)
-	label.visible = alpha > 0.1
+	label.hide()
 
 func _draw() -> void:
 	if cell == null: return
@@ -88,7 +81,7 @@ func _draw() -> void:
 		draw_line(a,b,hue.lightened(0.45)*Color(1,1,1,(0.5 if game.build_open else 0.16)+link.tension*0.3),1+link.tension*2,true)
 	for junction in ([] if simple_view else cell.membrane.skeleton.junctions.values()): draw_circle(junction.p,3,Color("cce6ee"))
 	# Six seeded vesicles replace fine repeated speckles; all remain inside the gel.
-	if not simple_view:
+	if not simple_view and cell != game.world.player:
 		for vesicle in art.vesicles:
 			var support: float = cell.visible_support(vesicle.angle)
 			var q: Vector2 = Vector2.from_angle(vesicle.angle)*support*vesicle.distance
@@ -109,7 +102,7 @@ func _draw() -> void:
 	if not simple_view:
 		draw_colored_polygon(Transform2D(-0.3,Vector2(0.30,0.38)*size,0,nucleus-Vector2.ONE*size*0.22)*core,palette[6])
 	for packet in cell.signals: draw_circle(packet.p,3,Color("fc8c90") if packet.fear else Color("b5a3f4"))
-	for packet in ([] if simple_view and cell != game.world.player else cell.resource_packets):
+	for packet in ([] if cell == game.world.player or simple_view else cell.resource_packets):
 		if packet.delay > 0: continue
 		var color := Color("f5d47b") if packet.kind == "atp" else Color("ffa8bd")
 		draw_circle(packet.p,5,color.darkened(0.25))

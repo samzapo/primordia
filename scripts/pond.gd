@@ -2,18 +2,17 @@ extends Node2D
 const Simulation = preload("res://scripts/simulation.gd")
 const CellView = preload("res://scripts/cell_view.gd")
 const Preferences = preload("res://scripts/preferences.gd")
-const OrganCard = preload("res://scripts/organ_card.gd")
 const Visuals = preload("res://scripts/visuals.gd")
 const ParticleArt = preload("res://scripts/particle_art.gd")
 const MIN_ZOOM := 0.8
-const MAX_ZOOM := 3.0
+const MAX_ZOOM := 12.0
 const PARTICLE_SHADER = preload("res://shaders/particle.gdshader")
 const MINT := Color("80efce")
 const GOLD := Color("f5d47b")
 const TEXT := Color("e5f5ec")
 const MUTED := Color("a3bfc5")
 const TITLES := ["Flagellum","Protective cortex","Hunting spike","Repair body","Grazing pore","Flight receptor","Photosynthesis","Toxin vesicle","Toxin neutralizer","Acid gland"]
-const HELP := ["Larger flagella deliver more thrust. Anatomy chooses travel direction.","Protects the membrane directly beneath it. Larger armor covers more surface.","Senses lower total biomass cells at long range, turns toward them and pulls you into pursuit. Its physical tip punctures on contact.","Uses biomass and ATP to repair organs and close punctures faster. Releases buffers that neutralize local acidity and accelerates receptor cleaning.","Senses and pumps nutrients into its opening. Secretes reusable enzymes that turn waste into food when aligned.","Faces a detected cell while propelling you away. This is the only organ that triggers flight.","Seeks brighter water. Light fixes dissolved carbon into biomass and food, releasing oxygen. Works best in bright habitat patches.","Spends ATP and biomass to fire toxins and receptor-blocking decoys at a cell detected by a spike or flight receptor.","Releases complementary particles that bind toxin into harmless waste. Costs small amounts of biomass and ATP.","Releases acidifying particles. Moderate acidity favors digestive enzymes; excess acidity costs ATP and stresses cells. Repair bodies release buffers."]
+const HELP := ["Flagella provide thrust. Anatomy chooses travel direction.","Protects the membrane directly beneath it. Coverage follows its membrane attachment.","Senses lower total biomass cells at long range, turns toward them and pulls you into pursuit. Its physical tip punctures on contact.","Uses biomass and ATP to repair organs and close punctures faster. Releases buffers that neutralize local acidity and accelerates receptor cleaning.","Senses and pumps nutrients into its opening. Secretes reusable enzymes that turn waste into food when aligned.","Faces a detected cell while propelling you away. This is the only organ that triggers flight.","Seeks brighter water. Light fixes dissolved carbon into biomass and food, releasing oxygen. Works best in bright habitat patches.","Spends ATP and biomass to fire toxins and receptor-blocking decoys at a cell detected by a spike or flight receptor.","Releases complementary particles that bind toxin into harmless waste. Costs small amounts of biomass and ATP.","Releases acidifying particles. Moderate acidity favors digestive enzymes; excess acidity costs ATP and stresses cells. Repair bodies release buffers."]
 var world: Simulation = Simulation.new()
 var preferences = Preferences.new()
 var world_layer := Node2D.new()
@@ -22,24 +21,19 @@ var currents := Node2D.new()
 var currents_origin := Vector2.ZERO
 var preview := Node2D.new()
 var ui := Control.new()
+var cell_ui := preload("res://scripts/cell_interface.gd").new()
+var inspector := preload("res://scripts/particle_inspector.gd").new()
+var moving_id := -1
+var placement_angle := 0.0
+var placement_keyboard := false
+var camera_offset := Vector2.ZERO
+var camera_zoom := 1.0
+var focus_animating := false
+var observation_view: Dictionary = {}
 var scale_bar := preload("res://scripts/scale_bar.gd").new()
-var hud := PanelContainer.new()
-var build_panel := PanelContainer.new()
 var settings_panel := PanelContainer.new()
-var bottom := PanelContainer.new()
-var status_label := Label.new()
-var detail_label := Label.new()
-var stats_label := Label.new()
-var growth_label := Label.new()
-var help_label := Label.new()
 var debug_label := Label.new()
 var tube_hint := Label.new()
-var cards: Array[Button] = []
-var build_scroll := ScrollContainer.new()
-var health_bar := ProgressBar.new()
-var atp_bar := ProgressBar.new()
-var health_text := Label.new()
-var atp_text := Label.new()
 var scale_select := OptionButton.new()
 var fullscreen_check := CheckButton.new()
 var bloom_check := CheckButton.new()
@@ -51,20 +45,15 @@ var tube_group := -1
 var tube_tension := 0.3
 var shape_preview_ticks := 0
 var selected := -1
-var placement_scale := 1.0
 var camera_locked := true
 var free_camera := Vector2.ZERO
 var camera_dragging := false
 var camera_button := 0
-var camera_button_control := Button.new()
 var quit_button := Button.new()
 var light_layer := ColorRect.new()
 var microscope_layer := ColorRect.new()
 var acidity_texture := ImageTexture.new()
 var light_texture := ImageTexture.new()
-var organ_items := VBoxContainer.new()
-var genome_button := Button.new()
-var evolution_panel = preload("res://scripts/evolution_panel.gd").new()
 var light_factor_shown := -1.0
 var particle_lod := PackedByteArray()
 var build_open := false
@@ -83,7 +72,7 @@ var simulation_ms := 0.0
 var render_ms := 0.0
 var screenshot_path := ""
 var capture_frame := 0
-var notice := "Establish a lineage: fund offspring before 12:00, then sustain it through dusk. Tab to adapt."
+var notice := "Tab to enter your cell · hover particles to inspect · Esc for settings."
 var notice_timer := 8.0
 
 func _ready() -> void:
@@ -98,10 +87,6 @@ func _ready() -> void:
 		elif arg.begins_with("--habitat="): world = Simulation.new(world.seed_value,int(arg.trim_prefix("--habitat=")))
 		elif arg.begins_with("--advance="):
 			for i in int(arg.trim_prefix("--advance=")): world.step(1.0/60)
-		elif arg == "--assembly":
-			world.begin_build()
-			build_open = true
-			selected = 4
 		elif arg == "--senses": show_senses = true
 	light_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var light_material := ShaderMaterial.new()
@@ -170,6 +155,12 @@ func _ready() -> void:
 	_layout()
 	_update_hud()
 	_update_world(1.0)
+	if "--assembly" in args:
+		_toggle_build()
+		camera_zoom = manual_zoom
+		focus_animating = false
+		_update_world(1.0)
+		cell_ui.open_context({"kind":"assembly"})
 
 func _physics_process(dt: float) -> void:
 	if is_paused(): return
@@ -178,6 +169,7 @@ func _physics_process(dt: float) -> void:
 	world.step(dt)
 	if identity != world.player.id:
 		camera_locked = true
+		camera_offset = Vector2.ZERO
 		free_camera = world.player.position
 		_message("Division complete. You now follow the offspring; keep it healthy and feeding through dusk.")
 	simulation_ms = lerpf(simulation_ms,(Time.get_ticks_usec()-started)/1000.0,0.15)
@@ -191,6 +183,9 @@ func _can_edit_tubules() -> bool:
 
 func _process(dt: float) -> void:
 	ui_time += dt
+	if focus_animating:
+		camera_zoom = lerpf(camera_zoom,manual_zoom,1-exp(-dt*10))
+		if absf(camera_zoom-manual_zoom) < 0.002: focus_animating = false
 	notice_timer = maxf(0,notice_timer-dt)
 	# Relax edited geometry before drawing, without advancing biology or the run.
 	if build_open and not is_equal_approx(preview_radius,world.player.radius):
@@ -211,8 +206,12 @@ func _process(dt: float) -> void:
 		hud_clock = 0
 		_update_hud()
 		_layout()
+	cell_ui.sync(dt)
+	var cursor := get_global_mouse_position()
+	var inspect_allowed := get_viewport_rect().has_point(cursor) and not settings_panel.visible and not camera_dragging and selected < 0 and moving_id < 0 and tube_start.is_empty() and cell_ui.context.is_empty() and get_viewport().gui_get_hovered_control() == null
+	inspector.update_lens(dt,cursor,alpha,inspect_allowed)
 	preview.queue_redraw()
-	var hover := _nearest_tubule(_player_relative(get_global_mouse_position()).rotated(-world.player.angle)) if _can_edit_tubules() else {}
+	var hover := _nearest_tubule(_player_relative(get_global_mouse_position()).rotated(-world.player.angle)) if _can_edit_tubules() and selected < 0 and moving_id < 0 and cell_ui.hit(get_global_mouse_position()).is_empty() else {}
 	tube_hint.visible = not settings_panel.visible and not hover.is_empty() and get_viewport().gui_get_hovered_control() == null
 	if tube_hint.visible:
 		var link: Dictionary = world.player.membrane.skeleton.link_by_id(hover.id)
@@ -226,15 +225,16 @@ func _update_world(alpha: float) -> void:
 	var size := get_viewport_rect().size
 	var base_zoom := minf(size.x/Simulation.VIEW.x,size.y/Simulation.VIEW.y)
 	if not diagnostic_zoom: manual_zoom = clampf(manual_zoom,MIN_ZOOM,MAX_ZOOM)
-	zoom = base_zoom*manual_zoom*minf(1.0,150.0/world.player.radius)
-	if build_open: zoom = minf(zoom,(size.x-build_panel.size.x-60)/(world.player.radius*3.2))
+	if not focus_animating: camera_zoom = manual_zoom
+	zoom = base_zoom*camera_zoom
+	if diagnostic_zoom: zoom *= minf(1.0,150.0/world.player.radius)
 	if not diagnostic_zoom: zoom = maxf(zoom,base_zoom*MIN_ZOOM)
 	scale_bar.configure(size,zoom,preferences.hud_scale)
-	camera_screen = Vector2((size.x-build_panel.size.x-24)*0.5 if build_open else size.x*0.5,size.y*0.52)
+	camera_screen = size*0.5
 	world.view_half = size/(2*zoom)
-	world.camera_follows_player = camera_locked
-	world.camera_position = free_camera
-	render_camera = world.player.previous_position+Simulation.Medium.offset(world.player.previous_position,world.player.position)*alpha if camera_locked else free_camera
+	render_camera = world.player.previous_position+Simulation.Medium.offset(world.player.previous_position,world.player.position)*alpha+camera_offset if camera_locked else free_camera
+	world.camera_follows_player = camera_locked and camera_offset.length_squared() < 0.001
+	world.camera_position = render_camera
 	light_layer.material.set_shader_parameter("camera",render_camera)
 	light_layer.material.set_shader_parameter("view_size",size/zoom)
 	light_layer.material.set_shader_parameter("screen_center",camera_screen/size)
@@ -275,6 +275,7 @@ func _update_world(alpha: float) -> void:
 		if not alive_ids.has(identity):
 			views[identity].queue_free()
 			views.erase(identity)
+	cell_ui.interior.sync()
 
 func _sync_particles(alpha: float = 1.0) -> void:
 	if world.native_render:
@@ -361,14 +362,26 @@ func _draw_currents() -> void:
 func _draw_preview() -> void:
 	if settings_panel.visible or world.player.dead or world.evolution.terminal(): return
 	_draw_tubule_preview()
-	if not build_open or selected < 0: return
+	if not build_open or (selected < 0 and moving_id < 0): return
+	var cell = world.player
 	var relative := _player_relative(get_global_mouse_position())
-	var a: float = world.player.surface_parameter(relative.angle()-world.player.angle)
-	var local: Vector2 = world.player.local_point(a)
-	var point: Vector2 = (local+local.normalized()*5*placement_scale).rotated(world.player.angle)
-	var fits: bool = world.player.can_fit(Simulation.KINDS[selected],a,placement_scale) and world.player.biomass >= Simulation.Cell.organ_cost(Simulation.KINDS[selected],placement_scale) and world.evolution.points >= world.Evolution.install_price(placement_scale)
-	Visuals.icon(preview,point,Simulation.KINDS[selected],local.angle()+world.player.angle,placement_scale,ui_time)
-	preview.draw_arc(point,22*placement_scale,0,TAU,32,MINT if fits else Color("fc8c90"),2/zoom,true)
+	var a: float = placement_angle if placement_keyboard else cell.surface_parameter(relative.angle()-cell.angle)
+	var local: Vector2 = cell.local_point(a)
+	var organ: Dictionary = cell.organ_by_id(moving_id)
+	var size: float = organ.scale if not organ.is_empty() else 1.0
+	var kind: String = organ.kind if not organ.is_empty() else Simulation.KINDS[selected]
+	var point: Vector2 = (local+local.normalized()*5*size).rotated(cell.angle)
+	var fits: bool = moving_id >= 0 or (cell.can_fit(kind,a) and cell.biomass >= Simulation.Cell.organ_cost(kind) and world.evolution.points >= 1)
+	Visuals.icon(preview,point,kind,local.angle()+cell.angle,size,ui_time)
+	preview.draw_arc(point,22*size,0,TAU,32,MINT if fits else Color("fc8c90"),2/zoom,true)
+	if selected >= 0:
+		var cost := minf(cell.biomass,Simulation.Cell.organ_cost(kind))
+		var factor := pow(maxf(8,cell.body+cell.biomass+cell.brood_mass-cost)/maxf(8,cell.body+cell.biomass+cell.brood_mass),1.0/3.0)
+		var outline: PackedVector2Array = cell.membrane.outline()
+		var contour := PackedVector2Array()
+		for vertex in outline: contour.append((vertex*factor).rotated(cell.angle))
+		contour.append(contour[0])
+		preview.draw_polyline(contour,Color(0.6,1,0.85,0.6) if fits else Color(1,0.6,0.65,0.65),1.5/zoom,true)
 
 func _refresh_light_texture() -> void:
 	var values := PackedFloat32Array()
@@ -385,6 +398,7 @@ func _player_relative(screen: Vector2) -> Vector2:
 func _toggle_camera() -> void:
 	if camera_locked: free_camera = Simulation.Medium.wrap_position(render_camera)
 	camera_locked = not camera_locked
+	if camera_locked: camera_offset = Vector2.ZERO
 	camera_dragging = false
 	world.camera_follows_player = camera_locked
 	world.camera_position = free_camera
@@ -395,11 +409,7 @@ func _toggle_settings() -> void:
 	settings_panel.visible = not settings_panel.visible
 	tube_start.clear()
 	camera_dragging = false
-	if settings_panel.visible:
-		world.cancel_build()
-		build_open = false
-		selected = -1
-		shape_preview_ticks = 0
+	if settings_panel.visible: cell_ui.close_context()
 	_layout()
 	_update_hud()
 
@@ -430,68 +440,15 @@ func _panel_box(panel: PanelContainer) -> VBoxContainer:
 	return box
 
 func _build_ui() -> void:
-	var top := _panel_box(hud)
-	var row := HFlowContainer.new()
-	row.add_theme_constant_override("h_separation",16)
-	row.add_theme_constant_override("v_separation",8)
-	top.add_child(row)
-	var title := _label(row,"primordia",MINT)
-	title.autowrap_mode = TextServer.AUTOWRAP_OFF
-	_resource_bar(row,health_bar,health_text,MINT)
-	_resource_bar(row,atp_bar,atp_text,GOLD)
-	row.add_child(stats_label)
-	_button(row,"Build [Tab]",func(): _toggle_build())
-	row.add_child(camera_button_control)
-	camera_button_control.pressed.connect(_toggle_camera)
-	_button(row,"Settings [Esc]",_toggle_settings)
-	var lower := _panel_box(bottom)
-	for label in [status_label,detail_label,debug_label]: label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	lower.add_child(status_label)
-	lower.add_child(detail_label)
-	lower.add_child(debug_label)
-	var box := _panel_box(build_panel)
-	var heading := HBoxContainer.new()
-	box.add_child(heading)
-	_label(heading,"BUILD · PAUSED",MINT).size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_button(heading,"Cancel",func(): _toggle_build())
-	var actions := HFlowContainer.new()
-	box.add_child(actions)
-	_button(actions,"Apply & resume",_apply_build)
-	_button(actions,"Undo plan",_undo_build)
-	var scroll := build_scroll
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	var pages := HFlowContainer.new()
-	box.add_child(pages)
-	_button(pages,"Grow",func(): organ_items.show(); evolution_panel.hide())
-	_button(pages,"Modify",func(): _build_section("modify"))
-	pages.add_child(genome_button)
-	genome_button.pressed.connect(func(): _build_section("genome"))
-	_button(pages,"Lineage",func(): _build_section("lineage"))
-	box.add_child(scroll)
-	var contents := VBoxContainer.new()
-	contents.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(contents)
-	contents.add_child(evolution_panel)
-	evolution_panel.initialize(self)
-	evolution_panel.hide()
-	var items := organ_items
-	items.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	items.add_theme_constant_override("separation",10)
-	contents.add_child(items)
-	_label(items,"GROW NEW ANATOMY",MINT)
-	for i in Simulation.KINDS.size():
-		var card = OrganCard.new()
-		items.add_child(card)
-		card.pressed.connect(_select.bind(i))
-		cards.append(card)
-	items.add_child(help_label)
-	help_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	items.add_child(growth_label)
-	growth_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_label(items,"Wheel over the cell: size the selected organ.
-Click to attach; neighbors make room.
-Right-click an installed organ to recycle.",MUTED)
+	ui.add_child(cell_ui)
+	cell_ui.initialize(self)
+	ui.add_child(inspector)
+	inspector.initialize(self)
+	inspector.z_index = 30
+	ui.add_child(debug_label)
+	debug_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	debug_label.add_theme_color_override("font_outline_color",Color("142540"))
+	debug_label.add_theme_constant_override("outline_size",5)
 	var options_box := _panel_box(settings_panel)
 	var settings_scroll := ScrollContainer.new()
 	settings_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -502,7 +459,7 @@ Right-click an installed organ to recycle.",MUTED)
 	options.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	settings_scroll.add_child(options)
 	_label(options,"SETTINGS",MINT)
-	_label(options,"HUD and text size")
+	_label(options,"Text and interaction size")
 	options.add_child(scale_select)
 	for scale_value in Preferences.SCALES: scale_select.add_item("%d%%" % roundi(scale_value*100))
 	scale_select.item_selected.connect(func(i): _apply_ui_scale(Preferences.SCALES[i]))
@@ -517,31 +474,12 @@ Right-click an installed organ to recycle.",MUTED)
 	_button(options,"Performance overlay [F3]",func(): show_debug = not show_debug)
 	_button(options,"Next habitat [H]",func(): _restart((world.habitat+1)%3))
 	_button(options,"New life [R]",func(): _restart())
-	_label(options,"Wheel during placement: organ size
-In build: drag microtubules; hover + wheel: tension
-Wheel elsewhere: zoom
-Space: follow / free camera
-Free camera: drag empty water or middle-drag
-No movement keys: anatomy steers.",MUTED)
+	_label(options,"Tab: enter cell / keep edits and resume\nClick factories, nucleus, bud or installed organs\nNew organs have a fixed size · no Undo\nRight-click: cancel a held organ or close choices\nIn edit: drag microtubules; hover + wheel: tension\nWheel elsewhere: zoom · middle-drag: pan\nSpace: follow / free camera\n[ / ]: cycle cell targets · Enter: choose / place\nArrow keys: navigate choices or membrane placement\nHover particles: inspect through a local lens\nNo movement keys: anatomy steers.",MUTED)
 	_button(options,"Close [Esc]",_toggle_settings)
 	options.add_child(quit_button)
 	quit_button.text = "Quit game"
 	quit_button.pressed.connect(func(): get_tree().quit())
 	settings_panel.hide()
-	build_panel.visible = build_open
-
-func _resource_bar(parent: Node, bar: ProgressBar, label: Label, color: Color) -> void:
-	parent.add_child(bar)
-	bar.show_percentage = false
-	bar.step = 0.0
-	bar.add_theme_stylebox_override("background",_style(Color("254361"),Color("527b9d")))
-	bar.add_theme_stylebox_override("fill",_style(color.darkened(0.42),color))
-	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	bar.add_child(label)
-	label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 func _style(color: Color, border: Color) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
@@ -567,7 +505,6 @@ func _apply_ui_scale(value: float) -> void:
 		theme.set_stylebox("hover",type_name,_style(Color("315b7c"),MINT))
 		theme.set_stylebox("pressed",type_name,_style(Color("315b7c"),MINT))
 	ui.theme = theme
-	for bar in [health_bar,atp_bar]: bar.custom_minimum_size = Vector2(205,44)*preferences.hud_scale
 	var closest := 0
 	for i in Preferences.SCALES.size():
 		if absf(Preferences.SCALES[i]-preferences.hud_scale) < absf(Preferences.SCALES[closest]-preferences.hud_scale): closest = i
@@ -576,24 +513,14 @@ func _apply_ui_scale(value: float) -> void:
 	_update_hud()
 	_layout()
 	_layout.call_deferred()
-	_scroll_selected.call_deferred()
 
 func _layout() -> void:
 	var size := get_viewport_rect().size
 	light_layer.size = size
 	microscope_layer.size = size
-	hud.position = Vector2(16,16)
-	hud.size = Vector2(size.x-32,0)
-	var panel_y := hud.position.y+hud.size.y+16
-	var panel_width := minf(490*preferences.hud_scale,size.x*0.48)
-	build_panel.position = Vector2(size.x-panel_width-16,panel_y)
-	build_panel.size = Vector2(panel_width,maxf(120,size.y-panel_y-16))
-	settings_panel.position = Vector2(size.x-minf(500*preferences.hud_scale,size.x-40)-20,panel_y)
-	settings_panel.size = Vector2(minf(500*preferences.hud_scale,size.x-40),maxf(120,size.y-panel_y-16))
-	bottom.size = Vector2(size.x-32,0)
-	bottom.position = Vector2(16,size.y-bottom.size.y-16)
-	bottom.visible = not build_open and not settings_panel.visible
-	build_panel.visible = build_open
+	var width := minf(530*preferences.hud_scale,size.x-32)
+	settings_panel.position = Vector2(size.x-width-16,16)
+	settings_panel.size = Vector2(width,size.y-32)
 	preview.queue_redraw()
 
 func set_bloom(on: bool) -> void:
@@ -613,91 +540,99 @@ func _apply_fullscreen() -> void:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if preferences.fullscreen else DisplayServer.WINDOW_MODE_WINDOWED)
 
 func _update_hud() -> void:
-	var cell = world.player
 	if absf(world.evolution.light_factor-light_factor_shown) > 0.02:
 		_refresh_light_texture()
 		light_factor_shown = world.evolution.light_factor
-	genome_button.text = "Genome" + (" •" if not world.evolution.chosen else "")
-	if build_open: evolution_panel.refresh()
 	if acidity_texture.get_width() > 0: acidity_texture.update(Image.create_from_data(64,40,false,Image.FORMAT_RF,world.acidity.values.to_byte_array()))
-	stats_label.text = "Biomass %s · %d AP · Tide %d · %d:%02d" % [_quantity(cell.biomass),world.evolution.points,mini(6,world.evolution.tide+1),int(world.time)/60,int(world.time)%60]
-	camera_button_control.text = "Unlock view [Space]" if camera_locked else "Follow cell [Space]"
-	health_bar.max_value = 100
-	health_bar.value = cell.health
-	atp_bar.max_value = cell.energy_capacity()
-	atp_bar.value = cell.energy
-	health_text.text = "Health %d%%" % roundi(cell.health)
-	atp_text.text = "ATP %s / %s" % [_quantity(cell.energy),_quantity(cell.energy_capacity())]
-	var status: String = cell.state
-	if cell.reserve_activity > 0: status += " · USING BIOMASS FOR ATP"
-	if cell.fermentation_activity > 0: status += " · FERMENTING · LOW OXYGEN"
-	if cell.organs.any(func(o): return o.blocked > 0.05): status += " · RECEPTORS CLEARING"
-	if cell.acid_stress > 0.1: status += " · ACID STRESS %d%%" % roundi(cell.acid_stress*100)
-	if world.evolution.terminal(): status = ("LINEAGE ESTABLISHED" if world.won else "LINEAGE ENDED")+" · R to start again"
-	elif cell.dead: status = "LIFE ENDED · R to start again"
-	elif build_open: status = "ASSEMBLY PAUSED"
-	elif settings_panel.visible: status = "SETTINGS · PAUSED"
-	status_label.text = status+(" · "+cell.feeding_feedback if cell.feeding_feedback != "" else "")
-	detail_label.text = world.evolution.ending if world.evolution.terminal() else notice if notice_timer > 0 else world.evolution.forecast()+"\nTab to adapt · Light %d%% · Acid %d%% · Oxygen %.1f" % [roundi(world.light_at(cell.position)*100),roundi(world.acidity.sample(cell.position)*100),cell.oxygen]
-	if not world.evolution.chosen and not world.evolution.terminal(): detail_label.text += "\nBlueprint ready · Tab → Genome"
-	if not world.evolution.terminal() and world.evolution.tide < 6:
-		var quote: Dictionary = world.offspring_quote()
-		detail_label.text += "\nLineage reserve %.0f / %.0f biomass · %.0f / 60 ATP · due 12:00" % [cell.brood_mass,quote.material,cell.brood_energy]
-	detail_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	debug_label.visible = show_debug
-	debug_label.text = "%s · %d FPS · sim %.2f ms · prepare %.2f ms · %d active cells / %d particles" % ["GPU experiment" if world.gpu_transport != null else "Native CPU" if world.kernels != null else "GDScript",Engine.get_frames_per_second(),simulation_ms,render_ms,world.active_cells,world.active_particles]
-	if selected >= 0:
-		help_label.text = HELP[selected]+"\n\nSize %.2f× · Cost %.1f tissue + %d AP\nWheel over the cell to resize." % [placement_scale,Simulation.Cell.organ_cost(Simulation.KINDS[selected],placement_scale),world.Evolution.install_price(placement_scale)]
-	else: help_label.text = "Choose an organ, then click the membrane. Drag between membrane or microtubule points to shape your cell; hover a link and scroll for tension."
-	growth_label.text = "Biomass %s · Radius %.1f · Surface %.0f%% occupied\nGrowth has no size cap." % [_quantity(cell.biomass),cell.radius,100*cell.occupied()/cell.perimeter()]
-	for i in cards.size():
-		cards[i].modulate = MINT if selected == i else Color.WHITE
-		var size: float = placement_scale if selected == i else 1.0
-		var title: String = TITLES[i]
-		cards[i].configure("%d  %s\n%.1f tissue · %d AP · %.2f×" % [(i+1)%10,title,Simulation.Cell.organ_cost(Simulation.KINDS[i],size),world.Evolution.install_price(size),size],Simulation.KINDS[i],"graze",preferences.hud_scale)
+	debug_label.visible = show_debug and not settings_panel.visible
+	debug_label.text = "%s · %d FPS · sim %.2f ms · prepare %.2f ms\n%d active cells / %d particles" % ["GPU experiment" if world.gpu_transport != null else "Native CPU" if world.kernels != null else "GDScript",Engine.get_frames_per_second(),simulation_ms,render_ms,world.active_cells,world.active_particles]
+	debug_label.position = Vector2(16,16 if not build_open else 52*preferences.hud_scale)
+	debug_label.add_theme_font_size_override("font_size",roundi(15*preferences.hud_scale))
 
-func _quantity(value: float) -> String:
-	if value >= 1000000: return "%.2fM" % (value/1000000)
-	if value >= 10000: return "%.1fk" % (value/1000)
-	return "%.0f" % value
 
 func _toggle_build() -> void:
-	if world.player.dead or world.evolution.terminal(): return
-	if build_open: world.cancel_build()
-	else: world.begin_build()
-	build_open = not build_open
-	evolution_panel.signature = ""
-	evolution_panel.moving = false
-	shape_preview_ticks = 0
-	settings_panel.hide()
-	if not build_open:
-		shape_preview_ticks = 0
-		tube_group = -1
-		selected = -1
-		tube_start.clear()
-	_layout()
-	_update_hud()
-
-func _select(index: int) -> void:
-	if world.player.dead or world.evolution.terminal(): return
+	if settings_panel.visible or world.player.dead or world.evolution.terminal(): return
+	if build_open:
+		_finish_build()
+		return
+	observation_view = {"zoom":manual_zoom,"locked":camera_locked,"free":free_camera,"offset":camera_offset}
 	world.begin_build()
 	build_open = true
-	organ_items.show()
-	evolution_panel.hide()
-	evolution_panel.existing_id = -1
-	evolution_panel.moving = false
-	selected = index
-	settings_panel.hide()
-	_layout()
-	_update_hud()
+	camera_locked = true
+	camera_offset = Vector2.ZERO
+	var size := get_viewport_rect().size
+	var fit := minf(size.x/Simulation.VIEW.x,size.y/Simulation.VIEW.y)
+	camera_zoom = zoom/maxf(0.001,fit)
+	manual_zoom = clampf(minf(size.x,size.y)*0.28/(world.player.radius*fit),MIN_ZOOM,MAX_ZOOM)
+	focus_animating = true
+	selected = -1
+	moving_id = -1
+	shape_preview_ticks = 0
 	tube_start.clear()
-	_scroll_selected.call_deferred()
+	cell_ui.close_context()
+	cell_ui.keyboard_target.clear()
+	_message("Click a factory to assemble organs · nucleus for blueprints · bud for offspring.")
+	_layout()
 
-func _scroll_selected() -> void:
-	await get_tree().process_frame
-	await get_tree().process_frame
-	if not build_open: return
-	if selected >= 0: build_scroll.ensure_control_visible(cards[selected])
+func _finish_build() -> void:
+	world.commit_build()
+	build_open = false
+	selected = -1
+	moving_id = -1
+	tube_start.clear()
+	tube_group = -1
+	shape_preview_ticks = 0
+	cell_ui.close_context()
+	cell_ui.keyboard_target.clear()
+	if not observation_view.is_empty():
+		manual_zoom = observation_view.zoom
+		camera_locked = observation_view.locked
+		free_camera = observation_view.free
+		camera_offset = observation_view.offset
+		focus_animating = true
+		observation_view.clear()
+	_message("Anatomy kept · the ecological clock resumes.")
+	_layout()
+
+func placement_status() -> String:
+	if selected < 0: return ""
+	if world.evolution.points < 1: return "Needs an AP coin."
+	if world.player.biomass < Simulation.Cell.organ_cost(Simulation.KINDS[selected]): return "Needs usable tissue; structural tissue stays protected."
+	if not world.player.can_fit(Simulation.KINDS[selected],0): return "Needs more membrane area."
+	return "Click the membrane · neighbors make room."
+
+func _place_at(angle: float) -> bool:
+	if moving_id >= 0:
+		var moved: bool = world.player.move_organ(moving_id,angle)
+		moving_id = -1
+		_message("Organelle moved." if moved else "That organ is no longer available.")
+		return moved
+	if selected < 0: return false
+	var placed: bool = world.install(Simulation.KINDS[selected],angle,"flee" if selected == 5 else "graze",1.0)
+	_message("Organelle attached." if placed else placement_status())
+	return placed
+
+func _zoom_at(screen: Vector2, factor: float) -> void:
+	var before: Vector2 = render_camera+(screen-camera_screen)/zoom
+	manual_zoom = clampf(manual_zoom*factor,MIN_ZOOM,MAX_ZOOM)
+	focus_animating = false
+	_update_world(1.0 if is_paused() else Engine.get_physics_interpolation_fraction())
+	var after: Vector2 = render_camera+(screen-camera_screen)/zoom
+	var correction := Simulation.Medium.offset(after,before)
+	if camera_locked: camera_offset += correction
+	else: free_camera = Simulation.Medium.wrap_position(free_camera+correction)
+	_update_world(1.0 if is_paused() else Engine.get_physics_interpolation_fraction())
+	currents.queue_redraw()
+
+func _select(index: int) -> void:
+	if settings_panel.visible or world.player.dead or world.evolution.terminal(): return
+	if not build_open: _toggle_build()
+	cell_ui.close_context()
+	cell_ui.keyboard_target.clear()
+	moving_id = -1
+	selected = index
+	placement_keyboard = false
+	tube_start.clear()
 
 func _restart(profile: int = -1) -> void:
 	if world.gpu_transport != null: world.gpu_transport.close()
@@ -714,6 +649,12 @@ func _restart(profile: int = -1) -> void:
 	for node in views.values(): node.queue_free()
 	views.clear()
 	manual_zoom = 1
+	camera_zoom = 1
+	focus_animating = false
+	camera_offset = Vector2.ZERO
+	observation_view.clear()
+	moving_id = -1
+	cell_ui.reset()
 	tube_start.clear()
 	tube_group = -1
 	shape_preview_ticks = 0
@@ -726,6 +667,14 @@ func _message(value: String) -> void:
 	_update_hud()
 
 func _input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT and build_open and not settings_panel.visible:
+		if selected >= 0 or moving_id >= 0 or not cell_ui.context.is_empty():
+			selected = -1
+			moving_id = -1
+			cell_ui.close_context()
+			get_viewport().set_input_as_handled()
+			return
+	if event is InputEventMouseMotion: placement_keyboard = false
 	if event is InputEventMouseButton and not event.pressed:
 		if event.button_index == camera_button: camera_dragging = false
 		if event.button_index == MOUSE_BUTTON_LEFT and not tube_start.is_empty():
@@ -734,12 +683,26 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 	if event is InputEventKey and event.pressed and not event.echo:
+		if settings_panel.visible and event.keycode not in [KEY_ESCAPE,KEY_F11,KEY_F3]: return
 		match event.keycode:
 			KEY_TAB: _toggle_build()
+			KEY_ENTER,KEY_KP_ENTER:
+				if not build_open: return
+				if selected >= 0 or moving_id >= 0:
+					placement_keyboard = true
+					_place_at(placement_angle)
+				elif not cell_ui.activate_keyboard(): _finish_build()
+			KEY_BRACKETLEFT,KEY_BRACKETRIGHT:
+				if not build_open: return
+				cell_ui.cycle_target(-1 if event.keycode == KEY_BRACKETLEFT else 1)
+			KEY_LEFT,KEY_RIGHT,KEY_UP,KEY_DOWN:
+				if not build_open or (selected < 0 and moving_id < 0): return
+				placement_keyboard = true
+				placement_angle = fposmod(placement_angle+(-0.10 if event.keycode in [KEY_LEFT,KEY_UP] else 0.10),TAU)
 			KEY_SPACE: _toggle_camera()
 			KEY_ESCAPE: _toggle_settings()
 			KEY_F11: set_fullscreen(not preferences.fullscreen)
-			KEY_F3: show_debug = not show_debug
+			KEY_F3: show_debug = not show_debug; _update_hud()
 			KEY_S: show_senses = not show_senses
 			KEY_F: _select(4)
 			KEY_C: _select(5)
@@ -754,9 +717,9 @@ func _input(event: InputEvent) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not _can_edit_tubules(): tube_start.clear()
 	if settings_panel.visible or world.player.dead or world.evolution.terminal(): return
-	if event is InputEventMouseMotion and camera_dragging and not camera_locked:
-		free_camera = Simulation.Medium.wrap_position(free_camera-event.relative/zoom)
-		world.camera_position = free_camera
+	if event is InputEventMouseMotion and camera_dragging:
+		if camera_locked: camera_offset -= event.relative/zoom
+		else: free_camera = Simulation.Medium.wrap_position(free_camera-event.relative/zoom)
 		currents.queue_redraw()
 		return
 	if not event is InputEventMouseButton: return
@@ -773,8 +736,13 @@ func _unhandled_input(event: InputEvent) -> void:
 					_message("Microtubule placed · hover and scroll to set tension.")
 			tube_start.clear()
 		return
+	if event.button_index == MOUSE_BUTTON_MIDDLE and (build_open or not camera_locked):
+		camera_dragging = true
+		camera_button = event.button_index
+		tube_start.clear()
+		return
 	if event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
-		var hit := _nearest_tubule(local) if _can_edit_tubules() else {}
+		var hit := _nearest_tubule(local) if _can_edit_tubules() and selected < 0 and moving_id < 0 and cell_ui.hit(event.position).is_empty() else {}
 		if not hit.is_empty():
 			var link: Dictionary = world.player.membrane.skeleton.link_by_id(hit.id)
 			tube_group = link.group
@@ -783,47 +751,39 @@ func _unhandled_input(event: InputEvent) -> void:
 			shape_preview_ticks = 60
 			_message("Microtubule tension %d%%" % roundi(tube_tension*100))
 			return
-		if build_open and selected >= 0:
-			placement_scale = maxf(0.5,placement_scale*(1.1 if event.button_index == MOUSE_BUTTON_WHEEL_UP else 1/1.1))
-			_update_hud()
+		_zoom_at(event.position,1.12 if event.button_index == MOUSE_BUTTON_WHEEL_UP else 1/1.12)
+		return
+	if event.button_index == MOUSE_BUTTON_RIGHT:
+		if selected >= 0 or moving_id >= 0:
+			selected = -1
+			moving_id = -1
 			return
-		manual_zoom = clampf(manual_zoom*(1.12 if event.button_index == MOUSE_BUTTON_WHEEL_UP else 1/1.12),MIN_ZOOM,MAX_ZOOM)
-		currents.queue_redraw()
-		return
-	if event.button_index == MOUSE_BUTTON_LEFT and build_open and evolution_panel.moving:
-		var a: float = world.player.surface_parameter(local.angle())
-		if absf(relative.length()-world.player.support(relative.angle())) > maxf(26/zoom,12): return
-		world.player.move_organ(evolution_panel.existing_id,a)
-		evolution_panel.moving = false
-		_message("Move planned. Apply to commit.")
-		return
-	if event.button_index == MOUSE_BUTTON_LEFT and build_open and selected >= 0:
-		var a: float = world.player.surface_parameter(relative.angle()-world.player.angle)
-		if absf(relative.length()-world.player.support(relative.angle())) > maxf(26/zoom,12): return
-		if world.install(Simulation.KINDS[selected],a,"flee" if selected == 5 else "graze",placement_scale):
-			_message("Attachment planned. Apply commits; Tab cancels the plan.")
-		else: _message("Needs enough AP, tissue and total membrane area. Neighbors move aside.")
-		return
-	if event.button_index == MOUSE_BUTTON_LEFT and _can_edit_tubules():
-		var anchor := _tubule_anchor(local)
-		if not anchor.is_empty(): tube_start = anchor; return
-	if event.button_index == MOUSE_BUTTON_RIGHT and build_open:
 		if not tube_start.is_empty(): tube_start.clear(); return
-		if build_open:
-			for i in world.player.organs.size():
-				var organ: Dictionary = world.player.organs[i]
-				if relative.distance_to(Simulation.Medium.offset(world.player.position,world.player.organ_position(organ))) < maxf(22/zoom,20*organ.scale):
-					world.remove(i)
-					return
-		var hit := _nearest_tubule(local)
-		if not hit.is_empty():
-			world.player.membrane.skeleton.remove_group(world.player.membrane.skeleton.link_by_id(hit.id).group)
-			tube_group = -1
-			shape_preview_ticks = 60
+		if not cell_ui.context.is_empty(): cell_ui.close_context(); return
+		if _can_edit_tubules() and cell_ui.hit(event.position).is_empty():
+			var hit := _nearest_tubule(local)
+			if not hit.is_empty():
+				world.player.membrane.skeleton.remove_group(world.player.membrane.skeleton.link_by_id(hit.id).group)
+				tube_group = -1
+				shape_preview_ticks = 60
 		return
-	if not camera_locked and (event.button_index == MOUSE_BUTTON_MIDDLE or event.button_index == MOUSE_BUTTON_LEFT):
-		camera_dragging = true
-		camera_button = event.button_index
+	if event.button_index == MOUSE_BUTTON_LEFT:
+		if build_open and (selected >= 0 or moving_id >= 0):
+			if absf(relative.length()-world.player.support(relative.angle())) <= maxf(26/zoom,12):
+				_place_at(world.player.surface_parameter(local.angle()))
+				return
+		var target: Dictionary = cell_ui.hit(event.position)
+		if not target.is_empty():
+			if not build_open: _toggle_build()
+			cell_ui.open_context(target)
+			return
+		if not cell_ui.context.is_empty(): cell_ui.close_context(); return
+		if _can_edit_tubules() and selected < 0 and moving_id < 0:
+			var anchor := _tubule_anchor(local)
+			if not anchor.is_empty(): tube_start = anchor; return
+		if not build_open and not camera_locked:
+			camera_dragging = true
+			camera_button = event.button_index
 
 func _nearest_tubule(local: Vector2) -> Dictionary:
 	var membrane = world.player.membrane
@@ -886,29 +846,3 @@ func _configure_backend() -> void:
 
 func _exit_tree() -> void:
 	if world.gpu_transport != null: world.gpu_transport.close()
-
-func _apply_build() -> void:
-	world.commit_build()
-	build_open = false
-	selected = -1
-	tube_start.clear()
-	evolution_panel.moving = false
-	shape_preview_ticks = 0
-	_message("Anatomy applied. The ecological clock resumes.")
-	_layout()
-
-func _build_section(name: String) -> void:
-	organ_items.hide()
-	evolution_panel.show()
-	evolution_panel.show_section(name)
-	build_scroll.scroll_vertical = 0
-
-func _undo_build() -> void:
-	world.undo_build()
-	tube_start.clear()
-	tube_group = -1
-	shape_preview_ticks = 0
-	evolution_panel.existing_id = -1
-	evolution_panel.moving = false
-	evolution_panel.signature = ""
-	_update_hud()

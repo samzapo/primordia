@@ -2,7 +2,7 @@
 
 A physics and chemistry simulation game about managing one small cell. Eat, grow and survive predation. **You never steer the cell:** its anatomy controls its behavior.
 
-This tenth playable revision uses **Godot 4.7.2**, a fixed-step simulation, deformable membranes, oriented chemical particles and procedural 2D artwork. Its vector artwork is authored in the project; cached particle textures and mipmaps generate automatically at runtime. The default Linux launcher builds a batched C++ GDExtension automatically; the GDScript reference backend remains available.
+This eleventh playable revision uses **Godot 4.7.2**, a fixed-step simulation, deformable membranes, oriented chemical particles and procedural 2D artwork. Its vector artwork is authored in the project; cached particle textures and mipmaps generate automatically at runtime. The default Linux launcher builds a batched C++ GDExtension automatically; the GDScript reference backend remains available.
 
 ## Run with Steam Godot on Linux
 
@@ -16,25 +16,31 @@ The launcher finds Godot in standard Steam locations, custom Steam libraries and
 
 ## Controls
 
-- **Tab:** open a paused assembly preview, or cancel it. **Apply & resume** commits changes; **Undo plan** resets them. **Grow / Modify / Genome / Lineage** switch between new organs, existing anatomy, mutation drafts and offspring reserves. Illustrated cards or **1–9 / 0** select organs. Click the membrane to attach; the wheel sizes the selected organ. Existing neighbors move aside to make space and stay anchored afterward. Right-click an installed organ during assembly to recycle it.
-- **In the build menu (Tab), drag on your cell:** press the left button for the first microtubule point and release for the second. Endpoints can be on the membrane, on another tube, or inside the cell. Hover a tube and **scroll** to adjust tension; a label shows the current setting. Right-click a tube to remove it. No microtubule build card is needed. During selected-organ placement, left click attaches that organ; use **Modify → Shape microtubules** to clear the selection and draw tubes. Creation, tension changes and removal are available only while the build menu is open.
-- **Space:** lock/unlock the camera to your cell's **position**, without changing its rotation or pausing. In free view, drag empty water or middle-drag to pan. Space returns to following the cell.
-- **Escape:** settings, including **Quit game**. Settings pause biology. **F11** toggles fullscreen. Fullscreen, **Light bloom** and **85–175% HUD/text scale** persist. Bloom can be disabled in settings.
-- **Wheel elsewhere:** microscope zoom, from an 80% widest view to 3× close-up. Growth and the build panel cannot widen past that minimum. The side scale shows world distance in μm; there is no zoom-percentage readout. **S:** sensing ranges. **F3:** active backend, FPS and CPU simulation/frame preparation times. **H:** next habitat. **R:** new life.
+- **Tab:** pause and zoom inside your cell; press Tab again to keep edits and resume. Enter also resumes when no choice or placement is active. There are no Undo, Apply or Cancel-plan controls. **Escape** opens settings without discarding edits.
+- **Click an intracellular factory:** the folded assembly ribbons offer six physical organs; the chamber cluster offers the four chemistry organs. Choose a picture, then click the membrane. New organs have one fixed size and neighbors move aside. **1–9 / 0** remain construction shortcuts.
+- **Click an installed organ:** move, recycle or apply an already-kept matching blueprint. There is no resizing during placement or afterward. Recycling returns half the tissue and never refunds AP. Click a damaged attachment scar to restore its original anatomy.
+- **Click the nucleus:** choose a blueprint and accept an optional challenge. Hover it for tide timing and forecasts. **Click the offspring bud:** fund or reclaim reproductive reserves; after division it reports viability.
+- **In edit mode, drag on bare cell surface:** place a microtubule between membrane, interior or existing-link points. Hover an unobstructed tube and scroll to adjust tension; right-click it to remove it. Factories and organ controls take precedence. **Right-click** cancels a held organ/move or closes local choices.
+- **Wheel:** zoom around the cursor, from the 80% widest view to 12×. It never resizes organs. **Middle-drag** pans while editing or in free view. **Space** toggles position-follow without pausing or rotating the world. Leaving edit restores the previous observation view.
+- **Hover particles:** a temporary local lens magnifies the surrounding scene and shows the particle's name and role. The sharp enlarged glyph follows its actual orientation. Moving away dismisses the effect; simulation continues.
+- **Keyboard editing:** **[ / ]** cycles cell targets, **Enter** opens/activates a choice, and arrow keys navigate the local choices or position a held organ around the membrane. Microtubules retain their direct mouse gestures.
+- **Escape:** settings with Quit, fullscreen, bloom, and persistent **85–175% text/interaction size**. **F11:** fullscreen. **S:** sensing ranges. **F3:** optional backend/FPS/timing diagnostics, without a zoom percentage. **H:** next habitat. **R:** new life.
 
-The world wraps without walls. The microscope center simulates fully, the fringe slows, and offscreen state freezes except for explicit population triggers. The active region follows the actual camera, including free view. Tab/settings remain ways to pause; Space is solely a camera control.
+ATP is the fill of an internal sac; AP are spinning coins; biomass is cell size. Hover for resource details or membrane health. Only the micrometer scale remains permanently at the edge; brief cell-local hints replace the screen panels. The scale measures the ordinary view, outside the temporary inspection lens.
+
+The world wraps without walls. The microscope center simulates fully, the fringe slows, and offscreen state freezes except for explicit population triggers. The active region follows the actual camera, including free view. Tab/settings pause biology; Space is solely a camera control.
 
 ## Adapt and establish a lineage
 
-Start with **36 biomass and 3 adaptation points**. New anatomy and enlargement cost biomass and adaptation; existing damage repair, repositioning and microtubules do not cost adaptation. Keep one of three mutation blueprints each tide, then pay to specialize a matching organ. Costs, routine ATP estimates and low repair reserves appear in the build menu.
+Start with **36 biomass and 3 adaptation points**. New fixed-size anatomy costs biomass and adaptation; existing damage repair, repositioning and microtubules do not cost adaptation. Keep one of three mutation blueprints each tide, then pay to specialize a matching organ. Local choices show costs; hover the ATP sac for stored fuel and an active-upkeep estimate.
 
-Six two-minute tides forecast changing light, population pressure and costly opponent adaptations. Gain 3 AP per transition before the finale; optional risks can earn at most one extra. The clock pauses with the build/settings menu, but continues when the free camera looks elsewhere.
+Six two-minute tides forecast changing light, population pressure and costly opponent adaptations. Gain 3 AP per transition before the finale; optional risks can earn at most one extra. The clock pauses during cell editing or settings, but continues when the free camera looks elsewhere.
 
 Fund an offspring's quoted additional tissue and **60 ATP** before **12:00**. Up to **12 oxygen** transfers if available; fermentation permits oxygen-poor reproduction. Division partitions existing body tissue and transfers real reproductive reserves and the camera follows the offspring. Sustain it for at least 60 healthy, metabolically active seconds through the **13:30** finale to establish a lineage. Death or missing the objective ends the run; **R** restarts. [Revision 9](docs/REVISION_9.md) lists every cost, mutation, counter and victory rule.
 
 ## Anatomy
 
-| Key | Organelle | 1× biomass cost | Role |
+| Key | Organelle | Biomass cost | Role |
 | --- | --- | ---: | --- |
 | 1 | Flagellum | 8 | Supplies extra thrust and turns the detecting organ toward its target. |
 | 2 | Protective cortex | 10 | Absorbs local damage before the membrane. |
@@ -49,7 +55,7 @@ Fund an offspring's quoted additional tissue and **60 ATP** before **12:00**. Up
 
 Proboscis and engulfing pores have been removed. The spike and toxin vesicle are the weapons. Spike target size uses all retained organic material, not just unspent building reserves. A spike or photosynthetic organ can guide and propel a cell; flagella provide additional power. Toxin vesicles use a target found by a spike or flight receptor.
 
-Organ cost, material and most output scale with size squared. Surface area, biomass and adaptation constrain new construction. Biomass growth has no arbitrary upper cap, although the finite toroidal habitat remains a geometric limit. Hydrostatic pressure, a soft cortex and the player-authored tension network control shape. Internal unattached junctions move freely; connect them to the membrane/network to transmit useful shape forces.
+New player organs have a fixed size. Surface area, biomass and adaptation constrain new construction; existing NPC/inherited anatomy keeps its physical dimensions. Biomass growth has no arbitrary upper cap, although the finite toroidal habitat remains a geometric limit. Hydrostatic pressure, a soft cortex and the player-authored tension network control shape. Internal unattached junctions move freely; connect them to the membrane/network to transmit useful shape forces.
 
 ## Living chemistry
 
@@ -71,9 +77,9 @@ Light varies smoothly across the habitat and is visible in the water. Photosynth
 
 Acidity is a local transported field: increasing acidity shifts blue/teal water toward rose/magenta; buffering restores its normal color. Moderate acidity favors the modeled digestive enzyme. Excess acidity raises maintenance ATP costs, accumulates internal stress, slows metabolism and eventually damages cells. Buffers have finite capacity. The secreting cell is also exposed. Nutrient assembly does **not** gain an automatic acid bonus.
 
-Decoys temporarily reduce chemical sensing range. Every affected receptor automatically spends a little ATP to clean itself, repair bodies accelerate clearance, and passive release still works with no ATP. Purple rings and the **RECEPTORS CLEARING** status show the effect. Light sensing is unaffected.
+Decoys temporarily reduce chemical sensing range. Every affected receptor automatically spends a little ATP to clean itself, repair bodies accelerate clearance, and passive release still works with no ATP. Purple rings and organ hover descriptions show the effect. Light sensing is unaffected.
 
-Pores pulse on consumption. Health/ATP bars show actual resources. Yellow nucleus-to-surface packets illustrate ATP spending; pink packets illustrate biomass-funded repair. External particles are shunted to the membrane edge instead of rendering underneath cells.
+Pores pulse on consumption. The ATP sac shows current energy; damaged membranes/organs and hover descriptions show health. Yellow sac-to-surface packets illustrate ATP spending; pink nucleus-to-surface packets illustrate biomass-funded repair. External particles are shunted to the membrane edge instead of rendering underneath cells.
 
 The former 90-second food milestone has been replaced by lineage victory. The starting anatomy is a starting point for adaptation, not a guaranteed unattended win. Balanced habitat delays its first three hunter arrivals until Lean Current; lean and rich profiles retain their opening hunters.
 
@@ -112,7 +118,7 @@ There are no saves, audio, permanent progression or packaged releases yet. Same-
 python3 tests/test_launchers.py
 ```
 
-The test launcher uses the same Steam discovery and fails on assertions or Godot script errors. Native tests build the extension first. Run `PRIMORDIA_BACKEND=script ./tools/test.sh` to verify the independent fallback too. Wide-view performance checks and per-item ablations are described in [revision seven](docs/REVISION_7.md) and [revision ten](docs/REVISION_10.md). `tests/profile.gd` is a historical close-view diagnostic, not performance acceptance. F3 during play measures the real frame rate.
+The test launcher uses the same Steam discovery and fails on assertions or Godot script errors. Native tests build the extension first. Run `PRIMORDIA_BACKEND=script ./tools/test.sh` to verify the independent fallback too. Wide-view performance checks and per-item ablations are described in [revision seven](docs/REVISION_7.md) and [revision eleven](docs/REVISION_11.md). `tests/profile.gd` is a historical close-view diagnostic, not performance acceptance. F3 during play measures the real frame rate.
 
 For a rendered capture with a display:
 
@@ -126,6 +132,6 @@ The owner's separate Linux **Steam Godot 4.7.2 / RTX 3090 / Threadripper 2990WX*
 
 Only authored source and stable Godot `.uid` identifiers are tracked. `.godot/` imports and caches regenerate automatically. Engine downloads, captures, logs and exports are not committed. No redistribution license has been granted for this private project.
 
-## Next interface proposal
+## Cell interface and inspection
 
-[The cell becomes the interface](docs/CELL_INTERFACE_PROPOSAL.md) proposes intracellular factories, an ATP sac, AP tokens, direct organ editing and a nucleus/offspring interface, replacing the current top, bottom and assembly panels. Those controls are proposed; the current panels remain usable. The camera minimum, micrometer marker and immediate paused recycling/shape preview are implemented.
+[Revision eleven](docs/REVISION_11.md) replaces the screen panels with cell-local construction, resource displays, nucleus/offspring controls and a temporary particle magnifier. The [original proposal](docs/CELL_INTERFACE_PROPOSAL.md) is retained with the owner's amendments; its Undo and resize ideas were rejected.
