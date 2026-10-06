@@ -19,9 +19,8 @@ var arcs := PackedFloat32Array()
 var cached_outline := PackedVector2Array()
 var geometry_dirty := true
 var outline_dirty := true
-const CHORDS := [[0,14],[7,21],[3,17],[10,24]]
 
-func _init(radius: float = 47.0) -> void:
+func _init(radius: float = 47.0, anatomy_seed: int = -1) -> void:
 	maximum_radius = radius
 	for i in COUNT:
 		normals.append(Vector2.from_angle(TAU*i/COUNT))
@@ -32,8 +31,7 @@ func _init(radius: float = 47.0) -> void:
 	rest_lengths.resize(COUNT)
 	gradients.resize(COUNT)
 	arcs.resize(COUNT+1)
-	for ends in CHORDS:
-		skeleton.connect_points({"kind":"membrane","a":TAU*ends[0]/COUNT},{"kind":"membrane","a":TAU*ends[1]/COUNT},0.04,self,radius)
+	if anatomy_seed >= 0: skeleton.seed_layout(anatomy_seed,self,radius)
 
 func step(dt: float, radius: float, acceleration: Vector2, time: float, _aspect: float = 1.0, traction: PackedVector2Array = PackedVector2Array()) -> void:
 	if dt < 0.000001: return

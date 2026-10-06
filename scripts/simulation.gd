@@ -79,7 +79,7 @@ func _init(seed_number: int = 20261004, profile: int = 0) -> void:
 	player.role = "player"
 	player.biomass = 36
 	player.update_geometry()
-	player.membrane = Cell.Membrane.new(player.radius)
+	player.membrane = Cell.Membrane.new(player.radius,absi(seed_value*1000003))
 	player.add_organ("feeding",0,"graze",false)
 	player.add_organ("propulsion",PI,"graze",false)
 	cells.append(player)
@@ -105,7 +105,7 @@ func _make_cell(p: Vector2, role: String):
 	cell.body = 135.0 if role == "hunter" else rng.randf_range(14,32)
 	cell.biomass = 35 if role == "hunter" else 10
 	cell.update_geometry()
-	cell.membrane = Cell.Membrane.new(cell.radius)
+	cell.membrane = Cell.Membrane.new(cell.radius,absi(seed_value*1000003+cell.id*9176))
 	cell.add_organ("feeding",1.1 if role == "hunter" else 1.4,"graze",false)
 	cell.add_organ("propulsion",PI,"graze",false)
 	if role == "hunter":
@@ -114,7 +114,7 @@ func _make_cell(p: Vector2, role: String):
 			cell.add_organ("toxin",1.8,"graze",false)
 			cell.biomass = 90
 			cell.update_geometry()
-			cell.membrane = Cell.Membrane.new(cell.radius)
+			cell.membrane = Cell.Membrane.new(cell.radius,absi(seed_value*1000003+cell.id*9176))
 			for a in [0.6,1.9,2.6,3.7,5.65]: cell.add_organ("protection",a,"graze",false)
 			cell.add_organ("regenerative",4.4,"graze",false)
 	else:

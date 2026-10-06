@@ -1,3 +1,4 @@
+#include "music_mixer.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -823,6 +824,7 @@ void initialize(ModuleInitializationLevel level) {
   if (level == MODULE_INITIALIZATION_LEVEL_SCENE) {
     ClassDB::register_class<PrimordiaKernels>();
     ClassDB::register_class<PrimordiaGrid>();
+    ClassDB::register_class<PrimordiaMusicMixer>();
   }
 }
 void terminate(ModuleInitializationLevel) {}

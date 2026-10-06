@@ -74,6 +74,7 @@ var dead := false
 
 func _init(identity: int = 0, at: Vector2 = Vector2.ZERO) -> void:
 	id = identity
+	membrane = Membrane.new(radius,maxi(0,identity))
 	position = at
 	previous_position = at
 

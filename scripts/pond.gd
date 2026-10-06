@@ -13,6 +13,9 @@ const TEXT := Color("e5f5ec")
 const MUTED := Color("a3bfc5")
 const TITLES := ["Flagellum","Protective cortex","Hunting spike","Repair body","Grazing pore","Flight receptor","Photosynthesis","Toxin vesicle","Toxin neutralizer","Acid gland"]
 const HELP := ["Flagella provide thrust. Anatomy chooses travel direction.","Protects the membrane directly beneath it. Coverage follows its membrane attachment.","Senses lower total biomass cells at long range, turns toward them and pulls you into pursuit. Its physical tip punctures on contact.","Uses biomass and ATP to repair organs and close punctures faster. Releases buffers that neutralize local acidity and accelerates receptor cleaning.","Senses and pumps nutrients into its opening. Secretes reusable enzymes that turn waste into food when aligned.","Faces a detected cell while propelling you away. This is the only organ that triggers flight.","Seeks brighter water. Light fixes dissolved carbon into biomass and food, releasing oxygen. Works best in bright habitat patches.","Spends ATP and biomass to fire toxins and receptor-blocking decoys at a cell detected by a spike or flight receptor.","Releases complementary particles that bind toxin into harmless waste. Costs small amounts of biomass and ATP.","Releases acidifying particles. Moderate acidity favors digestive enzymes; excess acidity costs ATP and stresses cells. Repair bodies release buffers."]
+var music := preload("res://scripts/music_director.gd").new()
+var music_slider := HSlider.new()
+var pulse_slider := HSlider.new()
 var world: Simulation = Simulation.new()
 var preferences = Preferences.new()
 var world_layer := Node2D.new()
@@ -161,6 +164,8 @@ func _ready() -> void:
 		focus_animating = false
 		_update_world(1.0)
 		cell_ui.open_context({"kind":"assembly"})
+	add_child(music)
+	music.initialize(self)
 
 func _physics_process(dt: float) -> void:
 	if is_paused(): return
@@ -207,6 +212,11 @@ func _process(dt: float) -> void:
 		_update_hud()
 		_layout()
 	cell_ui.sync(dt)
+	music.update_music(dt)
+	var particle_material: ShaderMaterial = batches[0].material
+	particle_material.set_shader_parameter("beat_pulse",music.pulse())
+	particle_material.set_shader_parameter("pulse_sources",music.pulse_sources)
+	particle_material.set_shader_parameter("canvas_aspect",get_viewport_rect().size.y/get_viewport_rect().size.x)
 	var cursor := get_global_mouse_position()
 	var inspect_allowed := get_viewport_rect().has_point(cursor) and not settings_panel.visible and not camera_dragging and selected < 0 and moving_id < 0 and tube_start.is_empty() and cell_ui.context.is_empty() and get_viewport().gui_get_hovered_control() == null
 	inspector.update_lens(dt,cursor,alpha,inspect_allowed)
@@ -470,6 +480,24 @@ func _build_ui() -> void:
 	bloom_check.text = "Light bloom"
 	bloom_check.set_pressed_no_signal(preferences.bloom)
 	bloom_check.toggled.connect(set_bloom)
+	var music_label := _label(options,"Music volume · %d%%" % roundi(preferences.music_volume*100))
+	music_slider.max_value = 100
+	music_slider.step = 1
+	music_slider.value = preferences.music_volume*100
+	options.add_child(music_slider)
+	music_slider.value_changed.connect(func(value):
+		preferences.music_volume = value/100
+		music_label.text = "Music volume · %d%%" % roundi(value)
+		preferences.save_settings())
+	var pulse_label := _label(options,"Particle beat response · %d%%" % roundi(preferences.beat_pulse*100))
+	pulse_slider.max_value = 100
+	pulse_slider.step = 1
+	pulse_slider.value = preferences.beat_pulse*100
+	options.add_child(pulse_slider)
+	pulse_slider.value_changed.connect(func(value):
+		preferences.beat_pulse = value/100
+		pulse_label.text = "Particle beat response · %d%%" % roundi(value)
+		preferences.save_settings())
 	_button(options,"Sense view [S]",func(): show_senses = not show_senses)
 	_button(options,"Performance overlay [F3]",func(): show_debug = not show_debug)
 	_button(options,"Next habitat [H]",func(): _restart((world.habitat+1)%3))
@@ -546,6 +574,7 @@ func _update_hud() -> void:
 	if acidity_texture.get_width() > 0: acidity_texture.update(Image.create_from_data(64,40,false,Image.FORMAT_RF,world.acidity.values.to_byte_array()))
 	debug_label.visible = show_debug and not settings_panel.visible
 	debug_label.text = "%s · %d FPS · sim %.2f ms · prepare %.2f ms\n%d active cells / %d particles" % ["GPU experiment" if world.gpu_transport != null else "Native CPU" if world.kernels != null else "GDScript",Engine.get_frames_per_second(),simulation_ms,render_ms,world.active_cells,world.active_particles]
+	if music.ready_bank: debug_label.text += "\nMusic mix %.2f ms · underruns %d" % [music.render_usec/1000.0,music.skips]
 	debug_label.position = Vector2(16,16 if not build_open else 52*preferences.hud_scale)
 	debug_label.add_theme_font_size_override("font_size",roundi(15*preferences.hud_scale))
 
@@ -655,6 +684,7 @@ func _restart(profile: int = -1) -> void:
 	observation_view.clear()
 	moving_id = -1
 	cell_ui.reset()
+	music.reset()
 	tube_start.clear()
 	tube_group = -1
 	shape_preview_ticks = 0

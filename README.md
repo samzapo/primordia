@@ -2,7 +2,7 @@
 
 A physics and chemistry simulation game about managing one small cell. Eat, grow and survive predation. **You never steer the cell:** its anatomy controls its behavior.
 
-This eleventh playable revision uses **Godot 4.7.2**, a fixed-step simulation, deformable membranes, oriented chemical particles and procedural 2D artwork. Its vector artwork is authored in the project; cached particle textures and mipmaps generate automatically at runtime. The default Linux launcher builds a batched C++ GDExtension automatically; the GDScript reference backend remains available.
+This twelfth playable revision uses **Godot 4.7.2**, a fixed-step simulation, deformable membranes, oriented chemical particles and procedural 2D artwork. Its vector artwork is authored in the project; cached particle textures and mipmaps generate automatically at runtime. The default Linux launcher builds a batched C++ GDExtension automatically; the GDScript reference backend remains available.
 
 ## Run with Steam Godot on Linux
 
@@ -55,7 +55,13 @@ Fund an offspring's quoted additional tissue and **60 ATP** before **12:00**. Up
 
 Proboscis and engulfing pores have been removed. The spike and toxin vesicle are the weapons. Spike target size uses all retained organic material, not just unspent building reserves. A spike or photosynthetic organ can guide and propel a cell; flagella provide additional power. Toxin vesicles use a target found by a spike or flight receptor.
 
-New player organs have a fixed size. Surface area, biomass and adaptation constrain new construction; existing NPC/inherited anatomy keeps its physical dimensions. Biomass growth has no arbitrary upper cap, although the finite toroidal habitat remains a geometric limit. Hydrostatic pressure, a soft cortex and the player-authored tension network control shape. Internal unattached junctions move freely; connect them to the membrane/network to transmit useful shape forces.
+New player organs have a fixed size. Surface area, biomass and adaptation constrain new construction; existing NPC/inherited anatomy keeps its physical dimensions. Biomass growth has no arbitrary upper cap, although the finite toroidal habitat remains a geometric limit. Hydrostatic pressure, a soft cortex and the player-authored tension network control shape. New cells start with 0–4 seeded, randomly tensioned links; later links can branch from earlier ones. Offspring inherit edited networks. Internal unattached junctions move freely; connect them to the membrane/network to transmit useful shape forces.
+
+## Living techno
+
+Music is a core design element. An original 128 BPM progressive score gives each organelle type a distinct instrument and rhythm. Nearby anatomy becomes louder and busier; larger cells sound lower, with an approaching giant announcing itself as a quiet bass presence. A longer arrangement supplies breakdowns, builds and melodic returns.
+
+Escape settings offer independent **Music volume** and **Particle beat response** controls. Particle glyphs breathe locally with the beat without changing their chemistry or motion. Editing keeps a quieter groove. The soundtrack uses generated, cached instruments and a bounded native mixer, with a GDScript fallback; no soundtrack downloads are required. [Revision twelve](docs/REVISION_12.md) describes the instruments, performance measurements and further immersion ideas.
 
 ## Living chemistry
 
@@ -109,7 +115,7 @@ Water gains broad blue, teal, jade and violet regions from seamless multiscale n
 
 This is a coarse 2D game, not molecular dynamics or a full biochemical network. “Microtubules” are generic tension links; real microtubules also bear compression. The membrane remains star-shaped for stable rendering. Fluid is a finite-mass viscous grid, not an incompressible Navier–Stokes solver. Acidity is an acid-equivalent field, not calibrated pH. Growth, repair, metabolism and reactions use explicit coarse material accounting rather than atom-by-atom stoichiometry.
 
-There are no saves, audio, permanent progression or packaged releases yet. Same-seed reproducibility is checked on one engine/platform, not promised across platforms. Diet balance, dense chemistry and long authored networks need playtesting.
+There are no saves, permanent progression or packaged releases yet. Same-seed reproducibility is checked on one engine/platform, not promised across platforms. Diet balance, dense chemistry and long authored networks need playtesting.
 
 ## Verification
 
@@ -118,7 +124,7 @@ There are no saves, audio, permanent progression or packaged releases yet. Same-
 python3 tests/test_launchers.py
 ```
 
-The test launcher uses the same Steam discovery and fails on assertions or Godot script errors. Native tests build the extension first. Run `PRIMORDIA_BACKEND=script ./tools/test.sh` to verify the independent fallback too. Wide-view performance checks and per-item ablations are described in [revision seven](docs/REVISION_7.md) and [revision eleven](docs/REVISION_11.md). `tests/profile.gd` is a historical close-view diagnostic, not performance acceptance. F3 during play measures the real frame rate.
+The test launcher uses the same Steam discovery and fails on assertions or Godot script errors. Native tests build the extension first. Run `PRIMORDIA_BACKEND=script ./tools/test.sh` to verify the independent fallback too. Wide-view performance checks and per-item ablations are described in [revision seven](docs/REVISION_7.md) and [revision twelve](docs/REVISION_12.md). `tests/profile.gd` is a historical close-view diagnostic, not performance acceptance. F3 during play measures the real frame rate.
 
 For a rendered capture with a display:
 

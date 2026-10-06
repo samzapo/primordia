@@ -132,3 +132,23 @@ func solve(membrane, dt: float, radius: float) -> void:
 		link.lambda += dl
 		_move(link.a,-delta/length*dl,membrane)
 		_move(link.b,delta/length*dl,membrane)
+
+func seed_layout(seed_number: int, membrane, radius: float) -> void:
+	# A separate RNG keeps anatomy generation from consuming the ecology stream.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_number ^ 0x4d595df4
+	var count := rng.randi_range(0,4)
+	for i in count:
+		for attempt in 32:
+			# Each link is committed before choosing the next endpoints. A later
+			# link can attach anywhere along an earlier one, on either end.
+			var a := _seed_anchor(rng)
+			var b := _seed_anchor(rng)
+			if point(a,membrane).distance_to(point(b,membrane)) < maxf(6,radius*0.30): continue
+			if connect_points(a,b,rng.randf(),membrane,radius) >= 0: break
+
+func _seed_anchor(rng: RandomNumberGenerator) -> Dictionary:
+	if not links.is_empty() and rng.randf() < 0.45:
+		var link: Dictionary = links[rng.randi_range(0,links.size()-1)]
+		return {"kind":"link","id":link.id,"t":rng.randf_range(0.15,0.85)}
+	return {"kind":"membrane","a":rng.randf()*TAU}

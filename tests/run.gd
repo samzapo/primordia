@@ -29,6 +29,7 @@ func _run() -> void:
 	_test_particle_exclusion()
 	_test_gel_polygons()
 	_test_microtubules()
+	preload("res://tests/music.gd").new().run(self)
 	_test_resource_animation()
 	_test_growth_and_anchors()
 	_test_incremental_grid()

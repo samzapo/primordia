@@ -24,6 +24,7 @@ func run() -> void:
 				var scene = load("res://scenes/pond.tscn").instantiate()
 				root.add_child(scene)
 				scene.preferences.persist = false
+				scene.music.enabled = option("--music","off") == "on"
 				scene.set_physics_process(false)
 				scene.diagnostic_zoom = camera != "play" # Historical stress views explicitly bypass play limits.
 				scene.manual_zoom = zoom
@@ -56,10 +57,12 @@ func run() -> void:
 					elapsed.append(now-prior)
 					prior = now
 				elapsed.sort()
-				print("VISUAL_BENCHMARK ",JSON.stringify({"stage":stage,"mode":mode,"fixture":fixture,"zoom":zoom,"camera":camera,"effective_zoom":scene.zoom/minf(scene.get_viewport_rect().size.x/sim.VIEW.x,scene.get_viewport_rect().size.y/sim.VIEW.y),"bloom":bloom,"frames":count,"median_ms":elapsed[count/2]/1000.0,"p95_ms":elapsed[mini(count-1,int(count*0.95))]/1000.0,"prepare_ms":scene.render_ms,"tick_ms":scene.simulation_ms,"cells":sim.active_cells,"particles":sim.active_particles,"renderer":RenderingServer.get_video_adapter_name()}))
+				print("VISUAL_BENCHMARK ",JSON.stringify({"stage":stage,"mode":mode,"fixture":fixture,"zoom":zoom,"camera":camera,"effective_zoom":scene.zoom/minf(scene.get_viewport_rect().size.x/sim.VIEW.x,scene.get_viewport_rect().size.y/sim.VIEW.y),"bloom":bloom,"frames":count,"median_ms":elapsed[count/2]/1000.0,"p95_ms":elapsed[mini(count-1,int(count*0.95))]/1000.0,"prepare_ms":scene.render_ms,"tick_ms":scene.simulation_ms,"cells":sim.active_cells,"particles":sim.active_particles,"renderer":RenderingServer.get_video_adapter_name(),"music":scene.music.enabled,"music_ms":scene.music.render_usec/1000.0,"music_peak_ms":scene.music.peak_render_usec/1000.0,"audio_skips":scene.music.skips,"music_ready":scene.music.ready_bank}))
 				if output != "" and fixture == "normal" and mode == "frozen":
 					await RenderingServer.frame_post_draw
 					root.get_texture().get_image().save_png(output+"/"+stage+"-"+str(int(zoom*100))+"-"+("bloom" if bloom else "flat")+".png")
 				scene.queue_free()
 				await process_frame
+	# Allow the audio mixer to release its last stopped playback before shutdown.
+	await create_timer(0.15).timeout
 	quit()
