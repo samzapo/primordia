@@ -5,6 +5,10 @@ const COLS := 64
 const ROWS := 40
 const WORLD := Vector2(COLS * SIZE, ROWS * SIZE)
 const NODE_MASS := 22.0
+# Keep the rectangular view and a full grid-cell halo at full speed. Only the
+# next offscreen grid cell fades to dormancy; edge blur is presentation only.
+const ACTIVE_PAD := 64.0
+const ACTIVE_FADE := 64.0
 var velocity := PackedVector2Array()
 var activity := PackedFloat32Array()
 var driven := true
@@ -34,10 +38,12 @@ static func offset(a: Vector2, b: Vector2) -> Vector2:
 	return Vector2(wrapf(b.x - a.x, -WORLD.x * 0.5, WORLD.x * 0.5), wrapf(b.y - a.y, -WORLD.y * 0.5, WORLD.y * 0.5))
 
 static func visibility(p: Vector2, camera: Vector2, half_view: Vector2 = Vector2(508,316)) -> float:
-	var d = offset(camera, p) / half_view
-	if d.length_squared() >= 1.0: return 0.0
-	var t = clampf((1.0 - d.length()) / 0.28, 0, 1)
-	return t * t * (3 - 2 * t)
+	var beyond := offset(camera,p).abs()-half_view-Vector2.ONE*ACTIVE_PAD
+	var t := clampf(1.0-maxf(beyond.x,beyond.y)/ACTIVE_FADE,0,1)
+	return t*t*(3-2*t)
+
+static func activity_half_view(half_view: Vector2) -> Vector2:
+	return half_view+Vector2.ONE*(ACTIVE_PAD+ACTIVE_FADE)
 
 static func index(x: int, y: int) -> int:
 	return posmod(y, ROWS) * COLS + posmod(x, COLS)
@@ -60,8 +66,9 @@ func sample(p: Vector2) -> Vector2:
 func set_camera(camera: Vector2, half_view: Vector2 = Vector2(508,316)) -> void:
 	for i in active_indices: activity[i] = 0
 	active_indices.clear()
-	var lo := Vector2i(((camera-half_view)/SIZE).floor())
-	var hi := Vector2i(((camera+half_view)/SIZE).ceil())
+	var reach := activity_half_view(half_view)
+	var lo := Vector2i(((camera-reach)/SIZE).floor())
+	var hi := Vector2i(((camera+reach)/SIZE).ceil())
 	for y in range(lo.y,mini(hi.y+1,lo.y+ROWS)):
 		for x in range(lo.x,mini(hi.x+1,lo.x+COLS)):
 			var i := index(x,y)

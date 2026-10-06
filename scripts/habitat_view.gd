@@ -3,7 +3,7 @@ extends Node2D
 var habitat
 var textures: Array[Texture2D] = []
 var sprites: Array[Sprite2D] = []
-const PALETTES := [["12475d","1ebc98","a5ef73"],["472369","a544b7","f89cbe"],["14447d","298bcc","64dddb"]]
+const PALETTES := [["12475d","1ebc98","a5ef73"],["472369","a544b7","f89cbe"],["14447d","298bcc","64dddb"],["72363b","e99143","ffe98c"]]
 
 func configure(value) -> void:
 	habitat = value
@@ -54,7 +54,21 @@ static func svg(form: Dictionary) -> String:
 		else:
 			# Rounded terminal bracts are fine, permeable foliage, not extra solids.
 			var angle := rad_to_deg((b-a).angle())
-			output += "<ellipse cx='%.3f' cy='%.3f' rx='4.5' ry='2.6' transform='rotate(%.2f %.3f %.3f)' fill='#%s'/><ellipse cx='%.3f' cy='%.3f' rx='2.6' ry='1.4' transform='rotate(%.2f %.3f %.3f)' fill='#%s'/>" % [b.x,b.y,angle,b.x,b.y,palette[1],b.x,b.y-0.5,angle,b.x,b.y,palette[2]]
-	# Stems overlap at the origin; this center stays inside their shared footprint.
-	output += "<circle r='6.5' fill='#%s'/><circle cy='-0.7' r='4.5' fill='#%s'/><circle cx='-1' cy='-1.5' r='2' fill='#%s'/></g></svg>" % [palette[0],palette[1],palette[2]]
+			var blade: bool = form.get("leaf","oval") == "blade"
+			if blade:
+				# Lanceolate pinnules cover each finest branch, with a simple vein.
+				var middle := a.lerp(b,0.55)
+				var normal := (b-a).orthogonal().normalized()*clampf(a.distance_to(b)*0.3,2.0,4.0)
+				var left := middle+normal
+				var right := middle-normal
+				output += "<path d='M %.3f %.3f Q %.3f %.3f %.3f %.3f Q %.3f %.3f %.3f %.3f Z' fill='#%s'/><path d='M %.3f %.3f L %.3f %.3f' stroke='#%s' stroke-width='0.65'/>" % [a.x,a.y,left.x,left.y,b.x,b.y,right.x,right.y,a.x,a.y,palette[1],a.x,a.y,b.x,b.y,palette[2]]
+				continue
+			var bud: bool = form.get("leaf","oval") == "bud"
+			var rx := 3.2 if bud else 4.5
+			var ry := 3.2 if bud else 2.6
+			output += "<ellipse cx='%.3f' cy='%.3f' rx='%.2f' ry='%.2f' transform='rotate(%.2f %.3f %.3f)' fill='#%s'/><ellipse cx='%.3f' cy='%.3f' rx='%.2f' ry='%.2f' transform='rotate(%.2f %.3f %.3f)' fill='#%s'/>" % [b.x,b.y,rx,ry,angle,b.x,b.y,palette[1],b.x,b.y-0.5,rx*0.58,ry*0.53,angle,b.x,b.y,palette[2]]
+	# The basal cap lies inside the shared stem footprint, including fern roots.
+	var root: Vector2 = form.get("root",Vector2.ZERO)
+	var radius: float = form.get("root_radius",7.0)*0.92
+	output += "<circle cx='%.3f' cy='%.3f' r='%.3f' fill='#%s'/><circle cx='%.3f' cy='%.3f' r='%.3f' fill='#%s'/></g></svg>" % [root.x,root.y,radius,palette[0],root.x,root.y-radius*0.15,radius*0.65,palette[2]]
 	return output

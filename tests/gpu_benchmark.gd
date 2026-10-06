@@ -27,6 +27,10 @@ func run() -> void:
 		gpu.close()
 		quit(1)
 		return
+	if not edge_parity(gpu):
+		gpu.close()
+		quit(1)
+		return
 	# Resident work is a transport-only throughput ceiling, not whole-game FPS.
 	for count in [4096,16384,65536]:
 		var data := PackedFloat32Array()
@@ -48,3 +52,29 @@ func run() -> void:
 	gpu.close()
 	quit()
 func rd_name(gpu) -> String: return gpu.rd.get_device_name()
+
+func edge_parity(gpu) -> bool:
+	var cpu = Sim.new(815)
+	var accelerated = Sim.new(815)
+	for sim in [cpu,accelerated]:
+		sim.camera_follows_player = false
+		sim.camera_position = Vector2(4070,2510)
+		sim.view_half = Vector2(500,300)
+		sim.particles.clear()
+		sim.pheromones.clear()
+		sim.grid.clear()
+		for offset in [Vector2(490,290),Vector2(-490,-290),Vector2(560,0),Vector2(596,0),Vector2(700,0)]:
+			sim.spawn_particle(Sim.NUTRIENT,sim.camera_position+offset,Vector2(20,8),0.3)
+		sim.rng.seed = 83
+	accelerated.gpu_transport = gpu
+	cpu._move_particles(0.02)
+	accelerated._move_particles(0.02)
+	var error := 0.0
+	var age_error := 0.0
+	for i in cpu.particles.size():
+		error = maxf(error,Sim.Medium.offset(cpu.particles[i].p,accelerated.particles[i].p).length())
+		age_error = maxf(age_error,absf(accelerated.particles[i].age-[0.02,0.02,0.02,0.01,0.0][i]))
+	var passed: bool = error < 0.005 and age_error < 0.000001 and accelerated.active_particles == 4
+	print("GPU_EDGE_PARITY ",JSON.stringify({"max_position_error":error,"max_age_error":age_error,"active":accelerated.active_particles,"passed":passed}))
+	if not passed: push_error("GPU viewport corners, offscreen fade or wrapped halo diverged")
+	return passed

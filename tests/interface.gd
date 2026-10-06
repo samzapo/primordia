@@ -236,9 +236,12 @@ func _particles() -> void:
 		expect(Vector2(data[0],data[4]).normalized().distance_to(Vector2.from_angle(PI/4)) < 0.0001,"Batched artwork retains the interpolated chemical binding orientation")
 		var picked: Dictionary = scene.inspector.pick(screen,0.5)
 		expect(not picked.is_empty() and picked.kind == kind and is_equal_approx(picked.angle,PI/4),"Particle hover identifies the displayed species and interpolated orientation")
+		scene.inspector.update_lens(0,screen,0.5,false)
 		scene.inspector.update_lens(0.2,screen,0.5,true)
 		expect(scene.inspector.label.text.begins_with(scene.ParticleArt.NAMES[kind]) and scene.inspector.lens_amount == 1,"Hover activates a local lens and names every chemical species")
 	expect(sim.particles == original,"Inspection cannot change particle mass, motion, orientation or chemistry")
+	_track_particle()
+	expect(sim.particles == original,"Tracking and inspection preserve the simulation state")
 	scene.diagnostic_zoom = true
 	scene.manual_zoom = 0.15
 	scene._update_world(1)
@@ -298,5 +301,75 @@ func _particles() -> void:
 	var picked: Dictionary = scene.inspector.pick(screen,0.5)
 	expect(not picked.is_empty() and picked.kind == Sim.ENZYME,"Picking follows wrapped interpolation at the invisible world seam")
 	expect(scene.inspector.candidates_examined < 20,"Particle inspection queries local buckets rather than scanning the ecosystem")
+	scene.inspector.update_lens(0,screen,0.5,false)
+	scene.inspector.update_lens(0.2,screen,0.5,true)
+	p.previous = p.p
+	p.p = Vector2(26,1000)
+	scene.inspector.update_lens(0.1,screen,1,true)
+	expect(is_same(scene.inspector.hovered.packet,p) and scene.inspector.lens_center.distance_to(scene.camera_screen+Vector2(32,0)*scene.zoom) < 0.001,"Tracking follows wrapped motion with the actual free camera")
+	p.p = Vector2(1700,1700)
+	p.previous = p.p
+	scene.inspector.update_lens(0.1,screen,1,true)
+	expect(scene.inspector.hovered.is_empty(),"A tracked particle leaving the visible rectangle releases the lens")
+	p.p = Vector2(2,1000)
+	p.previous = Vector2(4094,1000)
+	sim.grid.rebuild(sim.particles)
+	scene.inspector.update_lens(0.2,screen,0.5,true)
+	p.kind = Sim.PHEROMONE
+	p.expires_at = sim.time
+	scene.inspector.update_lens(0.1,screen,0.5,true)
+	expect(scene.inspector.hovered.is_empty(),"Expired pheromones dismiss tracking even before array cleanup")
+	p.kind = Sim.ENZYME
+	scene.inspector.update_lens(0.2,screen,0.5,true)
+	scene.world = Sim.new(123)
+	scene.inspector.update_lens(0.1,Vector2(20,20),1,true)
+	expect(scene.inspector.hovered.is_empty() and scene.inspector.tracked_packet.is_empty(),"Restarting clears the old world's tracked packet")
+	scene.world = sim
+
 	scene.inspector.update_lens(0.2,screen,0.5,false)
 	expect(scene.inspector.lens_amount == 0,"Modal UI disables the lens immediately")
+
+func _track_particle() -> void:
+	var sim = scene.world
+	var inspector = scene.inspector
+	var target: Dictionary = sim.particles[2]
+	var original: Dictionary = target.duplicate(true)
+	var cursor: Vector2 = scene.camera_screen+Sim.Medium.offset(scene.render_camera,target.p)*scene.zoom
+	inspector.update_lens(0,cursor,1,false)
+	inspector.update_lens(0.05,cursor,1,true)
+	target.p = Sim.Medium.wrap_position(target.p+Vector2(30,0))
+	target.previous = target.p
+	var rival: Dictionary = sim.particles[1]
+	var rival_original: Dictionary = rival.duplicate(true)
+	rival.p = original.p
+	rival.previous = rival.p
+	sim.grid.rebuild(sim.particles)
+	inspector.update_lens(0.2,cursor,1,true)
+	expect(is_same(inspector.hovered.packet,target),"A nearby rival cannot steal a briefly tracked particle")
+	expect(inspector.lens_center.distance_to(cursor+Vector2(30,0)*scene.zoom) < 0.001 and inspector.lens_amount == 1,"Lens follows the drifting particle without flickering off")
+	# Actual compaction changes indices without changing the tracked dictionary.
+	var removed: Dictionary = sim.particles.pop_front()
+	sim.grid.rebuild(sim.particles)
+	inspector.update_lens(0.1,cursor+Vector2(2,0),1,true)
+	expect(inspector.hovered.index == 1 and is_same(inspector.hovered.packet,target),"Tracking survives compaction and small hand jitter")
+	target.kind = Sim.NUTRIENT
+	inspector.update_lens(0.1,cursor,1,true)
+	expect(inspector.label.text.begins_with("Nutrient"),"A tracked packet displays its new chemical identity after reaction")
+	rival.alive = false
+	inspector.update_lens(1,cursor,1,true)
+	expect(inspector.hovered.is_empty(),"Tracking expires after its short grace period when the cursor no longer covers the particle")
+	var now: Vector2 = scene.camera_screen+Sim.Medium.offset(scene.render_camera,target.p)*scene.zoom
+	inspector.update_lens(0.2,now,1,true)
+	inspector.update_lens(0.2,now+Vector2(80,80),1,true)
+	expect(inspector.hovered.is_empty(),"Deliberately moving the pointer releases tracking immediately")
+	inspector.update_lens(0.2,now,1,true)
+	target.alive = false
+	inspector.update_lens(0.02,now,1,true)
+	expect(inspector.hovered.is_empty(),"Consumed or decayed particles cannot leave a ghost magnifier")
+	target.clear()
+	target.merge(original)
+	rival.clear()
+	rival.merge(rival_original)
+	sim.particles.push_front(removed)
+	sim.grid.rebuild(sim.particles)
+	inspector.update_lens(0,cursor,1,false)

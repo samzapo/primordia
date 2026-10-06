@@ -11,15 +11,21 @@ static func run(check: Callable) -> void:
 	check.call(first.habitat_geometry.plants.size() >= 6,"Habitat has several large obstacle colonies")
 	for cell in first.cells:
 		check.call(first.habitat_geometry.clear_at(cell.position,cell.extent()+20),"Initial cells have open water around them")
+	var families := {}
+	check.call(first.habitat_geometry.forms == second.habitat_geometry.forms,"Seeded plant artwork repeats independently of the simulation")
 	for form in first.habitat_geometry.forms:
+		families[form.kind] = true
 		var per_arm: int = form.branches.size()/form.arms
-		check.call(form.branches.size() <= 147,"Fractal grammar has a bounded finite depth")
+		check.call(form.branches.size() <= 192,"Fractal grammar has a bounded finite depth")
+		for branch in form.branches:
+			check.call(branch.a.is_finite() and branch.b.is_finite() and maxf(branch.a.length(),branch.b.length())+maxf(branch.r,5.5) < 100,"Every fractal fits its drawing and obstacle placement envelope")
 		for arm in range(1,form.arms):
 			var expected: Vector2 = form.branches[0].b.rotated(TAU*arm/form.arms)
 			check.call(expected.distance_to(form.branches[per_arm*arm].b) < 0.001,"Repeated arms have rotational symmetry")
 		var image := Image.new()
 		check.call(image.load_svg_from_string(Art.svg(form)) == OK,"Procedural plant artwork rasterizes")
 		check.call(image.get_size() == Vector2i(512,512),"Texture size stays bounded independently of visible geometry")
+	check.call(families.size() == 4 and families.has("fern") and families.has("fan") and families.has("spiral") and families.has("radial"),"Habitat contains fern, radial, branching fan and spiral families")
 	# One capsule fixture exercises the authoritative branch collision and periodic bins.
 	var h = Habitat.new(1)
 	h.forms = [{"branches":[{"a":Vector2(-50,0),"b":Vector2(50,0),"r":5.0,"depth":2}]}]

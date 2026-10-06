@@ -2,7 +2,7 @@
 
 A physics and chemistry simulation game about managing one small cell. Eat, grow and survive predation. **You never steer the cell:** its anatomy controls its behavior.
 
-This fourteenth playable revision uses **Godot 4.7.2**, a fixed-step simulation, deformable membranes, oriented chemical particles and procedural 2D artwork. Its vector artwork is authored in the project; cached particle textures and mipmaps generate automatically at runtime. The default Linux launcher builds a batched C++ GDExtension automatically; the GDScript reference backend remains available.
+This fifteenth playable revision uses **Godot 4.7.2**, a fixed-step simulation, deformable membranes, oriented chemical particles and procedural 2D artwork. Its vector artwork is authored in the project; cached particle textures and mipmaps generate automatically at runtime. The default Linux launcher builds a batched C++ GDExtension automatically; the GDScript reference backend remains available.
 
 ## Run with Steam Godot on Linux
 
@@ -28,7 +28,7 @@ The launcher finds Godot in standard Steam locations, custom Steam libraries and
 
 ATP is the fill of an internal sac; AP are spinning coins; biomass is cell size. Hover for resource details or membrane health. Only the micrometer scale remains permanently at the edge; brief cell-local hints replace the screen panels. The scale measures the ordinary view, outside the temporary inspection lens.
 
-The world wraps without walls. The microscope center simulates fully, the fringe slows, and offscreen state freezes except for explicit population triggers. The active region follows the actual camera, including free view. Tab/settings pause biology; Space is solely a camera control.
+The world wraps without walls. The entire rectangular view simulates at full speed, including its corners and a short margin outside the screen. Slowdown starts offscreen; farther state freezes except for explicit population triggers and pheromone expiry. The active region follows the actual camera, including free view. Tab/settings pause biology; Space is solely a camera control.
 
 ## Adapt and establish a lineage
 
@@ -101,9 +101,9 @@ A Vulkan compute transport experiment is included, but **is not enabled by defau
 
 ## Procedural habitat
 
-Procedural generation and fractals are now a core visual direction. Large radial plant-like colonies grow from a seeded recursive branching grammar, with five-, six- and sevenfold symmetry. Their stout stems obstruct cells and drifting particles; contact slides along branches without consuming material. Fine fronds are decorative, and the scenery does not add food or oxygen sources.
+Procedural generation and fractals are now a core visual direction. Large plant-like colonies include paired-leaf ferns, branching fans, curled spiral rosettes and radial colonies with five or seven arms. Each family has two seeded procedural variants. Their stout stems obstruct cells and drifting particles; contact slides along branches without consuming material. Fine fronds are decorative, and the scenery does not add food or oxygen sources.
 
-Water gains broad blue, teal, jade and violet regions from seamless multiscale noise. These patterns stay fixed in world space, with existing light, acidity tint and bloom layered over them. Plant art is cached in six mipmapped textures per habitat. See [revision eight](docs/REVISION_8.md) for collision scope and wide-view benchmarks. These additions do not solve the remaining whole-game frame-rate problem documented in revision seven.
+Water gains broad blue, teal, jade and violet regions from seamless multiscale noise. These patterns stay fixed in world space, with existing light, acidity tint and bloom layered over them. Plant art is cached in eight mipmapped textures per habitat. See [revision fifteen](docs/REVISION_15.md) for current shapes, the offscreen simulation margin and wide-view measurements, and [revision eight](docs/REVISION_8.md) for the original collision scope. These additions do not solve the remaining whole-game frame-rate problem documented in revision seven.
 
 ## Graphics and proposed chemistry
 
@@ -145,3 +145,5 @@ Only authored source and stable Godot `.uid` identifiers are tracked. `.godot/` 
 ## Cell interface and inspection
 
 [Revision eleven](docs/REVISION_11.md) replaces the screen panels with cell-local construction, resource displays, nucleus/offspring controls and a temporary particle magnifier. The [original proposal](docs/CELL_INTERFACE_PROPOSAL.md) is retained with the owner's amendments; its Undo and resize ideas were rejected.
+
+The magnifier briefly follows the selected particle after it drifts away from the pointer, keeping its tooltip and orientation stable. Deliberate pointer movement releases it. [Revision fifteen](docs/REVISION_15.md) covers tracking, camera-edge simulation and the new plant families.

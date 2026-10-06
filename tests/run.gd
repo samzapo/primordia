@@ -41,6 +41,7 @@ func _run() -> void:
 	_test_propulsion_and_toxins()
 	_test_membrane()
 	_test_wrap_and_dormancy()
+	preload("res://tests/visibility.gd").run(expect)
 	_test_contacts()
 	_test_chemistry()
 	_test_receptor_competition()
@@ -264,7 +265,7 @@ func _test_wrap_and_dormancy() -> void:
 	var corner: Vector2 = sim.screen_position(Vector2(4093,1200))
 	expect(absf(corner.x-(Sim.VIEW.x*0.5-7))<20,"Camera projects seam neighbors continuously")
 	expect(Fluid.visibility(Vector2(0,0),Vector2(0,0)) == 1,"Microscope center is fully active")
-	expect(Fluid.visibility(Vector2(470,0),Vector2(0,0)) > 0 and Fluid.visibility(Vector2(470,0),Vector2(0,0)) < 0.3,"Dark fringe slows activity")
+	expect(Fluid.visibility(Vector2(470,300),Vector2.ZERO) == 1,"Visible corners run at full speed despite peripheral blur")
 
 func _test_contacts() -> void:
 	var sim = isolated()

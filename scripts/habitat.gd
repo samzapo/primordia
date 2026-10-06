@@ -1,5 +1,5 @@
 extends RefCounted
-## Seeded radial branching colonies. Fixed environmental geometry, not food emitters.
+## Seeded fern, radial, fan and spiral branching colonies. Fixed environmental geometry, not food emitters.
 const Medium = preload("res://scripts/medium.gd")
 const BIN := 128.0
 const COLS := 32
@@ -14,17 +14,14 @@ var accelerator = preload("res://scripts/backend.gd").create()
 func _init(seed_number: int = 0, occupied: Array = []) -> void:
 	var random := RandomNumberGenerator.new()
 	random.seed = seed_number ^ 0x62ab91
-	for i in 6:
-		var form := {"arms":5+i%3,"turn":random.randf_range(0.6,0.86),"branches":[],"palette":i%3}
-		for arm in form.arms:
-			_branch(form.branches,Vector2.ZERO,TAU*arm/form.arms,61.0,7.0,2,form.turn)
-		forms.append(form)
+	for i in 8:
+		forms.append(_make_form(["fern","radial","fan","spiral"][i%4],i/4,random.randf_range(0.6,0.86)))
 	# Reject overlap with all initial cells and keep water passages between colonies.
 	for i in 10:
 		for attempt in 120:
 			var radius := random.randf_range(185,275)
 			var position := Vector2(random.randf()*Medium.WORLD.x,random.randf()*Medium.WORLD.y)
-			# Three radial colonies form each loose reef; fallback preserves open starts.
+			# Three varied colonies form each loose reef; fallback preserves open starts.
 			# Keep the same colony count and explicit water corridors.
 			if i%3 != 0 and not plants.is_empty() and attempt < 80:
 				var anchor: Dictionary = plants[mini(plants.size()-1,(i/3)*3)]
@@ -40,9 +37,81 @@ func _init(seed_number: int = 0, occupied: Array = []) -> void:
 			for plant in plants:
 				if Medium.offset(position,plant.p).length() < radius+plant.radius+90: clear = false; break
 			if not clear: continue
-			plants.append({"p":position,"radius":radius,"form":i%6,"angle":random.randf()*TAU})
+			plants.append({"p":position,"radius":radius,"form":i%forms.size(),"angle":random.randf()*TAU})
 			break
 	rebuild()
+
+static func _make_form(kind: String, variant: int, turn: float) -> Dictionary:
+	var form := {"kind":kind,"arms":1,"turn":turn,"branches":[],"palette":0,"root":Vector2.ZERO,"root_radius":7.0,"leaf":"oval"}
+	match kind:
+		"radial":
+			form.arms = 5+variant*2
+			form.palette = 2
+			for arm in form.arms:
+				_branch(form.branches,Vector2.ZERO,TAU*arm/form.arms,61.0,7.0,2,turn)
+		"fern":
+			form.root = Vector2(0,82)
+			form.root_radius = 4.5
+			form.leaf = "blade"
+			_fern(form.branches,variant,turn)
+		"fan":
+			form.root = Vector2(0,76)
+			form.root_radius = 5.0
+			form.palette = 1
+			form.leaf = "bud"
+			_stem(form.branches,form.root,Vector2(0,48),5,4)
+			for side in [-1,0,1]:
+				_fork(form.branches,Vector2(0,48),-PI/2+side*(0.6+variant*0.10),42,3.5,3,turn*0.53)
+		"spiral":
+			form.arms = 3+variant
+			form.palette = 3
+			form.root_radius = 5.0
+			for arm in form.arms:
+				var a := Vector2.ZERO
+				for i in range(1,9):
+					var phase: float = TAU*arm/form.arms+float(i)/8*(1.8+turn*0.4)
+					var b := Vector2.from_angle(phase)*(i*9.2)
+					_stem(form.branches,a,b,lerpf(4.8,1.8,float(i)/8),1)
+					if i > 1:
+						_branch(form.branches,b,(b-a).angle()-0.9,15*(1-i/12.0),1.2,1,0.75)
+					a = b
+	# Normalize the complete foliage envelope for safe placement, culling and SVG.
+	var extent := 0.0
+	for branch in form.branches:
+		extent = maxf(extent,maxf(branch.a.length(),branch.b.length())+maxf(branch.r,5.5))
+	if extent > 96:
+		var scale := 96/extent
+		for branch in form.branches:
+			branch.a *= scale
+			branch.b *= scale
+			branch.r *= scale
+		form.root *= scale
+		form.root_radius *= scale
+	return form
+
+static func _stem(output: Array, a: Vector2, b: Vector2, width: float, depth: int) -> void:
+	output.append({"a":a,"b":b,"r":width,"depth":depth})
+
+static func _fern(output: Array, variant: int, turn: float) -> void:
+	# A curved rachis with paired pinnae; each pinna repeats smaller leaflets.
+	var previous := Vector2(0,82)
+	for i in range(1,11):
+		var t := float(i)/10
+		var p := Vector2(sin(t*PI)*(-8 if variant == 0 else 13),82-t*170)
+		_stem(output,previous,p,lerpf(4.5,1.1,t),2)
+		if i < 10:
+			var span := (48 if variant == 0 else 38)*sin(PI*pow(t,0.72))+5
+			for side in [-1,1]:
+				var axis := Vector2(side,-0.32-t*0.55).normalized()
+				_branch(output,p,axis.angle(),span,lerpf(2.3,1.1,t),1,turn)
+		previous = p
+
+static func _fork(output: Array, a: Vector2, angle: float, length: float, width: float, depth: int, turn: float) -> void:
+	var b := a+Vector2.from_angle(angle)*length
+	_stem(output,a,b,width,depth)
+	if depth == 0: return
+	for side in [-1,1]:
+		_fork(output,b,angle+side*turn,length*0.63,width*0.66,depth-1,turn*0.93)
 
 static func _branch(output: Array, a: Vector2, angle: float, length: float, width: float, depth: int, turn: float) -> void:
 	var b := a+Vector2.from_angle(angle)*length

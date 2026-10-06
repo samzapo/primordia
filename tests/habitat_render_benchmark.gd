@@ -9,8 +9,15 @@ func run() -> void:
 	scene.set_physics_process(false)
 	scene.preferences.persist = false
 	scene.notice_timer = 0
-	for zoom in [0.5,0.25,0.15]:
-		scene.diagnostic_zoom = true # Preserve the original wider stress workload.
+	var zooms := [0.5,0.25,0.15]
+	var play_camera := false
+	for arg in OS.get_cmdline_user_args():
+		if arg == "--camera=play": play_camera = true
+		if arg.begins_with("--zooms="):
+			zooms.clear()
+			for value in arg.trim_prefix("--zooms=").split(","): zooms.append(float(value))
+	for zoom in zooms:
+		scene.diagnostic_zoom = not play_camera # Historical wider stress workload remains opt-in.
 		scene.manual_zoom = zoom
 		for enabled in [false,true,false,true]:
 			scene.habitat_view.visible = enabled
@@ -21,7 +28,7 @@ func run() -> void:
 				await process_frame
 				if i >= 20: elapsed.append(Time.get_ticks_usec()-begin)
 			elapsed.sort()
-			print("HABITAT_RENDER ",JSON.stringify({"zoom":zoom,"plants_and_fractal_color":enabled,"median_ms":elapsed[30]/1000.0,"p95_ms":elapsed[57]/1000.0,"gpu_ms":RenderingServer.viewport_get_measured_render_time_gpu(root.get_viewport_rid()),"prepare_ms":scene.render_ms,"plants":scene.world.habitat_geometry.plants.size(),"textures":scene.habitat_view.textures.size(),"draw_calls":Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),"renderer":RenderingServer.get_video_adapter_name()}))
+			print("HABITAT_RENDER ",JSON.stringify({"zoom":zoom,"camera":"play" if play_camera else "diagnostic","effective_zoom":scene.zoom/minf(root.size.x/scene.Simulation.VIEW.x,root.size.y/scene.Simulation.VIEW.y),"plants_and_fractal_color":enabled,"median_ms":elapsed[30]/1000.0,"p95_ms":elapsed[57]/1000.0,"gpu_ms":RenderingServer.viewport_get_measured_render_time_gpu(root.get_viewport_rid()),"prepare_ms":scene.render_ms,"plants":scene.world.habitat_geometry.plants.size(),"textures":scene.habitat_view.textures.size(),"draw_calls":Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),"renderer":RenderingServer.get_video_adapter_name()}))
 			if enabled and zoom == 0.5:
 				for arg in OS.get_cmdline_user_args():
 					if arg.begins_with("--picture="):

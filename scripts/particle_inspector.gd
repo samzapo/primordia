@@ -16,6 +16,13 @@ const DETAILS := [
 ]
 const RADIUS := 68.0
 const MAGNIFICATION := 3.5
+const TRACK_SECONDS := 0.9
+const CURSOR_RELEASE := 24.0
+var tracked_world
+var tracked_packet: Dictionary = {}
+var tracked_index := -1
+var track_remaining := 0.0
+var cursor_anchor := Vector2.ZERO
 var game
 var hovered: Dictionary = {}
 var lens_amount := 0.0
@@ -81,13 +88,59 @@ func pick(screen: Vector2, alpha: float) -> Dictionary:
 		var distance := screen.distance_to(screen_point)
 		if distance <= tolerance and distance < best:
 			best = distance
-			result = {"index":index,"kind":particle.kind,"screen":screen_point,"angle":angle,"radius":radius}
+			result = {"index":index,"packet":particle,"kind":particle.kind,"screen":screen_point,"angle":angle,"radius":radius}
 	return result
 
+func _tracked_pose(alpha: float) -> Dictionary:
+	var sim = game.world
+	if tracked_world != sim or tracked_packet.is_empty() or not sim._pheromone_alive(tracked_packet):
+		return {}
+	# Dictionaries retain identity through array compaction and native chemistry.
+	# Only recover the index from neighboring buckets if the old slot has moved.
+	if tracked_index >= sim.particles.size() or not is_same(sim.particles[tracked_index],tracked_packet):
+		if sim.grid.source_size != sim.particles.size(): sim.grid.rebuild(sim.particles)
+		tracked_index = -1
+		for index in sim.grid.query(tracked_packet.p,1):
+			if is_same(sim.particles[index],tracked_packet):
+				tracked_index = index
+				break
+		if tracked_index < 0: return {}
+	var p: Vector2 = tracked_packet.p
+	var angle: float = tracked_packet.angle
+	if tracked_packet.get("updated",-1) == sim.revision:
+		p = tracked_packet.previous+sim.Medium.offset(tracked_packet.previous,p)*alpha
+		angle = lerp_angle(tracked_packet.previous_angle,angle,alpha)
+	if tracked_packet.kind != sim.PHEROMONE: p = game._visible_particle_position(p,alpha)
+	var screen: Vector2 = game.camera_screen+sim.Medium.offset(game.render_camera,p)*game.zoom
+	if not get_viewport_rect().has_point(screen): return {}
+	return {"index":tracked_index,"packet":tracked_packet,"kind":tracked_packet.kind,"screen":screen,"angle":angle,
+		"radius":sim.particle_radius(tracked_packet.kind)*sim.particle_scale(tracked_packet.amount)*game.zoom}
+
 func update_lens(dt: float, screen: Vector2, alpha: float, allowed: bool) -> void:
-	hovered = pick(screen,alpha) if allowed else {}
+	var following := {}
+	if allowed and track_remaining > 0 and screen.distance_to(cursor_anchor) <= CURSOR_RELEASE*game.preferences.hud_scale:
+		following = _tracked_pose(alpha)
+		if not following.is_empty():
+			track_remaining = maxf(0,track_remaining-dt)
+			# Looking directly at the same particle renews the short grace period.
+			if screen.distance_to(following.screen) <= maxf(following.radius+3,7):
+				track_remaining = TRACK_SECONDS
+			if track_remaining <= 0: following = {}
+	hovered = following if not following.is_empty() else (pick(screen,alpha) if allowed else {})
 	var active := not hovered.is_empty()
-	if active: lens_center = screen
+	if active:
+		if following.is_empty():
+			tracked_world = game.world
+			tracked_packet = hovered.packet
+			tracked_index = hovered.index
+			cursor_anchor = screen
+			track_remaining = TRACK_SECONDS
+		lens_center = hovered.screen
+	else:
+		tracked_world = null
+		tracked_packet = {}
+		tracked_index = -1
+		track_remaining = 0
 	lens_amount = move_toward(lens_amount,1.0 if active else 0.0,dt*9)
 	if not allowed: lens_amount = 0
 	var material: ShaderMaterial = game.microscope_layer.material
@@ -110,7 +163,7 @@ func update_lens(dt: float, screen: Vector2, alpha: float, allowed: bool) -> voi
 	if box.visible:
 		var value: String = Art.NAMES[hovered.kind]+"\n"+DETAILS[hovered.kind]
 		if hovered.kind == game.world.PHEROMONE:
-			var packet: Dictionary = game.world.particles[hovered.index]
+			var packet: Dictionary = hovered.packet
 			var report: Dictionary = packet.get("report",{})
 			if not report.is_empty():
 				value += "\nReported size: %.0f μm across · %s\nSignal age: %.1f s" % [report.radius*2*game.scale_bar.MICROMETERS_PER_UNIT,"armed" if report.hostile else "unarmed",maxf(0,game.world.time-report.emitted_at)]

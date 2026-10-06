@@ -281,7 +281,7 @@ func _update_world(alpha: float) -> void:
 		var fraction: float = alpha if cell.activity > 0 else 1.0
 		var p: Vector2 = cell.previous_position+Simulation.Medium.offset(cell.previous_position,cell.position)*fraction
 		var heading := lerp_angle(cell.previous_angle,cell.angle,fraction)
-		views[cell.id].sync(Simulation.Medium.offset(render_camera,p),heading,zoom,world.activity_at(cell.position))
+		views[cell.id].sync(Simulation.Medium.offset(render_camera,p),heading,zoom,world.activity_for_cell(cell))
 	for identity in views.keys():
 		if not alive_ids.has(identity):
 			views[identity].queue_free()
@@ -292,7 +292,7 @@ func _sync_particles(alpha: float = 1.0) -> void:
 	if world.native_render:
 		var capacities := PackedInt32Array()
 		for batch in batches: capacities.append(batch.multimesh.instance_count)
-		var result: Array = world.kernels.render_particles(world.particles,world.local_particle_ids(30),world.cells,render_camera,world.view_half,alpha,world.revision,capacities)
+		var result: Array = world.kernels.render_particles(world.particles,world.visible_particle_ids(30),world.cells,render_camera,world.view_half,alpha,world.revision,capacities)
 		for kind in Simulation.SPECIES_COUNT:
 			buffers[kind] = result[kind]
 			var count: int = result[-1][kind]
@@ -303,7 +303,7 @@ func _sync_particles(alpha: float = 1.0) -> void:
 		return
 	if world.spatial_queries: world.cell_index.rebuild(world.cells)
 	var counts := PackedInt32Array([0,0,0,0,0,0,0,0,0,0,0])
-	for index in world.local_particle_ids(30):
+	for index in world.visible_particle_ids(30):
 		var p: Dictionary = world.particles[index]
 		if not p.alive: continue
 		var at: Vector2 = p.p

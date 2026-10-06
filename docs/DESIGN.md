@@ -127,3 +127,11 @@ Preserve emitted metadata snapshots, local receptor sampling, explicit flight, i
 The owner approved all three immediate music follow-ups: inherited lineage motifs, environmental timbre and musical event accents. A family's seeded melody survives division; installed organs change its orchestration. Local light opens melodic filters, local acidity adds saturation/ripple, and ordinary buffer chemistry calms that effect. Feeding, toxin neutralization and division trigger bounded, quantized phrases.
 
 The implementation is presentation only. Do not delay actions until the beat, consume ecology randomness, drain gameplay journals or make audio an input to cell AI. Preserve bounded queues, muted-history rejection, local audibility and native/reference parity. See [revision fourteen](REVISION_14.md) for behavior, bounds and measurements.
+
+## Revision 15: active screen edges, varied fractals and stable inspection
+
+The owner reports organisms freezing inside the view. The full rectangular viewport must run at normal speed, including blurred edges and corners. Keep full-speed simulation for a short offscreen margin, fade only farther outside, and account for the visible extent of large cells. This supersedes the historical in-view activity falloff; optical blur remains independent.
+
+Add fern-shaped fractals and other distinct families to the existing radial colonies. Preserve bounded generation, cached vector artwork, solid main stems, permeable fine foliage and cell-only chemical sources.
+
+The owner also requests less flicker from particle inspection. Briefly retain and follow the actual selected particle after activation, keeping its orientation and current identity; intentional pointer movement should release it. Inspection remains presentation-only. See [revision fifteen](REVISION_15.md) for implementation and evidence.

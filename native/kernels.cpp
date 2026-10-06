@@ -22,8 +22,9 @@ Vector2 delta(Vector2 a, Vector2 b) {
 int mod(int x, int n) { return (x % n + n) % n; }
 int node(int x, int y) { return mod(y, 40) * 64 + mod(x, 64); }
 double activity(Vector2 p, Vector2 camera, Vector2 half) {
-  double d = (delta(camera, p) / half).length();
-  double t = std::clamp((1 - d) / .28, 0., 1.);
+  // Match Medium.visibility: full rectangle + 64 world units, then 64 fade.
+  Vector2 beyond = delta(camera, p).abs() - half - Vector2(64,64);
+  double t = std::clamp(1 - std::max(beyond.x,beyond.y) / 64., 0., 1.);
   return t * t * (3 - 2 * t);
 }
 Vector2 sample(const PackedVector2Array &v, Vector2 p) {

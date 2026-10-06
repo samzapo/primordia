@@ -141,7 +141,15 @@ func screen_position(p: Vector2) -> Vector2:
 func activity_at(p: Vector2) -> float:
 	return Medium.visibility(p,player.position if camera_follows_player else camera_position,view_half)
 
+func activity_for_cell(cell) -> float:
+	# A visible membrane or appendage must not freeze when its center is outside.
+	var half: Vector2 = view_half+Vector2.ONE*(cell.extent()+80)
+	return Medium.visibility(cell.position,player.position if camera_follows_player else camera_position,half)
+
 func local_particle_ids(margin: float = 0.0) -> Array[int]:
+	return visible_particle_ids(margin+Medium.ACTIVE_PAD+Medium.ACTIVE_FADE)
+
+func visible_particle_ids(margin: float = 0.0) -> Array[int]:
 	if grid.source_size != particles.size(): grid.rebuild(particles)
 	return grid.query_rect(player.position if camera_follows_player else camera_position,view_half+Vector2.ONE*margin)
 
@@ -238,7 +246,7 @@ func step(dt: float) -> void:
 	for cell in cells:
 		cell.previous_position = cell.position
 		cell.previous_angle = cell.angle
-		cell.activity = activity_at(cell.position)
+		cell.activity = activity_for_cell(cell)
 		if cell.activity > 0 and not cell.dead:
 			active_cells += 1
 			var local_dt: float = dt*cell.activity
