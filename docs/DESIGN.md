@@ -147,3 +147,11 @@ Shift some adaptation income from waiting to optional bounded growth, feeding an
 The first implementation retains the 13:30 expedition length, three crisis milestones, bounded histories and local discovery persistence. Full habitat save/resume and a larger campaign are deferred. [Revision sixteen](REVISION_16.md) states exact thresholds, controls, scientific abstractions and validation.
 
 The owner explicitly accepts distinguishing player-only progression from shared cell rules, and asks that distinction be clear. NPCs currently share physiology and anatomy-derived behavior, but do not use the player's AP/drafts, succession, dormant bank or persistent knowledge. Their population uses bounded introductions/replacements. NPC reproductive AI is a future feature, not part of revision sixteen.
+
+## Revision 17: contact mechanics and separate hunting perception
+
+The owner requests more physical interaction among cells, plant obstacles and spikes, and explicitly removes sensing from spikes. A new hunting receptor matches the flight receptor: it samples local pheromones, orients toward their reported location and pursues prey that was smaller or undefended at emission. Undefended means no functional spike, toxin vesicle or protective cortex. Defense is an immutable emitted snapshot; no live-cell lookup, attack-direction oracle or role label enters perception. Flight remains the explicit higher-priority avoidance choice.
+
+Contacts transfer linear and angular motion, resist tangential slipping and compress the local pressure membrane. Spikes obstruct cells and stems and puncture on impact. The owner accepts prey bouncing away and requests that a few good hits can kill; damage therefore scales with actual normal impulse. Stronger mobility and useful weapon placement help hunters earn repeated impacts. No special predator speed or damage bonus is introduced. Slow sustained contact retains its small ATP-funded injury.
+
+The factory offers the separate fixed-size receptor for six tissue and one AP; V selects it. Existing NPC hunters receive the same receptor organ. Preserve family-only progression, chemical perception, continuous fluid coupling, finite contact cost and widest-view benchmarking. [Revision seventeen](REVISION_17.md) documents numerical limits and validation.

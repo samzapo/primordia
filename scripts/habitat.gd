@@ -242,6 +242,62 @@ func move(start: Vector2, end: Vector2, velocity: Vector2, radius: float, candid
 		if travel.length_squared() < 0.000001: break
 	return [Medium.wrap_position(p),velocity,hit_any]
 
+func move_cell(cell, start: Vector2, end: Vector2, dt: float) -> void:
+	if not enabled:
+		cell.position = end
+		return
+	var contacts = preload("res://scripts/contacts.gd")
+	var ids := query(start,end,cell.extent()+1)
+	cell.position = start
+	var travel := Medium.offset(start,end)
+	var remaining := dt
+	for iteration in 4:
+		var earliest := 2.0
+		var hit_normal := Vector2.ZERO
+		var hit_point := Vector2.ZERO
+		for id in ids:
+			var segment: Dictionary = segments[id]
+			var a: Vector2 = cell.position+Medium.offset(cell.position,segment.a)
+			var b: Vector2 = a+segment.b-segment.a
+			var near := closest(cell.position,a,b)
+			var toward: Vector2 = near-cell.position
+			var distance := toward.length()
+			if toward.length_squared() < 0.00001: toward = (b-a).orthogonal()
+			var normal := toward.normalized()
+			var radius: float = cell.support(normal.angle())
+			var overlap: float = radius+segment.r-distance
+			if overlap > 0:
+				var at: Vector2 = cell.position+normal*radius
+				var speed := maxf(0,contacts.velocity_at(cell,at).dot(normal))
+				contacts.solve(cell,null,at,normal,overlap)
+				contacts.dent(cell,at,minf(radius*0.06,overlap*0.12+speed*dt*0.65))
+				travel -= normal*maxf(0,travel.dot(normal))
+				continue
+			# Conservative envelope, refined with the actual approach-side radius.
+			var t := capsule_hit(cell.position,travel,a,b,cell.extent()+segment.r)
+			if t > 1: continue
+			for refine in 3:
+				var center: Vector2 = cell.position+travel*t
+				normal = (closest(center,a,b)-center).normalized()
+				radius = cell.support(normal.angle())
+				t = capsule_hit(cell.position,travel,a,b,radius+segment.r+0.05)
+				if t > 1: break
+			if t < earliest:
+				earliest = t
+				hit_normal = normal
+				hit_point = cell.position+travel*t+normal*radius
+		if earliest > 1:
+			cell.position = Medium.wrap_position(cell.position+travel)
+			break
+		cell.position = Medium.wrap_position(cell.position+travel*earliest-hit_normal*0.05)
+		var speed := maxf(0,contacts.velocity_at(cell,hit_point).dot(hit_normal))
+		contacts.solve(cell,null,hit_point,hit_normal,0)
+		contacts.dent(cell,hit_point,speed*dt*0.65)
+		remaining *= 1-earliest
+		travel = cell.velocity*remaining
+		if travel.length_squared() < 0.000001: break
+	cell.position = Medium.wrap_position(cell.position)
+
 func move_particles(particles: Array, ids: Array, revision: int, grid, native: bool = true) -> void:
 	if not enabled: return
 	if native and accelerator != null:

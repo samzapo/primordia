@@ -122,7 +122,7 @@ func open_context(target: Dictionary) -> void:
 	var run = sim.evolution
 	match target.kind:
 		"assembly","chemistry":
-			for index in (range(6) if target.kind == "assembly" else range(6,10)):
+			for index in ([0,1,2,3,4,5,10] if target.kind == "assembly" else range(6,10)):
 				var kind: String = sim.KINDS[index]
 				var cost: float = sim.Cell.organ_cost(kind)
 				_choice(game.TITLES[index],"%.0f tissue · 1 AP\n%s" % [cost,game.HELP[index]],game._select.bind(index),kind,"",cell.biomass >= cost and run.points >= 1)

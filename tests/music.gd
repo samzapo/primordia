@@ -99,7 +99,7 @@ func _observation() -> void:
 func _schedule() -> void:
 	var score := Score.new()
 	var counts := PackedFloat32Array()
-	counts.resize(10)
+	counts.resize(Score.KINDS.size())
 	counts.fill(1)
 	score.sources = [{"id":0,"lane":1,"gain":1.0,"mass":160.0,"counts":counts}]
 	var heard := {}
@@ -114,7 +114,7 @@ func _schedule() -> void:
 	check(bounded,"Musical events respect channel and gain limits")
 	var complete := true
 	for kind in range(4,14): complete = complete and heard.has(kind)
-	check(complete and regions.size() == 6,"All ten organs can sing across a six-section progressive arrangement")
+	check(complete and regions.size() == 6,"All organ timbres can sing across a six-section progressive arrangement")
 	var a := Score.new()
 	var b := Score.new()
 	var whole: Array = a.events(0,22050)

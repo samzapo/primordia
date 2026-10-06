@@ -5,7 +5,7 @@ const DETAILS := [
 	"Food collected by grazing pores.",
 	"Supports efficient respiration.",
 	"Enzymes can convert it into food.",
-	"A drifting cell report. Spikes and flight receptors read its last-known location, size and hostility.",
+	"A drifting cell report. Hunting and flight receptors read its last-known location, size and hostility.",
 	"Damages foreign cells; antitoxin can neutralize it.",
 	"Photosynthesis uses it in bright water.",
 	"Reuses waste as food when its binding face aligns.",
@@ -166,6 +166,7 @@ func update_lens(dt: float, screen: Vector2, alpha: float, allowed: bool) -> voi
 			var packet: Dictionary = hovered.packet
 			var report: Dictionary = packet.get("report",{})
 			if not report.is_empty():
+				value += "\nDefense: "+("defended" if report.get("defended",true) else "undefended")+" at emission"
 				value += "\nReported size: %.0f μm across · %s\nSignal age: %.1f s" % [report.radius*2*game.scale_bar.MICROMETERS_PER_UNIT,"armed" if report.hostile else "unarmed",maxf(0,game.world.time-report.emitted_at)]
 		label.custom_minimum_size.x = minf(260*game.preferences.hud_scale,get_viewport_rect().size.x-36)
 		label.add_theme_font_size_override("font_size",roundi(15*game.preferences.hud_scale))

@@ -2,7 +2,7 @@
 
 A physics and chemistry simulation game about managing one small cell. Eat, grow and survive predation. **You never steer the cell:** its anatomy controls its behavior.
 
-This sixteenth playable revision uses **Godot 4.7.2**, a fixed-step simulation, deformable membranes, oriented chemical particles and procedural 2D artwork. Its vector artwork is authored in the project; cached particle textures and mipmaps generate automatically at runtime. The default Linux launcher builds a batched C++ GDExtension automatically; the GDScript reference backend remains available.
+This seventeenth playable revision uses **Godot 4.7.2**, a fixed-step simulation, deformable membranes, oriented chemical particles and procedural 2D artwork. Its vector artwork is authored in the project; cached particle textures and mipmaps generate automatically at runtime. The default Linux launcher builds a batched C++ GDExtension automatically; the GDScript reference backend remains available.
 
 ## Run with Steam Godot on Linux
 
@@ -17,7 +17,7 @@ The launcher finds Godot in standard Steam locations, custom Steam libraries and
 ## Controls
 
 - **Tab:** pause and zoom inside your cell; press Tab again to keep edits and resume. Enter also resumes when no choice or placement is active. There are no Undo, Apply or Cancel-plan controls. **Escape** opens settings without discarding edits.
-- **Click an intracellular factory:** the folded assembly ribbons offer six physical organs; the chamber cluster offers the four chemistry organs. Choose a picture, then click the membrane. New organs have one fixed size and neighbors move aside. **1–9 / 0** remain construction shortcuts.
+- **Click an intracellular factory:** the folded assembly ribbons offer seven physical organs; the chamber cluster offers the four chemistry organs. Choose a picture, then click the membrane. New organs have one fixed size and neighbors move aside. **1–9 / 0** remain construction shortcuts; **V** selects the hunting receptor.
 - **Click an installed organ:** move, recycle or apply an already-kept matching blueprint. There is no resizing during placement or afterward. Recycling returns half the tissue and never refunds AP. Click a damaged attachment scar to restore its original anatomy.
 - **Click the nucleus:** choose a blueprint and accept an optional challenge. Hover it for the next objective, crisis progress and forecasts; its family tree also offers known blueprints. **Click the offspring bud:** fund/reclaim reserves, release a juvenile, store a dormant successor or follow a living relative.
 - **In edit mode, drag on bare cell surface:** place a microtubule between membrane, interior or existing-link points. Hover an unobstructed tube and scroll to adjust tension; right-click it to remove it. Factories and organ controls take precedence. **Right-click** cancels a held organ/move or closes local choices.
@@ -52,7 +52,7 @@ Family history records generations and causes of death. Discovered blueprints pe
 | --- | --- | ---: | --- |
 | 1 | Flagellum | 8 | Supplies extra thrust and turns the detecting organ toward its target. |
 | 2 | Protective cortex | 10 | Absorbs local damage before the membrane. |
-| 3 | Hunting spike | 12 | Reads local pheromones from lower **total biomass** cells, pursues their reported location and punctures with its tip. |
+| 3 | Hunting spike | 12 | Physical contact weapon. Strong impacts puncture hard; slow pressure causes smaller ATP-funded wounds. No detection or steering. |
 | 4 | Repair body | 10 | Repairs damage, speeds receptor cleaning and releases acid buffers. |
 | 5 | Grazing pore | 8 | Senses nutrients, pumps surrounding fluid, eats particles and secretes reusable digestive enzymes. |
 | 6 | Flight receptor | 6 | Reads pheromones reporting larger or armed cells, faces their reported location and requests travel away. Only this organ triggers flight. |
@@ -60,14 +60,17 @@ Family history records generations and causes of death. Discovered blueprints pe
 | 8 | Toxin vesicle | 12 | Fires damaging toxin and receptor-blocking decoy particles toward a chemically sensed cell. |
 | 9 | Toxin neutralizer | 10 | Releases particles that bind toxin and make harmless material. |
 | 0 | Acid gland | 12 | Releases acidifying particles to change local digestion conditions. |
+| V | Hunting receptor | 6 | Reads local pheromones from smaller **or undefended** prey; faces and pursues the reported location. |
 
-Proboscis and engulfing pores have been removed. The spike and toxin vesicle are the weapons. Spike target size uses all retained organic material, not just unspent building reserves. A spike or photosynthetic organ can guide and propel a cell; flagella provide additional power. Toxin vesicles use a target found by a spike or flight receptor.
+Proboscis and engulfing pores have been removed. The spike and toxin vesicle are the weapons. The hunting receptor compares reported total organic material with its own cell. “Undefended” means no working spike, toxin vesicle or protective cortex at emission; it never checks the live source. A hunting receptor or photosynthetic organ can guide pursuit; flagella provide additional power. Toxin vesicles use a report received by a hunting or flight receptor, and flight takes priority when both senses respond.
 
 New player organs have a fixed size. Surface area, biomass and adaptation constrain new construction; existing NPC/inherited anatomy keeps its physical dimensions. Biomass growth has no arbitrary upper cap, although the finite toroidal habitat remains a geometric limit. Hydrostatic pressure, a soft cortex and the player-authored tension network control shape. New cells start with 0–4 seeded, randomly tensioned links; later links can branch from earlier ones. Offspring inherit edited networks. Internal unattached junctions move freely; connect them to the membrane/network to transmit useful shape forces.
 
+Cells now push, spin and slide against one another and solid plant stems. Membranes compress locally and recover under pressure; spikes physically catch cells and stems before the body reaches them. Impact damage depends on actual impulse, so a few strong hits can kill exposed prey; armor still takes damage first. Place spikes around a hunting receptor and invest in propulsion to line up repeated strikes. A poorly aligned or slow hunter may only push prey away. See [revision seventeen](docs/REVISION_17.md) for the contact model and evidence.
+
 ## Living techno
 
-Music is a core design element. An original 128 BPM progressive score gives each organelle type a distinct instrument and rhythm. Nearby anatomy becomes louder and busier; larger cells sound lower, with an approaching giant announcing itself as a quiet bass presence. A longer arrangement supplies breakdowns, builds and melodic returns.
+Music is a core design element. An original 128 BPM progressive score gives each organelle type a distinct rhythm and register; hunting and flight share the receptor timbre. Nearby anatomy becomes louder and busier; larger cells sound lower, with an approaching giant announcing itself as a quiet bass presence. A longer arrangement supplies breakdowns, builds and melodic returns.
 
 Each lineage has a recognizable melody that offspring inherit; anatomy changes its orchestration. Bright water opens the synth filters, acidity adds grit and instability, and buffering calms it. Eating adds rhythmic fills, toxin neutralization adds answering chimes, and division resolves into a short phrase. Biology remains independent of the beat.
 
@@ -77,7 +80,7 @@ Escape settings offer independent **Music volume** and **Particle beat response*
 
 **Cells are the only sources of external particles.** The initial clouds represent products of the existing cells' earlier life, with source-cell identifiers. There is no automatic food/oxygen habitat spawner. Respiration, lower-yield fermentation, photosynthesis, secretion, wounds, recycling and death sustain the particle economy. Replacing a dead NPC is an explicit population event with accounted material input. Hidden replacement remains preferred; forecasted tides can admit a bounded number of arrivals into safe visible space when wide zoom leaves no hidden habitat.
 
-**Cells only learn about other cells through pheromones.** Every active creature releases small signal points that drift with current, diffuse and decay rapidly (mean lifetime 5 seconds). They pass through cells, reefs and other particles. Nearby receptors read the source's location, size and hostile anatomy **as they were at release**; a distant plume may be stale, and losing it ends pursuit. No live target tracking bypasses the trail. Hover a point to inspect its reported size, armed status and age. [Revision 13](docs/REVISION_13.md) describes the rules and validation.
+**Cells only learn about other cells through pheromones.** Every active creature releases small signal points that drift with current, diffuse and decay rapidly (mean lifetime 5 seconds). They pass through cells, reefs and other particles. Nearby receptors read the source's location, size, hostile anatomy and defense status **as they were at release**; a distant plume may be stale, and losing it ends pursuit. No live target tracking bypasses the trail. Hover a point to inspect its reported size, armed/defended status and age. [Revision 13](docs/REVISION_13.md) describes the rules and validation.
 
 Eleven particle types are visible: nutrient, oxygen, waste, pheromone, toxin, dissolved carbon, digestive enzyme, antitoxin, acidifying carrier, buffer and decoy. Forks, hooks, combs and linked lobes distinguish reacting species; their bright tips rotate with the actual particle orientation. Pheromones are non-oriented points. Compatible faces must touch and point toward each other to react; there is no additional reaction success roll. Thermal motion tumbles particles, and decay uses a per-second hazard instead of a fixed lifetime. Neighbor searches use spatial grids rather than all-pairs testing.
 

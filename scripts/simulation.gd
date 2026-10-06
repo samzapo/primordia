@@ -19,6 +19,7 @@ var spatial_queries := true
 var stagger_sensing := true
 var cell_index = preload("res://scripts/cell_index.gd").new()
 
+const Contacts = preload("res://scripts/contacts.gd")
 const Habitat = preload("res://scripts/habitat.gd")
 var habitat_geometry
 
@@ -123,6 +124,7 @@ func _make_cell(p: Vector2, role: String):
 	cell.add_organ("propulsion",PI,"graze",false)
 	if role == "hunter":
 		cell.add_organ("offensive",0,"graze",false)
+		cell.add_organ("hunting",0.48,"hunt",false)
 		if habitat == 2:
 			cell.add_organ("toxin",1.8,"graze",false)
 			cell.biomass = 90
@@ -208,12 +210,14 @@ func _emit_pheromone(cell) -> Dictionary:
 	spawn_particle(PHEROMONE,at,Vector2.ZERO,0.2,cell.id,cell.radius)
 	var p: Dictionary = particles[-1]
 	var hostile := false
+	var armored := false
 	for organ in cell.organs:
 		if organ.kind in ["offensive","toxin"] and organ.hp > 0: hostile = true
+		if organ.kind == "protection" and organ.hp > 0: armored = true
 	# Value snapshots, never a Cell reference. Coordinates are deliberately old
 	# once the source moves; size and hostile anatomy can only update via new cues.
 	p.report = {"id":cell.id,"lineage":cell.lineage_id(),"at":cell.position,
-		"mass":cell.organic_mass(),"radius":cell.radius,"hostile":hostile,"emitted_at":time}
+		"mass":cell.organic_mass(),"radius":cell.radius,"hostile":hostile,"defended":hostile or armored,"emitted_at":time}
 	return p
 
 func _pheromone_alive(p: Dictionary) -> bool:
@@ -302,20 +306,24 @@ func step(dt: float) -> void:
 	# Short motion substeps plus swept contacts avoid crossing from one side to the other.
 	var before_motion: Dictionary = {}
 	for cell in cells: before_motion[cell.id] = cell.velocity
+	for cell in cells:
+		cell.feeding_feedback = ""
+		for organ in cell.organs:
+			if organ.kind == "offensive": organ.feeding = false
 	for substep in 3:
+		var starts: Dictionary = {}
+		for cell in cells: starts[cell.id] = {"p":cell.position,"angle":cell.angle}
 		_motion(dt/3.0)
 		_contacts(dt/3.0)
+		_spike_contacts(dt/3.0,starts)
 		for cell in cells:
 			if cell.dead or cell.activity <= 0: continue
-			var contact: Array = habitat_geometry.move(cell.position,cell.position,cell.velocity,cell.extent())
-			cell.position = contact[0]
-			cell.velocity = contact[1]
+			habitat_geometry.move_cell(cell,cell.position,cell.position,dt/3.0)
 	for cell in cells:
 		cell.shape_acceleration = ((cell.velocity-before_motion[cell.id])/dt).limit_length(600)
 	profile_usec["motion"] = Time.get_ticks_usec()-mark
 	mark = Time.get_ticks_usec()
 	if spatial_queries: cell_index.rebuild(cells)
-	_spike_contacts(dt)
 	_toxin_contacts()
 	_receptor_contacts()
 	_exclude_particles()
@@ -555,8 +563,8 @@ func _suction(dt: float) -> void:
 
 func _sense(cell, dt: float) -> void:
 	# A memory or in-flight signal cannot outlive its source organ.
-	cell.signals = cell.signals.filter(func(packet): return packet.get("expires_at",INF) > time and not cell.organ_by_id(packet.organ_id).is_empty())
-	if cell.organ_by_id(cell.target_organ_id).is_empty() or cell.target_expires_at <= time: cell.target_memory = 0
+	cell.signals = cell.signals.filter(func(packet): return packet.get("expires_at",INF) > time and not cell.organ_by_id(packet.organ_id).is_empty() and cell.organ_by_id(packet.organ_id).hp > 0)
+	if cell.organ_by_id(cell.target_organ_id).is_empty() or cell.organ_by_id(cell.target_organ_id).get("hp",0) <= 0 or cell.target_expires_at <= time: cell.target_memory = 0
 	cell.sense_clock -= dt
 	cell.target_memory = maxf(0,cell.target_memory-dt)
 	if cell.sense_clock <= 0:
@@ -565,8 +573,8 @@ func _sense(cell, dt: float) -> void:
 		var best: Dictionary = {}
 		var best_score := -1.0
 		for organ in cell.organs:
-			if organ.kind not in ["feeding","sensing","offensive","photosynthesis"]: continue
-			var mode: String = "hunt" if organ.kind == "offensive" else "light" if organ.kind == "photosynthesis" else organ.mode
+			if organ.kind not in ["feeding","sensing","hunting","photosynthesis"] or organ.hp <= 0: continue
+			var mode: String = "hunt" if organ.kind == "hunting" else "light" if organ.kind == "photosynthesis" else organ.mode
 			var reach: float = (120.0 if mode == "hunt" else 90.0 if mode == "flee" else 310.0)*sqrt(organ.scale)*(1-organ.blocked*0.65)*Genes.factor(organ,"sense")
 			var receptor: Vector2 = cell.organ_position(organ)
 			if mode == "light":
@@ -593,7 +601,7 @@ func _sense(cell, dt: float) -> void:
 					reports[report.id] = {"report":report,"distance":distance,"expires_at":p.expires_at}
 			for detected in reports.values():
 				var report: Dictionary = detected.report
-				if mode == "hunt" and report.mass >= cell.organic_mass(): continue
+				if mode == "hunt" and report.mass >= cell.organic_mass() and report.get("defended",true): continue
 				if mode == "flee" and not report.hostile and report.mass <= cell.organic_mass(): continue
 				var age: float = maxf(0,time-report.emitted_at)
 				var score: float = (100.0 if mode == "flee" else 2.0)+1.0/(1+age)+0.1/(1+detected.distance)
@@ -622,7 +630,7 @@ func _sense(cell, dt: float) -> void:
 		cell.facing = Medium.offset(cell.position,cell.target_position).normalized()
 		cell.target = -cell.facing if cell.target_mode == "flee" else cell.facing
 		cell.threat = cell.facing if cell.target_id >= 0 else Vector2.ZERO
-		cell.state = {"graze":"FORAGING","hunt":"PURSUING SMALLER CELL","light":"SEEKING LIGHT","flee":"FLEEING"}.get(cell.target_mode,"EXPLORING")
+		cell.state = {"graze":"FORAGING","hunt":"FOLLOWING PREY PHEROMONE","light":"SEEKING LIGHT","flee":"FLEEING"}.get(cell.target_mode,"EXPLORING")
 		var organ: Dictionary = cell.organ_by_id(cell.target_organ_id)
 		cell.target_mouth = cell.local_point(organ.a).angle() if not organ.is_empty() else 0.0
 	else:
@@ -772,7 +780,7 @@ func _motion(dt: float) -> void:
 		var steering_power := 0.0
 		for organ in cell.organs:
 			if cell.energy <= 0: continue
-			var pursuing: bool = organ.id == cell.target_organ_id and cell.target_mode in ["hunt","light"]
+			var pursuing: bool = organ.kind in ["hunting","photosynthesis"] and organ.id == cell.target_organ_id and cell.target_memory > 0 and cell.target_mode in ["hunt","light"]
 			if organ.kind != "propulsion" and not pursuing: continue
 			var arm: Vector2 = cell.organ_position(organ)-cell.position
 			var power: float = (2600.0 if organ.kind == "propulsion" else 1100.0)*organ.scale*organ.scale*(organ.hp/organ.max_hp)*Genes.factor(organ,"thrust")
@@ -799,9 +807,7 @@ func _motion(dt: float) -> void:
 			var arm = Vector2.from_angle(TAU*i/6.0+cell.angle)*cell.radius
 			fluid.exchange(cell,arm,local_dt,15.0)
 		cell.angle = wrapf(cell.angle+cell.angular_velocity*local_dt,-PI,PI)
-		var plant_contact: Array = habitat_geometry.move(previous,Medium.wrap_position(previous+cell.velocity*local_dt),cell.velocity,cell.extent())
-		cell.position = plant_contact[0]
-		cell.velocity = plant_contact[1]
+		habitat_geometry.move_cell(cell,previous,Medium.wrap_position(previous+cell.velocity*local_dt),local_dt)
 		# Continuous sweep against other bodies catches high-speed crossings.
 		for other in cells:
 			if other == cell or other.dead: continue
@@ -818,7 +824,7 @@ func _motion(dt: float) -> void:
 				var hit = (-b-sqrt(maxf(0,b*b-4*a*c)))/(2*a)
 				if hit >= 0 and hit <= 1: cell.position = Medium.wrap_position(previous+travel*hit)
 
-func _contacts(_dt: float) -> void:
+func _contacts(dt: float) -> void:
 	for iteration in 5:
 		for i in cells.size():
 			var a = cells[i]
@@ -826,60 +832,107 @@ func _contacts(_dt: float) -> void:
 			for j in range(i+1,cells.size()):
 				var b = cells[j]
 				if b.dead or (a.activity <= 0 and b.activity <= 0): continue
-				var delta = Medium.offset(a.position,b.position)
-				if delta.length() > (a.extent()+b.extent()): continue
-				var normal = delta.normalized() if delta.length() > 0.001 else Vector2.RIGHT
-				var required: float = a.support(normal.angle())+b.support((-normal).angle())
-				var penetration = required-delta.length()
-				if penetration < -0.1: continue
-				var ia: float = a.activity/a.mass
-				var ib: float = b.activity/b.mass
-				var inverse_mass = ia+ib
-				if inverse_mass <= 0: continue
-				if penetration > 0:
-					a.position = Medium.wrap_position(a.position-normal*penetration*ia/inverse_mass)
-					b.position = Medium.wrap_position(b.position+normal*penetration*ib/inverse_mass)
-				var closing: float = (b.velocity-a.velocity).dot(normal)
-				if closing < 0:
-					var impulse = normal*(-closing*1.05/inverse_mass)
-					a.velocity -= impulse*ia
-					b.velocity += impulse*ib
-				if iteration == 0 and penetration > 0:
-					for body in [a,b]:
-						if body.activity <= 0: continue
-						var n = normal if body == a else -normal
-						var k = posmod(roundi(fposmod(n.angle()-body.angle,TAU)/TAU*body.membrane.COUNT),body.membrane.COUNT)
-						body.membrane.points[k] *= 0.96
-						body.membrane.invalidate()
+				Contacts.pair(a,b,dt,iteration == 0)
 
-func _spike_contacts(dt: float) -> void:
+func _spike_contacts(dt: float, starts: Dictionary = {}) -> void:
 	for attacker in cells:
 		if attacker.dead or attacker.activity <= 0 or attacker.health <= 0: continue
-		attacker.feeding_feedback = ""
 		for organ in attacker.organs:
-			if organ.kind != "offensive": continue
-			organ.feeding = false
-			var base: Vector2 = attacker.organ_position(organ)
-			var direction: Vector2 = attacker.local_point(organ.a).normalized().rotated(attacker.angle)
-			var length: float = 42.0*organ.scale
+			if organ.kind != "offensive" or organ.hp <= 0: continue
+			_spike_plants(attacker,organ,starts.get(attacker.id,{}),dt)
 			for prey in cells:
-				if prey == attacker or prey.dead or prey.activity <= 0 or prey.health <= 0 or prey.lineage_id() == attacker.lineage_id(): continue
+				if prey == attacker or prey.dead or prey.health <= 0: continue
+				if spatial_queries:
+					var travel_bound := 0.0
+					if starts.has(attacker.id): travel_bound += Medium.offset(starts[attacker.id].p,attacker.position).length()
+					if starts.has(prey.id): travel_bound += Medium.offset(starts[prey.id].p,prey.position).length()
+					var bound: float = attacker.extent()+50*organ.scale+prey.extent()+travel_bound
+					if Medium.offset(attacker.position,prey.position).length_squared() > bound*bound: continue
+				var base: Vector2 = attacker.organ_position(organ)
+				var direction: Vector2 = attacker.local_point(organ.a).normalized().rotated(attacker.angle)
+				var length: float = 42.0*organ.scale
+				# Translation sweep against the shaft. Rotation is handled by
+				# small motion substeps plus current overlap and tip sweeps below.
+				if starts.has(attacker.id) and starts.has(prey.id):
+					var old: Dictionary = starts[attacker.id]
+					var before: Dictionary = starts[prey.id]
+					var arm: Vector2 = (attacker.local_point(organ.a)+attacker.local_point(organ.a).normalized()*5*organ.scale).rotated(old.angle)
+					var old_base: Vector2 = old.p+arm
+					var old_direction: Vector2 = attacker.local_point(organ.a).normalized().rotated(old.angle)
+					var old_tip: Vector2 = old_base+old_direction*length
+					var from: Vector2 = old_base+Medium.offset(old_base,before.p)
+					var travel := Medium.offset(before.p,prey.position)-Medium.offset(old.p,attacker.position)
+					var closest := Habitat.closest(from,old_base,old_tip)
+					var reach: float = prey.support((closest-from).angle())+3*organ.scale
+					var hit := Habitat.capsule_hit(from,travel,old_base,old_tip,reach)
+					# Sweep shaft samples against the prey too, so a rotating weapon
+					# cannot jump past it between the bounded physics substeps.
+					for fraction in [0.0,0.5,1.0]:
+						var prior: Vector2 = old_base+old_direction*length*fraction
+						var current: Vector2 = base+direction*length*fraction
+						var relative_start := Medium.offset(before.p,prior)
+						var relative_travel := Medium.offset(prior,current)-Medium.offset(before.p,prey.position)
+						var radius: float = prey.support(relative_start.angle())+3*organ.scale
+						hit = minf(hit,Habitat.circle_hit(relative_start,relative_travel,Vector2.ZERO,radius))
+					if hit >= 0 and hit <= 1 and from.distance_to(closest) > reach+0.01:
+						# Preserve each body's traveled fraction at first contact;
+						# the impulse resolves the remaining closing velocity.
+						attacker.position = Medium.wrap_position(old.p+Medium.offset(old.p,attacker.position)*hit)
+						prey.position = Medium.wrap_position(before.p+Medium.offset(before.p,prey.position)*hit)
+						attacker.angle = lerp_angle(old.angle,attacker.angle,hit)
+						direction = attacker.local_point(organ.a).normalized().rotated(attacker.angle)
+						base = attacker.organ_position(organ)
 				var d := Medium.offset(base,prey.position)
 				var along := clampf(d.dot(direction),0,length)
-				var contact: Vector2 = base+direction*along
-				var offset := Medium.offset(prey.position,contact)
-				if offset.length() > prey.support(offset.angle())+3*organ.scale: continue
+				var shaft: Vector2 = base+direction*along
+				var offset := Medium.offset(shaft,prey.position)
+				var normal := offset.normalized() if offset.length_squared() > 0.000001 else direction
+				var reach: float = prey.support((-normal).angle())+3*organ.scale
+				var penetration := reach-offset.length()
+				if penetration < -0.2: continue
+				var at: Vector2 = shaft+normal*3*organ.scale
+				var speed := maxf(0,-(Contacts.velocity_at(prey,at)-Contacts.velocity_at(attacker,at)).dot(normal))
+				var impact := Contacts.solve(attacker,prey,at,normal,penetration)
+				Contacts.dent(prey,at,maxf(0,penetration)*0.18+speed*dt*0.65)
+				Contacts.dent(attacker,base,speed*dt*0.12)
+				organ.consume_flash = maxf(organ.consume_flash,minf(1,0.2+speed/60))
+				# Physical obstruction applies to relatives too; recognition only
+				# prevents deliberate tissue injury. No contact writes AI targets.
+				if prey.activity <= 0 or prey.lineage_id() == attacker.lineage_id(): continue
 				var local_dt := dt*minf(attacker.activity,prey.activity)
 				var energy: float = attacker.spend_energy(local_dt*1.2*organ.scale*organ.scale*Genes.factor(organ,"attack_cost"),organ)
-				if energy <= 0: continue
-				prey.waste += prey.damage(energy*12*Genes.factor(organ,"damage"),offset.angle())
+				var damage: float = energy*12*Genes.factor(organ,"damage")+(minf(45,impact/prey.mass*0.9) if speed >= 6 else 0.0)
+				if damage <= 0: continue
+				prey.waste += prey.damage(damage,Medium.offset(prey.position,at).angle())
 				prey.death_hint = "Membrane failed after spike wounds"
-				if attacker == player: evolution.record("spike",energy*12*Genes.factor(organ,"damage"))
+				if attacker == player: evolution.record("spike",damage)
 				organ.feeding = true
-				organ.consume_flash = 1
-				organ.link = contact
+				organ.link = at
 				attacker.feeding_feedback = "SPIKE CONTACT"
-				break
+
+func _spike_plants(cell, organ: Dictionary, before: Dictionary, dt: float) -> void:
+	if not habitat_geometry.enabled: return
+	var local: Vector2 = cell.local_point(organ.a)
+	var root: Vector2 = local+local.normalized()*5*organ.scale
+	var old_p: Vector2 = before.get("p",cell.position)
+	var old_angle: float = before.get("angle",cell.angle)
+	var candidates: Array = habitat_geometry.query(old_p,cell.position,cell.extent()+50*organ.scale)
+	if candidates.is_empty(): return
+	# Bounded overlapping shaft samples, swept through translation and rotation.
+	# Main stems resist weapons; the decorative fern leaves remain permeable.
+	for fraction in [1.0,0.75,0.5,0.25,0.0]:
+		var arm: Vector2 = root+local.normalized()*42*organ.scale*fraction
+		var at: Vector2 = cell.position+arm.rotated(cell.angle)
+		var previous: Vector2 = old_p+arm.rotated(old_angle)
+		var result: Array = habitat_geometry.move(previous,at,Contacts.velocity_at(cell,at),(3+7*(1-fraction))*organ.scale,candidates)
+		if not result[2]: continue
+		var correction := Medium.offset(at,result[0])
+		if correction.length_squared() < 0.000001: continue
+		var normal := -correction.normalized()
+		var speed := maxf(0,Contacts.velocity_at(cell,at).dot(normal))
+		Contacts.solve(cell,null,at,normal,correction.length())
+		Contacts.dent(cell,cell.organ_position(organ),speed*dt*0.2)
+		organ.consume_flash = maxf(organ.consume_flash,minf(1,0.15+speed/60))
 
 func _exclude_particles() -> void:
 	if native_exclusion:
@@ -923,7 +976,7 @@ func _receptor_contacts() -> void:
 	for cell in cells:
 		if cell.dead or cell.activity <= 0: continue
 		for organ in cell.organs:
-			if organ.kind not in ["feeding","sensing","offensive"]: continue
+			if organ.kind not in ["feeding","sensing","hunting"]: continue
 			var at: Vector2 = cell.organ_position(organ)
 			var forward: Vector2 = cell.local_point(organ.a).normalized().rotated(cell.angle)
 			var radius: float = 12*organ.scale

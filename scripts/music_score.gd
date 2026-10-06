@@ -1,12 +1,13 @@
 extends RefCounted
 ## Read-only musical observations. Rhythm is scheduled in audio sample frames.
 const Synth = preload("res://scripts/music_synth.gd")
-const KINDS := ["propulsion","protection","offensive","regenerative","feeding","sensing","photosynthesis","toxin","neutralizing","acidifying"]
+const KINDS := ["propulsion","protection","offensive","regenerative","feeding","sensing","photosynthesis","toxin","neutralizing","acidifying","hunting"]
+const INSTRUMENTS := [4,5,6,7,8,9,10,11,12,13,9]
 const PATTERNS := [
 	[2,6,10,14], [0,7,12], [0,3,6,10,14], [3,11],
-	[0,3,8,10,14], [1,4,9,12], [0,2,5,8,10,13], [3,6,11,14], [5,13], [0,3,7,10,15]
+	[0,3,8,10,14], [1,4,9,12], [0,2,5,8,10,13], [3,6,11,14], [5,13], [0,3,7,10,15], [2,5,8,14]
 ]
-const DEGREES := [0,7,0,12,3,10,7,0,12,3]
+const DEGREES := [0,7,0,12,3,10,7,0,12,3,5]
 const ROOTS := [0,8,3,10]
 var sources: Array = []
 var channels: Array = []
@@ -70,7 +71,7 @@ func observe(world, camera: Vector2, half: Vector2, editing: bool) -> void:
 		var gain := proximity(offset,half,cell.extent())
 		if gain < 0.005: continue
 		var counts := PackedFloat32Array()
-		counts.resize(10)
+		counts.resize(KINDS.size())
 		for organ in cell.organs:
 			var kind := KINDS.find(organ.kind)
 			if kind >= 0: counts[kind] += 0.35+0.65*clampf(organ.hp/maxf(organ.max_hp,0.01),0,1)
@@ -233,8 +234,8 @@ func _step(out: Array, step: int, offset: int) -> void:
 		for source in sources:
 			if source.id != lead_id: continue
 			var instruments: Array[int] = []
-			for kind in 10:
-				if source.counts[kind] > 0: instruments.append(kind+4)
+			for kind in KINDS.size():
+				if source.counts[kind] > 0: instruments.append(INSTRUMENTS[kind])
 			if instruments.is_empty(): break
 			var motif: Array = source.motif if source.has("motif") else lineage_motif(0,source.id)
 			var degree: int = motif[MOTIF_BEATS.find(beat)]
@@ -249,8 +250,8 @@ func _step(out: Array, step: int, offset: int) -> void:
 			var low := maxi(26,root-12-mini(12,floori(log(source.mass/120)/log(2))*4))
 			_note(out,offset,15,source.lane,low,minf(0.36,0.16+log(source.mass/100)*0.08))
 		var hits := 0
-		for shift in 10:
-			var kind := (shift+step/4)%10
+		for shift in KINDS.size():
+			var kind := (shift+step/4)%KINDS.size()
 			var count: float = source.counts[kind]
 			if count <= 0 or not beat in PATTERNS[kind]: continue
 			if source.gain < 0.25 and beat%4 != 0: continue
@@ -263,6 +264,6 @@ func _step(out: Array, step: int, offset: int) -> void:
 			if kind == 9: degree = [0,7,third,12][(step+bar)%4]
 			var note := clampi(root+12+register+degree,29,88)
 			var gain := 0.25*minf(1.6,sqrt(count))*(0.72 if opening else 1.0)
-			_note(out,offset,kind+4,source.lane,note,gain)
+			_note(out,offset,INSTRUMENTS[kind],source.lane,note,gain)
 			allowance -= 1
 			hits += 1

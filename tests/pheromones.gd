@@ -9,7 +9,7 @@ static func isolated():
 	sim.grid.rebuild(sim.particles)
 	sim.player.organs.clear()
 	sim.player.activity = 1
-	sim.player.add_organ("offensive",0,"graze",false)
+	sim.player.add_organ("hunting",0,"hunt",false)
 	return sim
 static func listen(sim, seconds: float = 0.5) -> void:
 	for i in ceili(seconds/DT): sim._sense(sim.player,DT)

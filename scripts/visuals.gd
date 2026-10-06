@@ -66,6 +66,14 @@ static func icon(c: Node2D, p: Vector2, kind: String, rotation: float, scale: fl
 				c.draw_line(Vector2(10,0),Vector2(19,side*9),PURPLE,5,true)
 				c.draw_circle(Vector2(19,side*9),4,Color("ed98ff"))
 			c.draw_circle(Vector2(-4,0),6,PURPLE)
+		"hunting":
+			# Inward-hooked coral fork: pursuit is distinct from violet flight.
+			c.draw_line(Vector2(-6,0),Vector2(10,0),Color("af394e"),8,true)
+			c.draw_line(Vector2(-3,0),Vector2(12,0),Color("ff9362"),5,true)
+			for side in [-1,1]:
+				c.draw_polyline(PackedVector2Array([Vector2(9,0),Vector2(17,side*10),Vector2(24,side*6)]),Color("ff9362"),5,true)
+				c.draw_circle(Vector2(24,side*6),3.5,Color("ffe6a1"))
+			c.draw_circle(Vector2(-4,0),6,Color("ff9362"))
 		"microtubule":
 			c.draw_line(Vector2(-22,-16),Vector2(25,18),Color("b7d9e8"),3,true)
 			c.draw_line(Vector2.ZERO,Vector2(13,-25),Color("b7d9e8"),3,true)

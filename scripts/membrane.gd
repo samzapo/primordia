@@ -117,6 +117,29 @@ func step(dt: float, radius: float, acceleration: Vector2, time: float, _aspect:
 		previous[i] += corrected-points[i]
 		points[i] = corrected
 
+func compress(local_angle: float, depth: float, radius: float) -> void:
+	# Spread dents across nodes, redistribute area, preserve polar ordering and
+	# shift Verlet history so positional correction creates no launch velocity.
+	var before_area := 0.0
+	for i in COUNT: before_area += points[i].cross(points[(i+1)%COUNT])*0.5
+	for i in COUNT:
+		var distance := absf(wrapf(points[i].angle()-local_angle,-PI,PI))
+		if distance >= 0.65: continue
+		var weight := 0.5+0.5*cos(PI*distance/0.65)
+		var corrected := points[i].normalized()*maxf(radius*0.58,points[i].length()-depth*weight)
+		previous[i] += corrected-points[i]
+		points[i] = corrected
+	var area := 0.0
+	for i in COUNT: area += points[i].cross(points[(i+1)%COUNT])*0.5
+	var scale := sqrt(maxf(0.001,before_area)/maxf(0.001,area))
+	maximum_radius = 0
+	for i in COUNT:
+		var corrected := points[i]*scale
+		previous[i] += corrected-points[i]
+		points[i] = corrected
+		maximum_radius = maxf(maximum_radius,corrected.length())
+	invalidate()
+
 func invalidate() -> void:
 	geometry_dirty = true
 	outline_dirty = true

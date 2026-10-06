@@ -19,6 +19,7 @@ func run() -> void:
 				if policy not in ["lineage","careful"]: sim.install("regenerative",4.2,"graze",1.0)
 			elif diet == "hunter":
 				sim.install("offensive",0)
+				sim.install("hunting",0.42)
 				if policy not in ["lineage","careful"]: sim.install("regenerative",4.2,"graze",1.0)
 			else:
 				if policy not in ["lineage","careful"]: sim.install("feeding",1.2,"graze",1.0)

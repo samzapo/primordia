@@ -78,7 +78,11 @@ func run(test_host) -> void:
 	scene._physics_process(DT)
 	expect(scene.build_open and scene.world.time == clock and scene.manual_zoom > 0.8,"Tab pauses biology and focuses inside the cell")
 	click(scene.cell_ui.screen_at({"kind":"assembly"}))
-	expect(scene.cell_ui.choices.size() == 6,"Clicking the assembly factory reveals six local illustrated choices")
+	expect(scene.cell_ui.choices.size() == 7,"The assembly factory includes the separate illustrated hunting receptor")
+	expect(scene.cell_ui.choices[6].kind == "hunting" and scene.cell_ui.choices[6].caption == "Hunting receptor","Hunting is its own factory organ, not a spike mode")
+	scene.cell_ui.choices[6].pressed.emit()
+	expect(scene.selected == 10,"Hunting receptor selection reaches the normal membrane placement flow")
+	click(scene.cell_ui.screen_at({"kind":"assembly"}))
 	scene.cell_ui.choices[1].pressed.emit()
 	expect(scene.selected == 1 and scene.cell_ui.choices.is_empty(),"Factory choice picks a cortex without a build panel")
 	var before_zoom: float = scene.manual_zoom

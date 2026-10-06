@@ -112,9 +112,9 @@ This is a living design record. For each new biological or physical mechanic, re
 
 **Source:** [PAAR-repeat proteins sharpen and diversify the type VI secretion system spike](https://www.nature.com/articles/nature12453) (Shneider and colleagues, 2013), structural and functional evidence for spike-mediated delivery/killing.
 
-**Game:** a protruding spike punctures local protection/membrane on contact and guides pursuit of lower-biomass targets. Dead cells release retained material for grazers.
+**Game:** a protruding spike punctures local protection/membrane on contact. Separate hunting chemoreceptors guide pursuit from emitted pheromone reports. Dead cells release retained material for grazers.
 
-**Abstraction:** our permanently protruding, self-propelling spike is not a model of the contraction-driven T6SS. Sensing, pursuit, physical impact damage and secretion are deliberately combined for playability.
+**Abstraction:** our permanently protruding weapon is not a model of the contraction-driven T6SS. Macroscopic collision-dependent puncture, its bounded damage curve and ATP-funded sustained injury are game abstractions. The spike has no sensing or self-propulsion.
 
 ## Repair, energy and presentation
 
@@ -223,9 +223,9 @@ The revision-eleven cursor lens illustrates optical magnification using the micr
 
 **Phenomenon:** secreted chemical signals are redistributed by flow and diffusion, and microbes can respond by chemotaxis. [Scheidweiler et al., Spatial structure, chemotaxis and quorum sensing shape bacterial biomass accumulation in complex porous media (Nature Communications, 2024)](https://www.nature.com/articles/s41467-023-44267-y) reports flow-dependent accumulation of *E. coli* responding to self-produced AI-2 and discusses how transport changes access to the signals.
 
-**Game:** each cell releases passive point tracers, sampled by nearby spike/flight chemoreceptors. Advection follows the local fluid; Gaussian displacement has variance proportional to elapsed time, modeling diffusion. Independent exponential lifetimes limit trail persistence. This motivates discovering a source through a transported cue rather than querying its current position.
+**Game:** each cell releases passive point tracers, sampled by nearby hunting/flight chemoreceptors. Advection follows the local fluid; Gaussian displacement has variance proportional to elapsed time, modeling diffusion. Independent exponential lifetimes limit trail persistence. This motivates discovering a source through a transported cue rather than querying its current position.
 
-**Abstraction:** “pheromone” is the game's broad label for these inter-cell cues. Real molecules do not contain literal coordinates, biomass, lineage IDs or a hostility bit. Encoded emission-time metadata, universal secretion, visual point size, pass-through solids, eight points per second, diffusion coefficient and five-second mean lifetime are gameplay choices, not measurements from that study. Hostility summarizes armed anatomy, not a claim about biological intent.
+**Abstraction:** “pheromone” is the game's broad label for these inter-cell cues. Real molecules do not contain literal coordinates, biomass, lineage IDs or a hostility bit. Encoded emission-time metadata, universal secretion, visual point size, pass-through solids, eight points per second, diffusion coefficient and five-second mean lifetime are gameplay choices, not measurements from that study. Hostility summarizes armed anatomy, not a claim about biological intent. The defense bit additionally summarizes a working protective cortex at emission. “Smaller or undefended” prey selection is a game heuristic, not a molecular defense assay or exact assessment of exposed membrane.
 
 ## Inherited themes, habitat timbre and event phrases
 
@@ -246,3 +246,11 @@ The game stores a complete prepaid body outside active physics, with no metaboli
 [Gonzalez and Bell, Evolutionary rescue and adaptation to abrupt environmental change depends upon the history of stress (2013)](https://pmc.ncbi.nlm.nih.gov/articles/PMC3538446/) examines how prior environmental stress affects rescue in yeast populations. It motivates giving a lineage a history of environmental challenges rather than testing only an isolated lifespan.
 
 Primordia compresses those pressures into authored light and rival-anatomy changes. Its three timed crises, survival thresholds, optional AP challenges, named rivals and recalled blueprints are design abstractions. The environment is not intentionally evolving against the player; the director introduces bounded, ordinarily paid variants. Persistent blueprint choices represent player knowledge, not DNA passing between unrelated expeditions, and grant no permanent stat advantage.
+
+## Contact impulses and compliant collision response
+
+**Technical motivation:** [Box2D simulation documentation](https://box2d.org/documentation/md_simulation.html) describes contact constraints, impulses, restitution, Coulomb friction, rotational response and swept collision handling. It motivates the numerical approach; Primordia does not add Box2D as a dependency.
+
+**Game:** deformed membrane contacts exchange equal/opposite impulses for fully active bodies, including the torque of an off-center hit. Limited friction turns glancing impacts into spin. Small restitution allows rebound, while local compression redistributes ring area and the existing pressure/cytoskeleton relaxes the shape. Solid plant stems take the environment's reaction; fine leaves remain decorative. Spike impacts transfer momentum and cause bounded tissue damage, making speed and placement useful.
+
+**Abstraction:** body contacts use a bounded radial approximation, not arbitrary concave polygon manifolds or full continuum mechanics. Finite substeps, swept proxies and positional projection stabilize crossings. Stem samples and spike shaft sweeps approximate contact geometry; restitution, friction and a maximum 45-health impact contribution are playtest constants. Near-static pressing retains ATP-funded damage. No claim of molecular, calibrated tissue or globally energy-conserving fluid simulation is made. The pressure/cytoskeleton references above motivate deformability, not the chosen damage curve.

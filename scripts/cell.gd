@@ -1,9 +1,9 @@
 extends RefCounted
 const Genes = preload("res://scripts/mutations.gd")
 const Membrane = preload("res://scripts/membrane.gd")
-const KINDS := ["propulsion", "protection", "offensive", "regenerative", "feeding", "sensing", "photosynthesis", "toxin", "neutralizing", "acidifying"]
-const COST := [8.0, 10.0, 12.0, 10.0, 8.0, 6.0, 12.0, 12.0, 10.0, 12.0]
-const WIDTH := [19.0, 34.0, 26.0, 27.0, 36.0, 20.0, 30.0, 26.0, 26.0, 26.0]
+const KINDS := ["propulsion", "protection", "offensive", "regenerative", "feeding", "sensing", "photosynthesis", "toxin", "neutralizing", "acidifying", "hunting"]
+const COST := [8.0, 10.0, 12.0, 10.0, 8.0, 6.0, 12.0, 12.0, 10.0, 12.0, 6.0]
+const WIDTH := [19.0, 34.0, 26.0, 27.0, 36.0, 20.0, 30.0, 26.0, 26.0, 26.0, 20.0]
 const SENSE_MODES := ["flee"]
 const MODES := ["graze"]
 var id := 0
@@ -239,9 +239,10 @@ func _make_room(anchor: float, width: float, length: float) -> void:
 func add_organ(kind: String, a: float, mode: String = "graze", paid: bool = true, size: float = 1.0) -> bool:
 	var k := KINDS.find(kind)
 	if dead or k < 0 or not can_fit(kind,a,size,paid): return false
-	if kind == "sensing":
-		if mode == "graze": mode = "flee"
-		if mode != "flee": return false
+	if kind in ["sensing","hunting"]:
+		var required := "flee" if kind == "sensing" else "hunt"
+		if mode == "graze": mode = required
+		if mode != required: return false
 	elif not MODES.has(mode): return false
 	var cost := organ_cost(kind,size)
 	if paid and biomass < cost: return false
