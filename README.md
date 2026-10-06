@@ -2,7 +2,7 @@
 
 A physics and chemistry simulation game about managing one small cell. Eat, grow and survive predation. **You never steer the cell:** its anatomy controls its behavior.
 
-This thirteenth playable revision uses **Godot 4.7.2**, a fixed-step simulation, deformable membranes, oriented chemical particles and procedural 2D artwork. Its vector artwork is authored in the project; cached particle textures and mipmaps generate automatically at runtime. The default Linux launcher builds a batched C++ GDExtension automatically; the GDScript reference backend remains available.
+This fourteenth playable revision uses **Godot 4.7.2**, a fixed-step simulation, deformable membranes, oriented chemical particles and procedural 2D artwork. Its vector artwork is authored in the project; cached particle textures and mipmaps generate automatically at runtime. The default Linux launcher builds a batched C++ GDExtension automatically; the GDScript reference backend remains available.
 
 ## Run with Steam Godot on Linux
 
@@ -61,7 +61,9 @@ New player organs have a fixed size. Surface area, biomass and adaptation constr
 
 Music is a core design element. An original 128 BPM progressive score gives each organelle type a distinct instrument and rhythm. Nearby anatomy becomes louder and busier; larger cells sound lower, with an approaching giant announcing itself as a quiet bass presence. A longer arrangement supplies breakdowns, builds and melodic returns.
 
-Escape settings offer independent **Music volume** and **Particle beat response** controls. Particle glyphs breathe locally with the beat without changing their chemistry or motion. Editing keeps a quieter groove. The soundtrack uses generated, cached instruments and a bounded native mixer, with a GDScript fallback; no soundtrack downloads are required. [Revision twelve](docs/REVISION_12.md) describes the instruments, performance measurements and further immersion ideas.
+Each lineage has a recognizable melody that offspring inherit; anatomy changes its orchestration. Bright water opens the synth filters, acidity adds grit and instability, and buffering calms it. Eating adds rhythmic fills, toxin neutralization adds answering chimes, and division resolves into a short phrase. Biology remains independent of the beat.
+
+Escape settings offer independent **Music volume** and **Particle beat response** controls. Particle glyphs breathe locally with the beat without changing their chemistry or motion. Editing keeps a quieter groove. The soundtrack uses generated, cached instruments and a bounded native mixer, with a GDScript fallback; no soundtrack downloads are required. [Revision fourteen](docs/REVISION_14.md) describes the inherited themes, habitat effects, event phrases, listening preview and wide-view measurements; [revision twelve](docs/REVISION_12.md) documents the original instruments.
 
 ## Living chemistry
 

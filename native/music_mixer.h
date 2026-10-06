@@ -13,7 +13,7 @@
 class PrimordiaMusicMixer : public godot::RefCounted {
   GDCLASS(PrimordiaMusicMixer, godot::RefCounted)
   static constexpr int RATE = 22050, LIMIT = 40;
-  struct Channel { int64_t id = -99; double l=0,r=0,tl=0,tr=0; };
+  struct Channel { int64_t id = -99; double l=0,r=0,tl=0,tr=0,low=0,filter=.5,target_filter=.5,acid=0,target_acid=0; };
   struct Voice { int instrument,lane,release=2147483647; double at=0,rate,gain; };
   struct Event { int offset,instrument,lane; double note,gain; };
   std::vector<godot::PackedFloat32Array> bank;
@@ -47,14 +47,19 @@ public:
     godot::PackedVector2Array output;
     if(frames<=0 || frames>16384 || bank.size()!=16 || left.empty()) return output;
     for(int lane=0;lane<7;++lane) {
-      int64_t identity=-1; double gain=0,pan=0;
+      int64_t identity=-1; double gain=0,pan=0,light=.75,acid=0;
       if(lane<sources.size()) {
         godot::Dictionary source=sources[lane];
         identity=source.get("id",-1); gain=source.get("gain",0.); pan=source.get("pan",0.);
+        light=source.get("light",.75); acid=source.get("acid",0.);
       }
       gain=std::isfinite(gain)?std::clamp(gain,0.,2.):0.;
       pan=std::isfinite(pan)?std::clamp(pan,-1.,1.):0.;
+      light=std::isfinite(light)?std::clamp(light,0.,1.):.75;
+      acid=std::isfinite(acid)?std::clamp(acid,0.,1.):0.;
       auto &c=channels[lane];
+      c.target_filter=1-std::exp(-6.283185307179586*(400+6100*std::pow(light,1.4))/RATE);
+      c.target_acid=acid;
       if(c.id!=identity) for(auto &v:voices) if(v.lane==lane) v.release=std::min(v.release,int(std::lround(RATE*.035)));
       c.id=identity; c.tl=gain*std::sqrt(.5*(1-pan)); c.tr=gain*std::sqrt(.5*(1+pan));
     }
@@ -76,9 +81,10 @@ public:
         voices.push_back({e.instrument,e.lane,2147483647,0,std::pow(2.,(std::clamp(e.note,12.,100.)-base[e.instrument])/12.),std::clamp(e.gain,0.,2.)});
       }
       double dry_l=0,dry_r=0,send_l=0,send_r=0;
+      std::array<double,7> tones{};
       double beat=std::fmod(double(cursor+i)/RATE,60./128);
       double duck=.42+.58*std::clamp(beat/.18,0.,1.);
-      for(auto &c:channels) { c.l+=(c.tl-c.l)*.002; c.r+=(c.tr-c.r)*.002; }
+      for(auto &c:channels) { c.l+=(c.tl-c.l)*.002; c.r+=(c.tr-c.r)*.002; c.filter+=(c.target_filter-c.filter)*.0015; c.acid+=(c.target_acid-c.acid)*.0015; }
       for(int n=int(voices.size())-1;n>=0;--n) {
         auto &v=voices[n]; const auto &samples=bank[v.instrument]; int index=int(v.at);
         if(index+1>=samples.size() || v.release<=0) { voices.erase(voices.begin()+n); continue; }
@@ -87,10 +93,20 @@ public:
         value*=std::min(1.,v.release/(RATE*.035));
         v.at+=v.rate; --v.release;
         const auto &c=channels[v.lane];
-        double l=value*c.l,r=value*c.r;
-        if(v.instrument>=3) { l*=duck; r*=duck; }
-        dry_l+=l; dry_r+=r;
-        if(v.instrument>=4) {send_l+=l*.18;send_r+=r*.18;}
+        if(v.instrument>=4) tones[v.lane]+=value*duck;
+        else {
+          double factor=v.instrument==3?duck:1.;
+          dry_l+=value*c.l*factor; dry_r+=value*c.r*factor;
+        }
+      }
+      const double ripple=std::sin(6.283185307179586*6.4*(cursor+i)/RATE);
+      for(int lane=0;lane<7;++lane) {
+        auto &c=channels[lane];
+        c.low+=(tones[lane]-c.low)*c.filter;
+        double tone=c.low;
+        if(c.acid>.001) tone=std::tanh(tone*(1+c.acid*2.5))/(1+c.acid*1.7)*(1+c.acid*.045*ripple);
+        double l=tone*c.l,r=tone*c.r;
+        dry_l+=l; dry_r+=r; send_l+=l*.18; send_r+=r*.18;
       }
       peak=std::max(peak,int(voices.size()));
       double echo_l=left[delay_index],echo_r=right[delay_index];

@@ -47,7 +47,7 @@ Notes are placed on an integer audio sample timeline, with a small authored sixt
 
 Headless tests and normal visual benchmarks leave playback disabled. Use `--music=on` with `tests/visual_benchmark.gd` for explicit audio-on frame comparisons. `--music-benchmark` enables the running director in a diagnostic scene. Benchmarks can use `--audio-driver Dummy` to exercise the real-time mixer without sending sound to speakers.
 
-Generate an offline 30-second listening fixture using the same score and sampler:
+Generate an offline listening fixture using the same score and sampler (the expanded 48-second example is described in revision fourteen):
 
 ```sh
 godot --headless --path . --script tools/music_preview.gd -- --output=/absolute/path/primordia-music.wav
@@ -57,7 +57,7 @@ The fixture introduces a large bass-producing organism, then increases the playe
 
 ## Further immersion ideas
 
-These remain suggestions beyond the implementation above:
+The first three follow-ups below were subsequently approved and implemented in [revision fourteen](REVISION_14.md). Threat transitions, longer authored sections and flow-linked space remain suggestions:
 
 - **Event accents:** feeding adds small rhythmic fills, toxin neutralization creates paired notes, and successful division resolves into a recognizable phrase. Sound can wait for a subdivision; the underlying action must remain immediate.
 - **Habitat filtering:** brighter water gradually opens the synth filters; acidic regions introduce a sharper, unstable timbre. Buffering audibly calms it.

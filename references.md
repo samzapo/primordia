@@ -224,3 +224,11 @@ The revision-eleven cursor lens illustrates optical magnification using the micr
 **Game:** each cell releases passive point tracers, sampled by nearby spike/flight chemoreceptors. Advection follows the local fluid; Gaussian displacement has variance proportional to elapsed time, modeling diffusion. Independent exponential lifetimes limit trail persistence. This motivates discovering a source through a transported cue rather than querying its current position.
 
 **Abstraction:** “pheromone” is the game's broad label for these inter-cell cues. Real molecules do not contain literal coordinates, biomass, lineage IDs or a hostility bit. Encoded emission-time metadata, universal secretion, visual point size, pass-through solids, eight points per second, diffusion coefficient and five-second mean lifetime are gameplay choices, not measurements from that study. Hostility summarizes armed anatomy, not a claim about biological intent.
+
+## Inherited themes, habitat timbre and event phrases
+
+These revision-fourteen features sonify existing state: lineage inheritance, the light/acid fields, buffer action, ingestion, oriented toxin neutralization and funded division. Their biological motivations remain in the corresponding sections above. No additional cell sense or chemical rule is introduced.
+
+[Audiokinetic's guide to game syncs and Stingers](https://www.audiokinetic.com/en/public-library/2024.1.5_8803/?id=using_game_syncs_during_playback&source=Help) describes short musical phrases layered over an ongoing score in response to events. This motivates the feeding, neutralization and division accents. Primordia implements its own sample-clock scheduler and synthesized phrases; it adds no Wwise dependency or third-party recordings.
+
+An inherited six-note musical contour is a presentation metaphor for the existing lineage signature. Light-to-filter cutoff, acidity-to-saturation/ripple and buffering-to-calmer timbre are authored listening choices, not measured biological acoustics. Audio may observe rendered ecology, but never supplies information to the pheromone-only perception system or changes authoritative particle behavior.

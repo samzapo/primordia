@@ -79,6 +79,7 @@ func update_music(dt: float) -> void:
 		score.observe(game.world,game.render_camera,game.get_viewport_rect().size*0.5/game.zoom,game.is_paused())
 		observe_clock = 0.10
 	if game.preferences.music_volume <= 0:
+		score.reset_accents(game.world)
 		silence_clock += dt
 		pulse_sources.fill(Vector4.ZERO)
 		if not player.playing or silence_clock > 0.35:
@@ -86,16 +87,28 @@ func update_music(dt: float) -> void:
 			playback = null
 			return
 	else: silence_clock = 0
+	var started := Time.get_ticks_usec()
 	if not player.playing:
 		# Unmute starts a fresh musical phrase; biology is never restarted.
+		score.reset_accents(game.world)
 		mixer.configure(Synth.cached_bank)
 		frame_cursor = 0
 		audible_time = 0
+		# The reference mixer can take tens of milliseconds. Prepare silence-free
+		# startup while the stream is stopped, then begin with a complete buffer.
+		var priming_frames := roundi(0.16*Synth.RATE)
+		var priming_events := score.events(0,priming_frames)
+		var priming: PackedVector2Array = mixer.render(priming_frames,priming_events,score.channels,game.preferences.music_volume)
 		player.play()
 		playback = player.get_stream_playback()
 		startup_skips = playback.get_skips()
 		buffer_capacity = playback.get_frames_available()
-	var started := Time.get_ticks_usec()
+		if not playback.push_buffer(priming):
+			player.stop()
+			playback = null
+			push_warning("Music could not prime its playback buffer.")
+			return
+		frame_cursor = priming_frames
 	var capacity := buffer_capacity
 	var target := mini(capacity,roundi(0.16*Synth.RATE))
 	var queued := capacity-playback.get_frames_available()

@@ -121,3 +121,9 @@ Starting cells now have 0–4 randomly tensioned original links, constructed seq
 The owner requires every creature to emit short-lived, current-advected and diffusing point pheromones carrying source location, size and hostility metadata. Receptors learn about other creatures exclusively by receiving these particles; no live source lookup may refresh the information. Pheromones ignore other particles and solids. Grazing and light sensing keep their existing resource inputs.
 
 Preserve emitted metadata snapshots, local receptor sampling, explicit flight, independent probabilistic expiry, down-current plumes and pass-through transport in every backend. These points are non-oriented signal tracers, an explicit exception to material-particle exclusion and binding-face graphics. See [revision thirteen](REVISION_13.md).
+
+## Revision 14: inherited and responsive music
+
+The owner approved all three immediate music follow-ups: inherited lineage motifs, environmental timbre and musical event accents. A family's seeded melody survives division; installed organs change its orchestration. Local light opens melodic filters, local acidity adds saturation/ripple, and ordinary buffer chemistry calms that effect. Feeding, toxin neutralization and division trigger bounded, quantized phrases.
+
+The implementation is presentation only. Do not delay actions until the beat, consume ecology randomness, drain gameplay journals or make audio an input to cell AI. Preserve bounded queues, muted-history rejection, local audibility and native/reference parity. See [revision fourteen](REVISION_14.md) for behavior, bounds and measurements.

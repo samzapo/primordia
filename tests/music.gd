@@ -30,6 +30,7 @@ func run(test_host) -> void:
 	_schedule()
 	_mixer(bank)
 	_preferences()
+	preload("res://tests/music_ecology.gd").new().run(host,bank)
 
 func _networks() -> void:
 	var counts := {}

@@ -87,7 +87,7 @@ func configure(samples: Array) -> void:
 	delay_right.resize(delay_left.size())
 	delay_left.fill(0)
 	delay_right.fill(0)
-	for i in 7: channels.append({"id":-99,"left":0.0,"right":0.0,"target_left":0.0,"target_right":0.0})
+	for i in 7: channels.append({"id":-99,"left":0.0,"right":0.0,"target_left":0.0,"target_right":0.0,"low":0.0,"filter":0.5,"target_filter":0.5,"acid":0.0,"target_acid":0.0})
 
 func render(frames: int, events: Array, sources: Array, volume: float) -> PackedVector2Array:
 	for lane in 7:
@@ -97,10 +97,15 @@ func render(frames: int, events: Array, sources: Array, volume: float) -> Packed
 			for voice in voices:
 				if voice.lane == lane: voice.release = mini(voice.release,roundi(RATE*0.035))
 		channel.id = source.id
+		var light := clampf(source.get("light",0.75),0,1)
+		channel.target_filter = 1-exp(-TAU*(400+6100*pow(light,1.4))/RATE)
+		channel.target_acid = clampf(source.get("acid",0.0),0,1)
 		channel.target_left = source.gain*sqrt(0.5*(1-clampf(source.pan,-1,1)))
 		channel.target_right = source.gain*sqrt(0.5*(1+clampf(source.pan,-1,1)))
 	var output := PackedVector2Array()
 	output.resize(frames)
+	var tones := PackedFloat64Array()
+	tones.resize(7)
 	var event_index := 0
 	for i in frames:
 		while event_index < events.size() and events[event_index].offset <= i:
@@ -113,11 +118,14 @@ func render(frames: int, events: Array, sources: Array, volume: float) -> Packed
 			voices.append({"instrument":instrument,"lane":event.lane,"position":0.0,"rate":pow(2,(event.note-BASE_NOTE[instrument])/12.0),"gain":event.gain,"release":2147483647})
 		var dry := Vector2.ZERO
 		var send := Vector2.ZERO
+		tones.fill(0)
 		var beat := fposmod(float(cursor+i)/RATE,60/BPM)
 		var duck := 0.42+0.58*clampf(beat/0.18,0,1)
 		for channel in channels:
 			channel.left = lerpf(channel.left,channel.target_left,0.002)
 			channel.right = lerpf(channel.right,channel.target_right,0.002)
+			channel.filter = lerpf(channel.filter,channel.target_filter,0.0015)
+			channel.acid = lerpf(channel.acid,channel.target_acid,0.0015)
 		for n in range(voices.size()-1,-1,-1):
 			var voice: Dictionary = voices[n]
 			var samples: PackedFloat32Array = bank[voice.instrument]
@@ -130,10 +138,22 @@ func render(frames: int, events: Array, sources: Array, volume: float) -> Packed
 			voice.position += voice.rate
 			voice.release -= 1
 			var channel: Dictionary = channels[voice.lane]
-			var pair: Vector2 = Vector2(channel.left,channel.right)*value
-			if voice.instrument >= 3: pair *= duck
+			if voice.instrument >= 4:
+				tones[voice.lane] += value*duck
+			else:
+				dry += Vector2(channel.left,channel.right)*value*(duck if voice.instrument == 3 else 1.0)
+		# One filter per organism, rather than per voice; percussion stays crisp.
+		var ripple := sin(TAU*6.4*(cursor+i)/RATE)
+		for lane in 7:
+			var channel: Dictionary = channels[lane]
+			channel.low = lerpf(channel.low,tones[lane],channel.filter)
+			var tone: float = channel.low
+			var acid: float = channel.acid
+			if acid > 0.001:
+				tone = tanh(tone*(1+acid*2.5))/(1+acid*1.7)*(1+acid*0.045*ripple)
+			var pair := Vector2(channel.left,channel.right)*tone
 			dry += pair
-			if voice.instrument >= 4: send += pair*0.18
+			send += pair*0.18
 		peak_voices = maxi(peak_voices,voices.size())
 		var echo := Vector2(delay_left[delay_index],delay_right[delay_index])
 		delay_left[delay_index] = send.x+echo.y*0.26

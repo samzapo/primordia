@@ -7,7 +7,7 @@ func run() -> void:
 	var mixer = ClassDB.instantiate("PrimordiaMusicMixer") if OS.get_environment("PRIMORDIA_BACKEND") != "script" and ClassDB.class_exists("PrimordiaMusicMixer") else Synth.new()
 	mixer.configure(bank)
 	var channels: Array = []
-	for i in 7: channels.append({"id":i,"gain":0.4,"pan":(i-3)/4.0})
+	for i in 7: channels.append({"id":i,"gain":0.4,"pan":(i-3)/4.0,"light":float(i)/6,"acid":1.0})
 	var times: Array[float] = []
 	for block in 60:
 		var events: Array = []

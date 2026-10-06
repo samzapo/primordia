@@ -614,6 +614,7 @@ public:
     static const char *names[] = {"decay", "combine", "recycle",   "detox",
                                   "spoil", "enzyme",  "neutralize"};
     std::array<int, 7> events{};
+    Array neutralizations;
     double loss = 0, recycled = 0;
     scratch.clear();
     scratch.reserve(ids.size());
@@ -708,6 +709,14 @@ public:
                 ++events[5];
                 reacted = true;
               } else if (u->kind == 7 && v->kind == 4) {
+                // Presentation samples are bounded; every chemical reaction still runs.
+                if (neutralizations.size() < 32) {
+                  Dictionary cue;
+                  cue["at"] = u->p;
+                  cue["source"] = u->d.get("owner", -1);
+                  cue["amount"] = v->amount;
+                  neutralizations.push_back(cue);
+                }
                 u->kind = 2;
                 u->amount += v->amount;
                 v->alive = false;
@@ -777,6 +786,7 @@ public:
     for (int i = 0; i < 7; ++i)
       e[names[i]] = events[i];
     out["events"] = e;
+    out["neutralizations"] = neutralizations;
     return out;
   }
   PackedVector2Array fluid_step(const PackedVector2Array &v,

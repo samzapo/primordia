@@ -12,7 +12,10 @@ func run() -> void:
 	var mixer = ClassDB.instantiate("PrimordiaMusicMixer") if OS.get_environment("PRIMORDIA_BACKEND") != "script" and ClassDB.class_exists("PrimordiaMusicMixer") else Synth.new()
 	mixer.configure(bank)
 	var score := Score.new()
-	var count := Synth.RATE*30
+	var count := Synth.RATE*48
+	var accents := [[2.0,"feeding"],[6.0,"feeding"],[18.0,"feeding"],[26.0,"neutralize"],[36.0,"division"]]
+	var next_accent := 0
+	var family := Score.lineage_motif(73,0)
 	var bytes := PackedByteArray()
 	bytes.resize(count*4)
 	var small := PackedFloat32Array([1,0,0,1,1,0,1,0,1,0])
@@ -23,19 +26,29 @@ func run() -> void:
 	var square := 0.0
 	while cursor < count:
 		var time := float(cursor)/Synth.RATE
-		var entering := smoothstep(5,18,time)
-		var exiting := 1-smoothstep(24,29,time)
+		var entering := smoothstep(4,16,time)
+		var exiting := 1-smoothstep(29,36,time)
 		var gain := entering*exiting
-		score.mass = lerpf(105,260,smoothstep(16,25,time))
+		score.mass = lerpf(105,260,smoothstep(12,32,time))
+		var light := smoothstep(4,12,time)
+		var acid := smoothstep(16,23,time)*(1-smoothstep(27,34,time))
+		var identity := 2 if time >= 36 else 0
+		score.lead_id = identity
 		score.sources = [
-			{"id":0,"lane":1,"gain":1.0,"mass":score.mass,"counts":small},
-			{"id":1,"lane":2,"gain":gain,"mass":820.0,"counts":large}
+			{"id":identity,"lane":1,"gain":1.0,"mass":score.mass,"counts":small,"motif":family},
+			{"id":1,"lane":2,"gain":gain,"mass":820.0,"counts":large,"motif":Score.lineage_motif(73,1)}
 		]
-		score.channels[1] = {"id":0,"gain":0.72,"pan":-0.15}
-		score.channels[2] = {"id":1,"gain":gain*0.78,"pan":lerpf(0.85,0.05,entering)}
+		score.channels[1] = {"id":identity,"gain":0.72,"pan":-0.15,"light":light,"acid":acid}
+		score.channels[2] = {"id":1,"gain":gain*0.78,"pan":lerpf(0.85,0.05,entering),"light":light,"acid":acid}
+		score.channels[0]["light"] = light
+		score.channels[0]["acid"] = acid
+		if time >= 36: small[1] = 1 # Inherited melody, new cortex orchestration.
+		while next_accent < accents.size() and time >= accents[next_accent][0]:
+			score.queue_accent(accents[next_accent][1],1,1)
+			next_accent += 1
 		var length := mini(1024,count-cursor)
 		var events := score.events(beginning+cursor,length)
-		var buffer: PackedVector2Array = mixer.render(length,events,score.channels,0.75*(1-smoothstep(28.5,30,time)))
+		var buffer: PackedVector2Array = mixer.render(length,events,score.channels,0.75*(1-smoothstep(46.5,48,time)))
 		for i in length:
 			var sample := buffer[i]
 			peak = maxf(peak,maxf(absf(sample.x),absf(sample.y)))
@@ -49,5 +62,5 @@ func run() -> void:
 	wav.stereo = true
 	wav.data = bytes
 	var result := wav.save_to_wav(path)
-	print("MUSIC_PREVIEW ",JSON.stringify({"path":path,"seconds":30,"peak":peak,"rms_db":linear_to_db(sqrt(square/(count*2))),"mixer":mixer.metrics(),"result":result}))
+	print("MUSIC_PREVIEW ",JSON.stringify({"path":path,"seconds":48,"peak":peak,"rms_db":linear_to_db(sqrt(square/(count*2))),"mixer":mixer.metrics(),"result":result}))
 	quit(0 if result == OK else 1)

@@ -55,6 +55,11 @@ var particles: Array = []
 # References to signal packets only; expiry never scans all material each tick.
 var pheromones: Array = []
 var events: Array = []
+# Bounded, read-only presentation journal; audio never consumes gameplay events.
+const SOUND_EVENT_LIMIT := 64
+var sound_events: Array = []
+var sound_sequence := 0
+var sound_recent: Dictionary = {}
 var pending_replacements: Array = []
 var next_id := 1
 var inherited_lineages: Dictionary = {}
@@ -169,6 +174,22 @@ func spawn_particle(kind: int, p: Vector2, v: Vector2 = Vector2.ZERO, amount: fl
 		particles[-1].expires_at = time-log(maxf(rng.randf(),0.000000001))/PHEROMONE_DECAY
 		pheromones.append(particles[-1])
 	grid.insert(particles.size()-1,particles[-1].p)
+
+func _record_sound(kind: String, at: Vector2, source: int, amount: float = 1.0) -> void:
+	var key := kind+":"+str(source)
+	if sound_recent.has(key) and time-sound_recent[key].time < 0.1:
+		sound_recent[key].amount = minf(8,sound_recent[key].amount+amount)
+		return
+	sound_sequence += 1
+	var event := {"sequence":sound_sequence,"kind":kind,"at":Medium.wrap_position(at),"source":source,"amount":amount,"time":time,"key":key}
+	if sound_events.size() < SOUND_EVENT_LIMIT:
+		sound_events.append(event)
+	else:
+		var slot := (sound_sequence-1)%SOUND_EVENT_LIMIT
+		var old: Dictionary = sound_events[slot]
+		if sound_recent.has(old.key) and sound_recent[old.key].sequence == old.sequence: sound_recent.erase(old.key)
+		sound_events[slot] = event
+	sound_recent[key] = event
 
 func _emit_pheromone(cell) -> Dictionary:
 	var direction := Vector2.from_angle(rng.randf()*TAU)
@@ -339,6 +360,7 @@ func _chemistry(dt: float) -> void:
 		respiration_loss += result.loss
 		recycled += result.recycled
 		for kind in result.events: chemistry_events[kind] += result.events[kind]
+		for cue in result.get("neutralizations",[]): _record_sound("neutralize",cue.at,cue.source,cue.amount)
 		return
 	# Unimolecular decay is stochastic. Pair reactions are deterministic contact
 	# rules: both binding patches must face their partner within 60 degrees.
@@ -416,6 +438,7 @@ func _react_pair(a: Dictionary, b: Dictionary, acid: float = 0.0) -> bool:
 		return true
 	if b.kind == ANTITOXIN and a.kind == TOXIN: return _react_pair(b,a,acid)
 	if a.kind == ANTITOXIN and b.kind == TOXIN:
+		_record_sound("neutralize",a.p,a.owner,b.amount)
 		a.kind = WASTE
 		a.amount += b.amount
 		b.alive = false
@@ -596,6 +619,7 @@ func _sense(cell, dt: float) -> void:
 	if cell.count("propulsion") == 0: cell.state = "DRIFTING · PORE PUMPING"
 
 func _feed(cell) -> void:
+	var before: float = cell.eaten
 	for organ in cell.organs:
 		if organ.kind != "feeding": continue
 		var mouth: Vector2 = cell.pore_center(organ)
@@ -624,6 +648,8 @@ func _feed(cell) -> void:
 			cell.oxygen += amount
 			p.amount -= amount
 			if p.amount <= 0.000001: p.alive = false
+
+	if cell.eaten > before: _record_sound("feeding",cell.position,cell.id,cell.eaten-before)
 
 func _metabolize(cell, dt: float) -> void:
 	# Storage mobilization bridges a food gap; it is not free ATP. It transfers
@@ -1081,5 +1107,6 @@ func divide_lineage() -> bool:
 	player = child
 	next_id += 1
 	evolution.offspring_id = child.id
+	_record_sound("division",child.position,child.id)
 	events.append({"type":"division","id":child.id,"time":time,"material":quote.total_material,"reserve_used":quote.material,"body_transferred":quote.body_transfer,"oxygen_transferred":child.oxygen,"atp_used":20})
 	return true
