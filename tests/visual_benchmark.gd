@@ -31,6 +31,7 @@ func run() -> void:
 				scene.preferences.bloom = bloom
 				scene.microscope_layer.material.set_shader_parameter("bloom_enabled",bloom)
 				var sim = scene.world
+				sim.background_biology = option("--biology","coarse") != "off"
 				sim.background_transport = option("--background","coarse") != "off"
 				if fixture == "dense":
 					var initial: Array = sim.particles.duplicate(true)
@@ -69,7 +70,7 @@ func run() -> void:
 					elapsed.append(now-prior)
 					prior = now
 				elapsed.sort()
-				print("VISUAL_BENCHMARK ",JSON.stringify({"stage":stage,"mode":mode,"fixture":fixture,"zoom":zoom,"camera":camera,"effective_zoom":scene.zoom/minf(scene.get_viewport_rect().size.x/sim.VIEW.x,scene.get_viewport_rect().size.y/sim.VIEW.y),"bloom":bloom,"frames":count,"median_ms":elapsed[count/2]/1000.0,"p95_ms":elapsed[mini(count-1,int(count*0.95))]/1000.0,"prepare_ms":scene.render_ms,"tick_ms":scene.simulation_ms,"cells":sim.active_cells,"particles":sim.active_particles,"background":sim.background_transport,"background_particles":sim.background_particles,"renderer":RenderingServer.get_video_adapter_name(),"music":scene.music.enabled,"music_ms":scene.music.render_usec/1000.0,"music_peak_ms":scene.music.peak_render_usec/1000.0,"audio_skips":scene.music.skips,"music_ready":scene.music.ready_bank}))
+				print("VISUAL_BENCHMARK ",JSON.stringify({"stage":stage,"mode":mode,"fixture":fixture,"zoom":zoom,"camera":camera,"effective_zoom":scene.zoom/minf(scene.get_viewport_rect().size.x/sim.VIEW.x,scene.get_viewport_rect().size.y/sim.VIEW.y),"bloom":bloom,"frames":count,"median_ms":elapsed[count/2]/1000.0,"p95_ms":elapsed[mini(count-1,int(count*0.95))]/1000.0,"prepare_ms":scene.render_ms,"tick_ms":scene.simulation_ms,"cells":sim.active_cells,"particles":sim.active_particles,"biology":sim.background_biology,"biology_us":sim.profile_usec.get("offscreen_biology",0),"background":sim.background_transport,"background_particles":sim.background_particles,"renderer":RenderingServer.get_video_adapter_name(),"music":scene.music.enabled,"music_ms":scene.music.render_usec/1000.0,"music_peak_ms":scene.music.peak_render_usec/1000.0,"audio_skips":scene.music.skips,"music_ready":scene.music.ready_bank}))
 				if output != "" and fixture == "normal" and mode == "frozen":
 					await RenderingServer.frame_post_draw
 					root.get_texture().get_image().save_png(output+"/"+stage+"-"+str(int(zoom*100))+"-"+("bloom" if bloom else "flat")+".png")

@@ -43,6 +43,7 @@ func _run() -> void:
 	_test_wrap_and_dormancy()
 	preload("res://tests/visibility.gd").run(expect)
 	preload("res://tests/offscreen_transport.gd").run(expect)
+	preload("res://tests/offscreen_ecology.gd").run(expect)
 	_test_contacts()
 	preload("res://tests/contacts.gd").run(expect)
 	_test_chemistry()
@@ -257,15 +258,14 @@ func _test_wrap_and_dormancy() -> void:
 	var distant = sim._make_cell(Vector2(1900,1200),"grazer")
 	var location: Vector2 = distant.position
 	var reserve: float = distant.biomass
-	var shape = distant.membrane.points.duplicate()
 	sim.spawn_particle(Sim.WASTE,distant.position,Vector2(25,0),2)
 	var dormant_packet: Dictionary = sim.particles[-1]
 	var stored = dormant_packet.duplicate(true)
-	for i in 30: sim.step(DT)
-	expect(distant.position == location and distant.biomass == reserve and distant.age == 0,"Offscreen organisms remain dormant")
-	expect(distant.membrane.points == shape,"Offscreen membrane is frozen")
+	for i in 120: sim.step(DT)
+	expect(distant.position != location and distant.biomass != reserve and distant.age > 0,"Offscreen organisms move and metabolize on their coarse clock")
+	expect(absf(distant.age+distant.coarse_elapsed-sim.time) < 0.0001,"Coarse scheduling retains all elapsed biology time")
 	expect(dormant_packet.p != stored.p and dormant_packet.age > 0,"Offscreen resources continue coarse transport")
-	expect(dormant_packet.kind == stored.kind and dormant_packet.amount == stored.amount,"Offscreen material chemistry remains dormant")
+	expect(dormant_packet.get("chemical_at",0) > 0,"Chemistry near a hidden cell advances on its coarse clock")
 	var corner: Vector2 = sim.screen_position(Vector2(4093,1200))
 	expect(absf(corner.x-(Sim.VIEW.x*0.5-7))<20,"Camera projects seam neighbors continuously")
 	expect(Fluid.visibility(Vector2(0,0),Vector2(0,0)) == 1,"Microscope center is fully active")

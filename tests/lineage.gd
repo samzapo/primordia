@@ -137,7 +137,7 @@ static func run(check: Callable) -> void:
 		else: run.metabolism_age = 16
 		run.advance(1,sim)
 		check.call(run.status == "lost","Final viability rejects "+condition+" despite earlier achievements")
-		var reason: String = {"empty ATP":"ATP below 10","offscreen":"dormant offscreen","stale metabolism":"no recent feeding"}[condition]
+		var reason: String = {"empty ATP":"ATP below 10","offscreen":"outside the observed area","stale metabolism":"no recent feeding"}[condition]
 		check.call(reason in run.ending,"The ending explains the specific missing condition")
 	# Specific rivals pay ordinary costs on existing population introductions.
 	sim = world()

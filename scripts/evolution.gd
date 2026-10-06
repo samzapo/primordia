@@ -198,7 +198,7 @@ func advance(dt: float, sim) -> void:
 			if sim.player.health < 50: reasons.append("health below 50%")
 			if sim.player.energy < 10: reasons.append("ATP below 10")
 			if metabolism_age > 15: reasons.append("no recent feeding or fixation")
-			if sim.player.activity <= 0.5: reasons.append("current body is dormant offscreen")
+			if sim.player.activity <= 0.5: reasons.append("current body is outside the observed area")
 			fail("EXPEDITION ENDED · "+", ".join(reasons)+".\nFamily history and discovered blueprints are retained.")
 
 func objective(sim) -> String:

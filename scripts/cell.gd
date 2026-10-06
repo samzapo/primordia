@@ -75,8 +75,13 @@ var oxygen_produced := 0.0
 var activity := 1.0
 var age := 0.0
 var dead := false
+# Unprocessed real time, never a growth/health multiplier.
+var coarse_elapsed := 0.0
+var coarse_due := 1.0
+var coarse_handling := 0.0
 
 func _init(identity: int = 0, at: Vector2 = Vector2.ZERO) -> void:
+	coarse_due = 0.25+fposmod(identity*0.61803398875,0.75)
 	id = identity
 	membrane = Membrane.new(radius,maxi(0,identity))
 	position = at

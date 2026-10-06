@@ -12,6 +12,8 @@ const ACTIVE_FADE := 64.0
 var velocity := PackedVector2Array()
 var activity := PackedFloat32Array()
 var driven := true
+# Only the serial coarse cell integrator may couple to distant cached nodes.
+var global_coupling := false
 var local_suction := true
 var active_indices := PackedInt32Array()
 var tide := PackedVector2Array()
@@ -86,10 +88,10 @@ func _weights(p: Vector2) -> float:
 	indices[1] = index(x+1,y)
 	indices[2] = index(x,y+1)
 	indices[3] = index(x+1,y+1)
-	weights[0] = (1-fx)*(1-fy)*activity[indices[0]]
-	weights[1] = fx*(1-fy)*activity[indices[1]]
-	weights[2] = (1-fx)*fy*activity[indices[2]]
-	weights[3] = fx*fy*activity[indices[3]]
+	weights[0] = (1-fx)*(1-fy)*(1.0 if global_coupling else activity[indices[0]])
+	weights[1] = fx*(1-fy)*(1.0 if global_coupling else activity[indices[1]])
+	weights[2] = (1-fx)*fy*(1.0 if global_coupling else activity[indices[2]])
+	weights[3] = fx*fy*(1.0 if global_coupling else activity[indices[3]])
 	return weights[0]+weights[1]+weights[2]+weights[3]
 
 func exchange(body, arm: Vector2, dt: float, strength: float = 16.0) -> Vector2:
@@ -157,7 +159,7 @@ func suction(body, mouth: Vector2, reach: float, power: float, dt: float) -> voi
 		for y in range(lo.y,mini(hi.y+1,lo.y+ROWS)):
 			for x in range(lo.x,mini(hi.x+1,lo.x+COLS)):
 				var candidate := index(x,y)
-				if activity[candidate] > 0: candidates.append(candidate)
+				if global_coupling or activity[candidate] > 0: candidates.append(candidate)
 	for i in candidates:
 		var at := Vector2(i%COLS+0.5,int(i/COLS)+0.5)*SIZE
 		var delta := offset(at,mouth)
@@ -165,7 +167,7 @@ func suction(body, mouth: Vector2, reach: float, power: float, dt: float) -> voi
 		if distance < 4 or distance >= reach: continue
 		var arm := offset(body.position,at)
 		if arm.length() < body.radius*0.65: continue
-		var falloff := pow(1-distance/reach,2.0)*activity[i]
+		var falloff := pow(1-distance/reach,2.0)*(1.0 if global_coupling else activity[i])
 		var desired := delta/distance*power
 		var change := (desired-velocity[i])*(1-exp(-dt*2.2*falloff))
 		velocity[i] += change

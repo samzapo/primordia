@@ -13,7 +13,7 @@ static func run(check: Callable) -> void:
 			check.call(absf(fluid._weights(edge)-1.0) < 0.00001,"Every fluid interpolation neighbor at the visible edge runs at full speed")
 		check.call(Medium.visibility(camera+Vector2(560,0),camera,half) == 1,"Simulation continues at full speed just beyond the visible rectangle")
 		check.call(is_equal_approx(Medium.visibility(camera+Vector2(596,0),camera,half),0.5),"Only the offscreen outer band slows simulation")
-		check.call(Medium.visibility(camera+Vector2(629,0),camera,half) == 0,"Distant offscreen state remains dormant")
+		check.call(Medium.visibility(camera+Vector2(629,0),camera,half) == 0,"Distant state exits detailed simulation")
 	_transport_and_chemistry(check)
 	var world = Sim.new(713)
 	world.evolution.enabled = false
@@ -36,7 +36,7 @@ static func run(check: Callable) -> void:
 	world.camera_position = Medium.wrap_position(world.camera_position-Vector2(1600,800))
 	var age: float = world.player.age
 	world.step(1.0/60)
-	check.call(world.player.age == age,"Moving the free camera away makes the entirely hidden cell dormant")
+	check.call(world.player.age == age and world.player.coarse_elapsed > 0,"An entirely hidden cell accrues time between coarse updates")
 
 static func _transport_and_chemistry(check: Callable) -> void:
 	var fast = Sim.new(981)

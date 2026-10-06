@@ -11,6 +11,12 @@ var build_waste := 0.0
 const Backend = preload("res://scripts/backend.gd")
 var kernels = Backend.create()
 var gpu_transport = null
+const Offscreen = preload("res://scripts/offscreen_ecology.gd")
+var offscreen_ecology = Offscreen.new()
+var background_biology := true
+var coarse_mode := false
+var coarse_event_at := 0.0
+var ecology_rng := RandomNumberGenerator.new()
 const Transport = preload("res://scripts/particle_transport.gd")
 var native_particles := kernels != null
 var native_fluid := kernels != null
@@ -99,6 +105,7 @@ func _init(seed_number: int = 20261004, profile: int = 0) -> void:
 	seed_value = seed_number
 	rng.seed = seed_number
 	background_rng.seed = seed_number ^ 0x51a7
+	ecology_rng.seed = seed_number ^ 0x719ab
 	evolution = Evolution.new(seed_number)
 	habitat = clampi(profile,0,2)
 	player.role = "player"
@@ -198,6 +205,7 @@ func spawn_particle(kind: int, p: Vector2, v: Vector2 = Vector2.ZERO, amount: fl
 		particles[-1].direction = Vector2.ZERO
 		particles[-1].expires_at = time-log(maxf(rng.randf(),0.000000001))/PHEROMONE_DECAY
 		pheromones.append(particles[-1])
+	particles[-1].chemical_at = time
 	particles[-1].transport_at = transport_clock
 	grid.insert(particles.size()-1,particles[-1].p)
 
@@ -217,7 +225,8 @@ func _record_sound(kind: String, at: Vector2, source: int, amount: float = 1.0) 
 		sound_events[slot] = event
 	sound_recent[key] = event
 
-func _emit_pheromone(cell) -> Dictionary:
+func _emit_pheromone(cell, emitted_at: float = -1.0) -> Dictionary:
+	if emitted_at < 0: emitted_at = time
 	var direction := Vector2.from_angle(rng.randf()*TAU)
 	var at: Vector2 = cell.position+cell.local_point(direction.angle()).rotated(cell.angle)
 	spawn_particle(PHEROMONE,at,Vector2.ZERO,0.2,cell.id,cell.radius)
@@ -230,7 +239,10 @@ func _emit_pheromone(cell) -> Dictionary:
 	# Value snapshots, never a Cell reference. Coordinates are deliberately old
 	# once the source moves; size and hostile anatomy can only update via new cues.
 	p.report = {"id":cell.id,"lineage":cell.lineage_id(),"at":cell.position,
-		"mass":cell.organic_mass(),"radius":cell.radius,"hostile":hostile,"defended":hostile or armored,"emitted_at":time}
+		"mass":cell.organic_mass(),"radius":cell.radius,"hostile":hostile,"defended":hostile or armored,"emitted_at":emitted_at}
+	p.expires_at -= maxf(0,time-emitted_at)
+	p.transport_at = maxf(0,transport_clock-(time-emitted_at))
+	if p.expires_at <= time: p.alive = false
 	return p
 
 func _pheromone_alive(p: Dictionary) -> bool:
@@ -269,6 +281,7 @@ func step(dt: float) -> void:
 		cell.previous_position = cell.position
 		cell.previous_angle = cell.angle
 		cell.activity = activity_for_cell(cell)
+		if background_biology: cell.activity = 1.0 if cell.activity > 0 else 0.0
 		if cell.activity > 0 and not cell.dead:
 			active_cells += 1
 			var local_dt: float = dt*cell.activity
@@ -289,6 +302,9 @@ func step(dt: float) -> void:
 			p.transport_jump = false
 	_chemistry(dt)
 	profile_usec["particles"] = Time.get_ticks_usec()-mark
+	mark = Time.get_ticks_usec()
+	if background_biology: offscreen_ecology.step(self,dt)
+	profile_usec["offscreen_biology"] = Time.get_ticks_usec()-mark
 	mark = Time.get_ticks_usec()
 	for cell in cells:
 		if cell.dead or cell.activity <= 0: continue
@@ -383,10 +399,12 @@ func _step_background_fluid(dt: float) -> void:
 		background_field_clock -= 0.25
 		if native_fluid:
 			fluid.velocity = kernels.fluid_step(fluid.velocity,far_activity,fluid.tide,0.25,fluid.driven)
+			if background_biology: acidity.values = kernels.acid_step(acidity.values,fluid.velocity,far_activity,0.25)
 		else:
 			fluid.activity = far_activity
 			fluid.active_indices = far_indices
 			fluid.step(0.25)
+			if background_biology: acidity.step(0.25,fluid)
 	fluid.activity = saved_activity
 	fluid.active_indices = saved_indices
 
@@ -448,7 +466,7 @@ func _move_particles(dt: float) -> void:
 	else:
 		background_particles = _transport_reference(far_ids,dt,background_rng,true)
 	# Swept stem contacts also apply to coarse material transport. Signals pass
-	# through every solid as before. No distant cell/chemistry work is scheduled.
+	# through every solid as before. Coarse biology/chemistry runs separately.
 	habitat_geometry.move_particles(particles,far_ids,revision,grid,native_particles)
 	for index in far_ids:
 		var p: Dictionary = particles[index]
@@ -457,28 +475,31 @@ func _move_particles(dt: float) -> void:
 	profile_usec["background_transport"] = Time.get_ticks_usec()-mark
 	if native_particles or gpu_transport != null: grid.rebuild(particles)
 
-func _chemistry(dt: float) -> void:
-	if native_particles:
+func _chemistry(dt: float, patch: Array[int] = [], background: bool = false) -> void:
+	if native_particles and not background:
 		var result: Dictionary = kernels.chemistry(particles,local_particle_ids(),acidity.values,player.position if camera_follows_player else camera_position,view_half,dt,revision,rng)
 		acidity.values = result.acid
 		respiration_loss += result.loss
 		recycled += result.recycled
 		for kind in result.events: chemistry_events[kind] += result.events[kind]
 		for cue in result.get("neutralizations",[]): _record_sound("neutralize",cue.at,cue.source,cue.amount)
+		if background_biology:
+			for index in local_particle_ids(): particles[index].chemical_at = time
 		return
 	# Unimolecular decay is stochastic. Pair reactions are deterministic contact
 	# rules: both binding patches must face their partner within 60 degrees.
-	var local_ids := local_particle_ids()
+	var local_ids := patch if background else local_particle_ids()
 	reaction_grid.clear()
 	for index in local_ids:
 		var p: Dictionary = particles[index]
-		p.reaction_activity = activity_at(p.p) if p.alive else 0.0
+		p.reaction_activity = (1.0 if background else activity_at(p.p)) if p.alive else 0.0
 		p.contact_radius = particle_radius(p.kind)*particle_scale(p.amount)
 		if p.reaction_activity > 0 and p.kind != PHEROMONE: reaction_grid.insert(index,p.p)
 	for index in local_ids:
 		var p: Dictionary = particles[index]
 		if not p.alive or p.kind == PHEROMONE: continue
-		var local_dt: float = dt*p.reaction_activity
+		var local_dt: float = maxf(0,time-p.get("chemical_at",time)) if background else dt*p.reaction_activity
+		p.chemical_at = time
 		if local_dt <= 0: continue
 		if p.kind in [ACID,BUFFER]:
 			var sign_value := 1.0 if p.kind == ACID else -1.0
@@ -584,6 +605,11 @@ func _react_pair(a: Dictionary, b: Dictionary, acid: float = 0.0) -> bool:
 		return true
 	return false
 
+func _event_count(rate: float, dt: float) -> int:
+	if not coarse_mode: return 1 if chance(rate,dt) else 0
+	# Match the expected count of the existing 60 Hz Bernoulli process.
+	return Offscreen.event_count(rng,60.0*(1.0-exp(-maxf(0,rate)/60.0))*dt)
+
 func chance(rate: float, dt: float) -> bool:
 	return rng.randf() < 1.0-exp(-maxf(0,rate)*maxf(0,dt))
 
@@ -600,10 +626,11 @@ func _photosynthesize(cell, dt: float) -> void:
 	for organ in cell.organs:
 		if organ.kind != "photosynthesis": continue
 		var light := light_at(cell.organ_position(organ))
-		if not chance(10*light*organ.scale*organ.scale*organ.hp/organ.max_hp*Genes.factor(organ,"sun" if light >= 0.5 else "shade"),dt): continue
+		var count := _event_count(10*light*organ.scale*organ.scale*organ.hp/organ.max_hp*Genes.factor(organ,"sun" if light >= 0.5 else "shade"),dt)
+		if count == 0: continue
 		# Light drives a coarse dissolved-carbon fixation event. Water is an
 		# implicit medium reservoir; oxygen units are not organic mass units.
-		var amount: float = minf(cell.carbon,0.35)
+		var amount: float = minf(cell.carbon,0.35*count)
 		if amount <= 0: continue
 		cell.carbon -= amount
 		cell.biomass += amount*0.35
@@ -803,7 +830,7 @@ func _secretion_needed(cell, organ: Dictionary, kind: int) -> bool:
 	var reach: float = 140*sqrt(organ.scale)
 	for index in grid.query(at,reach):
 		var packet: Dictionary = particles[index]
-		if not packet.alive or packet.kind != wanted or activity_at(packet.p) <= 0: continue
+		if not packet.alive or packet.kind != wanted or (not coarse_mode and activity_at(packet.p) <= 0): continue
 		if wanted == TOXIN and inherited_lineages.get(packet.owner,packet.owner) == cell.lineage_id(): continue
 		if Medium.offset(at,packet.p).length_squared() <= reach*reach: return true
 	return false
@@ -813,32 +840,37 @@ func _emit_and_attack(cell, dt: float) -> void:
 	cell.emission_clock -= dt
 	while cell.emission_clock <= 0:
 		cell.emission_clock += 1.0/PHEROMONE_RATE
-		_emit_pheromone(cell)
-	if cell.carbon > (3.0 if cell.count("photosynthesis") == 0 else 20.0) and chance(5.0,dt):
-		var amount: float = minf(0.3,cell.carbon)
-		cell.carbon -= amount
-		spawn_particle(CARBON,cell.position-Vector2.from_angle(cell.angle)*(cell.radius+12),Vector2.ZERO,amount,cell.id)
+		_emit_pheromone(cell,maxf(0,coarse_event_at+cell.emission_clock-1.0/PHEROMONE_RATE) if coarse_mode else time)
+	if cell.carbon > (3.0 if cell.count("photosynthesis") == 0 else 20.0):
+		for event in _event_count(5.0,dt):
+			if cell.carbon <= (3.0 if cell.count("photosynthesis") == 0 else 20.0): break
+			var amount: float = minf(0.3,cell.carbon)
+			cell.carbon -= amount
+			spawn_particle(CARBON,cell.position-Vector2.from_angle(cell.angle)*(cell.radius+12),Vector2.ZERO,amount,cell.id)
 	for organ in cell.organs:
 		var kind: int = {"feeding":ENZYME,"neutralizing":ANTITOXIN,"acidifying":ACID,"regenerative":BUFFER}.get(organ.kind,-1)
 		var energy_cost := 0.15*Genes.factor(organ,"secretion_cost")
 		if kind < 0 or cell.biomass < 0.06 or cell.energy < energy_cost: continue
 		if kind != ENZYME and cell.energy < 12: continue
 		var rate := 0.35 if kind == ENZYME else 2.0
-		if not chance(rate*organ.scale*organ.scale*Genes.factor(organ,"secretion"),dt): continue
-		# Query only on a scheduled secretion attempt, rather than every tick.
-		if not _secretion_needed(cell,organ,kind): continue
-		cell.biomass -= 0.06
-		cell.spend_energy(energy_cost,organ)
-		var direction: Vector2 = cell.local_point(organ.a).normalized().rotated(cell.angle)
-		spawn_particle(kind,cell.organ_position(organ)+direction*10,direction*18*Genes.factor(organ,"dispersal"),0.06,cell.id)
-		particles[-1].capacity = 0.25 if kind in [ACID,BUFFER] else 0.06
-		organ.charge_flash = 1
-		if cell == player and kind == ACID: evolution.record("acid",0.06)
+		for event in _event_count(rate*organ.scale*organ.scale*Genes.factor(organ,"secretion"),dt):
+			if cell.biomass < 0.06 or cell.energy < energy_cost: break
+			# Query only on a scheduled secretion attempt, rather than every tick.
+			if not _secretion_needed(cell,organ,kind): continue
+			cell.biomass -= 0.06
+			cell.spend_energy(energy_cost,organ)
+			var direction: Vector2 = cell.local_point(organ.a).normalized().rotated(cell.angle)
+			spawn_particle(kind,cell.organ_position(organ)+direction*10,direction*18*Genes.factor(organ,"dispersal"),0.06,cell.id)
+			particles[-1].capacity = 0.25 if kind in [ACID,BUFFER] else 0.06
+			organ.charge_flash = 1
+			if cell == player and kind == ACID: evolution.record("acid",0.06)
 	# Cellular stress also releases a material-bearing toxic byproduct.
-	if cell.health < 90 and cell.biomass > 0.08 and chance(0.6,dt):
-		cell.biomass -= 0.08
-		var direction := Vector2.from_angle(rng.randf()*TAU)
-		spawn_particle(TOXIN,cell.position+direction*(cell.radius+12),direction*24,0.08,cell.id)
+	if cell.health < 90 and cell.biomass > 0.08:
+		for event in _event_count(0.6,dt):
+			if cell.biomass <= 0.08: break
+			cell.biomass -= 0.08
+			var direction := Vector2.from_angle(rng.randf()*TAU)
+			spawn_particle(TOXIN,cell.position+direction*(cell.radius+12),direction*24,0.08,cell.id)
 
 	for organ in cell.organs:
 		if organ.kind != "toxin": continue
@@ -855,55 +887,61 @@ func _emit_and_attack(cell, dt: float) -> void:
 
 func _motion(dt: float) -> void:
 	for cell in cells:
-		if cell.dead or cell.activity <= 0: continue
-		var local_dt: float = dt*cell.activity
-		var previous: Vector2 = cell.position
-		var steering_power := 0.0
-		for organ in cell.organs:
-			if cell.energy <= 0: continue
-			var pursuing: bool = organ.kind in ["hunting","photosynthesis"] and organ.id == cell.target_organ_id and cell.target_memory > 0 and cell.target_mode in ["hunt","light"]
-			if organ.kind != "propulsion" and not pursuing: continue
-			var arm: Vector2 = cell.organ_position(organ)-cell.position
-			var power: float = (2600.0 if organ.kind == "propulsion" else 1100.0)*organ.scale*organ.scale*(organ.hp/organ.max_hp)*Genes.factor(organ,"thrust")
-			var energy_cost: float = local_dt*0.3*organ.scale*organ.scale*Genes.factor(organ,"motion_cost")
-			power *= minf(1,cell.energy/maxf(0.000001,energy_cost))
-			var impulse: Vector2 = cell.target.normalized()*power*local_dt
-			if fluid.deposit(cell.position+arm,-impulse):
-				cell.velocity += impulse/cell.mass
-				cell.angular_velocity += arm.cross(impulse)/cell.inertia
-				steering_power += power
-				cell.spend_energy(energy_cost,organ)
-		# Flagella can reverse their stroke to retreat while the receptor remains
-		# facing the threat. A paired steering impulse also acts on the medium.
-		if steering_power > 0:
-			var error := wrapf(cell.facing.angle()-cell.target_mouth-cell.angle,-PI,PI)
-			var torque := clampf(cell.inertia*(error*12-cell.angular_velocity*7),-steering_power*cell.radius,steering_power*cell.radius)
-			var arm: Vector2 = Vector2.from_angle(cell.angle)*cell.radius*0.8
-			if fluid.can_couple(cell.position+arm) and fluid.can_couple(cell.position-arm):
-				var impulse: Vector2 = arm.orthogonal().normalized()*torque*local_dt/(2*arm.length())
-				fluid.deposit(cell.position+arm,-impulse)
-				fluid.deposit(cell.position-arm,impulse)
-				cell.angular_velocity += torque*local_dt/cell.inertia
-		for i in 6:
-			var arm = Vector2.from_angle(TAU*i/6.0+cell.angle)*cell.radius
-			fluid.exchange(cell,arm,local_dt,15.0)
-		cell.angle = wrapf(cell.angle+cell.angular_velocity*local_dt,-PI,PI)
+		if not cell.dead and cell.activity > 0: _motion_cell(cell,dt*cell.activity)
+
+func _motion_cell(cell, local_dt: float) -> void:
+	var previous: Vector2 = cell.position
+	var steering_power := 0.0
+	for organ in cell.organs:
+		if cell.energy <= 0: continue
+		var pursuing: bool = organ.kind in ["hunting","photosynthesis"] and organ.id == cell.target_organ_id and cell.target_memory > 0 and cell.target_mode in ["hunt","light"]
+		if organ.kind != "propulsion" and not pursuing: continue
+		var arm: Vector2 = cell.organ_position(organ)-cell.position
+		var power: float = (2600.0 if organ.kind == "propulsion" else 1100.0)*organ.scale*organ.scale*(organ.hp/organ.max_hp)*Genes.factor(organ,"thrust")
+		var energy_cost: float = local_dt*0.3*organ.scale*organ.scale*Genes.factor(organ,"motion_cost")
+		power *= minf(1,cell.energy/maxf(0.000001,energy_cost))
+		var impulse: Vector2 = cell.target.normalized()*power*local_dt
+		if fluid.deposit(cell.position+arm,-impulse):
+			cell.velocity += impulse/cell.mass
+			cell.angular_velocity += arm.cross(impulse)/cell.inertia
+			steering_power += power
+			cell.spend_energy(energy_cost,organ)
+	# Flagella can reverse their stroke to retreat while the receptor remains
+	# facing the threat. A paired steering impulse also acts on the medium.
+	if steering_power > 0:
+		var error := wrapf(cell.facing.angle()-cell.target_mouth-cell.angle,-PI,PI)
+		var torque := clampf(cell.inertia*(error*12-cell.angular_velocity*7),-steering_power*cell.radius,steering_power*cell.radius)
+		var arm: Vector2 = Vector2.from_angle(cell.angle)*cell.radius*0.8
+		if fluid.can_couple(cell.position+arm) and fluid.can_couple(cell.position-arm):
+			var impulse: Vector2 = arm.orthogonal().normalized()*torque*local_dt/(2*arm.length())
+			fluid.deposit(cell.position+arm,-impulse)
+			fluid.deposit(cell.position-arm,impulse)
+			cell.angular_velocity += torque*local_dt/cell.inertia
+	for i in 6:
+		var arm = Vector2.from_angle(TAU*i/6.0+cell.angle)*cell.radius
+		fluid.exchange(cell,arm,local_dt,15.0)
+	cell.angle = wrapf(cell.angle+cell.angular_velocity*local_dt,-PI,PI)
+	if coarse_mode:
+		var moved: Array = habitat_geometry.move(previous,Medium.wrap_position(previous+cell.velocity*local_dt),cell.velocity,cell.extent())
+		cell.position = moved[0]
+		cell.velocity = moved[1]
+	else:
 		habitat_geometry.move_cell(cell,previous,Medium.wrap_position(previous+cell.velocity*local_dt),local_dt)
-		# Continuous sweep against other bodies catches high-speed crossings.
-		for other in cells:
-			if other == cell or other.dead: continue
-			var start = Medium.offset(other.position,previous)
-			var travel = Medium.offset(previous,cell.position)
-			if start.length() > (cell.extent()+other.extent())+travel.length(): continue
-			var distance: float = cell.support((-start).angle())+other.support(start.angle())
-			if start.length() < distance-0.2 or travel.length_squared() < 0.00001: continue
-			var t = clampf(-start.dot(travel)/travel.length_squared(),0,1)
-			if (start+travel*t).length() < distance:
-				var a = travel.length_squared()
-				var b = 2*start.dot(travel)
-				var c = start.length_squared()-distance*distance
-				var hit = (-b-sqrt(maxf(0,b*b-4*a*c)))/(2*a)
-				if hit >= 0 and hit <= 1: cell.position = Medium.wrap_position(previous+travel*hit)
+	# Continuous sweep against other bodies catches high-speed crossings.
+	for other in cells:
+		if other == cell or other.dead: continue
+		var start = Medium.offset(other.position,previous)
+		var travel = Medium.offset(previous,cell.position)
+		if start.length() > (cell.extent()+other.extent())+travel.length(): continue
+		var distance: float = cell.support((-start).angle())+other.support(start.angle())
+		if start.length() < distance-0.2 or travel.length_squared() < 0.00001: continue
+		var t = clampf(-start.dot(travel)/travel.length_squared(),0,1)
+		if (start+travel*t).length() < distance:
+			var a = travel.length_squared()
+			var b = 2*start.dot(travel)
+			var c = start.length_squared()-distance*distance
+			var hit = (-b-sqrt(maxf(0,b*b-4*a*c)))/(2*a)
+			if hit >= 0 and hit <= 1: cell.position = Medium.wrap_position(previous+travel*hit)
 
 func _contacts(dt: float) -> void:
 	for iteration in 5:
@@ -1136,6 +1174,7 @@ func _replace_population() -> void:
 		var role: String = pending.role
 		if evolution.enabled and evolution.tide >= 1 and evolution.newcomer_count%2 == 0: role = "hunter"
 		var replacement = _make_cell(at,role)
+		replacement.activity = 1.0 if activity_for_cell(replacement) > 0 else 0.0
 		evolution.newcomer(replacement,self)
 		evolution.arrival_budget = maxi(0,evolution.arrival_budget-1)
 		external_input += replacement.organic_mass()

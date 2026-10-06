@@ -22,7 +22,7 @@ func exchange(at: Vector2, amount: float) -> float:
 	return values[index]-before
 
 func step(dt: float, fluid) -> void:
-	# Transport only visible water; frozen regions keep their previous chemistry.
+	# The caller selects either the detailed region or its coarse complement.
 	for i in fluid.active_indices:
 		var at := Vector2(i%Medium.COLS+0.5,floori(float(i)/Medium.COLS)+0.5)*Medium.SIZE
 		var local_dt: float = dt*fluid.activity[i]

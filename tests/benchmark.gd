@@ -18,6 +18,7 @@ func run() -> void:
 	for zoom_string in option("--zooms","1,0.5,0.25,0.15").split(","):
 		for mode in modes:
 			var sim = Sim.new()
+			sim.background_biology = option("--biology","coarse") != "off"
 			sim.evolution.enabled = option("--economy","on") == "on"
 			sim.habitat_geometry.enabled = option("--plants","on") == "on"
 			if mode in ["native","fluid","all","gpu"] and sim.kernels == null:
@@ -40,7 +41,8 @@ func run() -> void:
 			sim.player.biomass *= growth
 			sim.player.update_geometry()
 			if growth != 1: sim.player.membrane = Sim.Cell.Membrane.new(sim.player.radius)
-			sim.view_half = Sim.VIEW*0.5/(zoom*minf(1,150.0/sim.player.radius))
+			var effective_zoom: float = zoom if option("--camera","diagnostic") == "play" else zoom*minf(1,150.0/sim.player.radius)
+			sim.view_half = Sim.VIEW*0.5/effective_zoom
 			var scale := int(option("--scale","1"))
 			var offspring := option("--offspring","off") == "on"
 			if offspring:
@@ -83,6 +85,6 @@ func run() -> void:
 				totals += Vector2(sim.active_cells,sim.active_particles)
 				for phase in sim.profile_usec: phases[phase] = phases.get(phase,0.0)+sim.profile_usec[phase]/float(count)
 			timings.sort()
-			print("BENCHMARK ",JSON.stringify({"case":mode,"plants":sim.habitat_geometry.enabled,"economy":sim.evolution.enabled,"zoom":zoom,"scale":scale,"growth":growth,"offspring":offspring,"deaths":deaths,"samples":count,"death_emission_ms":death_emission_us/1000.0,"max_ms":timings[-1]/1000.0,"median_ms":timings[count/2]/1000.0,"p95_ms":timings[mini(count-1,int(count*.95))]/1000.0,"p99_ms":timings[mini(count-1,int(count*.99))]/1000.0,"mean_active_cells":totals.x/count,"mean_active_particles":totals.y/count,"phase_mean_us":phases,"cpu":OS.get_processor_name(),"gpu_bridge":gpu.metrics if mode=="gpu" else {}}))
+			print("BENCHMARK ",JSON.stringify({"case":mode,"biology":sim.background_biology,"effective_zoom":effective_zoom,"plants":sim.habitat_geometry.enabled,"economy":sim.evolution.enabled,"zoom":zoom,"scale":scale,"growth":growth,"offspring":offspring,"deaths":deaths,"samples":count,"death_emission_ms":death_emission_us/1000.0,"max_ms":timings[-1]/1000.0,"median_ms":timings[count/2]/1000.0,"p95_ms":timings[mini(count-1,int(count*.95))]/1000.0,"p99_ms":timings[mini(count-1,int(count*.99))]/1000.0,"mean_active_cells":totals.x/count,"mean_active_particles":totals.y/count,"phase_mean_us":phases,"cpu":OS.get_processor_name(),"gpu_bridge":gpu.metrics if mode=="gpu" else {}}))
 	if gpu != null: gpu.close()
 	quit()
