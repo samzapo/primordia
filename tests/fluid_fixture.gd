@@ -10,11 +10,11 @@ static func packet_material(sim) -> float:
 			total += packet.amount+float(packet.get("product",0))
 	return total
 
-static func seed_packets(sim, count: int, distribution: String) -> bool:
+static func seed_packets(sim, count: int, distribution: String, sizes: String = "equal") -> bool:
 	var source: Array = []
 	for packet in sim.particles:
 		if packet.alive and packet.kind != sim.PHEROMONE: source.append(packet)
-	if count < source.size() or source.is_empty() or distribution not in ["uniform","clustered"] or count > 100000:
+	if count < source.size() or source.is_empty() or distribution not in ["uniform","clustered"] or count > 100000 or sizes not in ["equal","mixed"]:
 		return false
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 25171
@@ -26,8 +26,11 @@ static func seed_packets(sim, count: int, distribution: String) -> bool:
 		var copies := count/source.size()+(1 if j<count%source.size() else 0)
 		for k in copies:
 			var item: Dictionary = source[j].duplicate(true)
+			# Mixed-resolution fixture keeps one substantial source packet and
+			# splits its remaining material finely, preserving every source field.
+			var share: float = (0.85 if k == 0 else 0.15/(copies-1)) if sizes == "mixed" and copies > 1 else 1.0/copies
 			for key in ["amount","capacity","product"]:
-				if item.has(key): item[key] /= copies
+				if item.has(key): item[key] *= share
 			var at: Vector2
 			if distribution == "uniform":
 				at = sim.player.position+Vector2(rng.randf_range(-sim.view_half.x,sim.view_half.x),rng.randf_range(-sim.view_half.y,sim.view_half.y))*0.90

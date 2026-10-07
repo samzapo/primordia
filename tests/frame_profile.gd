@@ -9,6 +9,7 @@ func run() -> void:
 	var fluid_name := option("--fluid","current")
 	var packet_text := option("--chemicals","0")
 	var distribution := option("--distribution","uniform")
+	var sizes := option("--particle-sizes","equal")
 	var collisions := option("--particle-collisions","on")
 	if collisions not in ["on","off"]:
 		push_error("Particle collisions must be on or off")
@@ -18,7 +19,7 @@ func run() -> void:
 	var feedback := option("--fluid-feedback","on")
 	var dx_text := option("--fluid-dx","16")
 	var iterations_text := option("--fluid-iterations","0")
-	if fluid_name not in ["current","grid","pbf"] or not packet_text.is_valid_int() or int(packet_text) < 0 or int(packet_text) > 100000 or distribution not in ["uniform","clustered"] or frame_step not in ["live","fixed"]:
+	if fluid_name not in ["current","grid","pbf"] or not packet_text.is_valid_int() or int(packet_text) < 0 or int(packet_text) > 100000 or distribution not in ["uniform","clustered"] or sizes not in ["equal","mixed"] or frame_step not in ["live","fixed"]:
 		push_error("Invalid fluid/chemical comparison parameters")
 		quit(1)
 		return
@@ -54,6 +55,19 @@ func run() -> void:
 	scene.show_reaction_sparks = option("--sparks","on") == "on"
 	scene.set_particle_collisions(collisions == "on")
 	var sim = scene.world
+	var neighbors := option("--neighbors","legacy")
+	var cache := option("--neighbor-cache","off")
+	var metrics := option("--neighbor-metrics","on")
+	if neighbors not in ["legacy","packed","bvh","quadtree"] or cache not in ["on","off"] or metrics not in ["on","off"]:
+		push_error("Neighbor comparison requires legacy/packed/bvh/quadtree and on/off cache/metrics")
+		finish_scene(scene,1)
+		return
+	if sim.kernels != null:
+		sim.kernels.neighbor_configure(neighbors,cache == "on",metrics == "on")
+	elif neighbors != "legacy" or cache == "on":
+		push_error("Packed/BVH/quadtree/cache comparison requires native kernels")
+		finish_scene(scene,1)
+		return
 	var initial_player_biomass: float = sim.player.biomass
 	# Exercise real paid opening anatomy, not a free propulsion endowment.
 	for kind in (["propulsion","cilia"] if locomotion == "mixed" else ["propulsion"] if locomotion == "flagellum" else ["cilia"] if locomotion == "cilia" else []):
@@ -105,7 +119,7 @@ func run() -> void:
 	scene._update_world(1)
 	if int(packet_text)>0:
 		var material_before := Fixture.packet_material(sim)
-		if not Fixture.seed_packets(sim,int(packet_text),distribution):
+		if not Fixture.seed_packets(sim,int(packet_text),distribution,sizes):
 			push_error("Chemical count must cover the initial inventory")
 			finish_scene(scene,1)
 			return
@@ -138,6 +152,7 @@ func run() -> void:
 			return
 	for i in 30: await process_frame
 	if option("--mode","live") == "ticks":
+		if sim.kernels != null: sim.kernels.neighbor_reset_metrics()
 		var tick_rows: Array[float] = []
 		var phases := {}
 		sim.profiling = true
@@ -151,7 +166,7 @@ func run() -> void:
 		for key in phases: phases[key] /= tick_rows.size()
 		tick_rows.sort()
 		var tick_result := {"mode":"ticks","fluid":fluid_name,"locomotion":locomotion,"fixture":option("--fixture","dense"),"hotpaths":option("--hotpaths","all"),
-			"particle_collisions":sim.particle_collisions,"ticks":tick_rows.size(),"mean_ms":total/tick_rows.size(),"p95_ms":tick_rows[mini(tick_rows.size()-1,int(tick_rows.size()*0.95))],
+			"neighbors":neighbor_summary(sim),"particle_collisions":sim.particle_collisions,"ticks":tick_rows.size(),"mean_ms":total/tick_rows.size(),"p95_ms":tick_rows[mini(tick_rows.size()-1,int(tick_rows.size()*0.95))],
 			"phases_ms":phases,"particles":sim.particle_count(),"simulation_seconds":sim.time-sim_started,
 			"rng":str(sim.rng.state),"background_rng":str(sim.background_rng.state),"ecology_rng":str(sim.ecology_rng.state)}
 		if not save_result(tick_result,option("--output","")):
@@ -159,6 +174,7 @@ func run() -> void:
 			return
 		finish_scene(scene)
 		return
+	if sim.kernels != null: sim.kernels.neighbor_reset_metrics()
 	scene.begin_frame_trace()
 	scene.set_physics_process(option("--mode","live") != "frozen" and frame_step == "live")
 	var seconds := float(option("--seconds","0"))
@@ -172,8 +188,8 @@ func run() -> void:
 	var result := {"rows":rows,"fluid":fluid_name,"fluid_settings":sim.experimental_fluid.metrics if sim.experimental_fluid != null else {},
 		"fluid_feedback":feedback,
 		"fluid_quality":preload("res://tests/fluid_compare_gpu.gd").summary(sim.experimental_fluid) if sim.experimental_fluid != null else {},
-		"requested_chemicals":int(packet_text),"distribution":distribution,"frame_step":frame_step,"particle_collisions":sim.particle_collisions,
-		"chemistry_events":sim.chemistry_events.duplicate(),"material_remaining":Fixture.packet_material(sim),
+		"requested_chemicals":int(packet_text),"distribution":distribution,"particle_sizes":sizes,"frame_step":frame_step,"particle_collisions":sim.particle_collisions,
+		"neighbors":neighbor_summary(sim),"chemistry_events":sim.chemistry_events.duplicate(),"material_remaining":Fixture.packet_material(sim),
 		"packed_particles":sim.native_particle_pipeline,"particle_pool":sim.particle_pool,"pool_metrics":sim.kernels.pool_metrics() if sim.kernels != null else {},"particle_render_cache":sim.native_particle_render_cache,
 		"simulation_seconds":sim.time-sim_started,"rng":str(sim.rng.state),"background_rng":str(sim.background_rng.state),"ecology_rng":str(sim.ecology_rng.state),
 		"locomotion":locomotion,"player_radius":sim.player.radius,"player_biomass":sim.player.biomass,"seconds":seconds,"hotpaths":option("--hotpaths","all"),"mode":option("--mode","live"),"fixture":option("--fixture","dense"),"music":scene.music.enabled,
@@ -187,6 +203,9 @@ func run() -> void:
 	# Use the same immediate shutdown as the game's Quit action. Waiting for
 	# another compositor frame after capture can stall a headless display.
 	finish_scene(scene)
+
+func neighbor_summary(sim) -> Dictionary:
+	return sim.kernels.neighbor_metrics() if sim.kernels != null else {"backend":"script","cache":false,"instrumented":false}
 
 func finish_scene(scene, code: int = 0) -> void:
 	if scene.world.experimental_fluid != null: scene.world.experimental_fluid.close()

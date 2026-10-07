@@ -1,4 +1,5 @@
 #include "music_mixer.h"
+#include "chemical_neighbors.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -102,7 +103,8 @@ struct Particle {
   Dictionary d;
   Vector2 p, v, dir;
   double amount, capacity, active, radius, elapsed;
-  int kind, identity;
+  int kind, identity, neighbor_bin;
+  uint64_t handle=0;
   bool alive, reacted, initial_alive, initial_reacted;
   Vector2 initial_v;
   double initial_amount, initial_capacity;
@@ -448,11 +450,13 @@ class PrimordiaKernels : public RefCounted {
     slot.chemical_loaded=true;
   }
   std::vector<Particle> scratch;
-  std::vector<std::vector<int>> bins;
-  std::vector<int> occupied_bins;
+  ChemicalNeighbors neighbors;
 
 protected:
   static void _bind_methods() {
+    ClassDB::bind_method(D_METHOD("neighbor_configure", "backend", "cache", "metrics"), &PrimordiaKernels::neighbor_configure, DEFVAL(false), DEFVAL(false));
+    ClassDB::bind_method(D_METHOD("neighbor_metrics"), &PrimordiaKernels::neighbor_metrics);
+    ClassDB::bind_method(D_METHOD("neighbor_reset_metrics"), &PrimordiaKernels::neighbor_reset_metrics);
     ClassDB::bind_method(D_METHOD("pool_start"), &PrimordiaKernels::pool_start);
     ClassDB::bind_method(D_METHOD("pool_size"), &PrimordiaKernels::pool_size);
     ClassDB::bind_method(D_METHOD("pool_spawn"), &PrimordiaKernels::pool_spawn);
@@ -524,6 +528,25 @@ protected:
 
 public:
 
+  bool neighbor_configure(String backend, bool cache, bool metrics) {
+    int b=backend=="legacy" ? 0 : backend=="packed" ? 1 : backend=="bvh" ? 2 : backend=="quadtree" ? 3 : -1;
+    if (b<0) return false;
+    neighbors.configure(b,cache,metrics); return true;
+  }
+  void neighbor_reset_metrics() { neighbors.reset_metrics(); }
+  Dictionary neighbor_metrics() {
+    Dictionary d;
+    d["backend"]=neighbors.backend==0 ? "legacy" : neighbors.backend==1 ? "packed" : neighbors.backend==2 ? "bvh" : "quadtree";
+    d["cache"]=neighbors.caching; d["instrumented"]=neighbors.metrics;
+    d["index_builds"]=int64_t(neighbors.index_builds()); d["calls"]=int64_t(neighbors.chemistry_calls());
+    d["coarse_calls"]=int64_t(neighbors.coarse_calls()); d["cache_hits"]=int64_t(neighbors.cache_hits());
+    d["cache_misses"]=int64_t(neighbors.cache_misses()); d["cache_overflows"]=int64_t(neighbors.cache_overflows());
+    d["candidates"]=int64_t(neighbors.candidate_count()); d["owned_candidates"]=int64_t(neighbors.owned_count());
+    d["contacts"]=int64_t(neighbors.contact_count()); d["memory_bytes"]=int64_t(neighbors.memory_bytes());
+    d["index_build_ms"]=neighbors.build_time(); d["search_sort_ms"]=neighbors.search_time();
+    d["cache_build_ms"]=neighbors.cache_time();
+    return d;
+  }
   void pool_start(Array particles) {
     packet_slots.clear(); handles.clear(); signal_slots.clear();
     packet_positions.resize(0);
@@ -1558,17 +1581,13 @@ public:
     double max_radius = 0;
     scratch.clear();
     scratch.reserve(ids.size());
-    if (bins.empty())
-      bins.resize(256 * 160);
-    for (int id : occupied_bins) bins[id].clear();
-    occupied_bins.clear();
     for (int k = 0; k < ids.size(); ++k) {
       Particle p;
       p.identity=int64_t(ids[k]);
       PacketState *numeric=nullptr;
       if (packet_frame) {
         auto &slot=packet(p.identity); load_chemistry(slot); numeric=&slot.value; slot.chemical=true;
-        p.d=slot.d; p.p=numeric->p; p.v=numeric->v; p.dir=numeric->dir;
+        p.handle=slot.handle; p.d=slot.d; p.p=numeric->p; p.v=numeric->v; p.dir=numeric->dir;
         p.amount=numeric->amount; p.capacity=numeric->capacity; p.kind=numeric->kind;
         p.alive=numeric->alive; p.reacted=numeric->reacted==revision;
       } else {
@@ -1584,14 +1603,11 @@ public:
       if (clock >= 0 && !background) { if (numeric) { numeric->chemical_at=clock; packet_slots[p.identity].has_chemical_clock=true; } else p.d[keys.chemical_at]=clock; }
       p.radius = radii[p.kind] * std::clamp(std::sqrt(p.amount / .3), .8, 1.7);
       if (!numeric) { p.d[keys.reaction_activity]=p.active; p.d[keys.contact_radius]=p.radius; }
+      p.neighbor_bin=mod(int(std::floor(p.p.y/16)),160)*256+mod(int(std::floor(p.p.x/16)),256);
       scratch.push_back(p);
-      if (p.active > 0 && p.kind != 3) {
-        max_radius = std::max(max_radius, p.radius);
-        int id = mod(int(std::floor(p.p.y / 16)),160)*256 + mod(int(std::floor(p.p.x / 16)),256);
-        if (bins[id].empty()) occupied_bins.push_back(id);
-        bins[id].push_back(k);
-      }
+      if (p.active > 0 && p.kind != 3) max_radius=std::max(max_radius,p.radius);
     }
+    neighbors.begin(scratch,max_radius,background);
     for (int i = 0; i < int(scratch.size()); ++i) {
       auto &p = scratch[i];
       if (!p.alive || p.active <= 0 || p.kind == 3)
@@ -1622,113 +1638,106 @@ public:
       // Only omit bins beyond every possible cached contact radius. Keep
       // traversal order and a float-coordinate margin for boundary contacts.
       double reach = tight_bounds ? p.radius + max_radius + .001 : 18.;
-      int lx = std::floor((p.p.x - reach) / 16),
-          hx = std::floor((p.p.x + reach) / 16),
-          ly = std::floor((p.p.y - reach) / 16),
-          hy = std::floor((p.p.y + reach) / 16);
-      for (int x = lx; x <= hx && !p.reacted; ++x)
-        for (int y = ly; y <= hy && !p.reacted; ++y)
-          for (int j : bins[mod(y, 160) * 256 + mod(x, 256)]) {
-            // Original identity, not local traversal order, owns each unordered
-            // pair.
-            auto &b = scratch[j];
-            if (b.identity <= p.identity)
-              continue;
-            if (!b.alive || b.kind == 3 || b.reacted)
-              continue;
-            Vector2 d = delta(p.p, b.p);
-            double c = p.radius + b.radius, dist2 = d.length_squared();
-            if (dist2 > c * c)
-              continue;
-            double dist = std::sqrt(dist2);
-            Vector2 n = dist2 > .000001 ? d / dist : Vector2(1, 0);
-            const bool enzyme_pair = (p.kind == 6 && b.kind == 2) || (p.kind == 2 && b.kind == 6);
-            // Most chemistry and every separation impulse are acid-independent.
-            double a = (!lazy_acid || enzyme_pair) ? acid_sample(acid, p.p) : 0.;
-            double threshold = .5;
-            if (enzyme_pair)
-              threshold +=
-                  .46 * std::pow(std::clamp(std::abs(a - .4) / .4, 0., 1.), 2);
-            bool reacted = false;
-            if (p.dir.dot(n) >= threshold && b.dir.dot(-n) >= threshold) {
-              if (lazy_acid && ((p.kind == 2 && b.kind == 1) || (p.kind == 1 && b.kind == 2)))
-                a = acid_sample(acid, p.p);
-              Particle *u = &p, *v = &b;
-              if ((u->kind == 2 && v->kind == 6) ||
-                  (u->kind == 4 && v->kind == 7) ||
-                  (u->kind == 1 && (v->kind == 2 || v->kind == 4)) ||
-                  (u->kind == 4 && v->kind == 0))
-                std::swap(u, v);
-              if (u->kind == 6 && v->kind == 2 && a < .9) {
-                v->kind = 0;
-                recycled += v->amount;
-                ++events[5];
-                reacted = true;
-              } else if (u->kind == 7 && v->kind == 4) {
-                // Presentation samples are bounded; every chemical reaction still runs.
-                if (neutralizations.size() < 32) {
-                  Dictionary cue;
-                  cue["at"] = u->p;
-                  cue["source"] = u->d.get("owner", -1);
-                  cue["amount"] = v->amount;
-                  neutralizations.push_back(cue);
-                }
-                u->kind = 2;
-                u->amount += v->amount;
-                v->alive = false;
-                ++events[6];
-                reacted = true;
-              } else if ((u->kind == 8 || u->kind == 9) &&
-                         (v->kind == 8 || v->kind == 9) && u->kind != v->kind) {
-                double use = std::min(u->capacity, v->capacity);
-                u->capacity -= use;
-                v->capacity -= use;
-                if (u->capacity <= .000001)
-                  u->kind = 2;
-                if (v->capacity <= .000001)
-                  v->kind = 2;
-                reacted = true;
-              } else if (u->kind == 2 && v->kind == 1 &&
-                         v->amount >= u->amount * .15 && a < .8) {
-                double amount = u->amount;
-                u->kind = 0;
-                u->amount = amount * .6;
-                v->kind = 5;
-                v->amount = amount * .4;
-                recycled += amount * .6;
-                ++events[2];
-                reacted = true;
-              } else if (u->kind == 0 && v->kind == 4) {
-                u->kind = 2;
-                ++events[4];
-                reacted = true;
-              } else if (u->kind == v->kind &&
-                         (u->kind == 0 || u->kind == 2 || u->kind == 5 ||
-                          u->kind == 1) &&
-                         u->amount + v->amount <= 1.4) {
-                double total = u->amount + v->amount;
-                if (total <= 0)
-                  continue;
-                u->v = u->v.lerp(v->v, v->amount / total);
-                u->amount = total;
-                v->alive = false;
-                ++events[1];
-                reacted = true;
-              }
+      neighbors.visit(scratch,i,reach,[&](int j) {
+        auto &b = scratch[j];
+        if (b.identity <= p.identity) return false;
+        neighbors.owned_candidate();
+        if (!b.alive || b.kind == 3 || b.reacted) return false;
+        Vector2 d = delta(p.p, b.p);
+        double c = p.radius + b.radius, dist2 = d.length_squared();
+        if (dist2 > c * c)
+          return false;
+        neighbors.contact();
+        double dist = std::sqrt(dist2);
+        Vector2 n = dist2 > .000001 ? d / dist : Vector2(1, 0);
+        const bool enzyme_pair = (p.kind == 6 && b.kind == 2) || (p.kind == 2 && b.kind == 6);
+        // Most chemistry and every separation impulse are acid-independent.
+        double a = (!lazy_acid || enzyme_pair) ? acid_sample(acid, p.p) : 0.;
+        double threshold = .5;
+        if (enzyme_pair)
+          threshold +=
+              .46 * std::pow(std::clamp(std::abs(a - .4) / .4, 0., 1.), 2);
+        bool reacted = false;
+        if (p.dir.dot(n) >= threshold && b.dir.dot(-n) >= threshold) {
+          if (lazy_acid && ((p.kind == 2 && b.kind == 1) || (p.kind == 1 && b.kind == 2)))
+            a = acid_sample(acid, p.p);
+          Particle *u = &p, *v = &b;
+          if ((u->kind == 2 && v->kind == 6) ||
+              (u->kind == 4 && v->kind == 7) ||
+              (u->kind == 1 && (v->kind == 2 || v->kind == 4)) ||
+              (u->kind == 4 && v->kind == 0))
+            std::swap(u, v);
+          if (u->kind == 6 && v->kind == 2 && a < .9) {
+            v->kind = 0;
+            recycled += v->amount;
+            ++events[5];
+            reacted = true;
+          } else if (u->kind == 7 && v->kind == 4) {
+            // Presentation samples are bounded; every chemical reaction still runs.
+            if (neutralizations.size() < 32) {
+              Dictionary cue;
+              cue["at"] = u->p;
+              cue["source"] = u->d.get("owner", -1);
+              cue["amount"] = v->amount;
+              neutralizations.push_back(cue);
             }
-            if (reacted) {
-              // Capped presentation samples do not skip or alter chemistry.
-              if (reaction_points.size() < 64)
-                reaction_points.push_back(wrapv(p.p + d * .5));
-              p.reacted = b.reacted = true;
-              break;
-            }
-            if (collisions) {
-              Vector2 push = n * (c - dist) * .25;
-              p.v -= push * 8;
-              b.v += push * 8;
-            }
+            u->kind = 2;
+            u->amount += v->amount;
+            v->alive = false;
+            ++events[6];
+            reacted = true;
+          } else if ((u->kind == 8 || u->kind == 9) &&
+                     (v->kind == 8 || v->kind == 9) && u->kind != v->kind) {
+            double use = std::min(u->capacity, v->capacity);
+            u->capacity -= use;
+            v->capacity -= use;
+            if (u->capacity <= .000001)
+              u->kind = 2;
+            if (v->capacity <= .000001)
+              v->kind = 2;
+            reacted = true;
+          } else if (u->kind == 2 && v->kind == 1 &&
+                     v->amount >= u->amount * .15 && a < .8) {
+            double amount = u->amount;
+            u->kind = 0;
+            u->amount = amount * .6;
+            v->kind = 5;
+            v->amount = amount * .4;
+            recycled += amount * .6;
+            ++events[2];
+            reacted = true;
+          } else if (u->kind == 0 && v->kind == 4) {
+            u->kind = 2;
+            ++events[4];
+            reacted = true;
+          } else if (u->kind == v->kind &&
+                     (u->kind == 0 || u->kind == 2 || u->kind == 5 ||
+                      u->kind == 1) &&
+                     u->amount + v->amount <= 1.4) {
+            double total = u->amount + v->amount;
+            if (total <= 0)
+              return false;
+            u->v = u->v.lerp(v->v, v->amount / total);
+            u->amount = total;
+            v->alive = false;
+            ++events[1];
+            reacted = true;
           }
+        }
+        if (reacted) {
+          // Capped presentation samples do not skip or alter chemistry.
+          if (reaction_points.size() < 64)
+            reaction_points.push_back(wrapv(p.p + d * .5));
+          p.reacted = b.reacted = true;
+          return true;
+        }
+        if (collisions) {
+          Vector2 push = n * (c - dist) * .25;
+          p.v -= push * 8;
+          b.v += push * 8;
+        }
+        return false;
+      });
     }
     for (auto &p : scratch) {
       if (packet_frame) {
