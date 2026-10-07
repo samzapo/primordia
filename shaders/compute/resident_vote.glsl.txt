@@ -42,6 +42,7 @@ void main(){
   for(uint k=range.x;k<range.y;k++){
    uint j=order[k].y;if(j==i)continue;
    vec4 b=pose(j),bv=motion(j),bm=matter(j);
+   if(bv.w<0.||bv.w==3.)continue;
    // Canonical endpoint order gives exactly the same score at both ends.
    uint low=min(i,j),high=max(i,j);
    vec4 lp=pose(low),hp=pose(high);

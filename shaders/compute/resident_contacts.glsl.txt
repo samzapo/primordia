@@ -28,7 +28,7 @@ void main() {
   if(i<16u)stats[i]=0u;
   if(i<pc.padded) {
    uint cell=0xffffffffu;
-   if(i<pc.count && motion(i).w>=0. && motion(i).w!=3.)
+   if(i<pc.count && motion(i).w>=0. && (motion(i).w!=3. || pc.unused!=0u))
     cell=bin(ivec2(floor(mod(pose(i).xy,WORLD)/16.)));
    order[i]=uvec2(cell,i);
   }
@@ -59,7 +59,7 @@ void main() {
   for(int x=lo.x;x<=hi.x;x++)for(int y=lo.y;y<=hi.y;y++) {
    uvec2 range=ranges[bin(ivec2(x,y))];
    for(uint k=range.x;k<range.y;k++) {
-    uint j=order[k].y;if(j<=i)continue;
+    uint j=order[k].y;if(j<=i||motion(j).w==3.||motion(j).w<0.)continue;
     vec2 d=offset(at,pose(j).xy);float c=radius+matter(j).x*.5;
     if(dot(d,d)>c*c)continue;
     if(total<CAP)pairs[i*CAP+total]=j;

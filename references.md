@@ -382,3 +382,7 @@ The biological rules are unchanged. [Godot thread-safety documentation](https://
 ## Stable GPU binning and asynchronous capacity reservations (Revision 37)
 
 [AMD FidelityFX Parallel Sort](https://gpuopen.com/manuals/fidelityfx_sdk/techniques/parallel-sort/) describes count, prefix-scan and scatter stages. Primordia uses four stable four-bit passes to retain canonical bin/particle ordering while reducing dispatch overhead; this is a computational optimization, not a new biological law. [Godot RenderingDevice readback](https://docs.godotengine.org/en/stable/classes/class_renderingdevice.html#class-renderingdevice-method-buffer-get-data-async) documents asynchronous delivery after queued frames. Resident remaining-capacity accounts prevent duplicate allocation while those receipts are pending. They do not replace metabolism or confer extra material on cells.
+
+## Resident chemical perception (Revision 38)
+
+This revision implements the existing [pheromone-plume abstraction](#pheromone-plumes-and-chemical-perception) and [local nutrient-patch steering](#nutrient-patches-exploration-and-atp-headroom-revision-24) in GPU queries. It adds no biological mechanism: reports remain emission-time game metadata, and patch centroids remain an affordable spatial-sensing abstraction. The sources in those sections motivate chemical communication and patch exploitation, not literal digital organism identities or exact molecular coordinates. GPU batching and compact CPU receipts are engineering choices; see [Revision 38](docs/REVISION_38.md) for their limits.

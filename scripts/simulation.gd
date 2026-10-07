@@ -948,7 +948,9 @@ func _food_patch(bins: Dictionary, reach: float, cell) -> Dictionary:
 				"mass":total,"inner":center.length() <= inner}
 	return best
 
-func _sense(cell, dt: float) -> void:
+func _sense(cell, dt: float, received_by_organ: Dictionary = {}) -> void:
+	# Explicit diagnostic injection of completed local receptor results. Missing
+	# organs still query the authoritative CPU pool; ordinary calls are unchanged.
 	# A memory or in-flight signal cannot outlive its source organ.
 	cell.signals = cell.signals.filter(func(packet): return _signal_alive(cell,packet))
 	var held_organ: Dictionary = cell.organ_by_id(cell.target_organ_id)
@@ -976,12 +978,15 @@ func _sense(cell, dt: float) -> void:
 				continue
 			var food_bins: Dictionary = {}
 			var reports: Dictionary = {}
-			var candidates: Array = grid.query_kind(particles,receptor,reach,NUTRIENT if mode == "graze" else PHEROMONE)
+			var candidates: Array = [] if received_by_organ.has(organ.id) else grid.query_kind(particles,receptor,reach,NUTRIENT if mode == "graze" else PHEROMONE)
 			if profiling:
 				profile_counts["receptor_queries"] = profile_counts.get("receptor_queries",0)+1
 				profile_counts["receptor_candidates"] = profile_counts.get("receptor_candidates",0)+candidates.size()
 				if mode in ["hunt","flee"]: profile_counts["pheromone_queries"] = profile_counts.get("pheromone_queries",0)+1
-			if particle_pool:
+			if received_by_organ.has(organ.id):
+				food_bins = received_by_organ[organ.id].food
+				reports = received_by_organ[organ.id].reports
+			elif particle_pool:
 				var received: Dictionary = kernels.pool_sense(candidates,receptor,reach,cell.position,cell.id,cell.lineage_id(),time,mode == "graze")
 				food_bins = received.food
 				reports = received.reports
@@ -1021,7 +1026,7 @@ func _sense(cell, dt: float) -> void:
 				if weighted > best_score:
 					best_score = weighted
 					best = {"lineage":report.lineage,"score":score,"mode":mode,"id":report.id,"at":report.at,"a":organ.a,"organ_id":organ.id,"expires_at":detected.expires_at}
-			var patch: Dictionary = _food_patch(food_bins,reach,cell)
+			var patch: Dictionary = received_by_organ[organ.id].get("patch",{}) if received_by_organ.has(organ.id) else _food_patch(food_bins,reach,cell)
 			var food_score: float = _candidate_score(cell,strength,organ.id,"graze",-1)
 			if not patch.is_empty() and best_score < food_score:
 				best_score = food_score

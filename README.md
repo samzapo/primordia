@@ -226,3 +226,5 @@ opt-in complete-game CPU matching comparison. Whole-frame gains remain too
 small to justify changing the default; the GPU gameplay migration remains gated.
 
 Revision 37 makes the resident GPU grid substantially cheaper and adds bounded, finite feeding-capacity reservations for queued cell exchange. This remains an opt-in GPU experiment; ordinary gameplay retains the CPU engine. See [Revision 37](docs/REVISION_37.md) for matched outcomes, rendered particle-scene measurements, exchange latency, and remaining integration work.
+
+Revision 38 adds resident pheromone reports and grazing/hunting/flight queries to the GPU feeding bridge, with completed results driving existing CPU cell behavior and resource updates. Spreading receptor work lowers clustered diagnostic step time from 8.68 to 6.86 ms; this is subsystem throughput with shrinking clouds, not whole-game FPS. Desktop correctness/performance gate the integration; phone validation is a later target. See [Revision 38](docs/REVISION_38.md) for comparisons, bounds and remaining coupling work.

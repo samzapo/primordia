@@ -44,6 +44,18 @@ func configure_grid(backend: String) -> bool:
 	if _started or backend not in ["bitonic","radix"]: return false
 	grid_backend=backend
 	return true
+const Perception=preload("res://scripts/resident_perception.gd")
+var perception_enabled:=false
+var perception_spread_queries:=true
+var perception_time:=0.0
+var _perception: RefCounted
+var _perception_source:=""
+var _perception_initial:=PackedByteArray()
+func configure_perception(now: float=0.0) -> bool:
+	if _started or not exchange_enabled or exchange_queue_depth!=1 or exchange_resident_capacity or not is_finite(now) or now<0: return false
+	perception_enabled=true;perception_time=now
+	_perception=Perception.new()
+	return true
 const Exchange=preload("res://scripts/resident_exchange.gd")
 var exchange_enabled:=false
 var exchange_busy:=false
@@ -66,7 +78,7 @@ var exchange_fallbacks:=0
 var _exchange_source:=""
 var _exchange: RefCounted
 func configure_exchange(queue_depth: int=1, resident_capacity: bool=false) -> bool:
-	if _started or interaction_mode==0 or queue_depth<1 or queue_depth>8 or (queue_depth>1 and not resident_capacity): return false
+	if _started or perception_enabled or interaction_mode==0 or queue_depth<1 or queue_depth>8 or (queue_depth>1 and not resident_capacity): return false
 	exchange_enabled=true;exchange_queue_depth=queue_depth;exchange_resident_capacity=resident_capacity
 	_exchange_slots.resize(queue_depth);_exchange_slots.fill(false)
 	return true
@@ -89,12 +101,24 @@ func end_capacity_epoch() -> bool:
 	if not exchange_resident_capacity or exchange_inflight>0 or _closing: return false
 	_accounts_started=false;_account_ids.clear();_account_instances.clear();_account_caps.clear()
 	return true
-func exchange(cells: Array, emissions: Array=[], handles: Array=[], asynchronous: bool=true) -> bool:
+func exchange(cells: Array, emissions: Array=[], handles: Array=[], asynchronous: bool=true, queries: Array=[]) -> bool:
 	if not exchange_enabled or exchange_inflight>=exchange_queue_depth or _closing or not _initialized: return false
 	var batch:=Exchange.prepare(cells,emissions,handles)
 	if batch.has("error"): return false
-	if batch.body_count+batch.emit_count+batch.inspect_count==0: return false
+	if not perception_enabled and not queries.is_empty(): return false
+	if batch.body_count+batch.emit_count+batch.inspect_count+queries.size()==0: return false
+	var perception_batch: Dictionary={}
+	if perception_enabled:
+		perception_batch=_perception.prepare_batch(emissions,queries)
+		if perception_batch.has("error"): return false
 	if exchange_resident_capacity and not _reserve_accounts(cells): return false
+	if perception_enabled:
+		_perception.sources=perception_batch.sources
+		perception_batch.erase("sources")
+		batch.merge(perception_batch)
+		batch["source_count"]=_perception.sources.size()
+		batch["now"]=perception_time
+		batch["spread_queries"]=perception_spread_queries
 	var slot:=_exchange_slots.find(false)
 	_exchange_slots[slot]=true
 	exchange_inflight+=1;exchange_peak_inflight=maxi(exchange_peak_inflight,exchange_inflight)
@@ -106,15 +130,23 @@ func exchange(cells: Array, emissions: Array=[], handles: Array=[], asynchronous
 	RenderingServer.call_on_render_thread(_exchange_rd.bind(batch,asynchronous))
 	return true
 func _exchange_rd(batch: Dictionary, asynchronous: bool) -> void:
-	# Feeding needs a fresh grid after transport, projection or emission.
-	if batch.feed_count>0 and not _grid_valid: _prepare_grid_rd()
+	# Expiry is global, independent of camera or receptor presence.
+	if perception_enabled: _perception.dispatch(1,batch,batch.now,ceili(count/64.0))
+	# Sensing samples the same pre-feeding state for every receptor in this batch.
+	if (batch.feed_count>0 or batch.get("query_count",0)>0) and not _grid_valid: _prepare_grid_rd()
+	if perception_enabled:
+		exchange_upload_bytes+=_perception.upload(batch)
+		if batch.query_count>0: _perception.dispatch(4 if batch.spread_queries else 3,batch,batch.now,batch.query_count if batch.spread_queries else ceili(batch.query_count/64.0))
 	exchange_upload_bytes+=_exchange.upload(batch)
 	if batch.body_count>0 and batch.parallel_oxygen: _exchange.dispatch(4,batch,ceili(count/128.0))
 	_exchange.dispatch(1,batch,1)
+	if perception_enabled and batch.emit_count>0:
+		_perception.dispatch(2,batch,batch.now,ceili(batch.emit_count/64.0))
+		_perception.dispatch(1,batch,batch.now,ceili(count/64.0))
 	if batch.body_count>0: _exchange.dispatch(2,batch,ceili(count/128.0))
 	if batch.body_count>0 or batch.emit_count>0: _grid_valid=false
 	if batch.inspect_count>0: _exchange.dispatch(3,batch,ceili(batch.inspect_count/128.0))
-	var size: int=(batch.body_count+batch.feed_count+batch.emit_count+batch.inspect_count*4)*16
+	var size: int=(batch.body_count+batch.feed_count+batch.emit_count+batch.inspect_count*4+batch.get("query_count",0)*5)*16
 	var callback:=_exchange_received.bind(batch)
 	if asynchronous:
 		var error:=rd.buffer_get_data_async(_exchange.receipt_buffers[batch.ring_slot],callback,0,size)
@@ -124,6 +156,9 @@ func _exchange_rd(batch: Dictionary, asynchronous: bool) -> void:
 	callback.call(rd.buffer_get_data(_exchange.receipt_buffers[batch.ring_slot],0,size))
 func _exchange_received(bytes: PackedByteArray,batch: Dictionary) -> void:
 	var receipt:=Exchange.decode(bytes,batch)
+	if perception_enabled:
+		var at: int=(batch.body_count+batch.feed_count+batch.emit_count+batch.inspect_count*4)*16
+		receipt["senses"]=Perception.decode(bytes,at,batch.query_count)
 	receipt["serial"]=batch.serial;receipt["readback_bytes"]=bytes.size();receipt["ring_slot"]=batch.ring_slot
 	_exchange_main.call_deferred(receipt)
 func _exchange_main(receipt: Dictionary) -> void:
@@ -144,7 +179,7 @@ func configure_interactions(mode: String, acid: float = 0.4) -> bool:
 	interaction_mode=["off","contacts","collisions","chemistry"].find(mode)
 	acidity=acid
 	return true
-func initialize(values: PackedFloat32Array, velocity: PackedVector2Array) -> void:
+func initialize(values: PackedFloat32Array, velocity: PackedVector2Array, metadata: Array=[]) -> void:
 	if _started:
 		push_error("Resident pool already initialized");return
 	_started=true
@@ -163,6 +198,14 @@ func initialize(values: PackedFloat32Array, velocity: PackedVector2Array) -> voi
 			_ready_main.call_deferred(false,"Invalid particle kind, material or diameter");return
 		if exchange_enabled and values[k+11]!=0:
 			_ready_main.call_deferred(false,"Product reserves are not supported by the exchange prototype");return
+	if not perception_enabled and not metadata.is_empty():
+		_ready_main.call_deferred(false,"Metadata requires resident perception");return
+	if perception_enabled:
+		var initial: Dictionary=_perception.prepare_initial(values,metadata)
+		if initial.has("error"):
+			_ready_main.call_deferred(false,initial.error);return
+		_perception_initial=initial.bytes
+		_perception_source=FileAccess.get_file_as_string("res://shaders/compute/resident_perception.glsl.txt").replace("#[compute]","")
 	while padded_count<count: padded_count*=2
 	if exchange_enabled:
 		_exchange_source=FileAccess.get_file_as_string("res://shaders/compute/resident_exchange.glsl.txt").replace("#[compute]","")
@@ -223,6 +266,11 @@ func _initialize_rd(bytes: PackedByteArray, velocities: PackedByteArray) -> void
 		_exchange=Exchange.new()
 		if not _exchange.initialize(rd,state,count,contact_buffers[0],contact_buffers[1],_exchange_source,exchange_queue_depth):
 			_ready_main.call_deferred(false,"Cell exchange pipeline creation failed");return
+	if perception_enabled:
+		if not _perception.initialize(rd,state,_exchange.buffers[4],contact_buffers[0],contact_buffers[1],_exchange.receipt_buffers,_perception_initial,_perception_source,count):
+			_ready_main.call_deferred(false,"Resident perception creation failed");return
+		upload_bytes+=_perception_initial.size()
+		_perception_initial.clear()
 	upload_bytes += bytes.size()+velocities.size()
 	_ready_main.call_deferred(true,"")
 func _initialize_contacts() -> bool:
@@ -259,7 +307,7 @@ func _contact_pass(stage: int, groups: int, level: int = 0, stride: int = 0, com
 	params.resize(32)
 	params.encode_u32(0,count);params.encode_u32(4,padded_count);params.encode_u32(8,stage)
 	params.encode_u32(12,level);params.encode_u32(16,stride);params.encode_u32(20,interaction_mode)
-	params.encode_float(24,acidity);params.encode_u32(28,reaction_tick)
+	params.encode_float(24,acidity);params.encode_u32(28,(1 if perception_enabled else 0) if stage==0 else reaction_tick)
 	var index := (2 if stage==5 else 1) if commit else 0
 	var list := rd.compute_list_begin()
 	rd.compute_list_bind_compute_pipeline(list,contact_pipelines[index])
@@ -309,8 +357,9 @@ func _ready_main(ok: bool, reason: String) -> void:
 	ready.emit(ok,reason)
 func advance(dt: float, tick: int) -> void:
 	assert(dt>0 and dt<=2 and tick>=0 and tick<=0xffffffff and not _closing)
-	RenderingServer.call_on_render_thread(_advance_rd.bind(dt,tick))
-func _advance_rd(dt: float, tick: int) -> void:
+	if perception_enabled: perception_time+=dt
+	RenderingServer.call_on_render_thread(_advance_rd.bind(dt,tick,perception_time))
+func _advance_rd(dt: float, tick: int, now: float) -> void:
 	_grid_valid=false
 	var params := PackedByteArray()
 	params.resize(16);params.encode_u32(0,count);params.encode_float(4,dt);params.encode_u32(8,tick)
@@ -320,6 +369,7 @@ func _advance_rd(dt: float, tick: int) -> void:
 	rd.compute_list_set_push_constant(list,params,16)
 	rd.compute_list_dispatch(list,ceili(count/128.0),1,1)
 	rd.compute_list_end()
+	if perception_enabled: _perception.dispatch(1,{},now,ceili(count/64.0))
 	if interaction_mode>0: _contacts_rd()
 	dispatches += 1
 	# Main device submission and barriers are owned by the renderer. No submit/sync.
@@ -355,6 +405,7 @@ func _finish_close() -> void:
 	RenderingServer.call_on_render_thread(_close_rd)
 func _close_rd() -> void:
 	if rd != null:
+		if _perception!=null: _perception.close()
 		if _exchange!=null: _exchange.close()
 		if _radix!=null: _radix.close()
 		for resource in contact_sets+contact_pipelines+contact_shaders+contact_buffers+[bindings,pipeline,shader,state,flow]:
