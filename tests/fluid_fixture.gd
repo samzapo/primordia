@@ -3,6 +3,7 @@ extends RefCounted
 # preserve species, source snapshots and total amount/product/capacity. Placement
 # is controlled fixture data, not a new gameplay particle source.
 static func packet_material(sim) -> float:
+	if sim.particle_pool: return sim.kernels.pool_material()
 	var total := 0.0
 	for packet in sim.particles:
 		if packet.alive and packet.kind not in [sim.OXYGEN,sim.PHEROMONE]:

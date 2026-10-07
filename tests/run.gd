@@ -21,6 +21,7 @@ func _run() -> void:
 	preload("res://tests/performance.gd").run(expect)
 	preload("res://tests/fluid_options.gd").run(expect)
 	preload("res://tests/packed_particles.gd").run(expect)
+	preload("res://tests/particle_pool.gd").run(expect)
 	preload("res://tests/habitat.gd").run(expect)
 	preload("res://tests/porous_habitat.gd").run(expect)
 	preload("res://tests/art.gd").run(expect)

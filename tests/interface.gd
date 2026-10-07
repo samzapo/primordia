@@ -27,6 +27,7 @@ func settle() -> void:
 func run(test_host) -> void:
 	host = test_host
 	scene = load("res://scenes/pond.tscn").instantiate()
+	scene.use_particle_pool = false # Dictionary-edit fixtures; pool UI has separate checks.
 	host.root.add_child(scene)
 	scene.set_physics_process(false)
 	scene.set_process(false)
@@ -387,6 +388,7 @@ func run(test_host) -> void:
 		expect(is_equal_approx(scene.scale_bar.length_pixels/(fitted*factor)*0.2,scene.scale_bar.micrometers),"Physical scale stays calibrated through close editing and accessibility scaling")
 	await _lineage()
 	await _particles()
+	_native_pool()
 	scene.queue_free()
 	await host.process_frame
 
@@ -691,3 +693,45 @@ func _lineage() -> void:
 	expect(scene.world != sim and gene in scene.archive.discovered and not scene.archive.expeditions.is_empty(),"An explicit new expedition retains history and blueprint discoveries")
 	expect(scene.world.evolution.points == 3 and scene.world.evolution.learned.is_empty(),"Discoveries never create a free starting stat or AP advantage")
 	await host.process_frame
+
+func _native_pool() -> void:
+	var sim = Sim.new(271)
+	if sim.kernels == null: return
+	sim.cells = [sim.player]
+	sim.pending_replacements.clear()
+	sim.habitat_geometry.enabled = false
+	sim.particles.clear()
+	sim.pheromones.clear()
+	sim.grid.rebuild(sim.particles)
+	sim.spawn_particle(Sim.OXYGEN,sim.player.position+Vector2(220,30),Vector2.ZERO,0.3,900)
+	sim.particles[0].alive = false
+	sim.spawn_particle(Sim.ENZYME,sim.player.position+Vector2(180,0),Vector2.ZERO,0.3,900)
+	sim.enable_particle_pool()
+	scene.world = sim
+	scene.camera_locked = true
+	scene.build_open = false
+	scene.manual_zoom = 0.8
+	scene.focus_animating = false
+	scene._update_world(1)
+	var cursor: Vector2 = scene.camera_screen+Vector2(180,0)*scene.zoom
+	scene.inspector.update_lens(0,cursor,1,false)
+	var exports: int = sim.kernels.pool_metrics().exports
+	scene._sync_particles(1)
+	expect(sim.kernels.pool_metrics().exports==exports,"Native scene drawing reads the pool without particle snapshots")
+	scene.inspector.update_lens(0.2,cursor,1,true)
+	expect(not scene.inspector.hovered.is_empty() and scene.inspector.hovered.kind==Sim.ENZYME,"Native pool particles remain locally inspectable")
+	if scene.inspector.hovered.is_empty(): return
+	var handle: int = scene.inspector.hovered.packet._handle
+	sim._compact_particles()
+	sim.grid.rebuild(sim.particles)
+	scene.inspector.update_lens(0.1,cursor,1,true)
+	expect(not scene.inspector.hovered.is_empty() and scene.inspector.hovered.packet._handle==handle and scene.inspector.hovered.index==0,"The real lens keeps its handle through native slot compaction")
+	expect(scene.inspector.pick(scene.camera_screen,1).is_empty(),"Native picking still suppresses cell-adjacent particles")
+	sim._chemistry(100000)
+	scene.inspector.update_lens(0.1,cursor,1,true)
+	expect(scene.inspector.hovered.is_empty(),"A consumed/decayed native handle cannot leave a ghost lens")
+	scene._restart()
+	expect(scene.world.particle_pool==false,"Dictionary fixture restart honors its explicit ownership setting")
+	scene.use_particle_pool = true
+	scene._restart()
+	expect(scene.world.particle_pool and scene.world.particles.is_empty(),"Ordinary restart enables authoritative ownership by default")

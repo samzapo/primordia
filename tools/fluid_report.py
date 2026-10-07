@@ -28,6 +28,8 @@ def summarize(path):
         "hotpaths": data.get("hotpaths"),
         "packed_particles": data.get("packed_particles"),
         "particle_render_cache": data.get("particle_render_cache"),
+        "particle_pool": data.get("particle_pool"),
+        "pool_metrics": data.get("pool_metrics", {}),
         "final_random_states": {key: data.get(key) for key in ["rng", "background_rng", "ecology_rng"]},
         "quality": data.get("fluid_quality", {}),
         "settings": data.get("fluid_settings", {}),

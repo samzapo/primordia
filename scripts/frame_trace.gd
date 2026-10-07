@@ -59,8 +59,8 @@ func _post() -> void:
 			"render_setup_ms":RenderingServer.get_frame_setup_time_cpu(),
 			"draw_calls":RenderingServer.viewport_get_render_info(viewport,RenderingServer.VIEWPORT_RENDER_INFO_TYPE_CANVAS,RenderingServer.VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME),
 			"counts":counts.duplicate(),"cells":sim.cells.size(),"active_cells":sim.active_cells,
-			"views":game.views.size(),"particles":sim.particles.size(),"active_particles":sim.active_particles,
-			"background_particles":sim.background_particles,"pheromones":sim.pheromones.size(),
+			"views":game.views.size(),"particles":sim.particle_count(),"active_particles":sim.active_particles,
+			"background_particles":sim.background_particles,"pheromones":sim.pheromone_count(),
 			"audio_skips":game.music.skips,"audio_ready":game.music.ready_bank})
 	prior_post = now
 	ticks = 0

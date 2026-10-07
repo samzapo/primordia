@@ -14,6 +14,7 @@
 #include <godot_cpp/variant/callable.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
 #include <vector>
+#include <unordered_map>
 using namespace godot;
 namespace {
 constexpr double TAU = 6.283185307179586, PI = TAU / 2;
@@ -22,6 +23,12 @@ Vector2 wrapv(Vector2 p) { return Vector2(wrap(p.x, 4096), wrap(p.y, 2560)); }
 Vector2 delta(Vector2 a, Vector2 b) {
   return Vector2(wrap(b.x - a.x + 2048, 4096) - 2048,
                  wrap(b.y - a.y + 1280, 2560) - 1280);
+}
+// GDScript's Medium.offset evaluates component subtraction/wrap in doubles
+// before constructing Vector2. Preserve that order for migrated script consumers.
+Vector2 perception_delta(Vector2 a, Vector2 b) {
+  double x=double(b.x)-double(a.x), y=double(b.y)-double(a.y);
+  return Vector2(x-4096*std::floor((x+2048)/4096),y-2560*std::floor((y+1280)/2560));
 }
 int mod(int x, int n) { return (x % n + n) % n; }
 int node(int x, int y) { return mod(y, 40) * 64 + mod(x, 64); }
@@ -66,9 +73,8 @@ struct Keys {
   const Variant transport_jump = String("transport_jump");
   const Variant chemical_at = String("chemical_at");
 };
-// Numeric packet buffers persist, but a scoped frame imports public dictionaries
-// lazily. Transport mirrors stay current, chemical changes publish before
-// biology, and numeric poses continue into drawing; identity/metadata stay intact.
+// Ordinary scenes retain authoritative numeric slots plus sparse metadata.
+// The scoped dictionary handoff remains a separately selectable reference path.
 struct PacketState {
   Vector2 p, v, dir, previous;
   double angle, previous_angle, spin, age, amount, capacity, transport_at, chemical_at;
@@ -80,7 +86,8 @@ struct PacketSlot {
   Dictionary d;
   PacketState value{};
   ChemicalOriginal original;
-  uint64_t epoch = 0;
+  uint64_t epoch = 0, handle=0;
+  uint32_t mask=0;
   bool moved = false, chemical = false, transport_loaded=false, chemical_loaded=false;
   bool has_transport_clock=false, has_chemical_clock=false;
 };
@@ -124,6 +131,7 @@ protected:
                          &PrimordiaGrid::rebuild);
     ClassDB::bind_method(D_METHOD("update", "particles", "ids"),
                          &PrimordiaGrid::update);
+    ClassDB::bind_method(D_METHOD("rebuild_positions", "positions"), &PrimordiaGrid::rebuild_positions);
     ClassDB::bind_method(D_METHOD("update_positions", "positions", "ids"), &PrimordiaGrid::update_positions);
     ClassDB::bind_method(D_METHOD("insert", "id", "position"),
                          &PrimordiaGrid::insert);
@@ -157,6 +165,9 @@ public:
       Dictionary p = particles[i];
       insert(i, p[keys.p]);
     }
+  }
+  void rebuild_positions(PackedVector2Array positions) {
+    clear(); for (int i=0;i<positions.size();++i) insert(i,positions[i]);
   }
   void insert(int id, Vector2 p) {
     if (id >= int(locations.size())) locations.resize(id + 1, -1);
@@ -309,9 +320,95 @@ class PrimordiaKernels : public RefCounted {
   PackedVector2Array packet_positions;
   std::vector<RenderPacket> render_packets;
   std::array<std::vector<std::array<float,12>>,11> render_instances;
+
+  // The pool owns hot state. Metadata is sparse and never a second mutable pose.
+  bool pool_enabled=false;
+  uint64_t next_handle=1, pool_imports=0, pool_exports=0, pool_batches=0;
+  std::unordered_map<uint64_t,int> handles;
+  std::vector<int> signal_slots;
+  static constexpr uint32_t CLOCK_T=1, CLOCK_C=2, UPDATED=4, REACTED=8, JUMP=16;
+  PacketSlot import_slot(Dictionary d) {
+    PacketSlot s; auto &v=s.value;
+    v.p=d[keys.p]; v.previous=d.get(keys.previous,v.p); v.v=d.get(keys.v,Vector2());
+    v.angle=d.get(keys.angle,0.); v.previous_angle=d.get(keys.previous_angle,v.angle);
+    v.spin=d.get(keys.spin,0.); v.age=d.get(keys.age,0.); v.dir=d.get(keys.direction,Vector2());
+    v.kind=d[keys.kind]; v.alive=d.get(keys.alive,true);
+    v.amount=d[keys.amount]; v.capacity=d.get(keys.capacity,v.amount);
+    v.updated=d.get(keys.updated,-1); v.reacted=d.get(keys.reacted,-1);
+    v.transport_at=d.get(keys.transport_at,0.); v.chemical_at=d.get(keys.chemical_at,0.);
+    v.jump=d.get(keys.transport_jump,false);
+    for (auto pair : {std::pair<Variant,uint32_t>(keys.transport_at,CLOCK_T),{keys.chemical_at,CLOCK_C},
+                      {keys.updated,UPDATED},{keys.reacted,REACTED},{keys.transport_jump,JUMP}})
+      if (d.has(pair.first)) s.mask|=pair.second;
+    s.has_transport_clock=s.mask&CLOCK_T; s.has_chemical_clock=s.mask&CLOCK_C;
+    s.transport_loaded=s.chemical_loaded=true;
+    s.handle=next_handle++;
+    s.d=d.duplicate(true);
+    for (auto key : {keys.p,keys.previous,keys.v,keys.angle,keys.previous_angle,keys.spin,keys.age,
+                    keys.direction,keys.kind,keys.alive,keys.amount,keys.capacity,
+                    keys.updated,keys.reacted,keys.transport_at,keys.chemical_at,keys.transport_jump})
+      s.d.erase(key);
+    s.d.erase("_handle"); s.d.erase("_index"); s.d.erase(keys.reaction_activity); s.d.erase(keys.contact_radius);
+    ++pool_imports;
+    return s;
+  }
+  Dictionary snapshot(int id) {
+    if (id<0 || id>=int(packet_slots.size())) return Dictionary();
+    const auto &s=packet_slots[id]; const auto &v=s.value;
+    Dictionary d=s.d.duplicate(true);
+    d[keys.p]=v.p; d[keys.previous]=v.previous; d[keys.v]=v.v;
+    d[keys.angle]=v.angle; d[keys.previous_angle]=v.previous_angle; d[keys.spin]=v.spin;
+    d[keys.age]=v.age; d[keys.direction]=v.dir; d[keys.kind]=v.kind; d[keys.alive]=v.alive;
+    d[keys.amount]=v.amount; d[keys.capacity]=v.capacity;
+    if (s.mask&UPDATED) d[keys.updated]=v.updated;
+    if (s.mask&REACTED) d[keys.reacted]=v.reacted;
+    if (s.has_transport_clock) d[keys.transport_at]=v.transport_at;
+    if (s.has_chemical_clock) d[keys.chemical_at]=v.chemical_at;
+    if (s.mask&JUMP) d[keys.transport_jump]=v.jump;
+    d["_handle"]=int64_t(s.handle); d["_index"]=id;
+    ++pool_exports; return d;
+  }
+  // Small native consumers share these numeric reads/writes with the retained
+  // dictionary backend. No packet snapshot is made by a biological query.
+  struct Access {
+    PacketSlot *slot; Dictionary d; Keys *keys;
+    Variant get(Variant key, Variant fallback=Variant()) const {
+      if (!slot) return d.get(key,fallback);
+      const auto &v=slot->value;
+      if (key==keys->kind) return v.kind;
+      if (key==keys->alive) return v.alive;
+      if (key==keys->p) return v.p;
+      if (key==keys->previous) return v.previous;
+      if (key==keys->v) return v.v;
+      if (key==keys->direction) return v.dir;
+      if (key==keys->amount) return v.amount;
+      if (key==keys->angle) return v.angle;
+      if (key==keys->previous_angle) return v.previous_angle;
+      return slot->d.get(key,fallback);
+    }
+    int kind() const { return slot ? slot->value.kind : int(d[keys->kind]); }
+    bool alive() const { return slot ? slot->value.alive : bool(d[keys->alive]); }
+    Vector2 position() const { return slot ? slot->value.p : Vector2(d[keys->p]); }
+    double amount() const { return slot ? slot->value.amount : double(d[keys->amount]); }
+    Variant operator[](Variant key) const { return get(key); }
+    void set(Variant key,Variant value) {
+      if (!slot) { d[key]=value; return; }
+      auto &v=slot->value;
+      if (key==keys->alive) v.alive=value;
+      else if (key==keys->amount) v.amount=value;
+      else if (key==keys->p) v.p=value;
+      else if (key==keys->previous) v.previous=value;
+      else slot->d[key]=value;
+    }
+  };
+  Access access(Array particles,int id) {
+    return pool_enabled ? Access{&packet_slots[id],Dictionary(),&keys} :
+                          Access{nullptr,particles[id],&keys};
+  }
+
   PacketSlot &packet(int id) {
     auto &slot=packet_slots[id];
-    if (slot.epoch==packet_epoch) return slot;
+    if (pool_enabled || slot.epoch==packet_epoch) return slot;
     slot.epoch=packet_epoch;
     slot.moved=slot.chemical=slot.transport_loaded=slot.chemical_loaded=false;
     slot.d=packet_source[id];
@@ -327,7 +424,7 @@ class PrimordiaKernels : public RefCounted {
     return slot;
   }
   void load_transport(PacketSlot &slot) {
-    if (slot.transport_loaded) return;
+    if (pool_enabled || slot.transport_loaded) return;
     auto &v=slot.value; auto &o=slot.original; auto &d=slot.d;
     v.kind=d[keys.kind]; v.v=d[keys.v]; v.angle=d[keys.angle];
     v.age=d[keys.age]; v.spin=d[keys.spin];
@@ -335,7 +432,7 @@ class PrimordiaKernels : public RefCounted {
     slot.transport_loaded=true;
   }
   void load_chemistry(PacketSlot &slot) {
-    if (slot.chemical_loaded) return;
+    if (pool_enabled || slot.chemical_loaded) return;
     auto &v=slot.value; auto &o=slot.original; auto &d=slot.d;
     if (!slot.moved) {
       v.kind=d[keys.kind]; v.v=d[keys.v]; v.dir=d[keys.direction];
@@ -356,6 +453,25 @@ class PrimordiaKernels : public RefCounted {
 
 protected:
   static void _bind_methods() {
+    ClassDB::bind_method(D_METHOD("pool_start"), &PrimordiaKernels::pool_start);
+    ClassDB::bind_method(D_METHOD("pool_size"), &PrimordiaKernels::pool_size);
+    ClassDB::bind_method(D_METHOD("pool_spawn"), &PrimordiaKernels::pool_spawn);
+    ClassDB::bind_method(D_METHOD("pool_patch"), &PrimordiaKernels::pool_patch);
+    ClassDB::bind_method(D_METHOD("pool_snapshot"), &PrimordiaKernels::pool_snapshot);
+    ClassDB::bind_method(D_METHOD("pool_resolve"), &PrimordiaKernels::pool_resolve);
+    ClassDB::bind_method(D_METHOD("pool_snapshots"), &PrimordiaKernels::pool_snapshots);
+    ClassDB::bind_method(D_METHOD("pool_stop"), &PrimordiaKernels::pool_stop);
+    ClassDB::bind_method(D_METHOD("pool_metrics"), &PrimordiaKernels::pool_metrics);
+    ClassDB::bind_method(D_METHOD("pool_expire"), &PrimordiaKernels::pool_expire);
+    ClassDB::bind_method(D_METHOD("pool_compact"), &PrimordiaKernels::pool_compact);
+    ClassDB::bind_method(D_METHOD("pool_filter"), &PrimordiaKernels::pool_filter);
+    ClassDB::bind_method(D_METHOD("pool_sense"), &PrimordiaKernels::pool_sense);
+    ClassDB::bind_method(D_METHOD("pool_needed"), &PrimordiaKernels::pool_needed);
+    ClassDB::bind_method(D_METHOD("pool_decoys"), &PrimordiaKernels::pool_decoys);
+    ClassDB::bind_method(D_METHOD("pool_toxins"), &PrimordiaKernels::pool_toxins);
+    ClassDB::bind_method(D_METHOD("pool_exposure"), &PrimordiaKernels::pool_exposure);
+    ClassDB::bind_method(D_METHOD("pool_inspection"), &PrimordiaKernels::pool_inspection);
+    ClassDB::bind_method(D_METHOD("pool_material"), &PrimordiaKernels::pool_material);
     ClassDB::bind_method(D_METHOD("packet_begin", "particles"), &PrimordiaKernels::packet_begin);
     ClassDB::bind_method(D_METHOD("packet_end"), &PrimordiaKernels::packet_end);
     ClassDB::bind_method(D_METHOD("packet_positions"), &PrimordiaKernels::get_packet_positions);
@@ -407,7 +523,216 @@ protected:
   }
 
 public:
+
+  void pool_start(Array particles) {
+    packet_slots.clear(); handles.clear(); signal_slots.clear();
+    packet_positions.resize(0);
+    pool_enabled=true; packet_frame=true;
+    for (int i=0;i<particles.size();++i) pool_spawn(particles[i]);
+    render_packets.clear(); packet_touched.clear(); packet_source=Array(); render_source=Array();
+  }
+  int pool_size() const { return packet_slots.size(); }
+  int pool_spawn(Dictionary d) {
+    int id=packet_slots.size(); packet_slots.push_back(import_slot(d));
+    handles[packet_slots.back().handle]=id;
+    packet_positions.push_back(packet_slots.back().value.p);
+    if (packet_slots.back().value.kind==3) signal_slots.push_back(id);
+    return id;
+  }
+  void pool_patch(int id,Dictionary d) {
+    auto &s=packet_slots[id]; auto &v=s.value;
+    // Emission-time metadata/capacity corrections only, never a general sync.
+    if (d.has("report")) s.d["report"]=Dictionary(d["report"]).duplicate(true);
+    if (d.has("expires_at")) s.d["expires_at"]=d["expires_at"];
+    if (d.has(keys.capacity)) v.capacity=d[keys.capacity];
+    if (d.has(keys.transport_at)) { v.transport_at=d[keys.transport_at]; s.has_transport_clock=true; }
+    if (d.has(keys.alive)) v.alive=d[keys.alive];
+  }
+  Dictionary pool_snapshot(int id) { return snapshot(id); }
+  Dictionary pool_resolve(int64_t handle) {
+    auto found=handles.find(handle); return found==handles.end() ? Dictionary() : snapshot(found->second);
+  }
+  Array pool_snapshots() {
+    Array out; for (int i=0;i<pool_size();++i) out.push_back(snapshot(i)); return out;
+  }
+  Array pool_stop() {
+    Array out=pool_snapshots(); pool_enabled=false; packet_frame=false;
+    handles.clear(); signal_slots.clear(); packet_slots.clear(); packet_positions.resize(0);
+    invalidate_particle_render(); return out;
+  }
+  Dictionary pool_metrics() const {
+    Dictionary d; d["enabled"]=pool_enabled; d["particles"]=pool_enabled ? pool_size() : 0;
+    d["imports"]=int64_t(pool_imports); d["exports"]=int64_t(pool_exports);
+    d["consumer_batches"]=int64_t(pool_batches); d["mirror_writes"]=pool_enabled ? Variant(0) : Variant();
+    d["numeric_capacity_bytes"]=int64_t(packet_slots.capacity()*sizeof(PacketSlot));
+    d["signal_slots"]=int64_t(signal_slots.size()); return d;
+  }
+  int pool_expire(double time) {
+    int count=0;
+    for (int id : signal_slots) {
+      auto &s=packet_slots[id];
+      if (s.value.alive && double(s.d.get("expires_at",0.))<=time) {
+        s.value.alive=false; ++count;
+      }
+    }
+    return count;
+  }
+  int pool_compact(int cursor) {
+    int before=0, kept=0; handles.clear(); signal_slots.clear();
+    for (int i=0;i<pool_size();++i) {
+      if (!packet_slots[i].value.alive) continue;
+      if (i<cursor) ++before;
+      if (i!=kept) packet_slots[kept]=std::move(packet_slots[i]);
+      handles[packet_slots[kept].handle]=kept;
+      if (packet_slots[kept].value.kind==3) signal_slots.push_back(kept);
+      ++kept;
+    }
+    packet_slots.resize(kept); packet_positions.resize(kept);
+    for (int i=0;i<kept;++i) packet_positions.set(i,packet_slots[i].value.p);
+    return kept ? before%kept : 0;
+  }
+  TypedArray<int64_t> pool_filter(TypedArray<int64_t> ids,int kind,bool hidden,Vector2 camera,Vector2 half) {
+    ++pool_batches; TypedArray<int64_t> out;
+    for (int k=0;k<ids.size();++k) {
+      int id=ids[k]; const auto &v=packet_slots[id].value;
+      if (v.alive && (kind<0 || v.kind==kind) && (!hidden || activity(v.p,camera,half)<=0)) out.push_back(id);
+    }
+    return out;
+  }
+  Dictionary pool_sense(TypedArray<int64_t> ids,Vector2 receptor,double reach,Vector2 center,
+                        int owner,int lineage,double time,bool graze) {
+    ++pool_batches; Dictionary food,reports;
+    for (int k=0;k<ids.size();++k) {
+      auto &s=packet_slots[int64_t(ids[k])]; const auto &p=s.value;
+      if (!p.alive || int(s.d.get("owner",-1))==owner) continue;
+      double distance=perception_delta(receptor,p.p).length(); if (distance>reach) continue;
+      if (graze && p.kind==0 && p.amount>0) {
+        Vector2 d=perception_delta(center,p.p); Vector2 keyf=(d/std::max(80.,reach/4.)).floor();
+        Vector2i key(int(keyf.x),int(keyf.y));
+        if (!food.has(key)) {
+          Dictionary bin; bin["mass"]=0.; bin["moment"]=Vector2(); bin["nearest"]=d; bin["distance"]=distance; food[key]=bin;
+        }
+        Dictionary bin=food[key]; bin["mass"]=double(bin["mass"])+p.amount;
+        bin["moment"]=Vector2(bin["moment"])+d*p.amount;
+        if (distance<double(bin["distance"])) { bin["nearest"]=d; bin["distance"]=distance; }
+      } else if (!graze && p.kind==3 && double(s.d.get("expires_at",0.))>time) {
+        Dictionary report=s.d.get("report",Dictionary());
+        if (report.is_empty() || int(report["lineage"])==lineage) continue;
+        Variant id=report["id"];
+        if (reports.has(id)) {
+          Dictionary seen=reports[id], old=seen["report"];
+          if (double(old["emitted_at"])>=double(report["emitted_at"])) continue;
+        }
+        Dictionary detected; detected["report"]=report; detected["distance"]=distance;
+        detected["expires_at"]=s.d["expires_at"]; reports[id]=detected;
+      }
+    }
+    Dictionary out; out["food"]=food; out["reports"]=reports; return out;
+  }
+  bool pool_needed(TypedArray<int64_t> ids,Vector2 at,double reach,int wanted,bool coarse,
+                   int lineage,Dictionary inherited,Vector2 camera,Vector2 half) {
+    ++pool_batches;
+    for (int k=0;k<ids.size();++k) {
+      const auto &s=packet_slots[int64_t(ids[k])]; const auto &p=s.value;
+      if (!p.alive || p.kind!=wanted || (!coarse && activity(p.p,camera,half)<=0)) continue;
+      int owner=s.d.get("owner",-1);
+      if (wanted==4 && int(inherited.get(owner,owner))==lineage) continue;
+      if (perception_delta(at,p.p).length_squared()<=reach*reach) return true;
+    }
+    return false;
+  }
+  void pool_decoys(TypedArray<int64_t> ids,Object *cell,Dictionary organ,Dictionary inherited,
+                   Vector2 camera,Vector2 half) {
+    ++pool_batches;
+    Vector2 at=cell->call("organ_position",organ), forward=Vector2(cell->call("organ_normal",organ)).rotated(cell->get("angle"));
+    double radius=12*double(organ["scale"]); int lineage=cell->call("lineage_id");
+    for (int k=0;k<ids.size();++k) {
+      auto &s=packet_slots[int64_t(ids[k])]; auto &p=s.value; int owner=s.d.get("owner",-1);
+      if (!p.alive || p.kind!=10 || int(inherited.get(owner,owner))==lineage || activity(p.p,camera,half)<=0) continue;
+      Vector2 d=perception_delta(at,p.p); if (d.length()>radius+3.5*std::clamp(std::sqrt(p.amount/.3),.8,1.7)) continue;
+      Vector2 n=d.normalized(); if (forward.dot(n)<.25 || p.dir.dot(-n)<.5) continue;
+      organ["blocked"]=std::min(1.,double(organ["blocked"])+.65);
+      cell->set("waste",double(cell->get("waste"))+p.amount); p.alive=false;
+      cell->set("render_revision",int(cell->get("render_revision"))+1);
+    }
+  }
+  void pool_toxins(TypedArray<int64_t> ids,Array cells,Dictionary cell_bins,bool spatial,
+                     Dictionary inherited,Vector2 camera,Vector2 half,int player,Object *director) {
+    ++pool_batches;
+    for (int k=0;k<ids.size();++k) {
+      auto &s=packet_slots[int64_t(ids[k])]; auto &p=s.value;
+      if (!p.alive || p.kind!=4 || activity(p.p,camera,half)<=0) continue;
+      Array candidates;
+      if (spatial) candidates=cell_bins.get(Vector2i(mod(int(std::floor(p.p.x/128)),32),mod(int(std::floor(p.p.y/128)),20)),Array());
+      else for (int i=0;i<cells.size();++i) candidates.push_back(i);
+      int owner=s.d.get("owner",-1);
+      for (int i=0;i<candidates.size();++i) {
+        Object *cell=cells[int(candidates[i])];
+        if (bool(cell->get("dead")) || double(cell->get("activity"))<=0 ||
+            int(cell->call("lineage_id"))==int(inherited.get(owner,owner))) continue;
+        Vector2 d=perception_delta(cell->get("position"),p.p);
+        if (d.length()>double(cell->call("support",d.angle()))+5) continue;
+        double debris=cell->call("damage",p.amount*75,d.angle());
+        cell->set("waste",double(cell->get("waste"))+(debris+p.amount));
+        cell->set("death_hint","Membrane failed after toxin exposure");
+        if (owner==player) director->call("record","toxin",p.amount*75);
+        p.alive=false; break;
+      }
+    }
+  }
+  void pool_exposure(TypedArray<int64_t> ids,Object *cell,double dt,Dictionary inherited,
+                     Vector2 camera,Vector2 half,Ref<RandomNumberGenerator> rng) {
+    ++pool_batches; double radius=double(cell->call("extent"))+24; Vector2 at=cell->get("position");
+    int lineage=cell->call("lineage_id"); Array organs=cell->get("organs");
+    for (int k=0;k<ids.size();++k) {
+      auto &s=packet_slots[int64_t(ids[k])]; auto &p=s.value; int owner=s.d.get("owner",-1);
+      if (!p.alive || (p.kind!=4 && p.kind!=10) || activity(p.p,camera,half)>0 || int(inherited.get(owner,owner))==lineage) continue;
+      Vector2 d=perception_delta(at,p.p);
+      if (d.length()>radius || rng->randf()>=1-std::exp(-2*std::max(0.,dt))) continue;
+      if (p.kind==10) {
+        bool bound=false;
+        for (int i=0;i<organs.size();++i) {
+          Dictionary organ=organs[i]; String kind=organ["kind"];
+          if (kind!="feeding" && kind!="sensing" && kind!="hunting") continue;
+          Vector2 contact=perception_delta(cell->call("organ_position",organ),p.p);
+          if (contact.length()>12*double(organ["scale"])+3.5*std::clamp(std::sqrt(p.amount/.3),.8,1.7)) continue;
+          Vector2 forward=Vector2(cell->call("organ_normal",organ)).rotated(cell->get("angle")), n=contact.normalized();
+          if (forward.dot(n)<.25 || p.dir.dot(-n)<.5) continue;
+          organ["blocked"]=std::min(1.,double(organ["blocked"])+.65); bound=true; break;
+        }
+        if (!bound) continue;
+      }
+      p.alive=false; cell->set("waste",double(cell->get("waste"))+p.amount);
+      if (p.kind==4) {
+        double debris=cell->call("damage",p.amount*75,d.angle());
+        cell->set("waste",double(cell->get("waste"))+debris);
+        cell->set("death_hint","Membrane failed after toxin exposure");
+      }
+    }
+  }
+  Array pool_inspection(TypedArray<int64_t> ids,Vector2 at,double alpha,int revision,double time,double zoom) {
+    Array out;
+    static const double radii[]={4,2.5,3,2.5,5,3,4,4,3,3,3.5};
+    for (int k=0;k<ids.size();++k) {
+      int id=ids[k]; const auto &s=packet_slots[id]; const auto &p=s.value;
+      if (!p.alive || (p.kind==3 && double(s.d.get("expires_at",0.))<=time)) continue;
+      Vector2 pos=p.updated==revision ? p.previous+perception_delta(p.previous,p.p)*alpha : p.p;
+      double radius=radii[p.kind]*std::clamp(std::sqrt(p.amount/.3),.8,1.7)*zoom;
+      if (perception_delta(at,pos).length()*zoom<=std::max(radius+3,7.)+10) {
+        Dictionary candidate; candidate["index"]=id; candidate["packet"]=snapshot(id); out.push_back(candidate);
+      }
+    }
+    return out;
+  }
+  double pool_material() const {
+    double total=0;
+    for (const auto &s : packet_slots) if (s.value.alive && s.value.kind!=1 && s.value.kind!=3)
+      total+=s.value.amount+double(s.d.get("product",0.));
+    return total;
+  }
+
   void packet_begin(Array particles) {
+    if (pool_enabled) { packet_frame=true; return; }
     packet_source = particles;
     packet_frame = true;
     ++packet_epoch;
@@ -425,6 +750,7 @@ public:
     } else { render_revision=-1; packed_render_state=false; }
   }
   void particle_render_ready(Array particles,int revision) {
+    if (pool_enabled) return;
     if (!packed_render_state || !UtilityFunctions::is_same(render_source,particles)) {
       invalidate_particle_render(); return;
     }
@@ -432,6 +758,7 @@ public:
     render_revision=revision;
   }
   void packet_end() {
+    if (pool_enabled) { packet_frame=true; return; }
     if (!packet_frame) return;
     for (int id : packet_touched) {
       auto &slot=packet_slots[id]; auto &a=slot.value; const auto &b=slot.original;
@@ -706,7 +1033,7 @@ public:
     }
     auto &instances=render_instances;
     for (auto &batch : instances) batch.clear();
-    if (cache && (render_revision!=revision || render_count!=particles.size() ||
+    if (!pool_enabled && cache && (render_revision!=revision || render_count!=particles.size() ||
                   !UtilityFunctions::is_same(render_source,particles))) {
       render_source=particles; render_revision=revision; render_count=particles.size();
       ++render_epoch; render_packets.resize(particles.size());
@@ -714,8 +1041,12 @@ public:
     static const double radii[] = {4, 2.5, 3, 2.5, 5, 3, 4, 4, 3, 3, 3.5};
     for (int k = 0; k < ids.size(); ++k) {
       int id=ids[k];
-      RenderPacket fresh, *pose=cache ? &render_packets[id] : &fresh;
-      if (!cache || pose->epoch!=render_epoch) {
+      RenderPacket fresh, *pose=pool_enabled ? &fresh : cache ? &render_packets[id] : &fresh;
+      if (pool_enabled) {
+        const auto &v=packet_slots[id].value;
+        pose->p=v.p; pose->previous=v.previous; pose->angle=v.angle; pose->previous_angle=v.previous_angle;
+        pose->amount=v.amount; pose->kind=v.kind; pose->alive=v.alive; pose->updated=v.updated;
+      } else if (!cache || pose->epoch!=render_epoch) {
         Dictionary d=particles[id];
         pose->p=d[keys.p]; pose->previous=d[keys.previous];
         pose->angle=d[keys.angle]; pose->previous_angle=d[keys.previous_angle];
@@ -842,10 +1173,10 @@ public:
     bool photo = int(body->call("count","photosynthesis")) > 0;
     bool solid = bool(habitat->get("enabled")) && !bool(habitat->get("particles_permeable"));
     for (int k=0;k<ids.size();++k) {
-      Dictionary p = particles[int64_t(ids[k])];
-      int kind = p[keys.kind];
-      if (!bool(p[keys.alive]) || (kind != 0 && kind != 1 && kind != 5)) continue;
-      Vector2 at = p[keys.p];
+      auto p = access(particles,int64_t(ids[k]));
+      int kind = p.kind();
+      if (!p.alive() || (kind != 0 && kind != 1 && kind != 5)) continue;
+      Vector2 at = p.position();
       if (activity(at,camera,half) > 0 || delta(center,at).length() > radius) continue;
       double capacity = 0, rate = 0;
       if (kind == 0 && !mouth.is_empty()) {
@@ -861,10 +1192,10 @@ public:
         Array moved = habitat->call("move",center,at,Vector2(),0.,Array());
         if (bool(moved[2])) continue;
       }
-      double taken = std::min(double(p[keys.amount]),capacity);
-      p[keys.amount] = double(p[keys.amount])-taken;
+      double taken = std::min(p.amount(),capacity);
+      p.set(keys.amount,p.amount()-taken);
       invalidate_particle_render(int64_t(ids[k]));
-      if (double(p[keys.amount]) <= .000001) p[keys.alive] = false;
+      if (p.amount() <= .000001) p.set(keys.alive,false);
       if (kind == 1) oxygen += taken;
       else if (kind == 5) {
         carbon += taken;
@@ -894,24 +1225,24 @@ public:
     Object *membrane = body->get("membrane");
     PackedVector2Array outline = membrane->get("points");
     for (int k = 0; k < ids.size(); ++k) {
-      Dictionary p = particles[int64_t(ids[k])];
-      int kind = p[keys.kind];
-      if (!bool(p[keys.alive]) || (mouth ? kind != 0 : kind != 1 && kind != 5)) continue;
-      Vector2 at = p[keys.p];
+      auto p = access(particles,int64_t(ids[k]));
+      int kind = p.kind();
+      if (!p.alive() || (mouth ? kind != 0 : kind != 1 && kind != 5)) continue;
+      Vector2 at = p.position();
       if (activity(at,camera,half) <= 0) continue;
       Vector2 d = delta(center,at);
       double distance = d.length(), taken = 0;
       bool handled = false;
       if (mouth && distance <= reach) {
         handled = true;
-        taken = std::min(double(p[keys.amount]), std::max(0.,gut-substrate));
+        taken = std::min(p.amount(), std::max(0.,gut-substrate));
         substrate += taken;
         eaten += taken;
         if (int(p.get("owner",-1)) != owner) foreign += taken;
         if (taken > 0) body->call("consumed",organ,taken);
       } else if (!mouth && kind == 5 && photo && distance < extent+18) {
         handled = true;
-        taken = std::min(double(p[keys.amount]), std::max(0.,carbon_cap-carbon));
+        taken = std::min(p.amount(), std::max(0.,carbon_cap-carbon));
         carbon += taken;
         if (int(p.get("owner",-1)) != owner) foreign += taken;
       } else if (!mouth && kind == 1) {
@@ -937,14 +1268,14 @@ public:
         }
         if (distance < radius+14) {
           handled = true;
-          taken = std::min(double(p[keys.amount]), std::max(0.,oxygen_cap-oxygen));
+          taken = std::min(p.amount(), std::max(0.,oxygen_cap-oxygen));
           oxygen += taken;
         }
       }
       if (!handled) continue;
-      if (taken > 0) p[keys.amount] = double(p[keys.amount])-taken;
+      if (taken > 0) p.set(keys.amount,p.amount()-taken);
       invalidate_particle_render(int64_t(ids[k]));
-      if (double(p[keys.amount]) <= .000001) p[keys.alive] = false;
+      if (p.amount() <= .000001) p.set(keys.alive,false);
     }
     body->set("substrate",substrate); body->set("eaten",eaten);
     body->set("foreign_intake",foreign); body->set("oxygen",oxygen); body->set("carbon",carbon);
@@ -982,10 +1313,10 @@ public:
     }
     for (int k = 0; k < ids.size(); ++k) {
       int id = ids[k];
-      Dictionary p = particles[id];
-      if (!bool(p[keys.alive]) || int(p[keys.kind]) == 3)
+      auto p = access(particles,id);
+      if (!p.alive() || p.kind() == 3)
         continue;
-      Vector2 at = p[keys.p];
+      Vector2 at = p.position();
       if (activity(at, camera, half) <= 0)
         continue;
       bool changed = false;
@@ -1031,8 +1362,9 @@ public:
       }
       if (changed) {
         invalidate_particle_render(id);
-        p[keys.p] = at;
-        p[keys.previous] = at;
+        p.set(keys.p,at);
+        if (pool_enabled) packet_positions.set(id,at);
+        p.set(keys.previous,at);
       }
     }
   }
@@ -1052,7 +1384,7 @@ public:
                                       Vector2 camera, Vector2 half, double clock) {
     TypedArray<int64_t> out;
     for (int k=0;k<visits;++k) {
-      int id = (cursor+k)%particles.size();
+      int id = (cursor+k)%(pool_enabled ? packet_slots.size() : particles.size());
       if (packet_frame) {
         const auto &p=packet(id).value;
         if (p.alive && activity(p.p,camera,half)<=0 && p.transport_at<clock) out.push_back(id);
@@ -1069,9 +1401,10 @@ public:
       if (packet_frame) {
         auto &slot=packet(ids[k]); auto &p=slot.value;
         if (background || p.jump) {
-          if (!slot.moved) p.angle=slot.d[keys.angle];
+          if (!pool_enabled && !slot.moved) p.angle=slot.d[keys.angle];
           p.previous=p.p; p.previous_angle=p.angle;
           if (!background) p.jump=false;
+          if (pool_enabled) { slot.mask|=JUMP; continue; }
           slot.d[keys.previous]=p.previous;
           slot.d[keys.previous_angle]=p.previous_angle;
           if (!background) slot.d[keys.transport_jump]=p.jump;
@@ -1191,7 +1524,9 @@ public:
       if (packet_frame) {
         packet_slots[int64_t(ids[k])].moved=true;
         packet_positions.set(int64_t(ids[k]),p.p);
-        auto &slot=packet_slots[int64_t(ids[k])]; Dictionary &d=slot.d;
+        auto &slot=packet_slots[int64_t(ids[k])];
+        if (pool_enabled) { slot.mask|=UPDATED|JUMP; continue; }
+        Dictionary &d=slot.d;
         d[keys.updated]=p.updated; d[keys.previous]=p.previous; d[keys.transport_jump]=p.jump;
         if (clock>=0) d[keys.transport_at]=p.transport_at;
         d[keys.p]=p.p; d[keys.v]=p.v; d[keys.age]=p.age;
@@ -1388,7 +1723,7 @@ public:
       if (packet_frame) {
         auto &value=packet_slots[p.identity].value;
         value.v=p.v; value.kind=p.kind; value.amount=p.amount; value.capacity=p.capacity;
-        value.alive=p.alive; if (p.reacted) value.reacted=revision;
+        value.alive=p.alive; if (p.reacted) { value.reacted=revision; if (pool_enabled) packet_slots[p.identity].mask|=REACTED; }
         continue;
       }
       if (p.kind!=p.initial_kind || p.amount!=p.initial_amount || p.alive!=p.initial_alive)

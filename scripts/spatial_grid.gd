@@ -2,6 +2,7 @@ extends RefCounted
 ## Uniform grid for local chemical/receptor queries. Stable insertion order.
 var buckets: Dictionary = {}
 var native = null
+var pool = null
 var native_enabled := true
 var source_size := 0
 var incremental := true
@@ -23,6 +24,10 @@ func key_for(p: Vector2) -> Vector2i:
 	return Vector2i(posmod(cell.x,cols), posmod(cell.y,rows))
 
 func rebuild(particles: Array) -> void:
+	if pool != null:
+		native.rebuild_positions(pool.packet_positions())
+		source_size = pool.pool_size()
+		return
 	if native != null and native_enabled:
 		native.rebuild(particles)
 		source_size = particles.size()
@@ -32,6 +37,10 @@ func rebuild(particles: Array) -> void:
 	for i in particles.size(): insert(i,particles[i].p)
 
 func update(particles: Array, ids: Array) -> void:
+	if pool != null:
+		if source_size != pool.pool_size(): rebuild(particles)
+		else: native.update_positions(pool.packet_positions(),ids)
+		return
 	# Packet history may already be projected to a solid edge; native locations
 	# remember the actual bucket, independent of interpolation history.
 	if source_size != particles.size():
@@ -65,6 +74,10 @@ func move(i: int, old: Vector2, p: Vector2) -> void:
 	buckets[to].append(i)
 
 func query_kind_rect(particles: Array, position: Vector2, half_extent: Vector2, kind: int) -> Array[int]:
+	if pool != null:
+		var ids := query_rect(position,half_extent)
+		if not kind_queries: return ids
+		return pool.pool_filter(ids,kind,false,Vector2.ZERO,Vector2.ZERO)
 	if native != null and native_enabled and kind_queries:
 		return native.query_kind_rect(particles,position,half_extent,kind)
 	# Callers retain ordinary live/type checks; fallback preserves its traversal.

@@ -2,7 +2,7 @@
 
 A physics and chemistry simulation game about managing one small cell. Eat, grow and survive predation. **You never steer the cell:** its anatomy controls its behavior.
 
-This twenty-fourth playable revision uses **Godot 4.7.2**, a fixed-step simulation, deformable membranes, oriented chemical particles and procedural 2D artwork. Its vector artwork is authored in the project; cached particle textures and mipmaps generate automatically at runtime. The default Linux launcher builds a batched C++ GDExtension automatically; the GDScript reference backend remains available.
+This prototype uses **Godot 4.7.2**, a fixed-step simulation, deformable membranes, oriented chemical particles and procedural 2D artwork. Its vector artwork is authored in the project; cached particle textures and mipmaps generate automatically at runtime. The default Linux launcher builds a batched C++ GDExtension automatically; the GDScript reference backend remains available.
 
 ## Run with Steam Godot on Linux
 
@@ -198,3 +198,9 @@ Neither solver alone makes dense chemistry fast: particle transport, reactions a
 The native path now reuses numeric packet state between transport, grid updates and chemistry, then carries it into particle drawing. Feeding, toxin/decoy binding, membrane shunting, spawning and compaction refresh affected visuals; paused editing reads fresh state. Existing chemistry, finite material and sensing rules remain.
 
 [Revision 26](docs/REVISION_26.md) includes independent packing/render-cache measurements, 20k/50k/100k whole-frame tests at the 80% view, clustered clouds, large cells and live catch-up. This is the first migration stage: biological dictionaries still publish each tick, and dense particle soup has not reached the 60 FPS target.
+
+## Revision 27: native-owned particle state
+
+Ordinary native gameplay now keeps particles in a persistent C++ pool. Motion, chemistry, feeding, pheromone sensing, contact, offscreen biology and drawing share that state; per-tick dictionary mirrors are gone. Local inspection uses stable handles so the lens follows a particle through compaction.
+
+At the 80% view on the RTX 5080 workstation, matched initial 20k fixed-step whole-frame time falls from **71.3 to 23.5 ms**, about **67% less**. The live 20k fixture approaches real time, but frame stalls remain and particle counts shrink; sustained 20k at 60 FPS and larger soups remain unproven. Default gameplay density is unchanged. [Revision 27](docs/REVISION_27.md) documents 20k/50k/100k, clusters, large cells, hunters/cilia, audio and live catch-up tests, exact finite-ecology comparisons and the explicit fallback/snapshot interface.

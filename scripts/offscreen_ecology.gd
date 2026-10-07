@@ -61,9 +61,12 @@ func advance(sim, cell, elapsed: float, hidden: bool = true) -> void:
 	var mark := Time.get_ticks_usec() if sim.profiling else 0
 	if hidden:
 		var patch: Array[int] = []
-		for index in sim.grid.query(cell.position,cell.extent()+FEED_MARGIN+60):
-			var packet: Dictionary = sim.particles[index]
-			if packet.alive and sim.activity_at(packet.p) <= 0: patch.append(index)
+		if sim.particle_pool:
+			patch = sim.kernels.pool_filter(sim.grid.query(cell.position,cell.extent()+FEED_MARGIN+60),-1,true,sim.player.position if sim.camera_follows_player else sim.camera_position,sim.view_half)
+		else:
+			for index in sim.grid.query(cell.position,cell.extent()+FEED_MARGIN+60):
+				var packet: Dictionary = sim.particles[index]
+				if packet.alive and sim.activity_at(packet.p) <= 0: patch.append(index)
 		# Same oriented contact rules; timestamped unary chemistry prevents two
 		# nearby cells from charging the same packet twice for elapsed time.
 		sim._chemistry(0,patch,true)
@@ -206,6 +209,9 @@ static func _clear_path(sim, start: Vector2, end: Vector2) -> bool:
 func _exposure(sim, cell, dt: float) -> void:
 	# Actual toxin/decoy packets pay for offscreen exposure; no free poison DPS.
 	var radius: float = cell.extent()+24
+	if sim.particle_pool:
+		sim.kernels.pool_exposure(sim.grid.query(cell.position,radius),cell,dt,sim.inherited_lineages,sim.player.position if sim.camera_follows_player else sim.camera_position,sim.view_half,sim.rng)
+		return
 	for index in sim.grid.query(cell.position,radius):
 		var p: Dictionary = sim.particles[index]
 		if not p.alive or p.kind not in [sim.TOXIN,sim.DECOY] or sim.activity_at(p.p) > 0: continue

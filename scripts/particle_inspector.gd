@@ -72,12 +72,15 @@ func pick(screen: Vector2, alpha: float) -> Dictionary:
 	candidates_examined = 0
 	# Keep anatomy and feeding clouds visually quiet, including pheromones.
 	if _near_cell(at,alpha): return {}
-	if sim.grid.source_size != sim.particles.size(): sim.grid.rebuild(sim.particles)
+	if sim.grid.source_size != sim.particle_count(): sim.grid.rebuild(sim.particles)
 	var best := INF
 	var result := {}
 	# One neighboring-bucket query, with padding for one interpolated transport step.
-	for index in sim.grid.query(at,16/game.zoom+64):
-		var particle: Dictionary = sim.particles[index]
+	var ids: Array = sim.grid.query(at,16/game.zoom+64)
+	var candidates: Array = sim.kernels.pool_inspection(ids,at,alpha,sim.revision,sim.time,game.zoom) if sim.particle_pool else ids
+	for candidate in candidates:
+		var index: int = int(candidate.index) if sim.particle_pool else int(candidate)
+		var particle: Dictionary = candidate.packet if sim.particle_pool else sim.particles[index]
 		if not sim._pheromone_alive(particle): continue
 		candidates_examined += 1
 		var p: Vector2 = particle.p
@@ -99,12 +102,16 @@ func pick(screen: Vector2, alpha: float) -> Dictionary:
 
 func _tracked_pose(alpha: float) -> Dictionary:
 	var sim = game.world
+	if tracked_world == sim and sim.particle_pool and not tracked_packet.is_empty():
+		tracked_packet = sim.kernels.pool_resolve(tracked_packet.get("_handle",0))
+		if not tracked_packet.is_empty(): tracked_index = tracked_packet._index
 	if tracked_world != sim or tracked_packet.is_empty() or not sim._pheromone_alive(tracked_packet):
 		return {}
-	# Dictionaries retain identity through array compaction and native chemistry.
+	# The native handle resolves the current slot; the reference backend retains
+	# dictionary identity through compaction and chemistry.
 	# Only recover the index from neighboring buckets if the old slot has moved.
-	if tracked_index >= sim.particles.size() or not is_same(sim.particles[tracked_index],tracked_packet):
-		if sim.grid.source_size != sim.particles.size(): sim.grid.rebuild(sim.particles)
+	if not sim.particle_pool and (tracked_index >= sim.particle_count() or not is_same(sim.particles[tracked_index],tracked_packet)):
+		if sim.grid.source_size != sim.particle_count(): sim.grid.rebuild(sim.particles)
 		tracked_index = -1
 		for index in sim.grid.query(tracked_packet.p,1):
 			if is_same(sim.particles[index],tracked_packet):

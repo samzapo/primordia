@@ -41,6 +41,7 @@ func run() -> void:
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 	Engine.max_physics_steps_per_frame = int(option("--max-steps","8"))
 	var scene = load("res://scenes/pond.tscn").instantiate()
+	scene.use_particle_pool = false # Import after fixture setup and ablation switches.
 	root.add_child(scene)
 	scene.set_physics_process(false)
 	scene.music.enabled = option("--music","on") == "on"
@@ -111,6 +112,7 @@ func run() -> void:
 			return
 		backend.body_feedback_enabled = feedback == "on"
 		sim.experimental_fluid = backend
+	if "pool" not in switches and "legacy" not in switches: sim.enable_particle_pool()
 	# Ordinary profiles retain their old warmup. Chemical comparison measures
 	# initial finite clouds immediately after presentation/audio warmup.
 	if int(packet_text)==0:
@@ -142,7 +144,7 @@ func run() -> void:
 		tick_rows.sort()
 		var tick_result := {"mode":"ticks","fluid":fluid_name,"locomotion":locomotion,"fixture":option("--fixture","dense"),"hotpaths":option("--hotpaths","all"),
 			"ticks":tick_rows.size(),"mean_ms":total/tick_rows.size(),"p95_ms":tick_rows[mini(tick_rows.size()-1,int(tick_rows.size()*0.95))],
-			"phases_ms":phases,"particles":sim.particles.size(),"simulation_seconds":sim.time-sim_started,
+			"phases_ms":phases,"particles":sim.particle_count(),"simulation_seconds":sim.time-sim_started,
 			"rng":str(sim.rng.state),"background_rng":str(sim.background_rng.state),"ecology_rng":str(sim.ecology_rng.state)}
 		if not save_result(tick_result,option("--output","")):
 			finish_scene(scene,1)
@@ -164,7 +166,7 @@ func run() -> void:
 		"fluid_quality":preload("res://tests/fluid_compare_gpu.gd").summary(sim.experimental_fluid) if sim.experimental_fluid != null else {},
 		"requested_chemicals":int(packet_text),"distribution":distribution,"frame_step":frame_step,
 		"chemistry_events":sim.chemistry_events.duplicate(),"material_remaining":Fixture.packet_material(sim),
-		"packed_particles":sim.native_particle_pipeline,"particle_render_cache":sim.native_particle_render_cache,
+		"packed_particles":sim.native_particle_pipeline,"particle_pool":sim.particle_pool,"pool_metrics":sim.kernels.pool_metrics() if sim.kernels != null else {},"particle_render_cache":sim.native_particle_render_cache,
 		"simulation_seconds":sim.time-sim_started,"rng":str(sim.rng.state),"background_rng":str(sim.background_rng.state),"ecology_rng":str(sim.ecology_rng.state),
 		"locomotion":locomotion,"player_radius":sim.player.radius,"player_biomass":sim.player.biomass,"seconds":seconds,"hotpaths":option("--hotpaths","all"),"mode":option("--mode","live"),"fixture":option("--fixture","dense"),"music":scene.music.enabled,
 		"engine":Engine.get_version_info().string,"cpu":OS.get_processor_name(),"gpu":RenderingServer.get_video_adapter_name(),

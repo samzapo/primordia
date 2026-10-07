@@ -121,6 +121,50 @@ var camera_position := Vector2(2048,1280)
 var camera_follows_player := true
 var chemistry_events := {"decay":0,"combine":0,"recycle":0,"detox":0,"spoil":0,"enzyme":0,"neutralize":0}
 
+
+# Native ownership is explicit: fixture dictionaries are imported once, and
+# thereafter empty. Snapshots are detached diagnostics, never an implicit getter.
+var particle_pool := false
+var last_spawn: Dictionary = {}
+var emitted_particles := 0
+
+func enable_particle_pool() -> bool:
+	if particle_pool: return true
+	if not _pool_supported(): return false
+	kernels.pool_start(particles)
+	particle_pool = true
+	grid.pool = kernels
+	particles = []
+	pheromones = []
+	grid.rebuild(particles)
+	return true
+
+func disable_particle_pool() -> void:
+	if not particle_pool: return
+	particles = kernels.pool_stop()
+	particle_pool = false
+	grid.pool = null
+	pheromones = particles.filter(func(p): return p.kind == PHEROMONE and p.alive)
+	grid.rebuild(particles)
+
+func _pool_supported() -> bool:
+	return kernels != null and native_particle_pipeline and native_particles and native_transport_bookkeeping and native_chemistry_writes and native_chemical_timestamps and native_background_chemistry and native_feeding and native_exclusion and native_particle_compaction and native_render and grid.native != null and grid.native_enabled and grid.incremental and gpu_transport == null and (not habitat_geometry.enabled or habitat_geometry.particles_permeable)
+
+func particle_count() -> int:
+	return kernels.pool_size() if particle_pool else particles.size()
+
+func pheromone_count() -> int:
+	return int(kernels.pool_metrics().signal_slots) if particle_pool else pheromones.size()
+
+func particle_snapshots() -> Array:
+	return kernels.pool_snapshots() if particle_pool else particles
+
+func particle_snapshot(index: int) -> Dictionary:
+	return kernels.pool_snapshot(index) if particle_pool else particles[index]
+
+func _commit_spawn_metadata() -> void:
+	if particle_pool: kernels.pool_patch(particle_count()-1,last_spawn)
+
 func _init(seed_number: int = 20261004, profile: int = 0) -> void:
 	seed_value = seed_number
 	rng.seed = seed_number
@@ -193,11 +237,11 @@ func local_particle_ids(margin: float = 0.0) -> Array[int]:
 	return visible_particle_ids(margin+Medium.ACTIVE_PAD+Medium.ACTIVE_FADE)
 
 func visible_particle_ids(margin: float = 0.0) -> Array[int]:
-	if grid.source_size != particles.size(): grid.rebuild(particles)
+	if grid.source_size != particle_count(): grid.rebuild(particles)
 	return grid.query_rect(player.position if camera_follows_player else camera_position,view_half+Vector2.ONE*margin)
 
 func local_particle_kind(kind: int) -> Array[int]:
-	if grid.source_size != particles.size(): grid.rebuild(particles)
+	if grid.source_size != particle_count(): grid.rebuild(particles)
 	return grid.query_kind_rect(particles,player.position if camera_follows_player else camera_position,view_half+Vector2.ONE*(Medium.ACTIVE_PAD+Medium.ACTIVE_FADE),kind)
 
 func install(kind: String, local_angle: float, mode: String = "graze", size: float = 1.0) -> bool:
@@ -215,23 +259,27 @@ func remove(index: int) -> bool:
 
 func spawn_particle(kind: int, p: Vector2, v: Vector2 = Vector2.ZERO, amount: float = 1.0, owner: int = -1, source_radius: float = 0.0) -> void:
 	if amount <= 0: return
-	if grid.source_size != particles.size(): grid.rebuild(particles)
-	particles.append({"kind":kind,"p":Medium.wrap_position(p),"previous":Medium.wrap_position(p),"v":v,"amount":amount,"age":0.0,"alive":true,"owner":owner,"source_radius":source_radius,"angle":rng.randf()*TAU,"previous_angle":0.0,"spin":rng.randfn(0,0.8),"direction":Vector2.RIGHT,"capacity":amount})
-	particles[-1].previous_angle = particles[-1].angle
-	particles[-1].direction = Vector2.from_angle(particles[-1].angle)
+	emitted_particles += 1
+	if grid.source_size != particle_count(): grid.rebuild(particles)
+	last_spawn = {"kind":kind,"p":Medium.wrap_position(p),"previous":Medium.wrap_position(p),"v":v,"amount":amount,"age":0.0,"alive":true,"owner":owner,"source_radius":source_radius,"angle":rng.randf()*TAU,"previous_angle":0.0,"spin":rng.randfn(0,0.8),"direction":Vector2.RIGHT,"capacity":amount}
+	last_spawn.previous_angle = last_spawn.angle
+	last_spawn.direction = Vector2.from_angle(last_spawn.angle)
 	if kind == PHEROMONE:
 		# Dissolved point tracers have no momentum, binding face or material budget.
-		particles[-1].v = Vector2.ZERO
-		particles[-1].angle = 0.0
-		particles[-1].previous_angle = 0.0
-		particles[-1].spin = 0.0
-		particles[-1].direction = Vector2.ZERO
-		particles[-1].expires_at = time-log(maxf(rng.randf(),0.000000001))/PHEROMONE_DECAY
-		pheromones.append(particles[-1])
-	if kernels != null: kernels.invalidate_particle_render(particles.size()-1)
-	particles[-1].chemical_at = time
-	particles[-1].transport_at = transport_clock
-	grid.insert(particles.size()-1,particles[-1].p)
+		last_spawn.v = Vector2.ZERO
+		last_spawn.angle = 0.0
+		last_spawn.previous_angle = 0.0
+		last_spawn.spin = 0.0
+		last_spawn.direction = Vector2.ZERO
+		last_spawn.expires_at = time-log(maxf(rng.randf(),0.000000001))/PHEROMONE_DECAY
+		if not particle_pool: pheromones.append(last_spawn)
+	last_spawn.chemical_at = time
+	last_spawn.transport_at = transport_clock
+	if particle_pool: kernels.pool_spawn(last_spawn)
+	else:
+		particles.append(last_spawn)
+		if kernels != null: kernels.invalidate_particle_render(particle_count()-1)
+	grid.insert(particle_count()-1,last_spawn.p)
 
 func _record_reaction(at: Vector2) -> void:
 	if activity_at(at) <= 0: return
@@ -262,7 +310,7 @@ func _emit_pheromone(cell, emitted_at: float = -1.0) -> Dictionary:
 	var direction := Vector2.from_angle(rng.randf()*TAU)
 	var at: Vector2 = cell.position+cell.local_point(direction.angle()).rotated(cell.angle)
 	spawn_particle(PHEROMONE,at,Vector2.ZERO,0.2,cell.id,cell.radius)
-	var p: Dictionary = particles[-1]
+	var p: Dictionary = last_spawn
 	var hostile := false
 	var armored := false
 	for organ in cell.organs:
@@ -275,12 +323,16 @@ func _emit_pheromone(cell, emitted_at: float = -1.0) -> Dictionary:
 	p.expires_at -= maxf(0,time-emitted_at)
 	p.transport_at = maxf(0,transport_clock-(time-emitted_at))
 	if p.expires_at <= time: p.alive = false
+	_commit_spawn_metadata()
 	return p
 
 func _pheromone_alive(p: Dictionary) -> bool:
 	return p.alive and (p.kind != PHEROMONE or p.get("expires_at",0.0) > time)
 
 func _expire_pheromones() -> void:
+	if particle_pool:
+		chemistry_events.decay += kernels.pool_expire(time)
+		return
 	# Only signal references are visited, including offscreen ones. Global-clock
 	# expiry prevents dormant clouds from reviving obsolete reports.
 	for p in pheromones:
@@ -308,7 +360,8 @@ func step(dt: float) -> void:
 		profile_usec["traction"] = 0
 	time += dt
 	revision += 1
-	if grid.source_size != particles.size(): grid.rebuild(particles)
+	if particle_pool and not _pool_supported(): disable_particle_pool()
+	if grid.source_size != particle_count(): grid.rebuild(particles)
 	var mark := Time.get_ticks_usec()
 	fluid.set_camera(player.position if camera_follows_player else camera_position,view_half)
 	if experimental_fluid != null:
@@ -444,7 +497,7 @@ func step(dt: float) -> void:
 	spawn_clock += dt
 	if spawn_clock >= 0.5:
 		spawn_clock -= 0.5
-		pheromones = pheromones.filter(func(p): return p.alive)
+		if not particle_pool: pheromones = pheromones.filter(func(p): return p.alive)
 		_compact_particles()
 		grid.rebuild(particles)
 		_replace_population()
@@ -495,6 +548,9 @@ func _step_background_fluid(dt: float) -> void:
 	fluid.active_indices = saved_indices
 
 func _compact_particles() -> void:
+	if particle_pool:
+		background_cursor = kernels.pool_compact(background_cursor)
+		return
 	if native_particle_compaction:
 		var result: Array = kernels.compact_particles(particles,background_cursor)
 		particles = result[0]
@@ -503,27 +559,27 @@ func _compact_particles() -> void:
 	# Retain the next survivor in the round-robin sweep when indices shift.
 	var kept: Array = []
 	var before_cursor := 0
-	for i in particles.size():
+	for i in particle_count():
 		if not particles[i].alive: continue
 		if i < background_cursor: before_cursor += 1
 		kept.append(particles[i])
 	particles = kept
-	background_cursor = before_cursor%particles.size() if not particles.is_empty() else 0
+	background_cursor = before_cursor%particle_count() if particle_count() > 0 else 0
 
 func _background_ids(dt: float) -> Array[int]:
 	var ids: Array[int] = []
-	if not background_transport or particles.is_empty(): return ids
-	background_credit += particles.size()*dt/maxf(background_period,dt)
-	var visits := mini(particles.size(),floori(background_credit+0.0000001))
+	if not background_transport or particle_count() == 0: return ids
+	background_credit += particle_count()*dt/maxf(background_period,dt)
+	var visits := mini(particle_count(),floori(background_credit+0.0000001))
 	background_credit -= visits
-	background_cursor %= particles.size()
+	background_cursor %= particle_count()
 	if native_particles and native_transport_bookkeeping:
 		ids = kernels.background_ids(particles,background_cursor,visits,player.position if camera_follows_player else camera_position,view_half,transport_clock)
-		background_cursor = (background_cursor+visits)%particles.size()
+		background_cursor = (background_cursor+visits)%particle_count()
 		return ids
 	for i in visits:
 		var index := background_cursor
-		background_cursor = (background_cursor+1)%particles.size()
+		background_cursor = (background_cursor+1)%particle_count()
 		var p: Dictionary = particles[index]
 		if p.alive and activity_at(p.p) <= 0 and p.get("transport_at",0.0) < transport_clock:
 			ids.append(index)
@@ -879,29 +935,34 @@ func _sense(cell, dt: float) -> void:
 				profile_counts["receptor_queries"] = profile_counts.get("receptor_queries",0)+1
 				profile_counts["receptor_candidates"] = profile_counts.get("receptor_candidates",0)+candidates.size()
 				if mode in ["hunt","flee"]: profile_counts["pheromone_queries"] = profile_counts.get("pheromone_queries",0)+1
-			for index in candidates:
-				var p: Dictionary = particles[index]
-				if not p.alive or p.owner == cell.id: continue
-				var distance: float = Medium.offset(receptor,p.p).length()
-				if distance > reach: continue
-				if mode == "graze" and p.kind == NUTRIENT:
-					if p.amount <= 0: continue
-					var delta: Vector2 = Medium.offset(cell.position,p.p)
-					var key := Vector2i((delta/maxf(80,reach/4.0)).floor())
-					if not food_bins.has(key): food_bins[key] = {"mass":0.0,"moment":Vector2.ZERO,"nearest":delta,"distance":distance}
-					var bin: Dictionary = food_bins[key]
-					bin.mass += p.amount
-					bin.moment += delta*p.amount
-					if distance < bin.distance:
-						bin.nearest = delta
-						bin.distance = distance
-				elif p.kind == PHEROMONE and mode in ["hunt","flee"] and _pheromone_alive(p):
-					var report: Dictionary = p.get("report",{})
-					if report.is_empty() or report.lineage == cell.lineage_id(): continue
-					# The newest locally received report from a source supersedes an
-					# older one, including a report that it is now too big to attack.
-					if reports.has(report.id) and reports[report.id].report.emitted_at >= report.emitted_at: continue
-					reports[report.id] = {"report":report,"distance":distance,"expires_at":p.expires_at}
+			if particle_pool:
+				var received: Dictionary = kernels.pool_sense(candidates,receptor,reach,cell.position,cell.id,cell.lineage_id(),time,mode == "graze")
+				food_bins = received.food
+				reports = received.reports
+			else:
+				for index in candidates:
+					var p: Dictionary = particles[index]
+					if not p.alive or p.owner == cell.id: continue
+					var distance: float = Medium.offset(receptor,p.p).length()
+					if distance > reach: continue
+					if mode == "graze" and p.kind == NUTRIENT:
+						if p.amount <= 0: continue
+						var delta: Vector2 = Medium.offset(cell.position,p.p)
+						var key := Vector2i((delta/maxf(80,reach/4.0)).floor())
+						if not food_bins.has(key): food_bins[key] = {"mass":0.0,"moment":Vector2.ZERO,"nearest":delta,"distance":distance}
+						var bin: Dictionary = food_bins[key]
+						bin.mass += p.amount
+						bin.moment += delta*p.amount
+						if distance < bin.distance:
+							bin.nearest = delta
+							bin.distance = distance
+					elif p.kind == PHEROMONE and mode in ["hunt","flee"] and _pheromone_alive(p):
+						var report: Dictionary = p.get("report",{})
+						if report.is_empty() or report.lineage == cell.lineage_id(): continue
+						# The newest locally received report from a source supersedes an
+						# older one, including a report that it is now too big to attack.
+						if reports.has(report.id) and reports[report.id].report.emitted_at >= report.emitted_at: continue
+						reports[report.id] = {"report":report,"distance":distance,"expires_at":p.expires_at}
 			for detected in reports.values():
 				var report: Dictionary = detected.report
 				if mode == "hunt" and report.mass >= cell.organic_mass() and report.get("defended",true): continue
@@ -1046,6 +1107,8 @@ func _secretion_needed(cell, organ: Dictionary, kind: int) -> bool:
 	var wanted := WASTE if kind == ENZYME else TOXIN
 	var at: Vector2 = cell.organ_position(organ)
 	var reach: float = 140*sqrt(organ.scale)
+	if particle_pool:
+		return kernels.pool_needed(grid.query(at,reach),at,reach,wanted,coarse_mode,cell.lineage_id(),inherited_lineages,player.position if camera_follows_player else camera_position,view_half)
 	for index in grid.query(at,reach):
 		var packet: Dictionary = particles[index]
 		if not packet.alive or packet.kind != wanted or (not coarse_mode and activity_at(packet.p) <= 0): continue
@@ -1079,7 +1142,8 @@ func _emit_and_attack(cell, dt: float) -> void:
 			cell.spend_energy(energy_cost,organ,"secretion")
 			var direction: Vector2 = cell.organ_normal(organ).rotated(cell.angle)
 			spawn_particle(kind,cell.organ_position(organ)+direction*10,direction*18*Genes.factor(organ,"dispersal"),0.06,cell.id)
-			particles[-1].capacity = 0.25 if kind in [ACID,BUFFER] else 0.06
+			last_spawn.capacity = 0.25 if kind in [ACID,BUFFER] else 0.06
+			_commit_spawn_metadata()
 			organ.charge_flash = 1
 			if cell == player and kind == ACID: evolution.record("acid",0.06)
 	# Cellular stress also releases a material-bearing toxic byproduct.
@@ -1339,6 +1403,9 @@ func _receptor_contacts() -> void:
 			var at: Vector2 = cell.organ_position(organ)
 			var forward: Vector2 = cell.organ_normal(organ).rotated(cell.angle)
 			var radius: float = 12*organ.scale
+			if particle_pool:
+				kernels.pool_decoys(grid.query_kind(particles,at,radius+6,DECOY),cell,organ,inherited_lineages,player.position if camera_follows_player else camera_position,view_half)
+				continue
 			for index in grid.query_kind(particles,at,radius+6,DECOY):
 				var p: Dictionary = particles[index]
 				if not p.alive or p.kind != DECOY or inherited_lineages.get(p.owner,p.owner) == cell.lineage_id() or activity_at(p.p) <= 0: continue
@@ -1354,6 +1421,9 @@ func _receptor_contacts() -> void:
 
 func _toxin_contacts() -> void:
 	if spatial_queries: cell_index.rebuild(cells)
+	if particle_pool:
+		kernels.pool_toxins(local_particle_kind(TOXIN),cells,cell_index.buckets,spatial_queries,inherited_lineages,player.position if camera_follows_player else camera_position,view_half,player.id,evolution)
+		return
 	for index in local_particle_kind(TOXIN):
 		var p: Dictionary = particles[index]
 		if not p.alive or p.kind != TOXIN or activity_at(p.p) <= 0: continue

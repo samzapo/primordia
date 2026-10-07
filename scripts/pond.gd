@@ -18,6 +18,7 @@ const HELP := ["Flagella provide thrust. Anatomy chooses travel direction.","Pro
 var music := preload("res://scripts/music_director.gd").new()
 var music_slider := HSlider.new()
 var world: Simulation = Simulation.new()
+var use_particle_pool := true
 var archive_error := ""
 var archive = preload("res://scripts/lineage_archive.gd").new()
 var preferences = Preferences.new()
@@ -378,7 +379,7 @@ func _sync_particles(alpha: float = 1.0) -> void:
 	if world.spatial_queries: world.cell_index.rebuild(world.cells)
 	var counts := PackedInt32Array([0,0,0,0,0,0,0,0,0,0,0])
 	for index in world.visible_particle_ids(30):
-		var p: Dictionary = world.particles[index]
+		var p: Dictionary = world.particle_snapshot(index)
 		if not p.alive: continue
 		var at: Vector2 = p.p
 		if p.get("updated",-1) == world.revision: at = p.previous+Simulation.Medium.offset(p.previous,p.p)*alpha
@@ -956,6 +957,7 @@ func _capture() -> void:
 	get_tree().quit(result)
 
 func _configure_backend() -> void:
+	if use_particle_pool and "--gpu-transport" not in OS.get_cmdline_user_args(): world.enable_particle_pool()
 	if "--gpu-transport" not in OS.get_cmdline_user_args(): return
 	var gpu = load("res://scripts/gpu_transport.gd").new()
 	if gpu.initialize(): world.gpu_transport = gpu
