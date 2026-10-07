@@ -1,5 +1,7 @@
 #include "music_mixer.h"
 #include "chemical_neighbors.h"
+#include "liquid_particles.h"
+#include "parcel_transport.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -317,6 +319,9 @@ class PrimordiaKernels : public RefCounted {
   uint64_t packet_epoch = 0, render_epoch = 0;
   int render_revision = -1, render_count = -1;
   bool packed_render_state=false;
+  LiquidParticles liquid;
+  ParcelTransport parcels;
+  double physical_radius=0;
   std::vector<PacketSlot> packet_slots;
   std::vector<int> packet_touched;
   PackedVector2Array packet_positions;
@@ -454,6 +459,13 @@ class PrimordiaKernels : public RefCounted {
 
 protected:
   static void _bind_methods() {
+    ClassDB::bind_method(D_METHOD("parcel_configure", "enabled"), &PrimordiaKernels::parcel_configure);
+    ClassDB::bind_method(D_METHOD("parcel_protect", "centers", "radii"), &PrimordiaKernels::parcel_protect);
+    ClassDB::bind_method(D_METHOD("parcel_metrics"), &PrimordiaKernels::parcel_metrics);
+    ClassDB::bind_method(D_METHOD("particle_engine_configure", "engine", "radius", "iterations"), &PrimordiaKernels::particle_engine_configure, DEFVAL(4.0), DEFVAL(1));
+    ClassDB::bind_method(D_METHOD("particle_solver_probe", "positions", "velocities", "dt"), &PrimordiaKernels::particle_solver_probe);
+    ClassDB::bind_method(D_METHOD("particle_engine_metrics"), &PrimordiaKernels::particle_engine_metrics);
+    ClassDB::bind_method(D_METHOD("particle_engine_reset_metrics"), &PrimordiaKernels::particle_engine_reset_metrics);
     ClassDB::bind_method(D_METHOD("neighbor_configure", "backend", "cache", "metrics"), &PrimordiaKernels::neighbor_configure, DEFVAL(false), DEFVAL(false));
     ClassDB::bind_method(D_METHOD("neighbor_metrics"), &PrimordiaKernels::neighbor_metrics);
     ClassDB::bind_method(D_METHOD("neighbor_reset_metrics"), &PrimordiaKernels::neighbor_reset_metrics);
@@ -530,7 +542,7 @@ public:
 
   bool neighbor_configure(String backend, bool cache, bool metrics) {
     int b=backend=="legacy" ? 0 : backend=="packed" ? 1 : backend=="bvh" ? 2 : backend=="quadtree" ? 3 : -1;
-    if (b<0) return false;
+    if (b<0 || (physical_radius>0 && cache)) return false;
     neighbors.configure(b,cache,metrics); return true;
   }
   void neighbor_reset_metrics() { neighbors.reset_metrics(); }
@@ -583,6 +595,51 @@ public:
     handles.clear(); signal_slots.clear(); packet_slots.clear(); packet_positions.resize(0);
     invalidate_particle_render(); return out;
   }
+  void parcel_configure(bool enabled) {parcels.enabled=enabled;parcels.reset_metrics();}
+  bool parcel_protect(PackedVector2Array centers,PackedFloat32Array radii) {
+    if (centers.size()!=radii.size()) {parcels.invalidate_protection();return false;}
+    for (int i=0;i<centers.size();++i) if (!centers[i].is_finite() || !std::isfinite(radii[i]) || radii[i]<0) {parcels.invalidate_protection();return false;}
+    parcels.protect(centers,radii);return true;
+  }
+  Dictionary parcel_metrics() const {
+    Dictionary d;d["enabled"]=parcels.enabled;d["calls"]=int64_t(parcels.calls);
+    d["parcels"]=int64_t(parcels.parcels);d["children"]=int64_t(parcels.children);
+    d["saved_integrations"]=int64_t(parcels.saved_integrations);
+    d["rejected_shear"]=int64_t(parcels.rejected_shear);d["prepare_ms"]=parcels.prepare_ms;
+    return d;
+  }
+  bool particle_engine_configure(String engine,double radius=4,int iterations=1) {
+    if (engine!="current" && engine!="uniform" && engine!="liquidfun") return false;
+    // Existing cached lists certify chemical radii, not a second physical radius.
+    if (engine!="current" && neighbors.caching) return false;
+    if (!liquid.configure(engine=="liquidfun",radius,iterations)) return false;
+    physical_radius=engine!="current" ? radius : 0;
+    return true;
+  }
+  Dictionary particle_engine_metrics() const {
+    Dictionary d;d["engine"]=liquid.enabled ? "liquidfun" : physical_radius>0 ? "uniform" : "current";
+    d["radius"]=liquid.enabled ? liquid.radius : physical_radius;d["iterations"]=liquid.iterations;
+    d["calls"]=int64_t(liquid.calls);d["rebuilds"]=int64_t(liquid.rebuilds);
+    d["solver_points"]=liquid.points;d["periodic_images"]=liquid.ghosts;
+    d["solver_capacity"]=liquid.capacity;d["contacts"]=liquid.contacts;
+    d["prepare_ms"]=liquid.prepare_ms;d["solve_ms"]=liquid.solve_ms;d["apply_ms"]=liquid.apply_ms;
+    d["simd"]="portable C++ / 32-bit particle indices";
+    d["pin"]="7f20402173fd143a3988c921bc384459c6a858f2";
+    return d;
+  }
+  Dictionary particle_solver_probe(PackedVector2Array p,PackedVector2Array v,double dt) {
+    Dictionary out;
+    if (!liquid.enabled || p.size()!=v.size() || p.size()>100000 || !std::isfinite(dt) || dt<=0 || dt>.05) return out;
+    std::vector<Vector2> positions,velocities;
+    for (int i=0;i<p.size();++i) {
+      if (!p[i].is_finite() || !v[i].is_finite()) return out;
+      positions.push_back(wrapv(p[i]));velocities.push_back(v[i]);
+    }
+    liquid.solve(positions,velocities,dt);
+    for (int i=0;i<p.size();++i) {p.set(i,wrapv(positions[i]));v.set(i,velocities[i]);}
+    out["positions"]=p;out["velocities"]=v;out["metrics"]=particle_engine_metrics();return out;
+  }
+  void particle_engine_reset_metrics() {liquid.clear_metrics();parcels.reset_metrics();}
   Dictionary pool_metrics() const {
     Dictionary d; d["enabled"]=pool_enabled; d["particles"]=pool_enabled ? pool_size() : 0;
     d["imports"]=int64_t(pool_imports); d["exports"]=int64_t(pool_exports);
@@ -1495,6 +1552,10 @@ public:
     if (!packet_frame)
       return transport_dictionary(particles,ids,flow,camera,half,dt,revision,rng,clock,background);
     int count = 0;
+    if (parcels.enabled && pool_enabled && background)
+      parcels.prepare(packet_slots,ids,flow,clock,dt,sample,wrapv);
+    std::vector<int> liquid_ids;
+    std::vector<Vector2> liquid_positions,liquid_motion;
     for (int k = 0; k < ids.size(); ++k) {
       PacketState local, *value;
       if (packet_frame) value=&packet(ids[k]).value;
@@ -1524,7 +1585,9 @@ public:
       }
       // Keep RNG call order explicit, matching the reference backend.
       double nx = rng->randfn(0, 1), ny = rng->randfn(0, 1);
-      if (t <= .05) {
+      if (background && parcels.enabled && parcels.contains(int64_t(ids[k]))) {
+        at=wrapv(at+parcels.displacement(int64_t(ids[k])));
+      } else if (t <= .05) {
         at = wrapv(at + (v + sample(flow, at)) * t);
       } else {
         int steps = std::clamp(int(std::ceil(t / .25)), 1, 8);
@@ -1538,6 +1601,11 @@ public:
       }
       p.p = wrapv(at + Vector2(nx, ny)*std::sqrt((tracer ? 240 : 12)*t));
       p.v = v * std::exp(-t * .8);
+      if (liquid.enabled && pool_enabled && !background && !tracer && std::abs(t-dt)<.000001) {
+        liquid_ids.push_back(int64_t(ids[k]));
+        liquid_positions.push_back(p.previous);
+        liquid_motion.push_back(delta(p.previous,p.p)/dt);
+      }
       p.age = p.age + t;
       p.previous_angle = angle;
       angle = wrap(angle + p.spin*t + rng->randfn(0, 1)*std::sqrt(1.2*t) + PI, TAU) - PI;
@@ -1563,6 +1631,18 @@ public:
         d[keys.previous_angle]=p.previous_angle; d[keys.angle]=p.angle; d[keys.direction]=p.dir;
       }
     }
+    if (!liquid_ids.empty()) {
+      liquid.solve(liquid_positions,liquid_motion,dt);
+      for (int k=0;k<int(liquid_ids.size());++k) {
+        int id=liquid_ids[k];auto &slot=packet_slots[id];auto &p=slot.value;
+        p.p=wrapv(liquid_positions[k]);
+        // Brownian/current velocity is imposed transport, not stored propulsion.
+        // Keep only the solver's correction to the original imposed trajectory.
+        Vector2 original_motion=delta(p.previous,packet_positions[id])/dt;
+        p.v+=liquid_motion[k]-original_motion;
+        packet_positions.set(id,p.p);slot.moved=true;
+      }
+    }
     return count;
   }
   Dictionary chemistry(Array particles, TypedArray<int64_t> ids,
@@ -1579,6 +1659,7 @@ public:
     PackedVector2Array reaction_points;
     double loss = 0, recycled = 0;
     double max_radius = 0;
+    bool fine_contacts=liquid.enabled && pool_enabled && !background;
     scratch.clear();
     scratch.reserve(ids.size());
     for (int k = 0; k < ids.size(); ++k) {
@@ -1605,8 +1686,13 @@ public:
       if (!numeric) { p.d[keys.reaction_activity]=p.active; p.d[keys.contact_radius]=p.radius; }
       p.neighbor_bin=mod(int(std::floor(p.p.y/16)),160)*256+mod(int(std::floor(p.p.x/16)),256);
       scratch.push_back(p);
+      if (fine_contacts && p.active>0 && p.kind!=3 && numeric->jump) fine_contacts=false;
       if (p.active > 0 && p.kind != 3) max_radius=std::max(max_radius,p.radius);
     }
+    // Fine LiquidFun already supplies circular contacts. Chemistry needs only
+    // its own conservative binding radius; catch-up/coarse passes keep both.
+    double contact_radius=fine_contacts ? 0 : physical_radius;
+    max_radius=std::max(max_radius,contact_radius);
     neighbors.begin(scratch,max_radius,background);
     for (int i = 0; i < int(scratch.size()); ++i) {
       auto &p = scratch[i];
@@ -1637,7 +1723,7 @@ public:
         continue;
       // Only omit bins beyond every possible cached contact radius. Keep
       // traversal order and a float-coordinate margin for boundary contacts.
-      double reach = tight_bounds ? p.radius + max_radius + .001 : 18.;
+      double reach = tight_bounds ? std::max(p.radius,contact_radius) + max_radius + .001 : 18.;
       neighbors.visit(scratch,i,reach,[&](int j) {
         auto &b = scratch[j];
         if (b.identity <= p.identity) return false;
@@ -1645,7 +1731,8 @@ public:
         if (!b.alive || b.kind == 3 || b.reacted) return false;
         Vector2 d = delta(p.p, b.p);
         double c = p.radius + b.radius, dist2 = d.length_squared();
-        if (dist2 > c * c)
+        double physical_c=contact_radius>0 ? contact_radius*2 : c;
+        if (dist2 > std::max(c,physical_c)*std::max(c,physical_c))
           return false;
         neighbors.contact();
         double dist = std::sqrt(dist2);
@@ -1658,7 +1745,7 @@ public:
           threshold +=
               .46 * std::pow(std::clamp(std::abs(a - .4) / .4, 0., 1.), 2);
         bool reacted = false;
-        if (p.dir.dot(n) >= threshold && b.dir.dot(-n) >= threshold) {
+        if (dist2 <= c*c && p.dir.dot(n) >= threshold && b.dir.dot(-n) >= threshold) {
           if (lazy_acid && ((p.kind == 2 && b.kind == 1) || (p.kind == 1 && b.kind == 2)))
             a = acid_sample(acid, p.p);
           Particle *u = &p, *v = &b;
@@ -1731,8 +1818,10 @@ public:
           p.reacted = b.reacted = true;
           return true;
         }
-        if (collisions) {
-          Vector2 push = n * (c - dist) * .25;
+        bool solved_contact=liquid.enabled && pool_enabled && !background &&
+          !packet_slots[p.identity].value.jump && !packet_slots[b.identity].value.jump;
+        if (collisions && !solved_contact && dist2 < physical_c*physical_c) {
+          Vector2 push = n * (physical_c - dist) * .25;
           p.v -= push * 8;
           b.v += push * 8;
         }

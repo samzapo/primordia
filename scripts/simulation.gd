@@ -128,6 +128,11 @@ var chemistry_events := {"decay":0,"combine":0,"recycle":0,"detox":0,"spoil":0,"
 
 # Native ownership is explicit: fixture dictionaries are imported once, and
 # thereafter empty. Snapshots are detached diagnostics, never an implicit getter.
+# Diagnostic particle engines pin the simulation footprint at configuration.
+# Display zoom remains presentation-only; switching engine resets no resources.
+var particle_engine := "current"
+var transport_parcels := false
+var integration_half := Vector2.ZERO
 var particle_pool := false
 var last_spawn: Dictionary = {}
 var emitted_particles := 0
@@ -142,6 +147,23 @@ func enable_particle_pool() -> bool:
 	pheromones = []
 	grid.rebuild(particles)
 	return true
+
+func configure_particle_engine(engine: String, radius: float = 4.0, iterations: int = 1) -> bool:
+	if engine not in ["current","uniform","liquidfun"] or kernels == null or not _pool_supported(): return false
+	if not kernels.particle_engine_configure(engine,radius,iterations): return false
+	particle_engine = engine
+	if engine != "current" or transport_parcels:
+		if integration_half == Vector2.ZERO: integration_half = view_half
+	else: integration_half = Vector2.ZERO
+	return enable_particle_pool()
+
+func configure_parcels(enabled: bool) -> bool:
+	if kernels == null or not _pool_supported(): return false
+	transport_parcels = enabled
+	kernels.parcel_configure(enabled)
+	if enabled and integration_half == Vector2.ZERO: integration_half = view_half
+	if not enabled and particle_engine == "current": integration_half = Vector2.ZERO
+	return enable_particle_pool()
 
 func disable_particle_pool() -> void:
 	if not particle_pool: return
@@ -350,6 +372,18 @@ func _emit_material(kind: int, at: Vector2, amount: float, motion: Vector2 = Vec
 	for i in count: spawn_particle(kind,at,motion,amount/count,owner)
 
 func step(dt: float) -> void:
+	var display_half := view_half
+	var display_camera := camera_position
+	var display_follow := camera_follows_player
+	if integration_half != Vector2.ZERO:
+		view_half = integration_half
+		camera_follows_player = true
+	_step_simulation(dt)
+	view_half = display_half
+	camera_position = display_camera
+	camera_follows_player = display_follow
+
+func _step_simulation(dt: float) -> void:
 	if evolution.terminal() or build_original != null: return
 	if player.dead and not evolution.enabled: return
 	if profiling:
@@ -627,6 +661,14 @@ func _move_particles(dt: float) -> void:
 		active_particles = _transport_reference(ids,dt,rng,false)
 	var mark := Time.get_ticks_usec()
 	var far_ids := _background_ids(dt)
+	if transport_parcels:
+		var centers := PackedVector2Array()
+		var radii := PackedFloat32Array()
+		for cell in cells:
+			if not cell.dead:
+				centers.append(cell.position)
+				radii.append(cell.extent())
+		kernels.parcel_protect(centers,radii)
 	if native_particles:
 		background_particles = kernels.transport(particles,far_ids,fluid.velocity,camera,view_half,dt,revision,background_rng,transport_clock,true)
 	else:

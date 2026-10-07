@@ -14,7 +14,7 @@ static func seed_packets(sim, count: int, distribution: String, sizes: String = 
 	var source: Array = []
 	for packet in sim.particles:
 		if packet.alive and packet.kind != sim.PHEROMONE: source.append(packet)
-	if count < source.size() or source.is_empty() or distribution not in ["uniform","clustered"] or count > 100000 or sizes not in ["equal","mixed"]:
+	if count < source.size() or source.is_empty() or distribution not in ["uniform","clustered","habitat"] or count > 100000 or sizes not in ["equal","mixed"]:
 		return false
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 25171
@@ -32,7 +32,9 @@ static func seed_packets(sim, count: int, distribution: String, sizes: String = 
 			for key in ["amount","capacity","product"]:
 				if item.has(key): item[key] *= share
 			var at: Vector2
-			if distribution == "uniform":
+			if distribution == "habitat":
+				at = Vector2(rng.randf_range(0,sim.WORLD.x),rng.randf_range(0,sim.WORLD.y))
+			elif distribution == "uniform":
 				at = sim.player.position+Vector2(rng.randf_range(-sim.view_half.x,sim.view_half.x),rng.randf_range(-sim.view_half.y,sim.view_half.y))*0.90
 			else:
 				at = anchors[j%anchors.size()]+Vector2(rng.randfn(0,45),rng.randfn(0,45))

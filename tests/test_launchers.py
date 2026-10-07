@@ -120,10 +120,23 @@ class SteamLaunchers(unittest.TestCase):
         self.assertEqual(result.stdout.splitlines(), [
             "<--path>", f"<{PROJECT}>", "<--rendering-method>", "<mobile>",
             "<--script>", "<tests/frame_profile.gd>", "<-->", "<--benchmark>",
-            "<--chemicals=50000>", "<--output=path with spaces>", "<--fluid=pbf>",
+            "<--chemicals=50000>", "<--output=path with spaces>", "<--particle-engine=current>", "<--fluid=pbf>",
             "<--fixture=normal>", "<--locomotion=cilia>", "<--chemicals=20000>",
             "<--frame-step=fixed>", "<--frames=180>",
         ])
+
+    def test_original_particle_engine_modes(self):
+        self.install(self.steam)
+        for mode in ["uniform", "liquidfun"]:
+            result = subprocess.run(
+                [BASH, str(PROJECT / "tools/fluid_compare.sh"), mode, "--parcels=on"],
+                cwd=self.root, env=self.env, text=True, capture_output=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            arguments = result.stdout.splitlines()
+            self.assertIn(f"<--particle-engine={mode}>", arguments)
+            self.assertIn("<--fluid=current>", arguments)
+            self.assertIn("<--parcels=on>", arguments)
 
     def test_fluid_launcher_rejects_unknown_solver(self):
         self.install(self.steam)

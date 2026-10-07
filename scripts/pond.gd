@@ -961,6 +961,24 @@ func _capture() -> void:
 	get_tree().quit(result)
 
 func _configure_backend() -> void:
+	var args := OS.get_cmdline_user_args()
+	# Benchmark fixtures configure after population/density setup.
+	if "--benchmark" not in args:
+		var engine := "current"
+		var parcel_option := "off"
+		for arg in args:
+			if arg.begins_with("--particle-engine="): engine = arg.trim_prefix("--particle-engine=")
+			if arg.begins_with("--parcels="): parcel_option = arg.trim_prefix("--parcels=")
+		if engine != "current" or parcel_option != "off":
+			var display_half: Vector2 = world.view_half
+			world.view_half = get_viewport_rect().size/(2.0*0.8)
+			var valid := "--gpu-transport" not in args and engine in ["current","uniform","liquidfun"] and parcel_option in ["on","off"]
+			valid = valid and world.configure_particle_engine(engine)
+			if valid and parcel_option == "on": valid = world.configure_parcels(true)
+			world.view_half = display_half
+			if not valid:
+				push_error("Particle engine/parcel trial requires the native pool, CPU fluid and valid options")
+				get_tree().quit(1)
 	if use_particle_pool and "--gpu-transport" not in OS.get_cmdline_user_args(): world.enable_particle_pool()
 	if "--gpu-transport" not in OS.get_cmdline_user_args(): return
 	var gpu = load("res://scripts/gpu_transport.gd").new()

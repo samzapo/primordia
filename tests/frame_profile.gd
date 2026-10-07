@@ -19,7 +19,7 @@ func run() -> void:
 	var feedback := option("--fluid-feedback","on")
 	var dx_text := option("--fluid-dx","16")
 	var iterations_text := option("--fluid-iterations","0")
-	if fluid_name not in ["current","grid","pbf"] or not packet_text.is_valid_int() or int(packet_text) < 0 or int(packet_text) > 100000 or distribution not in ["uniform","clustered"] or sizes not in ["equal","mixed"] or frame_step not in ["live","fixed"]:
+	if fluid_name not in ["current","grid","pbf"] or not packet_text.is_valid_int() or int(packet_text) < 0 or int(packet_text) > 100000 or distribution not in ["uniform","clustered","habitat"] or sizes not in ["equal","mixed"] or frame_step not in ["live","fixed"]:
 		push_error("Invalid fluid/chemical comparison parameters")
 		quit(1)
 		return
@@ -134,7 +134,24 @@ func run() -> void:
 			return
 		backend.body_feedback_enabled = feedback == "on"
 		sim.experimental_fluid = backend
-	if "pool" not in switches and "legacy" not in switches: sim.enable_particle_pool()
+	var engine := option("--particle-engine","current")
+	var radius_text := option("--physical-radius","4")
+	var particle_iterations := option("--particle-iterations","1")
+	if engine not in ["current","uniform","liquidfun"] or not radius_text.is_valid_float() or not particle_iterations.is_valid_int() or float(radius_text)<1 or float(radius_text)>8 or int(particle_iterations)<1 or int(particle_iterations)>4:
+		push_error("Unknown particle engine or invalid radius/iterations")
+		finish_scene(scene,1)
+		return
+	if engine != "current":
+		if fluid_name != "current" or collisions != "on" or not sim.configure_particle_engine(engine,float(radius_text),int(particle_iterations)):
+			push_error("Uniform/LiquidFun comparison requires current medium, collisions and supported native pool")
+			finish_scene(scene,1)
+			return
+	elif "pool" not in switches and "legacy" not in switches: sim.enable_particle_pool()
+	var parcel_option := option("--parcels","off")
+	if parcel_option not in ["on","off"] or (parcel_option == "on" and not sim.configure_parcels(true)):
+		push_error("Parcel transport requires supported native ownership")
+		finish_scene(scene,1)
+		return
 	# Ordinary profiles retain their old warmup. Chemical comparison measures
 	# initial finite clouds immediately after presentation/audio warmup.
 	if int(packet_text)==0:
@@ -152,7 +169,7 @@ func run() -> void:
 			return
 	for i in 30: await process_frame
 	if option("--mode","live") == "ticks":
-		if sim.kernels != null: sim.kernels.neighbor_reset_metrics()
+		if sim.kernels != null: sim.kernels.neighbor_reset_metrics(); sim.kernels.particle_engine_reset_metrics()
 		var tick_rows: Array[float] = []
 		var phases := {}
 		sim.profiling = true
@@ -166,7 +183,7 @@ func run() -> void:
 		for key in phases: phases[key] /= tick_rows.size()
 		tick_rows.sort()
 		var tick_result := {"mode":"ticks","fluid":fluid_name,"locomotion":locomotion,"fixture":option("--fixture","dense"),"hotpaths":option("--hotpaths","all"),
-			"neighbors":neighbor_summary(sim),"particle_collisions":sim.particle_collisions,"ticks":tick_rows.size(),"mean_ms":total/tick_rows.size(),"p95_ms":tick_rows[mini(tick_rows.size()-1,int(tick_rows.size()*0.95))],
+			"particle_engine":sim.kernels.particle_engine_metrics() if sim.kernels != null else {}, "parcels":sim.kernels.parcel_metrics() if sim.kernels != null else {}, "neighbors":neighbor_summary(sim),"particle_collisions":sim.particle_collisions,"ticks":tick_rows.size(),"mean_ms":total/tick_rows.size(),"p95_ms":tick_rows[mini(tick_rows.size()-1,int(tick_rows.size()*0.95))],
 			"phases_ms":phases,"particles":sim.particle_count(),"simulation_seconds":sim.time-sim_started,
 			"rng":str(sim.rng.state),"background_rng":str(sim.background_rng.state),"ecology_rng":str(sim.ecology_rng.state)}
 		if not save_result(tick_result,option("--output","")):
@@ -174,7 +191,7 @@ func run() -> void:
 			return
 		finish_scene(scene)
 		return
-	if sim.kernels != null: sim.kernels.neighbor_reset_metrics()
+	if sim.kernels != null: sim.kernels.neighbor_reset_metrics(); sim.kernels.particle_engine_reset_metrics()
 	scene.begin_frame_trace()
 	scene.set_physics_process(option("--mode","live") != "frozen" and frame_step == "live")
 	var seconds := float(option("--seconds","0"))
@@ -189,7 +206,7 @@ func run() -> void:
 		"fluid_feedback":feedback,
 		"fluid_quality":preload("res://tests/fluid_compare_gpu.gd").summary(sim.experimental_fluid) if sim.experimental_fluid != null else {},
 		"requested_chemicals":int(packet_text),"distribution":distribution,"particle_sizes":sizes,"frame_step":frame_step,"particle_collisions":sim.particle_collisions,
-		"neighbors":neighbor_summary(sim),"chemistry_events":sim.chemistry_events.duplicate(),"material_remaining":Fixture.packet_material(sim),
+		"particle_engine":sim.kernels.particle_engine_metrics() if sim.kernels != null else {}, "parcels":sim.kernels.parcel_metrics() if sim.kernels != null else {}, "neighbors":neighbor_summary(sim),"chemistry_events":sim.chemistry_events.duplicate(),"material_remaining":Fixture.packet_material(sim),
 		"packed_particles":sim.native_particle_pipeline,"particle_pool":sim.particle_pool,"pool_metrics":sim.kernels.pool_metrics() if sim.kernels != null else {},"particle_render_cache":sim.native_particle_render_cache,
 		"simulation_seconds":sim.time-sim_started,"rng":str(sim.rng.state),"background_rng":str(sim.background_rng.state),"ecology_rng":str(sim.ecology_rng.state),
 		"locomotion":locomotion,"player_radius":sim.player.radius,"player_biomass":sim.player.biomass,"seconds":seconds,"hotpaths":option("--hotpaths","all"),"mode":option("--mode","live"),"fixture":option("--fixture","dense"),"music":scene.music.enabled,
