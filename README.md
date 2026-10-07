@@ -186,3 +186,9 @@ Grazing selects a locally sensed nutrient patch by mass, heads toward its centro
 Death holds the camera on the membrane rupture for 1.15 seconds, then eases toward the actual successor over 0.65 seconds. Biology continues normally; there is no extra invulnerability or respawn reward. Wakes follow local fluid-relative motion, and a current-carried cell has little directional wake.
 
 The player starts with a grazing pore and **neither cilia nor a flagellum**. Both remain separate fixed-size assembly purchases, each costing eight tissue and one AP. Flagella emphasize thrust; cyan ciliary bands add weaker thrust plus a stronger directional local feeding current. Cilia use the receptor/exploration-selected heading, add no sensing or absorption, and pull hazards along with food. The current acts on the real fluid and returns equal/opposite momentum to the cell in detailed and coarse simulation. NPC flagella remain unchanged; offspring inherit paid anatomy normally. Cilia also contribute their own synthesized flutter-pluck rhythm.
+
+## Revision 25: GPU fluid comparison
+
+Two opt-in prototypes compare a pressure grid and Position Based Fluids with the existing medium. Ordinary gameplay remains on the established CPU backend. [Revision 25](docs/REVISION_25.md) documents GPU validation, 20k/50k chemical workloads, live catch-up, physics defects and Steam-compatible reproduction commands.
+
+Neither solver alone makes dense chemistry fast: particle transport, reactions and view preparation dominate. Packed persistent chemical state is the next priority; moving-body pressure coupling and PBF boundary density need work before either experimental solver can become the default.

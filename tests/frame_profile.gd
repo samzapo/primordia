@@ -1,10 +1,26 @@
 extends SceneTree
+const Fixture = preload("res://tests/fluid_fixture.gd")
 func _initialize() -> void: run.call_deferred()
 func option(name: String, fallback: String) -> String:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with(name+"="): return arg.substr(name.length()+1)
 	return fallback
 func run() -> void:
+	var fluid_name := option("--fluid","current")
+	var packet_text := option("--chemicals","0")
+	var distribution := option("--distribution","uniform")
+	var frame_step := option("--frame-step","live")
+	var feedback := option("--fluid-feedback","on")
+	var dx_text := option("--fluid-dx","16")
+	var iterations_text := option("--fluid-iterations","0")
+	if fluid_name not in ["current","grid","pbf"] or not packet_text.is_valid_int() or int(packet_text) < 0 or int(packet_text) > 100000 or distribution not in ["uniform","clustered"] or frame_step not in ["live","fixed"]:
+		push_error("Invalid fluid/chemical comparison parameters")
+		quit(1)
+		return
+	if feedback not in ["on","off"] or not dx_text.is_valid_float() or float(dx_text) not in [16.0,32.0] or not iterations_text.is_valid_int() or (int(iterations_text) != 0 and not preload("res://scripts/fluid_compare.gd").valid_options("grid",float(dx_text),int(iterations_text))):
+		push_error("Invalid fluid resolution, iteration count or feedback diagnostic")
+		quit(1)
+		return
 	var locomotion := option("--locomotion","none")
 	if locomotion not in ["none","flagellum","cilia","mixed"]:
 		push_error("Unknown locomotion fixture")
@@ -36,8 +52,7 @@ func run() -> void:
 	for kind in (["propulsion","cilia"] if locomotion == "mixed" else ["propulsion"] if locomotion == "flagellum" else ["cilia"] if locomotion == "cilia" else []):
 		if not sim.install(kind,PI if kind == "propulsion" else PI/2):
 			push_error("Profile locomotion purchase failed")
-			scene.queue_free()
-			quit(1)
+			finish_scene(scene,1)
 			return
 	var switches := option("--hotpaths","all").split(",")
 	if "legacy" in switches or "geometry" in switches: scene.native_geometry = false
@@ -77,7 +92,28 @@ func run() -> void:
 		sim.cells[1].position = sim.player.position+Vector2(45,0)
 		sim.cells[1].previous_position = sim.cells[1].position
 	scene._update_world(1)
-	for i in 60: sim.step(1.0/60)
+	if int(packet_text)>0:
+		var material_before := Fixture.packet_material(sim)
+		if not Fixture.seed_packets(sim,int(packet_text),distribution):
+			push_error("Chemical count must cover the initial inventory")
+			finish_scene(scene,1)
+			return
+		if absf(Fixture.packet_material(sim)-material_before)>0.00001:
+			push_error("Chemical fixture duplicated material")
+			finish_scene(scene,1)
+			return
+	if fluid_name != "current":
+		var backend = preload("res://scripts/fluid_compare.gd").new()
+		if not backend.initialize(fluid_name,sim.fluid.velocity,sim.cells,sim.habitat_geometry,float(dx_text),int(iterations_text)):
+			finish_scene(scene,1)
+			return
+		backend.body_feedback_enabled = feedback == "on"
+		sim.experimental_fluid = backend
+	# Ordinary profiles retain their old warmup. Chemical comparison measures
+	# initial finite clouds immediately after presentation/audio warmup.
+	if int(packet_text)==0:
+		for i in 60: sim.step(1.0/60)
+	var sim_started: float = sim.time
 	# Frozen biology keeps identical initial conditions while bank generation
 	# completes. Startup work must not seed the measured catch-up spiral.
 	if scene.music.enabled:
@@ -86,8 +122,7 @@ func run() -> void:
 			await process_frame
 		if not scene.music.ready_bank:
 			push_error("Music bank was not ready before profiling")
-			scene.queue_free()
-			quit(1)
+			finish_scene(scene,1)
 			return
 	for i in 30: await process_frame
 	if option("--mode","live") == "ticks":
@@ -103,41 +138,48 @@ func run() -> void:
 		for value in tick_rows: total += value
 		for key in phases: phases[key] /= tick_rows.size()
 		tick_rows.sort()
-		var tick_result := {"mode":"ticks","locomotion":locomotion,"fixture":option("--fixture","dense"),"hotpaths":option("--hotpaths","all"),
+		var tick_result := {"mode":"ticks","fluid":fluid_name,"locomotion":locomotion,"fixture":option("--fixture","dense"),"hotpaths":option("--hotpaths","all"),
 			"ticks":tick_rows.size(),"mean_ms":total/tick_rows.size(),"p95_ms":tick_rows[mini(tick_rows.size()-1,int(tick_rows.size()*0.95))],
-			"phases_ms":phases,"particles":sim.particles.size(),"simulation_seconds":sim.time-1.0,
+			"phases_ms":phases,"particles":sim.particles.size(),"simulation_seconds":sim.time-sim_started,
 			"rng":str(sim.rng.state),"background_rng":str(sim.background_rng.state),"ecology_rng":str(sim.ecology_rng.state)}
 		if not save_result(tick_result,option("--output","")):
-			scene.queue_free()
-			quit(1)
+			finish_scene(scene,1)
 			return
-		scene.queue_free()
-		quit()
+		finish_scene(scene)
 		return
 	scene.begin_frame_trace()
-	scene.set_physics_process(option("--mode","live") != "frozen")
+	scene.set_physics_process(option("--mode","live") != "frozen" and frame_step == "live")
 	var seconds := float(option("--seconds","0"))
 	var deadline := Time.get_ticks_usec()+int(seconds*1000000)
 	for i in 5900 if seconds > 0 else int(option("--frames","120")):
+		if frame_step == "fixed" and option("--mode","live") != "frozen": scene._physics_process(1.0/60)
 		await RenderingServer.frame_post_draw
 		if seconds > 0 and Time.get_ticks_usec() >= deadline: break
 	var rows: Array = scene.end_frame_trace()
 	var output := option("--output","")
-	var result := {"rows":rows,"locomotion":locomotion,"player_radius":sim.player.radius,"player_biomass":sim.player.biomass,"seconds":seconds,"hotpaths":option("--hotpaths","all"),"mode":option("--mode","live"),"fixture":option("--fixture","dense"),"music":scene.music.enabled,
+	var result := {"rows":rows,"fluid":fluid_name,"fluid_settings":sim.experimental_fluid.metrics if sim.experimental_fluid != null else {},
+		"fluid_feedback":feedback,
+		"fluid_quality":preload("res://tests/fluid_compare_gpu.gd").summary(sim.experimental_fluid) if sim.experimental_fluid != null else {},
+		"requested_chemicals":int(packet_text),"distribution":distribution,"frame_step":frame_step,
+		"chemistry_events":sim.chemistry_events.duplicate(),"material_remaining":Fixture.packet_material(sim),
+		"locomotion":locomotion,"player_radius":sim.player.radius,"player_biomass":sim.player.biomass,"seconds":seconds,"hotpaths":option("--hotpaths","all"),"mode":option("--mode","live"),"fixture":option("--fixture","dense"),"music":scene.music.enabled,
 		"engine":Engine.get_version_info().string,"cpu":OS.get_processor_name(),"gpu":RenderingServer.get_video_adapter_name(),
 		"display":DisplayServer.get_name(),"viewport":str(root.size),"zoom":scene.manual_zoom,"max_steps":Engine.max_physics_steps_per_frame,
 		"sparks":scene.show_reaction_sparks,"bloom":scene.preferences.bloom,"music_volume":scene.preferences.music_volume,"tick_rate":Engine.physics_ticks_per_second}
 	if not save_result(result,output):
-		scene.queue_free()
-		quit(1)
+		finish_scene(scene,1)
 		return
 	print("FRAME_PROFILE rows=",rows.size()," output=",output)
 	# Use the same immediate shutdown as the game's Quit action. Waiting for
 	# another compositor frame after capture can stall a headless display.
+	finish_scene(scene)
+
+func finish_scene(scene, code: int = 0) -> void:
+	if scene.world.experimental_fluid != null: scene.world.experimental_fluid.close()
 	scene.music.enabled = false
 	scene.music.player.stop()
 	scene.queue_free()
-	quit()
+	quit(code)
 
 func save_result(result: Dictionary, output: String) -> bool:
 	if output == "": return true

@@ -11,6 +11,8 @@ var build_waste := 0.0
 const Backend = preload("res://scripts/backend.gd")
 var kernels = Backend.create()
 var gpu_transport = null
+# Only the explicit fluid comparison harness attaches this backend.
+var experimental_fluid = null
 const Offscreen = preload("res://scripts/offscreen_ecology.gd")
 var offscreen_ecology = Offscreen.new()
 var background_biology := true
@@ -305,7 +307,15 @@ func step(dt: float) -> void:
 	if grid.source_size != particles.size(): grid.rebuild(particles)
 	var mark := Time.get_ticks_usec()
 	fluid.set_camera(player.position if camera_follows_player else camera_position,view_half)
-	if native_fluid:
+	if experimental_fluid != null:
+		fluid.velocity = experimental_fluid.step(fluid.velocity,cells,habitat_geometry,dt)
+		if profiling:
+			for key in ["pack_us","submit_wait_us","readback_apply_us"]:
+				profile_usec["fluid_gpu."+key] = experimental_fluid.metrics.get(key,0)
+		if revision%6 == 0:
+			if native_fluid: acidity.values = kernels.acid_step(acidity.values,fluid.velocity,fluid.activity,dt*6)
+			else: acidity.step(dt*6,fluid)
+	elif native_fluid:
 		fluid.velocity = kernels.fluid_step(fluid.velocity,fluid.activity,fluid.tide,dt,fluid.driven)
 		if revision%6 == 0: acidity.values = kernels.acid_step(acidity.values,fluid.velocity,fluid.activity,dt*6)
 	else:
@@ -451,7 +461,16 @@ func _step_background_fluid(dt: float) -> void:
 		if far_activity[i] > 0: far_indices.append(i)
 	while background_field_clock >= 0.25:
 		background_field_clock -= 0.25
-		if native_fluid:
+		if experimental_fluid != null:
+			# Experimental GPU water already advances the full torus every tick.
+			# Retain the ordinary coarse acidity clock without advancing water twice.
+			if background_biology:
+				if native_fluid: acidity.values = kernels.acid_step(acidity.values,fluid.velocity,far_activity,0.25)
+				else:
+					fluid.activity = far_activity
+					fluid.active_indices = far_indices
+					acidity.step(0.25,fluid)
+		elif native_fluid:
 			fluid.velocity = kernels.fluid_step(fluid.velocity,far_activity,fluid.tide,0.25,fluid.driven)
 			if background_biology: acidity.values = kernels.acid_step(acidity.values,fluid.velocity,far_activity,0.25)
 		else:

@@ -109,5 +109,31 @@ class SteamLaunchers(unittest.TestCase):
                           "<text with spaces>", "<$(not-a-command)>"])
 
 
+    def test_fluid_launcher_preserves_overrides_and_steam_discovery(self):
+        self.install(self.steam)
+        result = subprocess.run(
+            [BASH, str(PROJECT / "tools/fluid_compare.sh"), "pbf",
+             "--chemicals=50000", "--output=path with spaces"],
+            cwd=self.root, env=self.env, text=True, capture_output=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines(), [
+            "<--path>", f"<{PROJECT}>", "<--rendering-method>", "<mobile>",
+            "<--script>", "<tests/frame_profile.gd>", "<-->", "<--benchmark>",
+            "<--chemicals=50000>", "<--output=path with spaces>", "<--fluid=pbf>",
+            "<--fixture=normal>", "<--locomotion=cilia>", "<--chemicals=20000>",
+            "<--frame-step=fixed>", "<--frames=180>",
+        ])
+
+    def test_fluid_launcher_rejects_unknown_solver(self):
+        self.install(self.steam)
+        result = subprocess.run(
+            [BASH, str(PROJECT / "tools/fluid_compare.sh"), "unknown"],
+            cwd=self.root, env=self.env, text=True, capture_output=True,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("Usage:", result.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()
