@@ -27,6 +27,8 @@ var native_particles := kernels != null
 var native_background_chemistry := kernels != null
 var native_chemical_timestamps := true
 var native_chemistry_writes := true
+# Chemical overlap is allowed; this comparison switch restores soft repulsion.
+var particle_collisions := false
 var native_transport_bookkeeping := kernels != null
 var native_particle_compaction := kernels != null
 var native_fluid := kernels != null
@@ -646,7 +648,7 @@ func _move_particles(dt: float) -> void:
 
 func _chemistry(dt: float, patch: Array[int] = [], background: bool = false) -> void:
 	if native_particles and (not background or native_background_chemistry):
-		var result: Dictionary = kernels.chemistry(particles,patch if background else local_particle_ids(),acidity.values,player.position if camera_follows_player else camera_position,view_half,dt,revision,rng,time if native_chemical_timestamps and (background_biology or background) else -1.0,background,native_chemistry_writes)
+		var result: Dictionary = kernels.chemistry(particles,patch if background else local_particle_ids(),acidity.values,player.position if camera_follows_player else camera_position,view_half,dt,revision,rng,time if native_chemical_timestamps and (background_biology or background) else -1.0,background,native_chemistry_writes,particle_collisions)
 		acidity.values = result.acid
 		respiration_loss += result.loss
 		recycled += result.recycled
@@ -700,11 +702,11 @@ func _chemistry(dt: float, patch: Array[int] = [], background: bool = false) -> 
 				p.reacted = revision
 				other.reacted = revision
 				break
-			# Unsuccessful contacts separate softly and tumble, giving binding sites
-			# another encounter rather than allowing particles to remain overlaid.
-			var push := normal*(contact-delta.length())*0.25
-			p.v -= push*8
-			other.v += push*8
+			# Optional comparison: point-centered chemical particles can overlap.
+			if particle_collisions:
+				var push := normal*(contact-delta.length())*0.25
+				p.v -= push*8
+				other.v += push*8
 
 static func particle_radius(kind: int) -> float:
 	return [4.0,2.5,3.0,2.5,5.0,3.0,4.0,4.0,3.0,3.0,3.5][kind]

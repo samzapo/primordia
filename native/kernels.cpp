@@ -512,8 +512,8 @@ protected:
                                   "camera", "half", "dt", "revision", "rng", "clock", "background"),
                          &PrimordiaKernels::transport, DEFVAL(-1.0), DEFVAL(false));
     ClassDB::bind_method(D_METHOD("chemistry", "particles", "ids", "acid",
-                                  "camera", "half", "dt", "revision", "rng", "clock", "background", "dirty_writes"),
-                         &PrimordiaKernels::chemistry, DEFVAL(-1.0), DEFVAL(false), DEFVAL(true));
+                                  "camera", "half", "dt", "revision", "rng", "clock", "background", "dirty_writes", "collisions"),
+                         &PrimordiaKernels::chemistry, DEFVAL(-1.0), DEFVAL(false), DEFVAL(true), DEFVAL(false));
     ClassDB::bind_method(
         D_METHOD("fluid_step", "velocity", "activity", "tide", "dt", "driven"),
         &PrimordiaKernels::fluid_step);
@@ -1545,7 +1545,7 @@ public:
   Dictionary chemistry(Array particles, TypedArray<int64_t> ids,
                        PackedFloat32Array acid, Vector2 camera, Vector2 half,
                        double dt, int revision,
-                       Ref<RandomNumberGenerator> rng, double clock, bool background, bool dirty_writes) {
+                       Ref<RandomNumberGenerator> rng, double clock, bool background, bool dirty_writes, bool collisions) {
     static const double radii[] = {4, 2.5, 3, 2.5, 5, 3, 4, 4, 3, 3, 3.5};
     static const double decay[] = {.003, .008, .006, 0.0,  .1, .001,
                                    .02,  .015, .008, .008, .08};
@@ -1714,9 +1714,11 @@ public:
               p.reacted = b.reacted = true;
               break;
             }
-            Vector2 push = n * (c - dist) * .25;
-            p.v -= push * 8;
-            b.v += push * 8;
+            if (collisions) {
+              Vector2 push = n * (c - dist) * .25;
+              p.v -= push * 8;
+              b.v += push * 8;
+            }
           }
     }
     for (auto &p : scratch) {

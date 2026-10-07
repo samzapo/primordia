@@ -66,29 +66,31 @@ static func same_cells(a,b) -> bool:
 static func chemistry_pairs(check: Callable) -> void:
 	var pooled = Sim.new(27)
 	var mirrored = Sim.new(27)
-	for acid in [0.0,0.4,0.95]:
-		for aligned in [true,false]:
-			for a in Sim.SPECIES_COUNT:
-				for b in Sim.SPECIES_COUNT:
-					if pooled.particle_pool: pooled.disable_particle_pool()
-					pooled.particles.clear()
-					pooled.grid.rebuild(pooled.particles)
-					pooled.spawn_particle(a,Vector2(4094,900),Vector2(2,0),0.3,0)
-					pooled.spawn_particle(b,Vector2(2,900),Vector2(-3,0),0.4,1)
-					pooled.particles[0].direction = Vector2.RIGHT if aligned else Vector2.LEFT
-					pooled.particles[1].direction = Vector2.LEFT
-					mirrored.particles = pooled.particles.duplicate(true)
-					for sim in [pooled,mirrored]:
-						sim.camera_follows_player = false
-						sim.camera_position = Vector2(0,900)
-						sim.acidity.values.fill(acid)
-						sim.rng.seed = 781
-						sim.revision += 1
-						sim.grid.rebuild(sim.particles)
-					pooled.enable_particle_pool()
-					pooled._chemistry(0.0000001)
-					mirrored._chemistry(0.0000001)
-					check.call(Compare.same_packets(pooled.particle_snapshots(),mirrored.particles) and pooled.rng.state==mirrored.rng.state and pooled.chemistry_events==mirrored.chemistry_events and pooled.acidity.values==mirrored.acidity.values,"Resident pool oriented species/order/acid parity %d/%d" % [a,b])
+	for collisions in [false,true]:
+		for acid in [0.0,0.4,0.95]:
+			for aligned in [true,false]:
+				for a in Sim.SPECIES_COUNT:
+					for b in Sim.SPECIES_COUNT:
+						if pooled.particle_pool: pooled.disable_particle_pool()
+						pooled.particles.clear()
+						pooled.grid.rebuild(pooled.particles)
+						pooled.spawn_particle(a,Vector2(4094,900),Vector2(2,0),0.3,0)
+						pooled.spawn_particle(b,Vector2(2,900),Vector2(-3,0),0.4,1)
+						pooled.particles[0].direction = Vector2.RIGHT if aligned else Vector2.LEFT
+						pooled.particles[1].direction = Vector2.LEFT
+						mirrored.particles = pooled.particles.duplicate(true)
+						for sim in [pooled,mirrored]:
+							sim.particle_collisions = collisions
+							sim.camera_follows_player = false
+							sim.camera_position = Vector2(0,900)
+							sim.acidity.values.fill(acid)
+							sim.rng.seed = 781
+							sim.revision += 1
+							sim.grid.rebuild(sim.particles)
+						pooled.enable_particle_pool()
+						pooled._chemistry(0.0000001)
+						mirrored._chemistry(0.0000001)
+						check.call(Compare.same_packets(pooled.particle_snapshots(),mirrored.particles) and pooled.rng.state==mirrored.rng.state and pooled.chemistry_events==mirrored.chemistry_events and pooled.acidity.values==mirrored.acidity.values,"Resident pool oriented species/order/acid parity %d/%d" % [a,b])
 
 static func isolated():
 	var sim = Sim.new(619)

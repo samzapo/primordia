@@ -22,6 +22,7 @@ func _run() -> void:
 	preload("res://tests/fluid_options.gd").run(expect)
 	preload("res://tests/packed_particles.gd").run(expect)
 	preload("res://tests/particle_pool.gd").run(expect)
+	preload("res://tests/particle_collisions.gd").run(expect)
 	preload("res://tests/habitat.gd").run(expect)
 	preload("res://tests/porous_habitat.gd").run(expect)
 	preload("res://tests/art.gd").run(expect)
@@ -620,12 +621,13 @@ func _test_preferences() -> void:
 	preferences.fullscreen = true
 	preferences.bloom = false
 	preferences.water_ripples = false
+	preferences.particle_collisions = true
 	preferences.hud_scale = 1.5
 	preferences.save_settings()
 	var restored = preload("res://scripts/preferences.gd").new()
 	restored.path = preferences.path
 	restored.load_settings()
-	expect(restored.fullscreen and restored.hud_scale == 1.5 and not restored.bloom and not restored.water_ripples,"Water shimmer, fullscreen, bloom and HUD scale survive settings reload")
+	expect(restored.fullscreen and restored.hud_scale == 1.5 and not restored.bloom and not restored.water_ripples and restored.particle_collisions,"Particle collisions, water shimmer, fullscreen, bloom and HUD scale survive settings reload")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(preferences.path))
 
 func _test_packing_and_size() -> void:

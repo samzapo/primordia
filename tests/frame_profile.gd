@@ -9,6 +9,11 @@ func run() -> void:
 	var fluid_name := option("--fluid","current")
 	var packet_text := option("--chemicals","0")
 	var distribution := option("--distribution","uniform")
+	var collisions := option("--particle-collisions","off")
+	if collisions not in ["on","off"]:
+		push_error("Particle collisions must be on or off")
+		quit(1)
+		return
 	var frame_step := option("--frame-step","live")
 	var feedback := option("--fluid-feedback","on")
 	var dx_text := option("--fluid-dx","16")
@@ -47,6 +52,7 @@ func run() -> void:
 	scene.music.enabled = option("--music","on") == "on"
 	scene.manual_zoom = 0.8
 	scene.show_reaction_sparks = option("--sparks","on") == "on"
+	scene.set_particle_collisions(collisions == "on")
 	var sim = scene.world
 	var initial_player_biomass: float = sim.player.biomass
 	# Exercise real paid opening anatomy, not a free propulsion endowment.
@@ -143,7 +149,7 @@ func run() -> void:
 		for key in phases: phases[key] /= tick_rows.size()
 		tick_rows.sort()
 		var tick_result := {"mode":"ticks","fluid":fluid_name,"locomotion":locomotion,"fixture":option("--fixture","dense"),"hotpaths":option("--hotpaths","all"),
-			"ticks":tick_rows.size(),"mean_ms":total/tick_rows.size(),"p95_ms":tick_rows[mini(tick_rows.size()-1,int(tick_rows.size()*0.95))],
+			"particle_collisions":sim.particle_collisions,"ticks":tick_rows.size(),"mean_ms":total/tick_rows.size(),"p95_ms":tick_rows[mini(tick_rows.size()-1,int(tick_rows.size()*0.95))],
 			"phases_ms":phases,"particles":sim.particle_count(),"simulation_seconds":sim.time-sim_started,
 			"rng":str(sim.rng.state),"background_rng":str(sim.background_rng.state),"ecology_rng":str(sim.ecology_rng.state)}
 		if not save_result(tick_result,option("--output","")):
@@ -164,7 +170,7 @@ func run() -> void:
 	var result := {"rows":rows,"fluid":fluid_name,"fluid_settings":sim.experimental_fluid.metrics if sim.experimental_fluid != null else {},
 		"fluid_feedback":feedback,
 		"fluid_quality":preload("res://tests/fluid_compare_gpu.gd").summary(sim.experimental_fluid) if sim.experimental_fluid != null else {},
-		"requested_chemicals":int(packet_text),"distribution":distribution,"frame_step":frame_step,
+		"requested_chemicals":int(packet_text),"distribution":distribution,"frame_step":frame_step,"particle_collisions":sim.particle_collisions,
 		"chemistry_events":sim.chemistry_events.duplicate(),"material_remaining":Fixture.packet_material(sim),
 		"packed_particles":sim.native_particle_pipeline,"particle_pool":sim.particle_pool,"pool_metrics":sim.kernels.pool_metrics() if sim.kernels != null else {},"particle_render_cache":sim.native_particle_render_cache,
 		"simulation_seconds":sim.time-sim_started,"rng":str(sim.rng.state),"background_rng":str(sim.background_rng.state),"ecology_rng":str(sim.ecology_rng.state),

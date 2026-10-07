@@ -110,6 +110,12 @@ func run(test_host) -> void:
 	scene.ripple_check.toggled.emit(false)
 	expect(not scene.preferences.water_ripples and scene.light_layer.material.get_shader_parameter("water_ripples") == false,"Water shimmer can be disabled without changing anatomy or the screen-copy pass")
 	scene.ripple_check.toggled.emit(true)
+	expect(not scene.world.particle_collisions and not scene.collisions_check.button_pressed,"Collision-free chemical particles are the default")
+	var collision_time: float = scene.world.time
+	var collision_rng: int = scene.world.rng.state
+	scene.collisions_check.toggled.emit(true)
+	expect(scene.world.particle_collisions and scene.preferences.particle_collisions and scene.world.time == collision_time and scene.world.rng.state == collision_rng,"Settings restores particle repulsion without restarting or advancing ecology")
+	scene.collisions_check.toggled.emit(false)
 	key(KEY_ESCAPE)
 	key(KEY_SPACE)
 	expect(not scene.camera_locked and not scene.is_paused(),"Space unlocks view without pausing")
@@ -727,6 +733,8 @@ func _native_pool() -> void:
 	scene.inspector.update_lens(0.1,cursor,1,true)
 	expect(not scene.inspector.hovered.is_empty() and scene.inspector.hovered.packet._handle==handle and scene.inspector.hovered.index==0,"The real lens keeps its handle through native slot compaction")
 	expect(scene.inspector.pick(scene.camera_screen,1).is_empty(),"Native picking still suppresses cell-adjacent particles")
+	scene.set_particle_collisions(true)
+	expect(sim.particle_collisions and sim.particle_pool,"Collision setting switches the live native pool without a fallback")
 	sim._chemistry(100000)
 	scene.inspector.update_lens(0.1,cursor,1,true)
 	expect(scene.inspector.hovered.is_empty(),"A consumed/decayed native handle cannot leave a ghost lens")
@@ -735,3 +743,5 @@ func _native_pool() -> void:
 	scene.use_particle_pool = true
 	scene._restart()
 	expect(scene.world.particle_pool and scene.world.particles.is_empty(),"Ordinary restart enables authoritative ownership by default")
+	expect(scene.world.particle_collisions,"Native and dictionary restarts retain the collision preference")
+	scene.set_particle_collisions(false)
