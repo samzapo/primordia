@@ -192,3 +192,9 @@ The player starts with a grazing pore and **neither cilia nor a flagellum**. Bot
 Two opt-in prototypes compare a pressure grid and Position Based Fluids with the existing medium. Ordinary gameplay remains on the established CPU backend. [Revision 25](docs/REVISION_25.md) documents GPU validation, 20k/50k chemical workloads, live catch-up, physics defects and Steam-compatible reproduction commands.
 
 Neither solver alone makes dense chemistry fast: particle transport, reactions and view preparation dominate. Packed persistent chemical state is the next priority; moving-body pressure coupling and PBF boundary density need work before either experimental solver can become the default.
+
+## Revision 26: sharing particle state with drawing
+
+The native path now reuses numeric packet state between transport, grid updates and chemistry, then carries it into particle drawing. Feeding, toxin/decoy binding, membrane shunting, spawning and compaction refresh affected visuals; paused editing reads fresh state. Existing chemistry, finite material and sensing rules remain.
+
+[Revision 26](docs/REVISION_26.md) includes independent packing/render-cache measurements, 20k/50k/100k whole-frame tests at the 80% view, clustered clouds, large cells and live catch-up. This is the first migration stage: biological dictionaries still publish each tick, and dense particle soup has not reached the 60 FPS target.

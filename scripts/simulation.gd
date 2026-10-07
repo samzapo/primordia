@@ -20,6 +20,9 @@ var coarse_mode := false
 var coarse_event_at := 0.0
 var ecology_rng := RandomNumberGenerator.new()
 const Transport = preload("res://scripts/particle_transport.gd")
+var native_particle_pipeline := kernels != null
+var native_particle_render_cache := kernels != null
+var packed_particle_frame := false
 var native_particles := kernels != null
 var native_background_chemistry := kernels != null
 var native_chemical_timestamps := true
@@ -225,6 +228,7 @@ func spawn_particle(kind: int, p: Vector2, v: Vector2 = Vector2.ZERO, amount: fl
 		particles[-1].direction = Vector2.ZERO
 		particles[-1].expires_at = time-log(maxf(rng.randf(),0.000000001))/PHEROMONE_DECAY
 		pheromones.append(particles[-1])
+	if kernels != null: kernels.invalidate_particle_render(particles.size()-1)
 	particles[-1].chemical_at = time
 	particles[-1].transport_at = transport_clock
 	grid.insert(particles.size()-1,particles[-1].p)
@@ -338,6 +342,9 @@ func step(dt: float) -> void:
 	profile_usec["fluid"] = Time.get_ticks_usec()-mark
 	mark = Time.get_ticks_usec()
 	_expire_pheromones()
+	packed_particle_frame = native_particle_pipeline and native_particles and native_transport_bookkeeping and native_chemistry_writes and native_chemical_timestamps and grid.native != null and grid.native_enabled and grid.incremental and gpu_transport == null and (not habitat_geometry.enabled or habitat_geometry.particles_permeable)
+	var packed_render_tick := packed_particle_frame and native_feeding and native_exclusion and native_background_chemistry
+	if packed_particle_frame: kernels.packet_begin(particles)
 	_move_particles(dt)
 	if profiling: profile_usec["transport"] = Time.get_ticks_usec()-mark
 	var plant_mark := Time.get_ticks_usec() if profiling else 0
@@ -347,6 +354,11 @@ func step(dt: float) -> void:
 	var chem_mark := Time.get_ticks_usec() if profiling else 0
 	_chemistry(dt)
 	if profiling: profile_usec["chemistry"] = Time.get_ticks_usec()-chem_mark
+	var publish_mark := Time.get_ticks_usec() if profiling else 0
+	if packed_particle_frame:
+		kernels.packet_end()
+		packed_particle_frame = false
+	if profiling: profile_usec["particle_publish"] = Time.get_ticks_usec()-publish_mark
 	profile_usec["particles"] = Time.get_ticks_usec()-mark
 	mark = Time.get_ticks_usec()
 	if background_biology: offscreen_ecology.step(self,dt)
@@ -444,6 +456,7 @@ func step(dt: float) -> void:
 	evolution.advance(dt,self)
 	profile_usec["evolution"] = Time.get_ticks_usec()-mark
 	won = evolution.status == "won"
+	if packed_render_tick: kernels.particle_render_ready(particles,revision)
 
 func _step_background_fluid(dt: float) -> void:
 	if not background_transport: return
@@ -565,7 +578,11 @@ func _move_particles(dt: float) -> void:
 	profile_usec["background_transport"] = Time.get_ticks_usec()-mark
 	var grid_mark := Time.get_ticks_usec() if profiling else 0
 	if native_particles or gpu_transport != null:
-		if grid.incremental:
+		if packed_particle_frame:
+			var positions: PackedVector2Array = kernels.packet_positions()
+			grid.native.update_positions(positions,ids)
+			grid.native.update_positions(positions,far_ids)
+		elif grid.incremental:
 			grid.update(particles,ids)
 			grid.update(particles,far_ids)
 		else: grid.rebuild(particles)
@@ -960,6 +977,7 @@ func _feed(cell) -> void:
 			if Medium.offset(mouth,p.p).length() <= reach:
 				var amount = minf(p.amount,maxf(0,cell.gut_capacity()-cell.substrate))
 				p.amount -= amount
+				if kernels != null: kernels.invalidate_particle_render(index)
 				cell.substrate += amount
 				cell.eaten += amount
 				if p.owner != cell.id: cell.foreign_intake += amount
@@ -972,11 +990,13 @@ func _feed(cell) -> void:
 			cell.carbon += carbon_taken
 			if p.owner != cell.id: cell.foreign_intake += carbon_taken
 			p.amount -= carbon_taken
+			if kernels != null: kernels.invalidate_particle_render(index)
 			if p.amount <= 0.000001: p.alive = false
 		if p.alive and p.kind == OXYGEN and activity_at(p.p) > 0 and Medium.offset(cell.position,p.p).length() < cell.support(Medium.offset(cell.position,p.p).angle())+14:
 			var amount = minf(p.amount,maxf(0,cell.oxygen_capacity()-cell.oxygen))
 			cell.oxygen += amount
 			p.amount -= amount
+			if kernels != null: kernels.invalidate_particle_render(index)
 			if p.amount <= 0.000001: p.alive = false
 
 	if cell.eaten > before: _record_sound("feeding",cell.position,cell.id,cell.eaten-before)
@@ -1296,6 +1316,7 @@ func _exclude_particles() -> void:
 				var before: Vector2 = p.p
 				p.p = Medium.wrap_position(cell.position+Vector2.from_angle(angle)*edge)
 				p.previous = p.p
+				if kernels != null: kernels.invalidate_particle_render(index)
 				grid.move(index,before,p.p)
 				moved = true
 			if not moved: break
@@ -1327,6 +1348,7 @@ func _receptor_contacts() -> void:
 				if forward.dot(normal) < 0.25 or p.direction.dot(-normal) < 0.5: continue
 				organ.blocked = minf(1,organ.blocked+0.65)
 				cell.waste += p.amount
+				if kernels != null: kernels.invalidate_particle_render(index)
 				p.alive = false
 				cell.render_revision += 1
 
@@ -1343,6 +1365,7 @@ func _toxin_contacts() -> void:
 				cell.waste += cell.damage(p.amount*75,d.angle()) + p.amount
 				cell.death_hint = "Membrane failed after toxin exposure"
 				if p.owner == player.id: evolution.record("toxin",p.amount*75)
+				if kernels != null: kernels.invalidate_particle_render(index)
 				p.alive = false
 				break
 

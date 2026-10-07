@@ -55,6 +55,8 @@ func run() -> void:
 			finish_scene(scene,1)
 			return
 	var switches := option("--hotpaths","all").split(",")
+	if "legacy" in switches or "packets" in switches: sim.native_particle_pipeline = false
+	if "legacy" in switches or "render_cache" in switches: sim.native_particle_render_cache = false
 	if "legacy" in switches or "geometry" in switches: scene.native_geometry = false
 	if "legacy" in switches or "compact" in switches: sim.native_particle_compaction = false
 	if "legacy" in switches or "bookkeeping" in switches: sim.native_transport_bookkeeping = false
@@ -162,6 +164,8 @@ func run() -> void:
 		"fluid_quality":preload("res://tests/fluid_compare_gpu.gd").summary(sim.experimental_fluid) if sim.experimental_fluid != null else {},
 		"requested_chemicals":int(packet_text),"distribution":distribution,"frame_step":frame_step,
 		"chemistry_events":sim.chemistry_events.duplicate(),"material_remaining":Fixture.packet_material(sim),
+		"packed_particles":sim.native_particle_pipeline,"particle_render_cache":sim.native_particle_render_cache,
+		"simulation_seconds":sim.time-sim_started,"rng":str(sim.rng.state),"background_rng":str(sim.background_rng.state),"ecology_rng":str(sim.ecology_rng.state),
 		"locomotion":locomotion,"player_radius":sim.player.radius,"player_biomass":sim.player.biomass,"seconds":seconds,"hotpaths":option("--hotpaths","all"),"mode":option("--mode","live"),"fixture":option("--fixture","dense"),"music":scene.music.enabled,
 		"engine":Engine.get_version_info().string,"cpu":OS.get_processor_name(),"gpu":RenderingServer.get_video_adapter_name(),
 		"display":DisplayServer.get_name(),"viewport":str(root.size),"zoom":scene.manual_zoom,"max_steps":Engine.max_physics_steps_per_frame,

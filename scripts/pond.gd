@@ -366,7 +366,7 @@ func _sync_particles(alpha: float = 1.0) -> void:
 	if world.native_render:
 		var capacities := PackedInt32Array()
 		for batch in batches: capacities.append(batch.multimesh.instance_count)
-		var result: Array = world.kernels.render_particles(world.particles,world.visible_particle_ids(30),world.cells,render_camera,world.view_half,alpha,world.revision,capacities)
+		var result: Array = world.kernels.render_particles(world.particles,world.visible_particle_ids(30),world.cells,render_camera,world.view_half,alpha,world.revision,capacities,world.native_particle_render_cache and not is_paused())
 		for kind in Simulation.SPECIES_COUNT:
 			buffers[kind] = result[kind]
 			var count: int = result[-1][kind]

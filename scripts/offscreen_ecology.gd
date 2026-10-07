@@ -186,6 +186,7 @@ func _feed(sim, cell, dt: float) -> void:
 		if not sim.habitat_geometry.particles_permeable and not _clear_path(sim,cell.position,p.p): continue
 		var amount := minf(p.amount,capacity)
 		p.amount -= amount
+		if sim.kernels != null: sim.kernels.invalidate_particle_render(index)
 		if p.amount <= 0.000001: p.alive = false
 		if p.kind == sim.OXYGEN: cell.oxygen += amount
 		elif p.kind == sim.CARBON:
@@ -225,6 +226,7 @@ func _exposure(sim, cell, dt: float) -> void:
 				bound = true
 				break
 			if not bound: continue
+		if sim.kernels != null: sim.kernels.invalidate_particle_render(index)
 		p.alive = false
 		cell.waste += p.amount
 		if p.kind == sim.TOXIN:

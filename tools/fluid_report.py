@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare rendered fluid fixtures; distinguish fixed-tick throughput from live FPS."""
+"""Compare rendered particle/fluid fixtures; distinguish fixed-tick throughput from live FPS."""
 import argparse
 import json
 from pathlib import Path
@@ -23,7 +23,12 @@ def summarize(path):
         "ticks": measured["ticks"], "tick_histogram": measured["tick_histogram"],
         "phase_mean_ms": measured["phase_mean_ms"],
         "phase_per_tick_ms": measured["sim_phase_per_tick_ms"],
-        "ranges": measured["ranges"], "music_skip_delta": measured["music_skip_delta"],
+        "ranges": measured["ranges"], "count_per_tick": measured["count_per_tick"],
+        "music_skip_delta": measured["music_skip_delta"],
+        "hotpaths": data.get("hotpaths"),
+        "packed_particles": data.get("packed_particles"),
+        "particle_render_cache": data.get("particle_render_cache"),
+        "final_random_states": {key: data.get(key) for key in ["rng", "background_rng", "ecology_rng"]},
         "quality": data.get("fluid_quality", {}),
         "settings": data.get("fluid_settings", {}),
         "body_feedback": data.get("fluid_feedback", "on"),

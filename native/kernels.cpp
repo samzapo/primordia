@@ -12,6 +12,7 @@
 #include <godot_cpp/variant/packed_vector2_array.hpp>
 #include <godot_cpp/variant/typed_array.hpp>
 #include <godot_cpp/variant/callable.hpp>
+#include <godot_cpp/variant/utility_functions.hpp>
 #include <vector>
 using namespace godot;
 namespace {
@@ -65,6 +66,31 @@ struct Keys {
   const Variant transport_jump = String("transport_jump");
   const Variant chemical_at = String("chemical_at");
 };
+// Numeric packet buffers persist, but a scoped frame imports public dictionaries
+// lazily. Transport mirrors stay current, chemical changes publish before
+// biology, and numeric poses continue into drawing; identity/metadata stay intact.
+struct PacketState {
+  Vector2 p, v, dir, previous;
+  double angle, previous_angle, spin, age, amount, capacity, transport_at, chemical_at;
+  int kind, updated, reacted;
+  bool alive, jump;
+};
+struct ChemicalOriginal { Vector2 v; double amount=0,capacity=0,chemical_at=0; int kind=0,reacted=-1; bool alive=false, has_clock=false; };
+struct PacketSlot {
+  Dictionary d;
+  PacketState value{};
+  ChemicalOriginal original;
+  uint64_t epoch = 0;
+  bool moved = false, chemical = false, transport_loaded=false, chemical_loaded=false;
+  bool has_transport_clock=false, has_chemical_clock=false;
+};
+struct RenderPacket {
+  Vector2 p, previous;
+  double angle, previous_angle, amount;
+  int kind, updated;
+  bool alive;
+  uint64_t epoch = 0;
+};
 struct Particle {
   Dictionary d;
   Vector2 p, v, dir;
@@ -98,6 +124,7 @@ protected:
                          &PrimordiaGrid::rebuild);
     ClassDB::bind_method(D_METHOD("update", "particles", "ids"),
                          &PrimordiaGrid::update);
+    ClassDB::bind_method(D_METHOD("update_positions", "positions", "ids"), &PrimordiaGrid::update_positions);
     ClassDB::bind_method(D_METHOD("insert", "id", "position"),
                          &PrimordiaGrid::insert);
     ClassDB::bind_method(D_METHOD("move", "id", "old", "position"),
@@ -143,6 +170,29 @@ public:
       int id = int(ids[k]);
       Dictionary p = particles[id];
       int to = key(p[keys.p]);
+      int from = locations[id];
+      if (from == to) continue;
+      auto &old = bins[from];
+      auto found = std::find(old.begin(), old.end(), id);
+      if (found != old.end()) old.erase(found);
+      bins[to].push_back(id);
+      locations[id] = to;
+      std::sort(bins[from].begin(), bins[from].end());
+      std::sort(bins[to].begin(), bins[to].end());
+    }
+    // A hybrid reference move may already have changed locations. Repair its
+    // insertion order even when update() now sees from == to.
+    std::sort(moved_bins.begin(), moved_bins.end());
+    moved_bins.erase(std::unique(moved_bins.begin(), moved_bins.end()), moved_bins.end());
+    for (int id : moved_bins) std::sort(bins[id].begin(),bins[id].end());
+    moved_bins.clear();
+  }
+  void update_positions(PackedVector2Array positions, Array ids) {
+    // Read only moved packets. Match a full rebuild's stable identity order,
+    // including when a hybrid reference operation used move() beforehand.
+    for (int k = 0; k < ids.size(); ++k) {
+      int id = int(ids[k]);
+      int to = key(positions[id]);
       int from = locations[id];
       if (from == to) continue;
       auto &old = bins[from];
@@ -249,12 +299,68 @@ class PrimordiaKernels : public RefCounted {
       }
     return t;
   }
+  bool packet_frame = false;
+  Array packet_source, render_source;
+  uint64_t packet_epoch = 0, render_epoch = 0;
+  int render_revision = -1, render_count = -1;
+  bool packed_render_state=false;
+  std::vector<PacketSlot> packet_slots;
+  std::vector<int> packet_touched;
+  PackedVector2Array packet_positions;
+  std::vector<RenderPacket> render_packets;
+  std::array<std::vector<std::array<float,12>>,11> render_instances;
+  PacketSlot &packet(int id) {
+    auto &slot=packet_slots[id];
+    if (slot.epoch==packet_epoch) return slot;
+    slot.epoch=packet_epoch;
+    slot.moved=slot.chemical=slot.transport_loaded=slot.chemical_loaded=false;
+    slot.d=packet_source[id];
+    auto &v=slot.value;
+    v.p=slot.d[keys.p]; v.alive=slot.d[keys.alive];
+    Variant clock=slot.d.get(keys.transport_at,Variant());
+    slot.has_transport_clock=clock.get_type()!=Variant::NIL;
+    v.transport_at=slot.has_transport_clock ? double(clock) : 0.;
+    v.jump=slot.d.get(keys.transport_jump,false);
+    slot.original.alive=v.alive;
+    packet_positions.set(id,v.p);
+    packet_touched.push_back(id);
+    return slot;
+  }
+  void load_transport(PacketSlot &slot) {
+    if (slot.transport_loaded) return;
+    auto &v=slot.value; auto &o=slot.original; auto &d=slot.d;
+    v.kind=d[keys.kind]; v.v=d[keys.v]; v.angle=d[keys.angle];
+    v.age=d[keys.age]; v.spin=d[keys.spin];
+    o.kind=v.kind; o.v=v.v;
+    slot.transport_loaded=true;
+  }
+  void load_chemistry(PacketSlot &slot) {
+    if (slot.chemical_loaded) return;
+    auto &v=slot.value; auto &o=slot.original; auto &d=slot.d;
+    if (!slot.moved) {
+      v.kind=d[keys.kind]; v.v=d[keys.v]; v.dir=d[keys.direction];
+      o.kind=v.kind; o.v=v.v;
+    }
+    v.amount=d[keys.amount]; v.capacity=d[keys.capacity];
+    v.reacted=d.get(keys.reacted,-1);
+    Variant clock=d.get(keys.chemical_at,Variant());
+    slot.has_chemical_clock=clock.get_type()!=Variant::NIL;
+    v.chemical_at=slot.has_chemical_clock ? double(clock) : 0.;
+    o.has_clock=slot.has_chemical_clock;
+    o.amount=v.amount; o.capacity=v.capacity; o.reacted=v.reacted; o.chemical_at=v.chemical_at;
+    slot.chemical_loaded=true;
+  }
   std::vector<Particle> scratch;
   std::vector<std::vector<int>> bins;
   std::vector<int> occupied_bins;
 
 protected:
   static void _bind_methods() {
+    ClassDB::bind_method(D_METHOD("packet_begin", "particles"), &PrimordiaKernels::packet_begin);
+    ClassDB::bind_method(D_METHOD("packet_end"), &PrimordiaKernels::packet_end);
+    ClassDB::bind_method(D_METHOD("packet_positions"), &PrimordiaKernels::get_packet_positions);
+    ClassDB::bind_method(D_METHOD("invalidate_particle_render", "id"), &PrimordiaKernels::invalidate_particle_render, DEFVAL(-1));
+    ClassDB::bind_method(D_METHOD("particle_render_ready", "particles", "revision"), &PrimordiaKernels::particle_render_ready);
     ClassDB::bind_method(D_METHOD("obstacle_configure", "segments", "bins"),
                          &PrimordiaKernels::obstacle_configure);
     ClassDB::bind_method(
@@ -272,8 +378,8 @@ protected:
 
     ClassDB::bind_method(D_METHOD("render_particles", "particles", "ids",
                                   "bodies", "camera", "half", "alpha",
-                                  "revision", "capacities"),
-                         &PrimordiaKernels::render_particles);
+                                  "revision", "capacities", "cache"),
+                         &PrimordiaKernels::render_particles, DEFVAL(false));
     ClassDB::bind_method(D_METHOD("feed", "particles", "ids", "body", "organ", "camera", "half"),
                          &PrimordiaKernels::feed);
     ClassDB::bind_method(D_METHOD("coarse_feed", "particles", "ids", "body", "organ", "rates", "camera", "half", "rng", "habitat"),
@@ -301,6 +407,58 @@ protected:
   }
 
 public:
+  void packet_begin(Array particles) {
+    packet_source = particles;
+    packet_frame = true;
+    ++packet_epoch;
+    packet_slots.resize(particles.size());
+    packet_positions.resize(particles.size());
+    packet_touched.clear();
+    ++render_epoch; render_packets.resize(particles.size());
+    render_source=particles; render_count=particles.size(); render_revision=-1;
+    packed_render_state=true;
+  }
+  PackedVector2Array get_packet_positions() const { return packet_positions; }
+  void invalidate_particle_render(int id=-1) {
+    if (id>=0) {
+      if (id<int(render_packets.size())) render_packets[id].epoch=0;
+    } else { render_revision=-1; packed_render_state=false; }
+  }
+  void particle_render_ready(Array particles,int revision) {
+    if (!packed_render_state || !UtilityFunctions::is_same(render_source,particles)) {
+      invalidate_particle_render(); return;
+    }
+    render_packets.resize(particles.size()); render_count=particles.size();
+    render_revision=revision;
+  }
+  void packet_end() {
+    if (!packet_frame) return;
+    for (int id : packet_touched) {
+      auto &slot=packet_slots[id]; auto &a=slot.value; const auto &b=slot.original;
+      Dictionary &d=slot.d;
+      if (slot.moved) {
+        auto &pose=render_packets[id];
+        pose.p=a.p; pose.previous=a.previous; pose.angle=a.angle;
+        pose.previous_angle=a.previous_angle; pose.kind=a.kind; pose.updated=a.updated;
+        pose.alive=a.alive; pose.amount=slot.chemical ? a.amount : double(d[keys.amount]);
+        pose.epoch=render_epoch;
+      }
+      // Transport mirrors are already current for compatibility observers.
+      // Publish only chemical changes; geometry/velocity were shared numerically.
+      if (slot.chemical && a.v!=b.v) d[keys.v]=a.v;
+      if (slot.chemical) {
+        if (a.kind!=b.kind) d[keys.kind]=a.kind;
+        if (a.amount!=b.amount) d[keys.amount]=a.amount;
+        if (a.capacity!=b.capacity) d[keys.capacity]=a.capacity;
+        if (a.alive!=b.alive) d[keys.alive]=a.alive;
+        if (a.reacted!=b.reacted) d[keys.reacted]=a.reacted;
+        if (a.chemical_at!=b.chemical_at || (!b.has_clock && slot.has_chemical_clock)) d[keys.chemical_at]=a.chemical_at;
+        // Activity/radius are private scratch values in this numeric path.
+      }
+    }
+    packet_frame=false;
+    packet_source = Array();
+  }
   void obstacle_configure(Array segments, Dictionary source_bins) {
     stems.clear();
     for (int i = 0; i < segments.size(); ++i) {
@@ -512,7 +670,7 @@ public:
   }
   Array render_particles(Array particles, TypedArray<int64_t> ids, Array bodies,
                          Vector2 camera, Vector2 half, double alpha,
-                         int revision, PackedInt32Array capacities) {
+                         int revision, PackedInt32Array capacities, bool cache) {
     struct Body {
       Vector2 p;
       double angle, extent;
@@ -546,22 +704,36 @@ public:
         for (int y = ly; y < std::min(hy + 1, ly + 20); ++y)
           near[mod(y, 20) * 32 + mod(x, 32)].push_back(id);
     }
-    std::array<std::vector<std::array<float, 12>>, 11> instances;
+    auto &instances=render_instances;
+    for (auto &batch : instances) batch.clear();
+    if (cache && (render_revision!=revision || render_count!=particles.size() ||
+                  !UtilityFunctions::is_same(render_source,particles))) {
+      render_source=particles; render_revision=revision; render_count=particles.size();
+      ++render_epoch; render_packets.resize(particles.size());
+    }
     static const double radii[] = {4, 2.5, 3, 2.5, 5, 3, 4, 4, 3, 3, 3.5};
     for (int k = 0; k < ids.size(); ++k) {
-      Dictionary p = particles[int64_t(ids[k])];
-      if (!bool(p[keys.alive]))
-        continue;
-      Vector2 at = p[keys.p];
-      double heading = p[keys.angle];
-      if (int(p.get(keys.updated, -1)) == revision) {
-        Vector2 previous = p[keys.previous];
+      int id=ids[k];
+      RenderPacket fresh, *pose=cache ? &render_packets[id] : &fresh;
+      if (!cache || pose->epoch!=render_epoch) {
+        Dictionary d=particles[id];
+        pose->p=d[keys.p]; pose->previous=d[keys.previous];
+        pose->angle=d[keys.angle]; pose->previous_angle=d[keys.previous_angle];
+        pose->amount=d[keys.amount]; pose->kind=int(d[keys.kind]);
+        pose->alive=d[keys.alive]; pose->updated=int(d.get(keys.updated,-1));
+        pose->epoch=render_epoch;
+      }
+      if (!pose->alive) continue;
+      Vector2 at=pose->p;
+      double heading=pose->angle;
+      if (pose->updated == revision) {
+        Vector2 previous = pose->previous;
         at = previous + delta(previous, at) * alpha;
-        double old = p[keys.previous_angle];
+        double old = pose->previous_angle;
         heading = old + (wrap(heading - old + PI, TAU) - PI) * alpha;
       }
       // Dissolved pheromones are drawn at their true position, even inside cells.
-      if (int(p[keys.kind]) != 3) {
+      if (pose->kind != 3) {
         for (int c : near[mod(int(std::floor(at.y / 128)), 20) * 32 +
                           mod(int(std::floor(at.x / 128)), 32)]) {
           const Body &b = cells[c];
@@ -598,10 +770,10 @@ public:
       at = delta(camera, at);
       if (std::abs(at.x) > half.x + 20 || std::abs(at.y) > half.y + 20)
         continue;
-      int kind = p[keys.kind];
+      int kind = pose->kind;
       double diameter =
           2 * radii[kind] *
-          std::clamp(std::sqrt(double(p[keys.amount]) / .3), .8, 1.7);
+          std::clamp(std::sqrt(pose->amount / .3), .8, 1.7);
       float co = std::cos(heading) * diameter,
             si = std::sin(heading) * diameter;
       instances[kind].push_back({co, -si, 0, at.x, si, co, 0, at.y, 1, 1, 1,
@@ -691,6 +863,7 @@ public:
       }
       double taken = std::min(double(p[keys.amount]),capacity);
       p[keys.amount] = double(p[keys.amount])-taken;
+      invalidate_particle_render(int64_t(ids[k]));
       if (double(p[keys.amount]) <= .000001) p[keys.alive] = false;
       if (kind == 1) oxygen += taken;
       else if (kind == 5) {
@@ -770,6 +943,7 @@ public:
       }
       if (!handled) continue;
       if (taken > 0) p[keys.amount] = double(p[keys.amount])-taken;
+      invalidate_particle_render(int64_t(ids[k]));
       if (double(p[keys.amount]) <= .000001) p[keys.alive] = false;
     }
     body->set("substrate",substrate); body->set("eaten",eaten);
@@ -856,6 +1030,7 @@ public:
           break;
       }
       if (changed) {
+        invalidate_particle_render(id);
         p[keys.p] = at;
         p[keys.previous] = at;
       }
@@ -878,14 +1053,31 @@ public:
     TypedArray<int64_t> out;
     for (int k=0;k<visits;++k) {
       int id = (cursor+k)%particles.size();
-      Dictionary p = particles[id];
-      if (bool(p[keys.alive]) && activity(p[keys.p],camera,half) <= 0 &&
-          double(p.get(keys.transport_at,0.)) < clock) out.push_back(id);
+      if (packet_frame) {
+        const auto &p=packet(id).value;
+        if (p.alive && activity(p.p,camera,half)<=0 && p.transport_at<clock) out.push_back(id);
+      } else {
+        Dictionary p = particles[id];
+        if (bool(p[keys.alive]) && activity(p[keys.p],camera,half) <= 0 &&
+            double(p.get(keys.transport_at,0.)) < clock) out.push_back(id);
+      }
     }
     return out;
   }
   void settle_transport(Array particles, TypedArray<int64_t> ids, bool background) {
     for (int k=0;k<ids.size();++k) {
+      if (packet_frame) {
+        auto &slot=packet(ids[k]); auto &p=slot.value;
+        if (background || p.jump) {
+          if (!slot.moved) p.angle=slot.d[keys.angle];
+          p.previous=p.p; p.previous_angle=p.angle;
+          if (!background) p.jump=false;
+          slot.d[keys.previous]=p.previous;
+          slot.d[keys.previous_angle]=p.previous_angle;
+          if (!background) slot.d[keys.transport_jump]=p.jump;
+        }
+        continue;
+      }
       Dictionary p = particles[int64_t(ids[k])];
       if (background || bool(p.get(keys.transport_jump,false))) {
         p[keys.previous] = p[keys.p];
@@ -894,7 +1086,7 @@ public:
       }
     }
   }
-  int transport(Array particles, TypedArray<int64_t> ids,
+  int transport_dictionary(Array particles, TypedArray<int64_t> ids,
                 const PackedVector2Array &flow, Vector2 camera, Vector2 half,
                 double dt, int revision, Ref<RandomNumberGenerator> rng,
                 double clock, bool background) {
@@ -939,6 +1131,82 @@ public:
     }
     return count;
   }
+  int transport(Array particles, TypedArray<int64_t> ids,
+                const PackedVector2Array &flow, Vector2 camera, Vector2 half,
+                double dt, int revision, Ref<RandomNumberGenerator> rng,
+                double clock, bool background) {
+    // Keep the unscoped reference kernel unchanged for honest ablations.
+    if (!packet_frame)
+      return transport_dictionary(particles,ids,flow,camera,half,dt,revision,rng,clock,background);
+    int count = 0;
+    for (int k = 0; k < ids.size(); ++k) {
+      PacketState local, *value;
+      if (packet_frame) value=&packet(ids[k]).value;
+      else {
+        Dictionary d=particles[int64_t(ids[k])];
+        local.alive=d[keys.alive]; local.p=d[keys.p]; local.kind=int(d[keys.kind]);
+        local.transport_at=d.get(keys.transport_at,clock-dt);
+        local.v=d[keys.v]; local.angle=d[keys.angle]; local.age=d[keys.age]; local.spin=d[keys.spin];
+        value=&local;
+      }
+      auto &p=*value;
+      if (!p.alive) continue;
+      Vector2 at=p.p;
+      if ((activity(at,camera,half)>0)==background) continue;
+      double previous_clock = packet_frame && !packet_slots[int64_t(ids[k])].has_transport_clock ? clock-dt : p.transport_at;
+      double t=clock<0 ? dt : std::max(0.,clock-previous_clock);
+      if (t<=0) continue;
+      ++count;
+      if (packet_frame) load_transport(packet_slots[int64_t(ids[k])]);
+      bool tracer=p.kind==3;
+      Vector2 v=tracer ? Vector2() : p.v;
+      double angle=p.angle;
+      p.updated=revision; p.previous=at; p.jump=t>.05;
+      if (clock>=0) {
+        p.transport_at=clock;
+        if (packet_frame) packet_slots[int64_t(ids[k])].has_transport_clock=true;
+      }
+      // Keep RNG call order explicit, matching the reference backend.
+      double nx = rng->randfn(0, 1), ny = rng->randfn(0, 1);
+      if (t <= .05) {
+        at = wrapv(at + (v + sample(flow, at)) * t);
+      } else {
+        int steps = std::clamp(int(std::ceil(t / .25)), 1, 8);
+        double h = t / steps, damping = std::exp(-.8*h);
+        Vector2 launch = v;
+        for (int j = 0; j < steps; ++j) {
+          Vector2 midpoint = at + sample(flow, at)*(h*.5) + launch*((1-std::exp(-.4*h))/.8);
+          at = wrapv(at + sample(flow, midpoint)*h + launch*((1-damping)/.8));
+          launch *= damping;
+        }
+      }
+      p.p = wrapv(at + Vector2(nx, ny)*std::sqrt((tracer ? 240 : 12)*t));
+      p.v = v * std::exp(-t * .8);
+      p.age = p.age + t;
+      p.previous_angle = angle;
+      angle = wrap(angle + p.spin*t + rng->randfn(0, 1)*std::sqrt(1.2*t) + PI, TAU) - PI;
+      if (tracer) angle = 0;
+      p.angle = angle;
+      p.dir = tracer ? Vector2() : Vector2(std::cos(angle), std::sin(angle));
+      if (packet_frame) {
+        packet_slots[int64_t(ids[k])].moved=true;
+        packet_positions.set(int64_t(ids[k]),p.p);
+        auto &slot=packet_slots[int64_t(ids[k])]; Dictionary &d=slot.d;
+        d[keys.updated]=p.updated; d[keys.previous]=p.previous; d[keys.transport_jump]=p.jump;
+        if (clock>=0) d[keys.transport_at]=p.transport_at;
+        d[keys.p]=p.p; d[keys.v]=p.v; d[keys.age]=p.age;
+        d[keys.previous_angle]=p.previous_angle; d[keys.angle]=p.angle; d[keys.direction]=p.dir;
+        slot.original.v=p.v;
+      } else {
+        Dictionary d=particles[int64_t(ids[k])];
+        d[keys.updated]=p.updated; d[keys.previous]=p.previous; d[keys.transport_jump]=p.jump;
+        if (clock>=0) d[keys.transport_at]=p.transport_at;
+        d[keys.p]=p.p; d[keys.v]=p.v; d[keys.age]=p.age;
+        d[keys.previous_angle]=p.previous_angle; d[keys.angle]=p.angle; d[keys.direction]=p.dir;
+      }
+    }
+    return count;
+  }
   Dictionary chemistry(Array particles, TypedArray<int64_t> ids,
                        PackedFloat32Array acid, Vector2 camera, Vector2 half,
                        double dt, int revision,
@@ -959,26 +1227,27 @@ public:
     for (int id : occupied_bins) bins[id].clear();
     occupied_bins.clear();
     for (int k = 0; k < ids.size(); ++k) {
-      Dictionary d = particles[int64_t(ids[k])];
       Particle p;
-      p.identity = int64_t(ids[k]);
-      p.d = d;
-      p.p = d[keys.p];
-      p.v = d[keys.v];
-      p.dir = d[keys.direction];
-      p.amount = d[keys.amount];
-      p.capacity = d[keys.capacity];
-      p.kind = int(d[keys.kind]);
-      p.alive = d[keys.alive];
-      p.reacted = int(d.get(keys.reacted, -1)) == revision;
+      p.identity=int64_t(ids[k]);
+      PacketState *numeric=nullptr;
+      if (packet_frame) {
+        auto &slot=packet(p.identity); load_chemistry(slot); numeric=&slot.value; slot.chemical=true;
+        p.d=slot.d; p.p=numeric->p; p.v=numeric->v; p.dir=numeric->dir;
+        p.amount=numeric->amount; p.capacity=numeric->capacity; p.kind=numeric->kind;
+        p.alive=numeric->alive; p.reacted=numeric->reacted==revision;
+      } else {
+        p.d=particles[p.identity];
+        p.p=p.d[keys.p]; p.v=p.d[keys.v]; p.dir=p.d[keys.direction];
+        p.amount=p.d[keys.amount]; p.capacity=p.d[keys.capacity]; p.kind=int(p.d[keys.kind]);
+        p.alive=p.d[keys.alive]; p.reacted=int(p.d.get(keys.reacted,-1))==revision;
+      }
       p.initial_v = p.v; p.initial_amount = p.amount; p.initial_capacity = p.capacity;
       p.initial_kind = p.kind; p.initial_alive = p.alive; p.initial_reacted = p.reacted;
       p.active = p.alive ? (background ? 1. : activity(p.p, camera, half)) : 0;
-      p.elapsed = background ? std::max(0., clock - double(d.get(keys.chemical_at, clock))) : dt * p.active;
-      if (clock >= 0 && !background) d[keys.chemical_at] = clock;
+      p.elapsed = background ? std::max(0., clock - (numeric ? (packet_slots[p.identity].has_chemical_clock ? numeric->chemical_at : clock) : double(p.d.get(keys.chemical_at, clock)))) : dt * p.active;
+      if (clock >= 0 && !background) { if (numeric) { numeric->chemical_at=clock; packet_slots[p.identity].has_chemical_clock=true; } else p.d[keys.chemical_at]=clock; }
       p.radius = radii[p.kind] * std::clamp(std::sqrt(p.amount / .3), .8, 1.7);
-      d[keys.reaction_activity] = p.active;
-      d[keys.contact_radius] = p.radius;
+      if (!numeric) { p.d[keys.reaction_activity]=p.active; p.d[keys.contact_radius]=p.radius; }
       scratch.push_back(p);
       if (p.active > 0 && p.kind != 3) {
         int id = mod(int(std::floor(p.p.y / 16)),160)*256 + mod(int(std::floor(p.p.x / 16)),256);
@@ -991,7 +1260,7 @@ public:
       if (!p.alive || p.active <= 0 || p.kind == 3)
         continue;
       double t = p.elapsed;
-      if (clock >= 0 && background) p.d[keys.chemical_at] = clock;
+      if (clock >= 0 && background) { if (packet_frame) { packet_slots[p.identity].value.chemical_at=clock; packet_slots[p.identity].has_chemical_clock=true; } else p.d[keys.chemical_at]=clock; }
       if (t <= 0) continue;
       if (p.kind == 8 || p.kind == 9) {
         int n = node(std::floor(p.p.x / 64), std::floor(p.p.y / 64));
@@ -1116,6 +1385,14 @@ public:
           }
     }
     for (auto &p : scratch) {
+      if (packet_frame) {
+        auto &value=packet_slots[p.identity].value;
+        value.v=p.v; value.kind=p.kind; value.amount=p.amount; value.capacity=p.capacity;
+        value.alive=p.alive; if (p.reacted) value.reacted=revision;
+        continue;
+      }
+      if (p.kind!=p.initial_kind || p.amount!=p.initial_amount || p.alive!=p.initial_alive)
+        invalidate_particle_render(p.identity);
       if (!dirty_writes || p.v != p.initial_v) p.d[keys.v] = p.v;
       if (!dirty_writes || p.kind != p.initial_kind) p.d[keys.kind] = p.kind;
       if (!dirty_writes || p.amount != p.initial_amount) p.d[keys.amount] = p.amount;
