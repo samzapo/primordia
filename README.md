@@ -216,3 +216,7 @@ The native path now reuses numeric packet state between transport, grid updates 
 Ordinary native gameplay now keeps particles in a persistent C++ pool. Motion, chemistry, feeding, pheromone sensing, contact, offscreen biology and drawing share that state; per-tick dictionary mirrors are gone. Local inspection uses stable handles so the lens follows a particle through compaction.
 
 At the 80% view on the RTX 5080 workstation, matched initial 20k fixed-step whole-frame time falls from **71.3 to 23.5 ms**, about **67% less**. The live 20k fixture approaches real time, but frame stalls remain and particle counts shrink; sustained 20k at 60 FPS and larger soups remain unproven. Default gameplay density is unchanged. [Revision 27](docs/REVISION_27.md) documents 20k/50k/100k, clusters, large cells, hunters/cilia, audio and live catch-up tests, exact finite-ecology comparisons and the explicit fallback/snapshot interface.
+
+The [Revision 35 GPU matching diagnostic](docs/REVISION_35.md) adds parallel
+mutual-choice reactions and circular contacts to the resident experiment.
+It remains separate from gameplay; cell coupling and phone validation are pending.

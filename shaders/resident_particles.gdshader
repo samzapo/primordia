@@ -20,6 +20,7 @@ void vertex() {
  COLOR=vec4(1.0);
 }
 void fragment() {
+ if(species<0.0)discard;
  vec2 uv=vec2((UV.x+species)/11.0,UV.y);
  COLOR=texture(TEXTURE,uv);
  COLOR.a*= (species==1.0 || species==3.0) ? 0.6 : 1.0;

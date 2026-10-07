@@ -369,3 +369,8 @@ The biological rules are unchanged. [Godot thread-safety documentation](https://
 ## Resident particle transport/rendering experiment (Revision 34)
 
 [Godot's compute texture example](https://godotengine.org/asset-library/asset/2764) motivates main-device compute feeding Texture2DRD without per-frame readback. [Apple synchronization guidance](https://developer.apple.com/documentation/metal/synchronizing-cpu-and-gpu-work) motivates measuring dependency stalls; [Android thermal guidance](https://developer.android.com/games/optimize/adpf/thermal) motivates sustained tests. These are engineering references, not biological evidence. The synthetic fixture uses existing diffusion/advection abstractions and diagnostic noise; it omits reactions and biological transactions.
+
+## Parallel partner competition (Revision 35 diagnostic)
+
+- Israeli and Itai, “A fast and simple randomized parallel algorithm for maximal matching” (1986): https://www.sciencedirect.com/science/article/pii/0020019086901444 — computational motivation for selecting disjoint reacting pairs in parallel. Primordia uses one mutual-best round, not the complete maximal-matching algorithm.
+- ReaDDy simulation documentation: https://readdy.github.io/simulation.html — scientific particle reaction simulations must resolve competing reaction partners. Primordia's alignment ranking and random tie-breaking are a gameplay approximation, not calibrated reaction kinetics, equilibrium sampling or detailed balance.

@@ -3,6 +3,7 @@ extends RefCounted
 ## No synchronous readback in advance(); snapshots are validation-only.
 signal ready(ok: bool, reason: String)
 signal snapshot_ready(data: PackedFloat32Array)
+signal contacts_ready(data: Dictionary)
 signal closed
 var texture := Texture2DRD.new()
 var rd: RenderingDevice
@@ -19,6 +20,20 @@ var width := 768
 var height := 1
 var _closing := false
 var _source := ""
+var interaction_mode := 0
+var acidity := 0.4
+var contact_sources: Array[String] = []
+var contact_shaders: Array[RID] = []
+var contact_pipelines: Array[RID] = []
+var contact_sets: Array[RID] = []
+var contact_buffers: Array[RID] = []
+var padded_count := 1
+var reaction_tick := 0
+func configure_interactions(mode: String, acid: float = 0.4) -> bool:
+	if rd!=null or mode not in ["off","contacts","collisions","chemistry"] or not is_finite(acid) or acid<0 or acid>1: return false
+	interaction_mode=["off","contacts","collisions","chemistry"].find(mode)
+	acidity=acid
+	return true
 func initialize(values: PackedFloat32Array, velocity: PackedVector2Array) -> void:
 	count = values.size()/12
 	if count < 1 or count > 100000 or values.size()%12 != 0 or velocity.size()!=2560:
@@ -27,6 +42,16 @@ func initialize(values: PackedFloat32Array, velocity: PackedVector2Array) -> voi
 	if DisplayServer.get_name()=="headless" or RenderingServer.get_current_rendering_method()=="gl_compatibility":
 		_ready_main.call_deferred(false,"Requires Mobile/Forward+ and a real RenderingDevice display")
 		return
+	for k in range(0,values.size(),12):
+		for j in 12:
+			if not is_finite(values[k+j]):
+				_ready_main.call_deferred(false,"Nonfinite particle state");return
+		if values[k+7]<-1 or values[k+7]>10 or values[k+7]!=floor(values[k+7]) or values[k+9]<0 or values[k+10]<0 or (values[k+7]>=0 and (values[k+8]<=0 or values[k+8]>17)):
+			_ready_main.call_deferred(false,"Invalid particle kind, material or diameter");return
+	while padded_count<count: padded_count*=2
+	if interaction_mode>0:
+		for name in ["resident_contacts","resident_commit","resident_vote"]:
+			contact_sources.append(FileAccess.get_file_as_string("res://shaders/compute/"+name+".glsl.txt").replace("#[compute]",""))
 	height = ceili(count/256.0)
 	_source = FileAccess.get_file_as_string("res://shaders/compute/resident_particles.glsl.txt").replace("#[compute]","")
 	var padded := values.duplicate()
@@ -66,8 +91,79 @@ func _initialize_rd(bytes: PackedByteArray, velocities: PackedByteArray) -> void
 	if not bindings.is_valid():
 		_ready_main.call_deferred(false,"Resident bindings invalid")
 		return
+	if interaction_mode>0 and not _initialize_contacts():
+		_ready_main.call_deferred(false,"Contact pipeline creation failed");return
 	upload_bytes += bytes.size()+velocities.size()
 	_ready_main.call_deferred(true,"")
+func _initialize_contacts() -> bool:
+	for size in [padded_count*8,40960*8,count*4,count*64*4,count*4,16*4,count*8]:
+		var buffer := rd.storage_buffer_create(size)
+		contact_buffers.append(buffer)
+		if not buffer.is_valid(): return false
+	for text in contact_sources:
+		var source := RDShaderSource.new()
+		source.source_compute=text
+		var spirv := rd.shader_compile_spirv_from_source(source)
+		if spirv.compile_error_compute!="":
+			push_error(spirv.compile_error_compute);return false
+		var sh := rd.shader_create_from_spirv(spirv)
+		contact_shaders.append(sh)
+		var pipe := rd.compute_pipeline_create(sh)
+		contact_pipelines.append(pipe)
+		var uniforms: Array[RDUniform] = []
+		for binding in 8:
+			var u := RDUniform.new()
+			u.binding=binding
+			u.uniform_type=RenderingDevice.UNIFORM_TYPE_IMAGE if binding==0 else RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+			u.add_id(state if binding==0 else contact_buffers[binding-1])
+			uniforms.append(u)
+		var uniform_set := rd.uniform_set_create(uniforms,sh,0)
+		contact_sets.append(uniform_set)
+		if not pipe.is_valid() or not uniform_set.is_valid(): return false
+	return true
+func interact_only() -> void:
+	assert(interaction_mode>0 and not _closing)
+	RenderingServer.call_on_render_thread(_contacts_rd)
+func _contact_pass(stage: int, groups: int, level: int = 0, stride: int = 0, commit: bool = false) -> void:
+	var params := PackedByteArray()
+	params.resize(32)
+	params.encode_u32(0,count);params.encode_u32(4,padded_count);params.encode_u32(8,stage)
+	params.encode_u32(12,level);params.encode_u32(16,stride);params.encode_u32(20,interaction_mode)
+	params.encode_float(24,acidity);params.encode_u32(28,reaction_tick)
+	var index := (2 if stage==5 else 1) if commit else 0
+	var list := rd.compute_list_begin()
+	rd.compute_list_bind_compute_pipeline(list,contact_pipelines[index])
+	rd.compute_list_bind_uniform_set(list,contact_sets[index],0)
+	rd.compute_list_set_push_constant(list,params,32)
+	rd.compute_list_dispatch(list,groups,1,1)
+	rd.compute_list_end()
+func _contacts_rd() -> void:
+	_contact_pass(0,ceili(maxi(padded_count,40960)/128.0))
+	var level := 2
+	while level<=padded_count:
+		var stride := level/2
+		while stride>0:
+			_contact_pass(1,ceili(padded_count/128.0),level,stride)
+			stride/=2
+		level*=2
+	_contact_pass(2,ceili(padded_count/128.0))
+	_contact_pass(3,ceili(count/128.0))
+	if interaction_mode>=2:
+		_contact_pass(5,ceili(count/128.0),0,0,true)
+		_contact_pass(4,ceili(count/128.0),0,0,true)
+	reaction_tick+=1
+func contact_snapshot() -> void:
+	RenderingServer.call_on_render_thread(_contact_snapshot_rd)
+func _contact_snapshot_rd() -> void:
+	var result := {}
+	if not contact_buffers.is_empty():
+		result={"counts":rd.buffer_get_data(contact_buffers[2]).to_int32_array(),
+			"pairs":rd.buffer_get_data(contact_buffers[3]).to_int32_array(),
+			"choices":rd.buffer_get_data(contact_buffers[4]).to_int32_array(),
+			"stats":rd.buffer_get_data(contact_buffers[5]).to_int32_array()}
+	readbacks+=1
+	_contact_snapshot_main.call_deferred(result)
+func _contact_snapshot_main(result: Dictionary) -> void: contacts_ready.emit(result)
 func _ready_main(ok: bool, reason: String) -> void:
 	if ok: texture.texture_rd_rid=state
 	ready.emit(ok,reason)
@@ -83,6 +179,7 @@ func _advance_rd(dt: float, tick: int) -> void:
 	rd.compute_list_set_push_constant(list,params,16)
 	rd.compute_list_dispatch(list,ceili(count/128.0),1,1)
 	rd.compute_list_end()
+	if interaction_mode>0: _contacts_rd()
 	dispatches += 1
 	# Main device submission and barriers are owned by the renderer. No submit/sync.
 func upload(values: PackedFloat32Array) -> void:
@@ -110,7 +207,7 @@ func close() -> void:
 	RenderingServer.call_on_render_thread(_close_rd)
 func _close_rd() -> void:
 	if rd != null:
-		for resource in [bindings,pipeline,shader,state,flow]:
+		for resource in contact_sets+contact_pipelines+contact_shaders+contact_buffers+[bindings,pipeline,shader,state,flow]:
 			if resource.is_valid(): rd.free_rid(resource)
 	rd=null # Main RenderingDevice belongs to Godot; never free it.
 	_closed_main.call_deferred()
