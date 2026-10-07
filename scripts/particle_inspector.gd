@@ -72,6 +72,9 @@ func pick(screen: Vector2, alpha: float) -> Dictionary:
 	candidates_examined = 0
 	# Keep anatomy and feeding clouds visually quiet, including pheromones.
 	if _near_cell(at,alpha): return {}
+	if sim.resident!=null:
+		var packet: Dictionary=sim.resident.inspect(at,8.5+7/game.zoom,Vector2i(-1,-1),game.zoom)
+		return _resident_pose(packet,screen,alpha,true)
 	if sim.grid.source_size != sim.particle_count(): sim.grid.rebuild(sim.particles)
 	var best := INF
 	var result := {}
@@ -102,6 +105,9 @@ func pick(screen: Vector2, alpha: float) -> Dictionary:
 
 func _tracked_pose(alpha: float) -> Dictionary:
 	var sim = game.world
+	if tracked_world==sim and sim.resident!=null and not tracked_packet.is_empty():
+		tracked_packet=sim.resident.inspect(Vector2.ZERO,1,tracked_packet.get("_resident_handle",Vector2i(-1,-1)))
+		return _resident_pose(tracked_packet,Vector2.ZERO,alpha,false)
 	if tracked_world == sim and sim.particle_pool and not tracked_packet.is_empty():
 		tracked_packet = sim.kernels.pool_resolve(tracked_packet.get("_handle",0))
 		if not tracked_packet.is_empty(): tracked_index = tracked_packet._index
@@ -128,6 +134,15 @@ func _tracked_pose(alpha: float) -> Dictionary:
 	if not get_viewport_rect().has_point(screen) or _near_cell(p,alpha): return {}
 	return {"index":tracked_index,"packet":tracked_packet,"kind":tracked_packet.kind,"screen":screen,"angle":angle,
 		"radius":sim.particle_radius(tracked_packet.kind)*sim.particle_scale(tracked_packet.amount)*game.zoom}
+
+func _resident_pose(packet: Dictionary,cursor: Vector2,alpha: float,picking: bool) -> Dictionary:
+	if packet.is_empty() or not packet.alive: return {}
+	var sim=game.world
+	var screen: Vector2=game.camera_screen+sim.Medium.offset(game.render_camera,packet.p)*game.zoom
+	var radius: float=sim.particle_radius(packet.kind)*sim.particle_scale(packet.amount)*game.zoom
+	if not get_viewport_rect().has_point(screen) or _near_cell(packet.p,alpha): return {}
+	if picking and screen.distance_to(cursor)>maxf(radius+3,7): return {}
+	return {"index":packet._index,"packet":packet,"kind":packet.kind,"screen":screen,"angle":packet.angle,"radius":radius}
 
 func update_lens(dt: float, screen: Vector2, alpha: float, allowed: bool) -> void:
 	if allowed and _near_cell(_world_at(screen),alpha): allowed = false

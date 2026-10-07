@@ -19,6 +19,10 @@ var music := preload("res://scripts/music_director.gd").new()
 var music_slider := HSlider.new()
 var world: Simulation = Simulation.new()
 var use_particle_pool := true
+var resident_starting:=false
+var resident_controller
+var resident_view: Node2D
+var particle_backend:="cpu"
 var archive_error := ""
 var archive = preload("res://scripts/lineage_archive.gd").new()
 var preferences = Preferences.new()
@@ -212,7 +216,7 @@ func _physics_process(dt: float) -> void:
 	if not flow_streamers and world.revision%4 == 0: currents.queue_redraw()
 
 func is_paused() -> bool:
-	return build_open or settings_panel.visible or cell_ui.context.get("kind","") in ["lineage","archive","past"] or world.evolution.terminal()
+	return resident_starting or build_open or settings_panel.visible or cell_ui.context.get("kind","") in ["lineage","archive","past"] or world.evolution.terminal()
 
 func _can_edit_tubules() -> bool:
 	return build_open and not settings_panel.visible and not world.player.dead and not world.evolution.terminal()
@@ -364,6 +368,12 @@ func _update_world(alpha: float) -> void:
 	if frame_trace != null: frame_trace.work("cell_sync",Time.get_ticks_usec()-cells_start)
 
 func _sync_particles(alpha: float = 1.0) -> void:
+	if world.resident!=null and resident_view!=null:
+		for batch in batches: batch.visible=false
+		resident_view.visible=true;resident_view.camera(render_camera)
+		return
+	if resident_view!=null: resident_view.visible=false
+	for batch in batches: batch.visible=true
 	if world.native_render:
 		var capacities := PackedInt32Array()
 		for batch in batches: capacities.append(batch.multimesh.instance_count)
@@ -658,7 +668,7 @@ func _update_hud() -> void:
 		light_factor_shown = world.evolution.light_factor
 	if acidity_texture.get_width() > 0: acidity_texture.update(Image.create_from_data(64,40,false,Image.FORMAT_RF,world.acidity.values.to_byte_array()))
 	debug_label.visible = show_debug and not settings_panel.visible
-	debug_label.text = "%s · %d FPS · tick %.2f ms · view sync %.2f ms\n%d active cells / %d particles" % ["GPU experiment" if world.gpu_transport != null else "Native CPU" if world.kernels != null else "GDScript",Engine.get_frames_per_second(),simulation_ms,render_ms,world.active_cells,world.active_particles]
+	debug_label.text = "%s · %d FPS · tick %.2f ms · view sync %.2f ms\n%d active cells / %d particles" % ["Resident GPU" if world.resident!=null else "GPU experiment" if world.gpu_transport != null else "Native CPU" if world.kernels != null else "GDScript",Engine.get_frames_per_second(),simulation_ms,render_ms,world.active_cells,world.active_particles]
 	if music.ready_bank: debug_label.text += "\nMusic mix %.2f ms · underruns %d" % [music.render_usec/1000.0,music.skips]
 	debug_label.position = Vector2(16,16 if not build_open else 52*preferences.hud_scale)
 	debug_label.add_theme_font_size_override("font_size",roundi(15*preferences.hud_scale))
@@ -752,7 +762,10 @@ func _select(index: int) -> void:
 func _restart(profile: int = -1) -> void:
 	archive.sync(world)
 	archive.begin()
+	if resident_controller!=null: resident_controller.close()
+	elif world.resident!=null: world.resident.close()
 	if world.gpu_transport != null: world.gpu_transport.close()
+	resident_controller=null;resident_starting=false
 	world = Simulation.new(world.seed_value,world.habitat if profile < 0 else profile)
 	habitat_view.configure(world.habitat_geometry)
 	_configure_backend()
@@ -962,6 +975,14 @@ func _capture() -> void:
 
 func _configure_backend() -> void:
 	var args := OS.get_cmdline_user_args()
+	particle_backend=OS.get_environment("PRIMORDIA_PARTICLES")
+	if particle_backend=="": particle_backend="cpu"
+	for arg in args:
+		if arg.begins_with("--particle-backend="): particle_backend=arg.trim_prefix("--particle-backend=")
+	if particle_backend=="resident":
+		if "--benchmark" not in args: _start_resident()
+		return
+	if particle_backend=="cpu-matching" and world.kernels!=null: world.kernels.pair_matching_configure(true)
 	# Benchmark fixtures configure after population/density setup.
 	if "--benchmark" not in args:
 		var engine := "current"
@@ -985,8 +1006,33 @@ func _configure_backend() -> void:
 	if gpu.initialize(): world.gpu_transport = gpu
 	else: push_warning("GPU transport unavailable; keeping the CPU backend. Use --rendering-method mobile for the experiment.")
 
+func _start_resident() -> void:
+	if world.resident!=null: return
+	if resident_controller!=null: resident_controller.close()
+	resident_starting=true
+	resident_controller=load("res://scripts/resident_ecology.gd").new()
+	resident_controller.initialized.connect(_resident_initialized.bind(resident_controller,world),CONNECT_ONE_SHOT)
+	resident_controller.returned_to_cpu.connect(_resident_returned.bind(resident_controller))
+	resident_controller.start(world)
+
+func _resident_initialized(ok: bool,message: String,controller,starting_world) -> void:
+	if not is_inside_tree() or resident_controller!=controller or world!=starting_world:
+		controller.close();return
+	resident_starting=false
+	if ok:
+		if resident_view!=null: resident_view.queue_free()
+		resident_view=load("res://scripts/resident_view.gd").new()
+		world_layer.add_child(resident_view);resident_view.z_index=1
+		resident_view.initialize(controller.gpu)
+	else: _message("GPU particles unavailable; continuing on CPU. "+message)
+
+func _resident_returned(message: String,controller) -> void:
+	if controller==resident_controller: _message("Particle simulation switched to CPU. Your habitat is preserved.")
+
 func _exit_tree() -> void:
 	if frame_trace != null: frame_trace.stop()
+	if resident_controller!=null: resident_controller.close()
+	elif world.resident!=null: world.resident.close()
 	if world.gpu_transport != null: world.gpu_transport.close()
 
 

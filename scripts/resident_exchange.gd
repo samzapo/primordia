@@ -5,7 +5,7 @@ const MAX_FEEDS:=256
 const MAX_EMISSIONS:=256
 const MAX_INSPECTIONS:=32
 const MAX_POINTS:=8960
-const MAX_RECEIPTS:=MAX_BODIES+MAX_FEEDS+MAX_EMISSIONS+MAX_INSPECTIONS*4+256*5
+const MAX_RECEIPTS:=MAX_BODIES+MAX_FEEDS+MAX_EMISSIONS+MAX_INSPECTIONS*4+256*5+774+8512
 var shader:=RID()
 var pipeline:=RID()
 var bindings: Array[RID]=[]
@@ -61,7 +61,7 @@ static func prepare(cells: Array, emissions: Array, handles: Array) -> Dictionar
 		for v in value:
 			if not is_finite(v): return {"error":"Nonfinite emission"}
 		if value[7]<0 or value[7]>10 or floor(value[7])!=value[7] or value[8]<=0 or value[8]>17 or value[9]<=0 or value[10]<0 or value[11]!=0:
-			return {"error":"Unsupported emission material, diameter or product reserve"}
+			return {"error":"Unsupported emission material, diameter or product reserve: "+str(value)}
 		value=value.duplicate()
 		value[0]=fposmod(value[0],4096);value[1]=fposmod(value[1],2560)
 		var at:=products.size()

@@ -14,6 +14,20 @@ First launch needs **Git, CMake 3.20+, a C++17 compiler and Python 3**. It fetch
 
 The launcher finds Godot in standard Steam locations, custom Steam libraries and Flatpak Steam installations. Steam need not be running. Use `./tools/run.sh --editor` to open the editor, then F5 to play. Discovery order is an explicit `GODOT_BIN`, Steam libraries, then `godot4`/`godot` on PATH. `STEAM_DIR` supports a nonstandard Steam client root.
 
+## Desktop backend playtest
+
+The complete resident GPU game is ready for a desktop playtest:
+
+~~~sh
+./tools/playtest.sh resident      # GPU particles, reactions, queries and drawing
+./tools/playtest.sh cpu-matching  # Native CPU mutual-best reaction comparison
+./tools/playtest.sh cpu           # Existing CPU chemistry
+~~~
+
+These launchers find Steam Godot and use the same Mobile renderer. **F3 shows the active backend.** The GPU option retains cell-local editing, music, chemistry, predation and paid family succession, and advances offscreen cells under the same detailed rules. If a resident limit is reached, it preserves the habitat and continues on CPU.
+
+On the RTX 5080 workstation, wide-view live tests held approximately 60 FPS, including a habitat-wide 50k start that ended at 36k particles. This is not sustained 50k performance or a phone result. See [Revision 39](docs/REVISION_39.md) for frame/tick comparisons, validation and limits. The ordinary launcher above remains the CPU default.
+
 ## Controls
 
 - **Tab:** pause and zoom inside your cell; press Tab again to keep edits and resume. Enter also resumes when no choice or placement is active. There are no Undo, Apply or Cancel-plan controls. **Escape** opens settings without discarding edits.

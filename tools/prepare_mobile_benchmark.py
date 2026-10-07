@@ -4,6 +4,8 @@ from pathlib import Path
 import shutil
 ROOT = Path(__file__).resolve().parents[1]
 FILES = [
+    "scripts/resident_exposure.gd", "shaders/compute/resident_exposure.glsl.txt",
+    "scripts/resident_chemistry.gd", "shaders/compute/resident_chemistry.glsl.txt",
     "scripts/mutations.gd", "scripts/resident_perception.gd", "shaders/compute/resident_perception.glsl.txt",
     "scripts/resident_grid.gd", "shaders/compute/resident_grid.glsl.txt",
     "scripts/resident_exchange.gd", "shaders/compute/resident_exchange.glsl.txt",

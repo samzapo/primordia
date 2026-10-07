@@ -1,5 +1,5 @@
 extends RefCounted
-## Main-device diagnostic. All RD work is ordered on the render thread.
+## Main-device resident particles. All RD work is ordered on the render thread.
 ## No synchronous readback in advance(); snapshots are validation-only.
 signal ready(ok: bool, reason: String)
 signal snapshot_ready(data: PackedFloat32Array)
@@ -56,8 +56,86 @@ func configure_perception(now: float=0.0) -> bool:
 	perception_enabled=true;perception_time=now
 	_perception=Perception.new()
 	return true
+const Exposure=preload("res://scripts/resident_exposure.gd")
+var exposure_enabled:=false
+var _exposure: RefCounted
+var _exposure_source:=""
+var _sync_receipt: Dictionary={}
+var _export_data: Dictionary={}
+func export_sync() -> Dictionary:
+	if not _initialized: return {}
+	RenderingServer.call_on_render_thread(_export_rd)
+	_sync_semaphore.wait()
+	var result:=_export_data;_export_data={}
+	return result
+func _export_rd() -> void:
+	_export_data={"state":rd.texture_get_data(state,0).to_float32_array().slice(0,count*12),
+		"metadata":rd.buffer_get_data(_perception.buffers[0])}
+	readbacks+=1
+	_sync_semaphore.post()
+func slot_handle_sync(slot: int) -> Vector2i:
+	if slot<0 or slot>=count or not _initialized or _closing: return Vector2i(-1,-1)
+	RenderingServer.call_on_render_thread(func():
+		_export_data={"identity":rd.buffer_get_data(_exchange.buffers[4],slot*8,8)}
+		_sync_semaphore.post())
+	_sync_semaphore.wait()
+	var data: PackedByteArray=_export_data.identity;_export_data={}
+	return Vector2i(slot,data.decode_u32(0))
+func report_sync(slot: int) -> PackedByteArray:
+	RenderingServer.call_on_render_thread(func():
+		_export_data={"metadata":rd.buffer_get_data(_perception.buffers[0],slot*64,64)}
+		_sync_semaphore.post())
+	_sync_semaphore.wait()
+	var result: PackedByteArray=_export_data.metadata;_export_data={}
+	return result
+var _sync_semaphore:=Semaphore.new()
+func configure_exposure() -> bool:
+	if _started or not perception_enabled: return false
+	exposure_enabled=true
+	return true
+# A bounded blocking fence avoids multi-frame biology lag. Only compact receipts
+# cross the device boundary; render-thread ownership remains unchanged.
+func exchange_sync(cells: Array, emissions: Array=[], handles: Array=[], queries: Array=[], options: Dictionary={}) -> Dictionary:
+	options=options.duplicate();options["synchronous"]=true
+	if not exchange(cells,emissions,handles,false,queries,options): return {"error":"Resident exchange refused: "+exchange_error}
+	_sync_semaphore.wait()
+	var result:=_sync_receipt
+	_sync_receipt={}
+	_exchange_main(result)
+	return result
+const Chemistry=preload("res://scripts/resident_chemistry.gd")
+var chemistry_enabled:=false
+var chemistry_seed:=0
+var environment_upload_bytes:=0
+var _chemistry: RefCounted
+var _chemistry_source:=""
+var _initial_acid:=PackedFloat32Array()
+func configure_chemistry(values: PackedFloat32Array, random_seed: int=0) -> bool:
+	if _started or not perception_enabled or interaction_mode!=3 or values.size()!=2560: return false
+	for value in values:
+		if not is_finite(value) or value<0 or value>1: return false
+	chemistry_enabled=true;chemistry_seed=random_seed;_initial_acid=values.duplicate()
+	return true
+func environment(velocity: PackedVector2Array, values: PackedFloat32Array) -> bool:
+	if not _initialized or not chemistry_enabled or _closing or velocity.size()!=2560 or values.size()!=2560: return false
+	for vector in velocity:
+		if not vector.is_finite(): return false
+	for value in values:
+		if not is_finite(value) or value<0 or value>1: return false
+	var zero:=PackedByteArray();zero.resize(count*16)
+	rd.buffer_update(contact_buffers[8],0,zero.size(),zero)
+	var zero_stats:=PackedByteArray();zero_stats.resize(64)
+	rd.buffer_update(contact_buffers[5],0,64,zero_stats)
+	var acid:=PackedFloat32Array([1]);acid.append_array(values)
+	RenderingServer.call_on_render_thread(_environment_rd.bind(velocity.to_byte_array(),acid.to_byte_array()))
+	return true
+func _environment_rd(velocity: PackedByteArray, values: PackedByteArray) -> void:
+	rd.buffer_update(flow,0,velocity.size(),velocity)
+	rd.buffer_update(contact_buffers[7],0,values.size(),values)
+	environment_upload_bytes+=velocity.size()+values.size()
 const Exchange=preload("res://scripts/resident_exchange.gd")
 var exchange_enabled:=false
+var exchange_error:=""
 var exchange_busy:=false
 var exchange_serial:=0
 var exchange_queue_depth:=1
@@ -101,16 +179,25 @@ func end_capacity_epoch() -> bool:
 	if not exchange_resident_capacity or exchange_inflight>0 or _closing: return false
 	_accounts_started=false;_account_ids.clear();_account_instances.clear();_account_caps.clear()
 	return true
-func exchange(cells: Array, emissions: Array=[], handles: Array=[], asynchronous: bool=true, queries: Array=[]) -> bool:
+func exchange(cells: Array, emissions: Array=[], handles: Array=[], asynchronous: bool=true, queries: Array=[], options: Dictionary={}) -> bool:
+	exchange_error="Unavailable or busy"
 	if not exchange_enabled or exchange_inflight>=exchange_queue_depth or _closing or not _initialized: return false
 	var batch:=Exchange.prepare(cells,emissions,handles)
-	if batch.has("error"): return false
+	if batch.has("error"): exchange_error=batch.error;return false
+	batch["projection"]=options.get("projection",true)
+	batch["synchronous"]=options.get("synchronous",false)
+	batch["exposure"]=options.get("exposure",false) and exposure_enabled
+	if not options.get("feeding",true): batch.feeds=PackedByteArray();batch.feed_count=0
+	if batch.exposure:
+		var exposure_batch:=Exposure.prepare(cells)
+		if exposure_batch.has("error"): exchange_error=exposure_batch.error;return false
+		batch.merge(exposure_batch)
 	if not perception_enabled and not queries.is_empty(): return false
-	if batch.body_count+batch.emit_count+batch.inspect_count+queries.size()==0: return false
+	if not chemistry_enabled and batch.body_count+batch.emit_count+batch.inspect_count+queries.size()==0: return false
 	var perception_batch: Dictionary={}
 	if perception_enabled:
 		perception_batch=_perception.prepare_batch(emissions,queries)
-		if perception_batch.has("error"): return false
+		if perception_batch.has("error"): exchange_error=perception_batch.error;return false
 	if exchange_resident_capacity and not _reserve_accounts(cells): return false
 	if perception_enabled:
 		_perception.sources=perception_batch.sources
@@ -124,6 +211,9 @@ func exchange(cells: Array, emissions: Array=[], handles: Array=[], asynchronous
 	exchange_inflight+=1;exchange_peak_inflight=maxi(exchange_peak_inflight,exchange_inflight)
 	exchange_busy=exchange_inflight>=exchange_queue_depth;exchange_serial+=1
 	batch["serial"]=exchange_serial;batch["ring_slot"]=slot
+	if chemistry_enabled:
+		batch["chemistry_offset"]=batch.body_count+batch.feed_count+batch.emit_count+batch.inspect_count*4+batch.get("query_count",0)*5
+	batch["exposure_offset"]=batch.body_count+batch.feed_count+batch.emit_count+batch.inspect_count*4+batch.get("query_count",0)*5+(Chemistry.RECEIPT_VECTORS if chemistry_enabled else 0)
 	batch["parallel_oxygen"]=exchange_parallel_oxygen
 	batch["accounts"]=0 if not exchange_resident_capacity else (2 if _accounts_started else 1)
 	if exchange_resident_capacity: _accounts_started=true
@@ -138,15 +228,25 @@ func _exchange_rd(batch: Dictionary, asynchronous: bool) -> void:
 		exchange_upload_bytes+=_perception.upload(batch)
 		if batch.query_count>0: _perception.dispatch(4 if batch.spread_queries else 3,batch,batch.now,batch.query_count if batch.spread_queries else ceili(batch.query_count/64.0))
 	exchange_upload_bytes+=_exchange.upload(batch)
-	if batch.body_count>0 and batch.parallel_oxygen: _exchange.dispatch(4,batch,ceili(count/128.0))
+	if batch.feed_count>0 and batch.parallel_oxygen: _exchange.dispatch(4,batch,ceili(count/128.0))
 	_exchange.dispatch(1,batch,1)
 	if perception_enabled and batch.emit_count>0:
 		_perception.dispatch(2,batch,batch.now,ceili(batch.emit_count/64.0))
 		_perception.dispatch(1,batch,batch.now,ceili(count/64.0))
-	if batch.body_count>0: _exchange.dispatch(2,batch,ceili(count/128.0))
-	if batch.body_count>0 or batch.emit_count>0: _grid_valid=false
+	if batch.emit_count>0: _grid_valid=false
+	if batch.exposure and batch.body_count>0:
+		if not _grid_valid: _prepare_grid_rd()
+		exchange_upload_bytes+=_exposure.upload(batch)
+		_exposure.dispatch(0,batch);_exposure.dispatch(1,batch)
+	if batch.body_count>0 and batch.projection: _exchange.dispatch(2,batch,ceili(count/128.0))
+	if (batch.body_count>0 and batch.projection) or batch.emit_count>0: _grid_valid=false
 	if batch.inspect_count>0: _exchange.dispatch(3,batch,ceili(batch.inspect_count/128.0))
 	var size: int=(batch.body_count+batch.feed_count+batch.emit_count+batch.inspect_count*4+batch.get("query_count",0)*5)*16
+	if chemistry_enabled:
+		_chemistry.receipt(batch)
+		batch["chemistry_tick"]=_chemistry.last_tick
+		size+=Chemistry.RECEIPT_VECTORS*16
+	if batch.exposure: size+=(batch.body_count*(Exposure.HITS_PER_BODY+1)+batch.decoy_count)*16
 	var callback:=_exchange_received.bind(batch)
 	if asynchronous:
 		var error:=rd.buffer_get_data_async(_exchange.receipt_buffers[batch.ring_slot],callback,0,size)
@@ -154,13 +254,26 @@ func _exchange_rd(batch: Dictionary, asynchronous: bool) -> void:
 		exchange_fallbacks+=1
 	# Preserve already-committed receipts if async readback is unsupported.
 	callback.call(rd.buffer_get_data(_exchange.receipt_buffers[batch.ring_slot],0,size))
+func project_cached(cells: int) -> void:
+	# The last completed exposure exchange owns these immutable body buffers.
+	# Queue projection without another readback after every contact was delivered.
+	if cells>0 and _initialized:
+		RenderingServer.call_on_render_thread(func():
+			_exchange.dispatch(2,{"body_count":cells,"ring_slot":0},ceili(count/128.0))
+			_grid_valid=false)
 func _exchange_received(bytes: PackedByteArray,batch: Dictionary) -> void:
 	var receipt:=Exchange.decode(bytes,batch)
 	if perception_enabled:
 		var at: int=(batch.body_count+batch.feed_count+batch.emit_count+batch.inspect_count*4)*16
 		receipt["senses"]=Perception.decode(bytes,at,batch.query_count)
+	if chemistry_enabled:
+		receipt["chemistry"]=Chemistry.decode(bytes,batch.chemistry_offset)
+		receipt.chemistry["tick"]=batch.chemistry_tick
+	if batch.exposure: receipt["exposure"]=Exposure.decode(bytes,batch)
 	receipt["serial"]=batch.serial;receipt["readback_bytes"]=bytes.size();receipt["ring_slot"]=batch.ring_slot
-	_exchange_main.call_deferred(receipt)
+	if batch.synchronous:
+		_sync_receipt=receipt;_sync_semaphore.post()
+	else: _exchange_main.call_deferred(receipt)
 func _exchange_main(receipt: Dictionary) -> void:
 	# Readback callbacks need not arrive in serial order. Deliver each exactly once.
 	assert(receipt.serial>=_next_receipt and receipt.serial<=exchange_serial and not _received.has(receipt.serial))
@@ -175,7 +288,7 @@ func _exchange_main(receipt: Dictionary) -> void:
 	if _closing and exchange_inflight==0: _finish_close()
 
 func configure_interactions(mode: String, acid: float = 0.4) -> bool:
-	if _started or (exchange_enabled and mode=="off") or mode not in ["off","contacts","collisions","chemistry"] or not is_finite(acid) or acid<0 or acid>1: return false
+	if _started or (chemistry_enabled and mode!="chemistry") or (exchange_enabled and mode=="off") or mode not in ["off","contacts","collisions","chemistry"] or not is_finite(acid) or acid<0 or acid>1: return false
 	interaction_mode=["off","contacts","collisions","chemistry"].find(mode)
 	acidity=acid
 	return true
@@ -207,6 +320,10 @@ func initialize(values: PackedFloat32Array, velocity: PackedVector2Array, metada
 		_perception_initial=initial.bytes
 		_perception_source=FileAccess.get_file_as_string("res://shaders/compute/resident_perception.glsl.txt").replace("#[compute]","")
 	while padded_count<count: padded_count*=2
+	if exposure_enabled:
+		_exposure_source=FileAccess.get_file_as_string("res://shaders/compute/resident_exposure.glsl.txt").replace("#[compute]","")
+	if chemistry_enabled:
+		_chemistry_source=FileAccess.get_file_as_string("res://shaders/compute/resident_chemistry.glsl.txt").replace("#[compute]","")
 	if exchange_enabled:
 		_exchange_source=FileAccess.get_file_as_string("res://shaders/compute/resident_exchange.glsl.txt").replace("#[compute]","")
 	if interaction_mode>0:
@@ -223,7 +340,7 @@ func _initialize_rd(bytes: PackedByteArray, velocities: PackedByteArray) -> void
 	if rd == null:
 		_ready_main.call_deferred(false,"Main RenderingDevice unavailable")
 		return
-	var required_buffers:=11 if exchange_enabled else (7 if interaction_mode>0 else 1)
+	var required_buffers:=11 if exchange_enabled else (9 if interaction_mode>0 else 1)
 	if rd.limit_get(RenderingDevice.LIMIT_MAX_COMPUTE_WORKGROUP_INVOCATIONS)<128 or rd.limit_get(RenderingDevice.LIMIT_MAX_STORAGE_BUFFERS_PER_SHADER_STAGE)<required_buffers or rd.limit_get(RenderingDevice.LIMIT_MAX_STORAGE_BUFFERS_PER_UNIFORM_SET)<required_buffers:
 		_ready_main.call_deferred(false,"Device needs 128 compute invocations and %d storage buffers per stage/set" % required_buffers)
 		return
@@ -271,13 +388,29 @@ func _initialize_rd(bytes: PackedByteArray, velocities: PackedByteArray) -> void
 			_ready_main.call_deferred(false,"Resident perception creation failed");return
 		upload_bytes+=_perception_initial.size()
 		_perception_initial.clear()
+	if exposure_enabled:
+		_exposure=Exposure.new()
+		if not _exposure.initialize(rd,state,_exchange.buffers[4],_perception.buffers[0],_exchange.buffers[0],_exchange.buffers[1],contact_buffers[0],contact_buffers[1],_exchange.receipt_buffers,count,_exposure_source):
+			_ready_main.call_deferred(false,"Resident exposure creation failed");return
+	if chemistry_enabled:
+		_chemistry=Chemistry.new()
+		if not _chemistry.initialize(rd,state,contact_buffers[7],contact_buffers[0],contact_buffers[1],_exchange.receipt_buffers,contact_buffers[5],_exchange.buffers[4],contact_buffers[8],count,chemistry_seed,_chemistry_source):
+			_ready_main.call_deferred(false,"Resident chemistry creation failed");return
 	upload_bytes += bytes.size()+velocities.size()
 	_ready_main.call_deferred(true,"")
 func _initialize_contacts() -> bool:
-	for size in [padded_count*8,40960*8,count*4,count*64*4,count*4,16*4,count*8]:
+	for size in [padded_count*8,40960*8,count*4,count*64*4,count*4,16*4,count*8,2561*4,count*16]:
 		var buffer := rd.storage_buffer_create(size)
 		contact_buffers.append(buffer)
 		if not buffer.is_valid(): return false
+	var zero:=PackedByteArray();zero.resize(count*16)
+	rd.buffer_update(contact_buffers[8],0,zero.size(),zero)
+	var zero_stats:=PackedByteArray();zero_stats.resize(64)
+	rd.buffer_update(contact_buffers[5],0,64,zero_stats)
+	var acid:=PackedFloat32Array([1 if chemistry_enabled else -1])
+	if chemistry_enabled: acid.append_array(_initial_acid)
+	else: acid.resize(2561)
+	rd.buffer_update(contact_buffers[7],0,acid.size()*4,acid.to_byte_array())
 	for text in contact_sources:
 		var source := RDShaderSource.new()
 		source.source_compute=text
@@ -289,7 +422,7 @@ func _initialize_contacts() -> bool:
 		var pipe := rd.compute_pipeline_create(sh)
 		contact_pipelines.append(pipe)
 		var uniforms: Array[RDUniform] = []
-		for binding in 8:
+		for binding in 10:
 			var u := RDUniform.new()
 			u.binding=binding
 			u.uniform_type=RenderingDevice.UNIFORM_TYPE_IMAGE if binding==0 else RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
@@ -331,7 +464,9 @@ func _prepare_grid_rd() -> void:
 	_contact_pass(2,ceili(padded_count/128.0))
 	_grid_valid=true
 func _contacts_rd() -> void:
-	_prepare_grid_rd()
+	if not _grid_valid: _prepare_grid_rd()
+	var zeros:=PackedByteArray();zeros.resize(64)
+	rd.buffer_update(contact_buffers[5],0,64,zeros)
 	_contact_pass(3,ceili(count/128.0))
 	if interaction_mode>=2:
 		_contact_pass(5,ceili(count/128.0),0,0,true)
@@ -352,6 +487,7 @@ func _contact_snapshot_rd() -> void:
 	_contact_snapshot_main.call_deferred(result)
 func _contact_snapshot_main(result: Dictionary) -> void: contacts_ready.emit(result)
 func _ready_main(ok: bool, reason: String) -> void:
+	if _closing: ready.emit(false,"Initialization cancelled");return
 	_initialized=ok
 	if ok: texture.texture_rd_rid=state
 	ready.emit(ok,reason)
@@ -370,6 +506,9 @@ func _advance_rd(dt: float, tick: int, now: float) -> void:
 	rd.compute_list_dispatch(list,ceili(count/128.0),1,1)
 	rd.compute_list_end()
 	if perception_enabled: _perception.dispatch(1,{},now,ceili(count/64.0))
+	if chemistry_enabled:
+		_prepare_grid_rd()
+		_chemistry.advance(dt,tick,now)
 	if interaction_mode>0: _contacts_rd()
 	dispatches += 1
 	# Main device submission and barriers are owned by the renderer. No submit/sync.
@@ -405,6 +544,8 @@ func _finish_close() -> void:
 	RenderingServer.call_on_render_thread(_close_rd)
 func _close_rd() -> void:
 	if rd != null:
+		if _exposure!=null: _exposure.close()
+		if _chemistry!=null: _chemistry.close()
 		if _perception!=null: _perception.close()
 		if _exchange!=null: _exchange.close()
 		if _radix!=null: _radix.close()

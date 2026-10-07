@@ -9,6 +9,8 @@ layout(set=0,binding=4,std430) readonly buffer Pairs { uint pairs[]; };
 layout(set=0,binding=5,std430) buffer Flags { uint reacted[]; };
 layout(set=0,binding=6,std430) buffer Stats { uint stats[]; };
 layout(set=0,binding=7,std430) buffer Impulses { vec2 impulses[]; };
+layout(set=0,binding=8,std430) readonly buffer Acidity { float acid_field[]; };
+layout(set=0,binding=9,std430) buffer Events { vec4 events[]; };
 layout(push_constant,std430) uniform Params { uint count;uint padded;uint stage;uint level;uint stride;uint mode;float acid;uint tick; } pc;
 const vec2 WORLD=vec2(4096,2560);
 ivec2 pixel(uint i) {return ivec2(int(i%256u)*3,int(i/256u));}
@@ -18,6 +20,14 @@ vec4 matter(uint i) {return imageLoad(state,pixel(i)+ivec2(2,0));}
 uint bin(ivec2 p) {p=ivec2(mod(vec2(p),vec2(256,160)));return uint(p.y*256+p.x);}
 vec2 offset(vec2 a,vec2 b) {return mod(b-a+WORLD*.5,WORLD)-WORLD*.5;}
 
+uint acid_index(ivec2 p){p=ivec2(mod(vec2(p),vec2(64,40)));return 1u+uint(p.y*64+p.x);}
+float sample_acid(vec2 at){
+ if(acid_field[0]<0.)return pc.acid;
+ vec2 p=mod(at,WORLD)/64.-.5;ivec2 cell=ivec2(floor(p));vec2 f=fract(p);
+ return mix(mix(acid_field[acid_index(cell)],acid_field[acid_index(cell+ivec2(1,0))],f.x),
+  mix(acid_field[acid_index(cell+ivec2(0,1))],acid_field[acid_index(cell+ivec2(1,1))],f.x),f.y);
+}
+
 void store_particle(uint i,vec4 v,vec4 m){
  const float radii[11]=float[11](4.,2.5,3.,2.5,5.,3.,4.,4.,3.,3.,3.5);
  m.x=v.w<0.?0.:2.*radii[int(v.w)]*clamp(sqrt(m.y/.3),.8,1.7);
@@ -26,6 +36,7 @@ void store_particle(uint i,vec4 v,vec4 m){
 }
 void main(){
  uint i=gl_GlobalInvocationID.x;if(i>=pc.count)return;
+ events[i]=vec4(0);
  uint j=reacted[i];
  bool mutual=j<pc.count;
  if(mutual)mutual=reacted[j]==i;
@@ -33,18 +44,19 @@ void main(){
  vec4 pv=motion(i),pm=matter(i);pv.xy+=impulses[i];
  if(!mutual){store_particle(i,pv,pm);return;}
  vec4 bv=motion(j),bm=matter(j);bv.xy+=impulses[j];
- bool event=false;
+ float acid=sample_acid(pose(i).xy);
+ bool event=false;float recycled=0.;float cue=1.;
   bool swap_pair=(pv.w==2.&&bv.w==6.)||(pv.w==4.&&bv.w==7.)||(pv.w==1.&&(bv.w==2.||bv.w==4.))||(pv.w==4.&&bv.w==0.);
   vec4 uv=swap_pair?bv:pv,vv=swap_pair?pv:bv,um=swap_pair?bm:pm,vm=swap_pair?pm:bm;
-  if(uv.w==6.&&vv.w==2.&&pc.acid<.9){vv.w=0.;atomicAdd(stats[5],1u);event=true;}
-  else if(uv.w==7.&&vv.w==4.){uv.w=2.;um.y+=vm.y;vv.w=-1.;vm.y=0.;atomicAdd(stats[6],1u);event=true;}
+  if(uv.w==6.&&vv.w==2.&&acid<.9){vv.w=0.;recycled=vm.y;atomicAdd(stats[5],1u);event=true;}
+  else if(uv.w==7.&&vv.w==4.){cue=2.;uv.w=2.;um.y+=vm.y;vv.w=-1.;vm.y=0.;atomicAdd(stats[6],1u);event=true;}
   else if((uv.w==8.||uv.w==9.)&&(vv.w==8.||vv.w==9.)&&uv.w!=vv.w) {
    float used=min(um.z,vm.z);um.z-=used;vm.z-=used;
    if(um.z<=.000001)uv.w=2.;if(vm.z<=.000001)vv.w=2.;
    atomicAdd(stats[7],1u);event=true;
   }
-  else if(uv.w==2.&&vv.w==1.&&vm.y>=um.y*.15&&pc.acid<.8){
-   float amount=um.y;uv.w=0.;um.y=amount*.6;vv.w=5.;vm.y=amount*.4;atomicAdd(stats[8],1u);event=true;
+  else if(uv.w==2.&&vv.w==1.&&vm.y>=um.y*.15&&acid<.8){
+   float amount=um.y;recycled=amount*.6;uv.w=0.;um.y=amount*.6;vv.w=5.;vm.y=amount*.4;atomicAdd(stats[8],1u);event=true;
   }
   else if(uv.w==0.&&vv.w==4.){uv.w=2.;atomicAdd(stats[9],1u);event=true;}
   else if(uv.w==vv.w&&(uv.w==0.||uv.w==1.||uv.w==2.||uv.w==5.)&&um.y+vm.y<=1.4&&um.y+vm.y>0.) {
@@ -54,6 +66,7 @@ void main(){
  if(event){
   pv=swap_pair?vv:uv;bv=swap_pair?uv:vv;pm=swap_pair?vm:um;bm=swap_pair?um:vm;
   atomicAdd(stats[4],1u);
+  events[i]=vec4(pose(i).xy,recycled,cue);
  }
  store_particle(i,pv,pm);store_particle(j,bv,bm);
 }

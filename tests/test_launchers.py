@@ -97,6 +97,25 @@ class SteamLaunchers(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Install Godot Engine in Steam", result.stderr)
 
+    def test_playtest_preserves_steam_and_backend(self):
+        engine = self.install(self.steam)
+        engine.write_text('#!/bin/sh\nprintf "BACKEND=%s\\n" "$PRIMORDIA_PARTICLES"\nprintf "<%s>\\n" "$@"\n')
+        for backend in ["resident", "cpu", "cpu-matching"]:
+            result = subprocess.run(
+                [BASH, str(PROJECT / "tools/playtest.sh"), backend, "--", "--example=literal $()"],
+                env=self.env, text=True, capture_output=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("BACKEND=" + backend, result.stdout)
+            self.assertIn("<--rendering-method>\n<mobile>", result.stdout)
+            self.assertIn("<--example=literal $()>", result.stdout)
+
+    def test_playtest_rejects_unknown_backend(self):
+        result = subprocess.run([BASH, str(PROJECT / "tools/playtest.sh"), "typo"],
+                                env=self.env, text=True, capture_output=True)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("Usage:", result.stderr)
+
     def test_real_launcher_forwards_arguments_without_shell_expansion(self):
         self.install(self.steam)
         result = subprocess.run(

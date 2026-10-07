@@ -10,6 +10,8 @@ layout(set=0,binding=4,std430) buffer Pairs { uint pairs[]; };
 layout(set=0,binding=5,std430) buffer Flags { uint reacted[]; };
 layout(set=0,binding=6,std430) buffer Stats { uint stats[]; };
 layout(set=0,binding=7,std430) buffer Impulses { vec2 impulses[]; };
+layout(set=0,binding=8,std430) readonly buffer Acidity { float acid_field[]; };
+layout(set=0,binding=9,std430) buffer Events { vec4 events[]; };
 layout(push_constant,std430) uniform Params { uint count;uint padded;uint stage;uint level;uint stride;uint mode;float acid;uint unused; } pc;
 const vec2 WORLD=vec2(4096,2560);
 const uint CAP=64u;
@@ -25,7 +27,7 @@ void main() {
  if(pc.stage==0u) {
   if(i<40960u)ranges[i]=uvec2(0);
   if(i<pc.count){counts[i]=0u;reacted[i]=0u;}
-  if(i<16u)stats[i]=0u;
+
   if(i<pc.padded) {
    uint cell=0xffffffffu;
    if(i<pc.count && motion(i).w>=0. && (motion(i).w!=3. || pc.unused!=0u))

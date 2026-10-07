@@ -1,0 +1,101 @@
+#[compute]
+#version 450
+layout(local_size_x=128) in;
+layout(rgba32f,set=0,binding=0) uniform image2D state;
+layout(set=0,binding=1,std430) buffer Acid { float acid[]; };
+layout(set=0,binding=2,std430) readonly buffer Order { uvec2 order[]; };
+layout(set=0,binding=3,std430) readonly buffer Ranges { uvec2 ranges[]; };
+layout(set=0,binding=4,std430) buffer Partials { vec4 partials[]; };
+layout(set=0,binding=5,std430) buffer Receipt { vec4 receipt[]; };
+layout(set=0,binding=6,std430) readonly buffer PairStats { uint pair_stats[]; };
+layout(set=0,binding=7,std430) readonly buffer Identity { uvec2 identity[]; };
+layout(set=0,binding=8,std430) readonly buffer Events { vec4 events[]; };
+layout(push_constant,std430) uniform Params {uint count;uint stage;float dt;uint tick;float now;uint output_at;uint groups;uint seed;} pc;
+shared vec4 sums[128];
+ivec2 pixel(uint i){return ivec2(int(i%256u)*3,int(i/256u));}
+uint hash32(uint x){x=((x^(x>>16))*0x7feb352du);x=((x^(x>>15))*0x846ca68bu);return x^(x>>16);}
+void main(){
+ uint i=gl_GlobalInvocationID.x,lane=gl_LocalInvocationID.x;
+ if(pc.stage==0u){
+  if(i>=2560u)return;
+  uint x=i%64u,y=i/64u;
+  uint cursor[16],ends[16];
+  for(uint a=0u;a<4u;a++)for(uint b=0u;b<4u;b++){
+   uvec2 range=ranges[(y*4u+b)*256u+x*4u+a];cursor[a*4u+b]=range.x;ends[a*4u+b]=range.y;
+  }
+  float value=acid[i+1u];
+  // Merge the 16 sorted bins into global slot order. Each field node owns
+  // its particles, so finite acid/buffer exchange needs neither float atomics
+  // nor competing writes to particle capacities.
+  for(;;){
+   uint best=0xffffffffu,selected=0u;
+   for(uint b=0u;b<16u;b++)if(cursor[b]<ends[b]&&order[cursor[b]].y<best){best=order[cursor[b]].y;selected=b;}
+   if(best==0xffffffffu)break;
+   cursor[selected]++;
+   vec4 v=imageLoad(state,pixel(best)+ivec2(1,0));
+   if(v.w!=8.&&v.w!=9.)continue;
+   vec4 m=imageLoad(state,pixel(best)+ivec2(2,0));
+   float next=clamp(value+(v.w==8.?1.:-1.)*min(m.z,pc.dt*.2),0.,1.);
+   m.z-=abs(next-value);value=next;
+   if(m.z<=.000001){
+    v.w=2.;m.x=6.*clamp(sqrt(m.y/.3),.8,1.7);
+    imageStore(state,pixel(best)+ivec2(1,0),v);
+   }
+   imageStore(state,pixel(best)+ivec2(2,0),m);
+  }
+  acid[i+1u]=value;return;
+ }
+ if(pc.stage==1u){
+  vec4 total=vec4(0);
+  if(i<pc.count){
+   vec4 v=imageLoad(state,pixel(i)+ivec2(1,0)),m=imageLoad(state,pixel(i)+ivec2(2,0));
+   if(v.w>=0.&&v.w!=3.){
+    const float rates[11]=float[11](.003,.008,.006,0.,.1,.001,.02,.015,.008,.008,.08);
+    uint random=hash32(i^hash32(pc.tick)^hash32(identity[i].x)^pc.seed);
+    float roll=(float(random>>8)+.5)/16777216.;
+    if(roll<1.-exp(-rates[int(v.w)]*pc.dt)){
+     total=vec4(v.w==1.?0.:m.y,1,0,0);
+     v.w=-1.;m=vec4(0);
+     imageStore(state,pixel(i)+ivec2(1,0),v);imageStore(state,pixel(i)+ivec2(2,0),m);
+    }
+   }
+  }
+  sums[lane]=total;barrier();
+  for(uint stride=64u;stride>0u;stride>>=1){if(lane<stride)sums[lane]+=sums[lane+stride];barrier();}
+  if(lane==0u)partials[gl_WorkGroupID.x*2u]=sums[0];
+  return;
+ }
+ if(pc.stage==2u){
+  vec4 total=vec4(0);
+  if(i<pc.count){
+   float kind=imageLoad(state,pixel(i)+ivec2(1,0)).w;
+   float amount=imageLoad(state,pixel(i)+ivec2(2,0)).y;
+   if(kind>=0.)total=vec4(1,kind==3.?1.:0.,kind!=1.&&kind!=3.?amount:0.,kind==1.?amount:0.);
+  }
+  sums[lane]=total;barrier();
+  for(uint stride=64u;stride>0u;stride>>=1){if(lane<stride)sums[lane]+=sums[lane+stride];barrier();}
+  if(lane==0u)partials[gl_WorkGroupID.x*2u+1u]=sums[0];
+  return;
+ }
+ if(pc.stage==3u){
+  for(uint a=lane;a<640u;a+=128u)receipt[pc.output_at+a]=vec4(acid[a*4u+1u],acid[a*4u+2u],acid[a*4u+3u],acid[a*4u+4u]);
+  for(uint channel=0u;channel<2u;channel++){
+   vec4 total=vec4(0);
+   for(uint group=lane;group<pc.groups;group+=128u)total+=partials[group*2u+channel];
+   sums[lane]=total;barrier();
+   for(uint stride=64u;stride>0u;stride>>=1){if(lane<stride)sums[lane]+=sums[lane+stride];barrier();}
+   if(lane==0u)receipt[pc.output_at+640u+channel]=sums[0];
+   barrier();
+  }
+  vec4 selected=vec4(0);float recycled=0.;
+  for(uint slot=lane;slot<pc.count;slot+=128u){
+   vec4 event=events[slot];recycled+=event.z;
+   if(selected.w==0.&&event.w>0.)selected=event;
+  }
+  receipt[pc.output_at+646u+lane]=selected;
+  sums[lane]=vec4(0,0,recycled,0);barrier();
+  for(uint stride=64u;stride>0u;stride>>=1){if(lane<stride)sums[lane]+=sums[lane+stride];barrier();}
+  if(lane==0u)receipt[pc.output_at+640u].z=sums[0].z;
+  if(lane<4u)receipt[pc.output_at+642u+lane]=uintBitsToFloat(uvec4(pair_stats[lane*4u],pair_stats[lane*4u+1u],pair_stats[lane*4u+2u],pair_stats[lane*4u+3u]));
+ }
+}

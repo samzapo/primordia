@@ -44,6 +44,7 @@ func run() -> void:
 		push_error("Unknown profile fixture or mode")
 		quit(1)
 		return
+	Engine.max_fps=int(option("--fps-limit","0"))
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 	Engine.max_physics_steps_per_frame = int(option("--max-steps","8"))
 	var scene = load("res://scenes/pond.tscn").instantiate()
@@ -167,6 +168,11 @@ func run() -> void:
 		push_error("Parcel transport requires supported native ownership")
 		finish_scene(scene,1)
 		return
+	if option("--particle-backend","cpu")=="resident":
+		scene._start_resident()
+		while scene.resident_starting: await process_frame
+		if sim.resident==null: push_error("Resident gameplay initialization failed");finish_scene(scene,1);return
+	if option("--full-habitat","off")=="on" and sim.resident==null: sim.integration_half=sim.WORLD*.5
 	# Ordinary profiles retain their old warmup. Chemical comparison measures
 	# initial finite clouds immediately after presentation/audio warmup.
 	if int(packet_text)==0:
@@ -193,6 +199,8 @@ func run() -> void:
 			sim.step(1.0/60)
 			tick_rows.append((Time.get_ticks_usec()-started)/1000.0)
 			for key in sim.profile_usec: phases[key] = phases.get(key,0)+sim.profile_usec[key]/1000.0
+		if option("--particle-backend","cpu")=="resident" and sim.resident==null:
+			push_error("Resident tick benchmark fell back to CPU");finish_scene(scene,1);return
 		var total := 0.0
 		for value in tick_rows: total += value
 		for key in phases: phases[key] /= tick_rows.size()
@@ -216,11 +224,13 @@ func run() -> void:
 		await RenderingServer.frame_post_draw
 		if seconds > 0 and Time.get_ticks_usec() >= deadline: break
 	var rows: Array = scene.end_frame_trace()
+	if option("--particle-backend","cpu")=="resident" and sim.resident==null:
+		push_error("Resident benchmark fell back to CPU; no GPU performance claim");finish_scene(scene,1);return
 	var output := option("--output","")
 	var result := {"rows":rows,"fluid":fluid_name,"fluid_settings":sim.experimental_fluid.metrics if sim.experimental_fluid != null else {},
 		"fluid_feedback":feedback,
 		"fluid_quality":preload("res://tests/fluid_compare_gpu.gd").summary(sim.experimental_fluid) if sim.experimental_fluid != null else {},
-		"requested_chemicals":int(packet_text),"distribution":distribution,"particle_sizes":sizes,"frame_step":frame_step,"particle_collisions":sim.particle_collisions,
+		"backend":option("--particle-backend","cpu"),"full_habitat":option("--full-habitat","off"),"resident_readbacks":sim.resident.gpu.readbacks if sim.resident!=null else 0,"requested_chemicals":int(packet_text),"distribution":distribution,"particle_sizes":sizes,"frame_step":frame_step,"particle_collisions":sim.particle_collisions,
 		"pair_matching":matching,"threading":sim.kernels.thread_metrics() if sim.kernels != null else {}, "particle_engine":sim.kernels.particle_engine_metrics() if sim.kernels != null else {}, "parcels":sim.kernels.parcel_metrics() if sim.kernels != null else {}, "neighbors":neighbor_summary(sim),"chemistry_events":sim.chemistry_events.duplicate(),"material_remaining":Fixture.packet_material(sim),
 		"packed_particles":sim.native_particle_pipeline,"particle_pool":sim.particle_pool,"pool_metrics":sim.kernels.pool_metrics() if sim.kernels != null else {},"particle_render_cache":sim.native_particle_render_cache,
 		"simulation_seconds":sim.time-sim_started,"rng":str(sim.rng.state),"background_rng":str(sim.background_rng.state),"ecology_rng":str(sim.ecology_rng.state),
@@ -228,6 +238,7 @@ func run() -> void:
 		"engine":Engine.get_version_info().string,"cpu":OS.get_processor_name(),"gpu":RenderingServer.get_video_adapter_name(),
 		"display":DisplayServer.get_name(),"viewport":str(root.size),"zoom":scene.manual_zoom,"max_steps":Engine.max_physics_steps_per_frame,
 		"sparks":scene.show_reaction_sparks,"bloom":scene.preferences.bloom,"music_volume":scene.preferences.music_volume,"tick_rate":Engine.physics_ticks_per_second}
+	if option("--image-output","")!="": root.get_texture().get_image().save_png(option("--image-output",""))
 	if not save_result(result,output):
 		finish_scene(scene,1)
 		return

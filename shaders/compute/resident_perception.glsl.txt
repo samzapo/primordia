@@ -123,6 +123,39 @@ void main(){
  vec4 query=queries[i*4u];uvec4 self=floatBitsToUint(queries[i*4u+1u]);
  bool incumbent=floatBitsToUint(queries[i*4u+2u].x)!=0u;
  if(self.w==2u){food_query(i,query,self);return;}
+ if(self.w>=3u){
+  float best=query.z;uint selected=0xffffffffu;
+  ivec2 lo=ivec2(floor((query.xy-query.z)/16.)),hi=ivec2(floor((query.xy+query.z)/16.));
+  for(int x=lo.x;x<=min(hi.x,lo.x+255);x++)for(int y=lo.y;y<=min(hi.y,lo.y+159);y++){
+   uvec2 range=ranges[bin(ivec2(x,y))];
+   for(uint k=range.x;k<range.y;k++){
+    uint slot=order[k].y;float kind=imageLoad(state,pixel(slot)+ivec2(1,0)).w;
+    if(kind<0.)continue;
+    if(self.w==3u&&kind!=2.)continue;
+    if(self.w==4u&&(kind!=4.||floatBitsToUint(reports[slot*4u+3u].y)==self.y))continue;
+    float distance=length(offset(query.xy,imageLoad(state,pixel(slot)).xy));
+    if(distance>best)continue;
+    float zoom=queries[i*4u+3u].z;
+    if(self.w==5u&&zoom>0.){
+     float radius=imageLoad(state,pixel(slot)+ivec2(2,0)).x*.5;
+     if(distance>max(radius+3./zoom,7./zoom))continue;
+    }
+    best=distance;selected=slot;
+   }
+  }
+  if(selected!=0xffffffffu){
+   if(self.w==5u){
+    for(uint j=0u;j<3u;j++)receipts[output_at+j]=imageLoad(state,pixel(selected)+ivec2(int(j),0));
+    receipts[output_at+3u]=uintBitsToFloat(uvec4(selected,identity[selected].x,identity[selected].y,0));
+    receipts[output_at+4u]=vec4(best,0,4,0);
+   }else{
+    receipts[output_at+2u].z=uintBitsToFloat(1u);
+    receipts[output_at+4u].z=5.;
+   }
+  }
+  return;
+ }
+
  ivec2 lo=ivec2(floor((query.xy-query.z)/16.)),hi=ivec2(floor((query.xy+query.z)/16.));
  ivec2 native_lo=ivec2(floor((query.xy-query.z)/64.));
  for(int x=lo.x;x<=min(hi.x,lo.x+255);x++)for(int y=lo.y;y<=min(hi.y,lo.y+159);y++){

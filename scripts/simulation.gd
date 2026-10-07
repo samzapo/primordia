@@ -11,6 +11,7 @@ var build_waste := 0.0
 const Backend = preload("res://scripts/backend.gd")
 var kernels = Backend.create()
 var gpu_transport = null
+var resident = null
 # Only the explicit fluid comparison harness attaches this backend.
 var experimental_fluid = null
 const Offscreen = preload("res://scripts/offscreen_ecology.gd")
@@ -138,6 +139,7 @@ var last_spawn: Dictionary = {}
 var emitted_particles := 0
 
 func enable_particle_pool() -> bool:
+	if resident != null: return false
 	if particle_pool: return true
 	if not _pool_supported(): return false
 	kernels.pool_start(particles)
@@ -177,15 +179,19 @@ func _pool_supported() -> bool:
 	return kernels != null and native_particle_pipeline and native_particles and native_transport_bookkeeping and native_chemistry_writes and native_chemical_timestamps and native_background_chemistry and native_feeding and native_exclusion and native_particle_compaction and native_render and grid.native != null and grid.native_enabled and grid.incremental and gpu_transport == null and (not habitat_geometry.enabled or habitat_geometry.particles_permeable)
 
 func particle_count() -> int:
+	if resident != null: return resident.alive
 	return kernels.pool_size() if particle_pool else particles.size()
 
 func pheromone_count() -> int:
+	if resident != null: return resident.signals
 	return int(kernels.pool_metrics().signal_slots) if particle_pool else pheromones.size()
 
 func particle_snapshots() -> Array:
+	if resident != null: return resident.snapshots()
 	return kernels.pool_snapshots() if particle_pool else particles
 
 func particle_snapshot(index: int) -> Dictionary:
+	if resident != null: return resident.inspect_slot(index)
 	return kernels.pool_snapshot(index) if particle_pool else particles[index]
 
 func _commit_spawn_metadata() -> void:
@@ -252,9 +258,11 @@ func screen_position(p: Vector2) -> Vector2:
 	return view_half+Medium.offset(camera_position if not camera_follows_player else player.position,p)
 
 func activity_at(p: Vector2) -> float:
+	if resident != null: return 1.0
 	return Medium.visibility(p,player.position if camera_follows_player else camera_position,view_half)
 
 func activity_for_cell(cell) -> float:
+	if resident != null: return 1.0
 	# A visible membrane or appendage must not freeze when its center is outside.
 	var half: Vector2 = view_half+Vector2.ONE*(cell.extent()+80)
 	return Medium.visibility(cell.position,player.position if camera_follows_player else camera_position,half)
@@ -263,6 +271,7 @@ func local_particle_ids(margin: float = 0.0) -> Array[int]:
 	return visible_particle_ids(margin+Medium.ACTIVE_PAD+Medium.ACTIVE_FADE)
 
 func visible_particle_ids(margin: float = 0.0) -> Array[int]:
+	if resident != null: return [] # Rendering reads the resident texture directly.
 	if grid.source_size != particle_count(): grid.rebuild(particles)
 	return grid.query_rect(player.position if camera_follows_player else camera_position,view_half+Vector2.ONE*margin)
 
@@ -286,7 +295,7 @@ func remove(index: int) -> bool:
 func spawn_particle(kind: int, p: Vector2, v: Vector2 = Vector2.ZERO, amount: float = 1.0, owner: int = -1, source_radius: float = 0.0) -> void:
 	if amount <= 0: return
 	emitted_particles += 1
-	if grid.source_size != particle_count(): grid.rebuild(particles)
+	if resident == null and grid.source_size != particle_count(): grid.rebuild(particles)
 	last_spawn = {"kind":kind,"p":Medium.wrap_position(p),"previous":Medium.wrap_position(p),"v":v,"amount":amount,"age":0.0,"alive":true,"owner":owner,"source_radius":source_radius,"angle":rng.randf()*TAU,"previous_angle":0.0,"spin":rng.randfn(0,0.8),"direction":Vector2.RIGHT,"capacity":amount}
 	last_spawn.previous_angle = last_spawn.angle
 	last_spawn.direction = Vector2.from_angle(last_spawn.angle)
@@ -298,9 +307,12 @@ func spawn_particle(kind: int, p: Vector2, v: Vector2 = Vector2.ZERO, amount: fl
 		last_spawn.spin = 0.0
 		last_spawn.direction = Vector2.ZERO
 		last_spawn.expires_at = time-log(maxf(rng.randf(),0.000000001))/PHEROMONE_DECAY
-		if not particle_pool: pheromones.append(last_spawn)
+		if not particle_pool and resident == null: pheromones.append(last_spawn)
 	last_spawn.chemical_at = time
 	last_spawn.transport_at = transport_clock
+	if resident != null:
+		resident.enqueue(last_spawn)
+		return
 	if particle_pool: kernels.pool_spawn(last_spawn)
 	else:
 		particles.append(last_spawn)
@@ -372,6 +384,15 @@ func _emit_material(kind: int, at: Vector2, amount: float, motion: Vector2 = Vec
 	for i in count: spawn_particle(kind,at,motion,amount/count,owner)
 
 func step(dt: float) -> void:
+	if resident != null:
+		var shown_half:=view_half
+		var shown_camera:=camera_position
+		var shown_follow:=camera_follows_player
+		# Recruitment trigger geometry is also independent of display zoom/pan.
+		view_half=VIEW*.5/.8;camera_position=player.position;camera_follows_player=true
+		resident.step(dt)
+		view_half=shown_half;camera_position=shown_camera;camera_follows_player=shown_follow
+		return
 	var display_half := view_half
 	var display_camera := camera_position
 	var display_follow := camera_follows_player
@@ -466,62 +487,10 @@ func _step_simulation(dt: float) -> void:
 		var feed_mark := Time.get_ticks_usec() if profiling else 0
 		_feed(cell)
 		if profiling: profile_usec["feeding"] = profile_usec.get("feeding",0)+Time.get_ticks_usec()-feed_mark
-		_acid_stress(cell,local_dt)
-		_photosynthesize(cell,local_dt)
-		_metabolize(cell,local_dt)
-		cell.heal(local_dt)
-		for leak in cell.leaks:
-			var normal := Vector2.from_angle(cell.angle+leak.a)
-			_emit_material(NUTRIENT,cell.position+cell.local_point(leak.a).rotated(cell.angle)+normal*12,leak.amount,normal*12,cell.id)
-		# Tiny continuous emissions are aggregated into material-bearing packets.
-		if cell.waste >= 0.2:
-			_emit_material(WASTE,cell.position-Vector2.from_angle(cell.angle)*(cell.radius+12),cell.waste,Vector2.ZERO,cell.id)
-			cell.waste = 0
-		var organ_mark := Time.get_ticks_usec() if profiling else 0
-		cell.update_geometry()
-		# Shrinkage can shed crowded organs, releasing their remaining material.
-		while cell.occupied() > cell.perimeter() and not cell.organs.is_empty():
-			var organ: Dictionary = cell.organs.pop_back()
-			cell.lost_organs.append(organ.duplicate(true))
-			spawn_particle(WASTE,cell.organ_position(organ),Vector2.ZERO,organ.material,cell.id)
-		if profiling: profile_usec["organ_geometry"] = profile_usec.get("organ_geometry",0)+Time.get_ticks_usec()-organ_mark
-		var traction_mark := Time.get_ticks_usec() if profiling else 0
-		var traction := PackedVector2Array()
-		for point in cell.membrane.points:
-			var arm: Vector2 = point.rotated(cell.angle)
-			traction.append((fluid.sample(cell.position+arm)-cell.velocity-arm.orthogonal()*cell.angular_velocity).rotated(-cell.angle).limit_length(90))
-		if profiling: profile_usec["traction"] = profile_usec.get("traction",0)+Time.get_ticks_usec()-traction_mark
-		var membrane_mark := Time.get_ticks_usec() if profiling else 0
-		cell.membrane.step(local_dt,cell.radius,cell.shape_acceleration.rotated(-cell.angle),cell.age+cell.id*1.7,1.0,traction)
-		if profiling:
-			profile_usec["membrane"] = profile_usec.get("membrane",0)+Time.get_ticks_usec()-membrane_mark
-			profile_counts["membrane_updates"] = profile_counts.get("membrane_updates",0)+1
-		cell.render_revision += 1
-		_emit_and_attack(cell,local_dt)
+		_biology_after_feed(cell,local_dt)
 	profile_usec["biology"] = Time.get_ticks_usec()-mark
 	mark = Time.get_ticks_usec()
-	# Short motion substeps plus swept contacts avoid crossing from one side to the other.
-	var contacts_us := 0
-	var before_motion: Dictionary = {}
-	for cell in cells: before_motion[cell.id] = cell.velocity
-	for cell in cells:
-		cell.feeding_feedback = ""
-		for organ in cell.organs:
-			if organ.kind == "offensive": organ.feeding = false
-	for substep in 3:
-		var starts: Dictionary = {}
-		for cell in cells: starts[cell.id] = {"p":cell.position,"angle":cell.angle}
-		_motion(dt/3.0)
-		var contact_mark := Time.get_ticks_usec() if profiling else 0
-		_contacts(dt/3.0)
-		if profiling: contacts_us += Time.get_ticks_usec()-contact_mark
-		_spike_contacts(dt/3.0,starts)
-		for cell in cells:
-			if cell.dead or cell.activity <= 0: continue
-			habitat_geometry.move_cell(cell,cell.position,cell.position,dt/3.0)
-	for cell in cells:
-		cell.shape_acceleration = ((cell.velocity-before_motion[cell.id])/dt).limit_length(600)
-	if profiling: profile_usec["contacts"] = contacts_us
+	_step_cell_motion(dt)
 	profile_usec["motion"] = Time.get_ticks_usec()-mark
 	mark = Time.get_ticks_usec()
 	if spatial_queries: cell_index.rebuild(cells)
@@ -548,6 +517,64 @@ func _step_simulation(dt: float) -> void:
 	profile_usec["evolution"] = Time.get_ticks_usec()-mark
 	won = evolution.status == "won"
 	if packed_render_tick: kernels.particle_render_ready(particles,revision)
+
+func _biology_after_feed(cell, local_dt: float) -> void:
+	_acid_stress(cell,local_dt)
+	_photosynthesize(cell,local_dt)
+	_metabolize(cell,local_dt)
+	cell.heal(local_dt)
+	for leak in cell.leaks:
+		var normal := Vector2.from_angle(cell.angle+leak.a)
+		_emit_material(NUTRIENT,cell.position+cell.local_point(leak.a).rotated(cell.angle)+normal*12,leak.amount,normal*12,cell.id)
+	# Tiny continuous emissions are aggregated into material-bearing packets.
+	if cell.waste >= 0.2:
+		_emit_material(WASTE,cell.position-Vector2.from_angle(cell.angle)*(cell.radius+12),cell.waste,Vector2.ZERO,cell.id)
+		cell.waste = 0
+	var organ_mark := Time.get_ticks_usec() if profiling else 0
+	cell.update_geometry()
+	# Shrinkage can shed crowded organs, releasing their remaining material.
+	while cell.occupied() > cell.perimeter() and not cell.organs.is_empty():
+		var organ: Dictionary = cell.organs.pop_back()
+		cell.lost_organs.append(organ.duplicate(true))
+		spawn_particle(WASTE,cell.organ_position(organ),Vector2.ZERO,organ.material,cell.id)
+	if profiling: profile_usec["organ_geometry"] = profile_usec.get("organ_geometry",0)+Time.get_ticks_usec()-organ_mark
+	var traction_mark := Time.get_ticks_usec() if profiling else 0
+	var traction := PackedVector2Array()
+	for point in cell.membrane.points:
+		var arm: Vector2 = point.rotated(cell.angle)
+		traction.append((fluid.sample(cell.position+arm)-cell.velocity-arm.orthogonal()*cell.angular_velocity).rotated(-cell.angle).limit_length(90))
+	if profiling: profile_usec["traction"] = profile_usec.get("traction",0)+Time.get_ticks_usec()-traction_mark
+	var membrane_mark := Time.get_ticks_usec() if profiling else 0
+	cell.membrane.step(local_dt,cell.radius,cell.shape_acceleration.rotated(-cell.angle),cell.age+cell.id*1.7,1.0,traction)
+	if profiling:
+		profile_usec["membrane"] = profile_usec.get("membrane",0)+Time.get_ticks_usec()-membrane_mark
+		profile_counts["membrane_updates"] = profile_counts.get("membrane_updates",0)+1
+	cell.render_revision += 1
+	_emit_and_attack(cell,local_dt)
+
+func _step_cell_motion(dt: float) -> void:
+	# Short motion substeps plus swept contacts avoid crossing from one side to the other.
+	var contacts_us := 0
+	var before_motion: Dictionary = {}
+	for cell in cells: before_motion[cell.id] = cell.velocity
+	for cell in cells:
+		cell.feeding_feedback = ""
+		for organ in cell.organs:
+			if organ.kind == "offensive": organ.feeding = false
+	for substep in 3:
+		var starts: Dictionary = {}
+		for cell in cells: starts[cell.id] = {"p":cell.position,"angle":cell.angle}
+		_motion(dt/3.0)
+		var contact_mark := Time.get_ticks_usec() if profiling else 0
+		_contacts(dt/3.0)
+		if profiling: contacts_us += Time.get_ticks_usec()-contact_mark
+		_spike_contacts(dt/3.0,starts)
+		for cell in cells:
+			if cell.dead or cell.activity <= 0: continue
+			habitat_geometry.move_cell(cell,cell.position,cell.position,dt/3.0)
+	for cell in cells:
+		cell.shape_acceleration = ((cell.velocity-before_motion[cell.id])/dt).limit_length(600)
+	if profiling: profile_usec["contacts"] = contacts_us
 
 func _step_background_fluid(dt: float) -> void:
 	if not background_transport: return
@@ -1155,6 +1182,7 @@ func _metabolize(cell, dt: float) -> void:
 func _secretion_needed(cell, organ: Dictionary, kind: int) -> bool:
 	if kind == BUFFER: return acidity.sample(cell.organ_position(organ)) > 0.02 or cell.acid_stress > 0.03
 	if kind not in [ENZYME,ANTITOXIN]: return true
+	if resident != null: return resident.needed.get(Vector2i(cell.id,organ.id),false)
 	var wanted := WASTE if kind == ENZYME else TOXIN
 	var at: Vector2 = cell.organ_position(organ)
 	var reach: float = 140*sqrt(organ.scale)

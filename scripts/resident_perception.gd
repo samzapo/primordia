@@ -19,6 +19,9 @@ func encode_metadata(item: Dictionary, kind: int, table: Dictionary) -> Dictiona
 	if not integer(owner): return {"error":"Invalid owner"}
 	var bytes:=PackedByteArray();bytes.resize(64)
 	bytes.encode_s32(48,owner)
+	var lineage=item.get("lineage",owner)
+	if not integer(lineage): return {"error":"Invalid chemical lineage"}
+	bytes.encode_s32(52,lineage)
 	if kind!=3: return {"bytes":bytes}
 	if not item.get("report",{}) is Dictionary: return {"error":"Invalid pheromone report"}
 	var report: Dictionary=item.get("report",{})
@@ -69,7 +72,7 @@ func prepare_batch(emissions: Array, queries: Array) -> Dictionary:
 		if not query is Dictionary: return {"error":"Invalid receptor query"}
 		for name in ["at","reach","id","lineage","mass","mode","target_id","incumbent"]:
 			if not query.has(name): return {"error":"Incomplete receptor query"}
-		if not query.at is Vector2 or not query.at.is_finite() or query.mode not in ["hunt","flee","graze"] or not query.incumbent is bool:
+		if not query.at is Vector2 or not query.at.is_finite() or query.mode not in ["hunt","flee","graze","waste","toxin","inspect"] or not query.incumbent is bool:
 			return {"error":"Invalid receptor query"}
 		if not integer(query.id,0) or not integer(query.lineage,0) or not integer(query.target_id):
 			return {"error":"Invalid receptor identity"}
@@ -78,13 +81,13 @@ func prepare_batch(emissions: Array, queries: Array) -> Dictionary:
 		if not query.get("center",query.at) is Vector2 or not (query.get("inner",70) is int or query.get("inner",70) is float):
 			return {"error":"Invalid food-patch geometry"}
 		var center: Vector2=query.get("center",query.at)
-		var inner: float=query.get("inner",70)
+		var inner: float=query.get("inner",0 if query.mode=="inspect" else 70)
 		if not center.is_finite() or not is_finite(inner) or inner<0: return {"error":"Invalid food-patch geometry"}
 		var at:=requests.size();requests.resize(at+64)
 		requests.encode_float(at,fposmod(query.at.x,4096));requests.encode_float(at+4,fposmod(query.at.y,2560))
 		requests.encode_float(at+8,query.reach);requests.encode_float(at+12,query.mass)
 		requests.encode_s32(at+16,query.id);requests.encode_s32(at+20,query.lineage)
-		requests.encode_s32(at+24,query.target_id);requests.encode_u32(at+28,["hunt","flee","graze"].find(query.mode))
+		requests.encode_s32(at+24,query.target_id);requests.encode_u32(at+28,["hunt","flee","graze","waste","toxin","inspect"].find(query.mode))
 		requests.encode_u32(at+32,1 if query.incumbent else 0)
 		requests.encode_float(at+48,fposmod(center.x,4096));requests.encode_float(at+52,fposmod(center.y,2560))
 		requests.encode_float(at+56,inner)
@@ -99,7 +102,7 @@ static func requests(cells: Array, dt: float=0, now: float=0) -> Array:
 		for organ in cell.organs:
 			if organ.hp<=0 or organ.kind not in ["hunting","sensing","feeding"]: continue
 			var mode: String="hunt" if organ.kind=="hunting" else organ.mode
-			if mode not in ["hunt","flee","graze"]: continue
+			if mode not in ["hunt","flee","graze","waste","toxin","inspect"]: continue
 			if mode!="flee" and cell.steering_strength(organ)<=0: continue
 			var reach: float=(120 if mode=="hunt" else 90 if mode=="flee" else 310)*sqrt(organ.scale)*(1-organ.blocked*0.65)*Genes.factor(organ,"sense")
 			result.append({"at":cell.organ_position(organ),"reach":reach,"id":cell.id,"lineage":cell.lineage_id(),
@@ -113,6 +116,7 @@ static func for_cell(queries: Array, results: Array, cell) -> Dictionary:
 	for i in queries.size():
 		if queries[i].id!=cell.id: continue
 		var reports: Dictionary={}
+		if queries[i].mode not in ["hunt","flee","graze"]: continue
 		if results[i].valid and results[i].has("report"): reports[results[i].report.id]=results[i]
 		received[queries[i].organ_id]={"food":{},"reports":reports,"patch":results[i].get("patch",{})}
 	return received
@@ -164,14 +168,18 @@ static func decode(bytes: PackedByteArray, at: int, queries: int) -> Array:
 	var result: Array=[]
 	for i in queries:
 		var p:=at+i*80
-		var valid:=bytes.decode_u32(p+40)==1
+		var valid:=bytes.decode_u32(p+40)==1 or bytes.decode_float(p+72)==4
 		var item: Dictionary={"valid":valid}
 		if bytes.decode_float(p+72)==3:
 			push_error("Resident food bins overflowed")
 			item["error"]="Food bins overflowed"
 		if valid and bytes.decode_float(p+72)==2:
 			item["patch"]={"at":Vector2(bytes.decode_float(p),bytes.decode_float(p+4)),"mass":bytes.decode_float(p+8),"inner":bytes.decode_float(p+12)!=0}
-		elif valid:
+		elif valid and bytes.decode_float(p+72)==4:
+			item["state"]=bytes.slice(p,p+48).to_float32_array()
+			item["handle"]=Vector2i(bytes.decode_s32(p+48),bytes.decode_s32(p+52))
+			item["owner"]=bytes.decode_s32(p+56)
+		elif valid and bytes.decode_float(p+72)!=5:
 			item["report"]={"at":Vector2(bytes.decode_float(p),bytes.decode_float(p+4)),"mass":bytes.decode_float(p+8),
 				"radius":bytes.decode_float(p+12),"id":bytes.decode_s32(p+16),"lineage":bytes.decode_s32(p+20),
 				"hostile":bytes.decode_u32(p+24)!=0,"defended":bytes.decode_u32(p+28)!=0,"emitted_at":bytes.decode_float(p+32)}

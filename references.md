@@ -386,3 +386,7 @@ The biological rules are unchanged. [Godot thread-safety documentation](https://
 ## Resident chemical perception (Revision 38)
 
 This revision implements the existing [pheromone-plume abstraction](#pheromone-plumes-and-chemical-perception) and [local nutrient-patch steering](#nutrient-patches-exploration-and-atp-headroom-revision-24) in GPU queries. It adds no biological mechanism: reports remain emission-time game metadata, and patch centroids remain an affordable spatial-sensing abstraction. The sources in those sections motivate chemical communication and patch exploitation, not literal digital organism identities or exact molecular coordinates. GPU batching and compact CPU receipts are engineering choices; see [Revision 38](docs/REVISION_38.md) for their limits.
+
+## Playable resident ecology (Revision 39)
+
+[Revision 39](docs/REVISION_39.md) moves existing diffusion, binding, uptake, receptor competition, acid buffering and lysis abstractions onto a resident numerical representation. Their motivating phenomena and qualifications remain in the biological sections above; there is no new biological mechanism or source of matter. Parallel partner competition follows the computational references under Revision 35. Full-habitat execution and explicit CPU/GPU resource receipts are engineering choices, not claims of molecular fidelity. Tiny emission accumulation preserves finite material across numerical precisions; it is not a biological minimum-dose rule.
