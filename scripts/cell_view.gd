@@ -16,6 +16,7 @@ var detail_lod := true
 var label := Label.new()
 var appendages := Node2D.new()
 var surface := MeshInstance2D.new()
+var water_wake := MeshInstance2D.new()
 var surface_revision := -1
 var depth_style := false
 
@@ -26,6 +27,10 @@ func _ready() -> void:
 	surface.material = ShaderMaterial.new()
 	surface.material.shader = preload("res://shaders/membrane.gdshader")
 	add_child(surface)
+	water_wake.z_index = -1 # Cells are at z=2; all wakes remain below every body.
+	water_wake.material = ShaderMaterial.new()
+	water_wake.material.shader = preload("res://shaders/cell_wake.gdshader")
+	add_child(water_wake)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	label.add_theme_color_override("font_outline_color",Color("21375d"))
 	label.add_theme_constant_override("outline_size",4)
@@ -62,6 +67,7 @@ func sync(render_position: Vector2, render_angle: float, zoom: float, alpha: flo
 		set_meta("assembly",game.build_open)
 		queue_redraw()
 		appendages.queue_redraw()
+	water_wake.visible = depth_style and game.flow_wakes
 	if depth_style:
 		_sync_surface(render_angle,detail_changed)
 	label.visible = cell.rival_name != "" and (game.show_senses or get_global_mouse_position().distance_to(global_position) < cell.extent()*zoom+20)
@@ -80,6 +86,7 @@ func _sync_surface(render_angle: float, changed: bool) -> void:
 			for i in range(0,outline.size(),4): reduced.append(outline[i])
 			outline = reduced
 		surface.mesh = Surface.mesh(outline,game.native_geometry)
+		water_wake.mesh = surface.mesh
 		if game.frame_trace != null:
 			game.frame_trace.work("geometry",Time.get_ticks_usec()-mark)
 			game.frame_trace.count("mesh_updates")
@@ -91,7 +98,10 @@ func _sync_surface(render_angle: float, changed: bool) -> void:
 	surface.material.set_shader_parameter("hurt",cell.hurt_flash)
 	surface.material.set_shader_parameter("clock",game.world.time)
 	surface.material.set_shader_parameter("slip",slip)
-	surface.material.set_shader_parameter("wakes",game.flow_wakes)
+	surface.material.set_shader_parameter("wakes",false)
+	water_wake.material.set_shader_parameter("heading",render_angle)
+	water_wake.material.set_shader_parameter("clock",game.world.time)
+	water_wake.material.set_shader_parameter("slip",slip)
 
 func _draw() -> void:
 	var mark := Time.get_ticks_usec() if game.frame_trace != null else 0

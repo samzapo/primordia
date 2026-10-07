@@ -10,6 +10,9 @@ var forms: Array = []
 var segments: Array = []
 var bins: Dictionary = {}
 var enabled := true
+# Cells/spikes collide with stems; dissolved packets permeate the colony.
+# False is retained solely for the historical contact benchmark.
+var particles_permeable := true
 var accelerator = preload("res://scripts/backend.gd").create()
 
 func _init(seed_number: int = 0, occupied: Array = []) -> void:
@@ -304,7 +307,7 @@ func move_cell(cell, start: Vector2, end: Vector2, dt: float) -> void:
 	cell.position = Medium.wrap_position(cell.position)
 
 func move_particles(particles: Array, ids: Array, revision: int, grid, native: bool = true) -> void:
-	if not enabled: return
+	if not enabled or particles_permeable: return
 	if native and accelerator != null:
 		if accelerator.obstacle_particles(particles,ids,revision,native_bounds): grid.update(particles,ids)
 		return

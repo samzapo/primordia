@@ -20,6 +20,7 @@ func _run() -> void:
 	preload("res://tests/acceleration.gd").run(expect)
 	preload("res://tests/performance.gd").run(expect)
 	preload("res://tests/habitat.gd").run(expect)
+	preload("res://tests/porous_habitat.gd").run(expect)
 	preload("res://tests/art.gd").run(expect)
 	_test_metabolism()
 	_test_anatomy()
@@ -36,6 +37,8 @@ func _run() -> void:
 	_test_microtubules()
 	preload("res://tests/music.gd").new().run(self)
 	_test_resource_animation()
+	preload("res://tests/energy_budget.gd").run(expect)
+	preload("res://tests/size_drag.gd").run(expect)
 	_test_growth_and_anchors()
 	_test_incremental_grid()
 	_test_local_feeding()
@@ -609,12 +612,13 @@ func _test_preferences() -> void:
 	preferences.path = "user://test-preferences-%d.cfg" % Time.get_ticks_usec()
 	preferences.fullscreen = true
 	preferences.bloom = false
+	preferences.water_ripples = false
 	preferences.hud_scale = 1.5
 	preferences.save_settings()
 	var restored = preload("res://scripts/preferences.gd").new()
 	restored.path = preferences.path
 	restored.load_settings()
-	expect(restored.fullscreen and restored.hud_scale == 1.5 and not restored.bloom,"Fullscreen, bloom and HUD scale survive settings reload")
+	expect(restored.fullscreen and restored.hud_scale == 1.5 and not restored.bloom and not restored.water_ripples,"Water shimmer, fullscreen, bloom and HUD scale survive settings reload")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(preferences.path))
 
 func _test_packing_and_size() -> void:

@@ -61,6 +61,9 @@ func run(test_host) -> void:
 	scene.world.revision = revision
 	npc.render_revision = draw_revision
 	scene._update_world(1)
+	expect(scene.light_layer.material.get_shader_parameter("clock") == scene.world.time,"Broad water shimmer pauses with simulation time")
+	for view in scene.views.values():
+		expect(view.water_wake.z_index+view.z_index < 2 and view.water_wake.mesh == view.surface.mesh,"Stronger cell wakes share the deformed outline and draw behind all cell bodies")
 	# Bounded diagnostics aggregate catch-up ticks without changing ecology.
 	var before_trace: int = hash(scene.world.particles)
 	var before_time: float = scene.world.time
@@ -89,6 +92,9 @@ func run(test_host) -> void:
 	scene.bloom_check.toggled.emit(false)
 	expect(scene.microscope_layer.visible and not scene.preferences.bloom,"Turning off bloom preserves the shared blur/lens pass")
 	scene.bloom_check.toggled.emit(true)
+	scene.ripple_check.toggled.emit(false)
+	expect(not scene.preferences.water_ripples and scene.light_layer.material.get_shader_parameter("water_ripples") == false,"Water shimmer can be disabled without changing anatomy or the screen-copy pass")
+	scene.ripple_check.toggled.emit(true)
 	key(KEY_ESCAPE)
 	key(KEY_SPACE)
 	expect(not scene.camera_locked and not scene.is_paused(),"Space unlocks view without pausing")
@@ -116,10 +122,8 @@ func run(test_host) -> void:
 	expect(scene.selected == 1 and scene.cell_ui.choices.is_empty(),"Factory choice picks a cortex without a build panel")
 	var before_zoom: float = scene.manual_zoom
 	var cursor := Vector2(80,180)
-	var world_before: Vector2 = scene.render_camera+(cursor-scene.camera_screen)/scene.zoom
 	click(cursor,MOUSE_BUTTON_WHEEL_UP)
-	var world_after: Vector2 = scene.render_camera+(cursor-scene.camera_screen)/scene.zoom
-	expect(scene.manual_zoom > before_zoom and Sim.Medium.offset(world_before,world_after).length() < 0.001,"Wheel during placement zooms around the cursor")
+	expect(scene.manual_zoom > before_zoom and scene.camera_offset == Vector2.ZERO and Sim.Medium.offset(scene.render_camera,cell.position).length() < 0.001,"Wheel during placement zooms around the followed cell")
 	click(at(cell.local_point(2.15)))
 	expect(cell.count("protection") == 1 and cell.organs[-1].scale == 1,"New organs have a fixed standard size")
 	var organ_id: int = cell.organs[-1].id
@@ -145,6 +149,36 @@ func run(test_host) -> void:
 	expect(scene.cell_ui.describe({"kind":"organ","id":pore.id}).contains("Steering Off"),"Organ inspection immediately reports its steering setting")
 	for i in 3: scene.cell_ui.choices[2].pressed.emit()
 	scene.cell_ui.close_context()
+	# The actual kept upgrade price feeds both the tooltip and visual cost comparison.
+	var upgrade_gene := ""
+	for gene in Sim.Genes.DATA:
+		if Sim.Genes.DATA[gene].kind == "feeding": upgrade_gene = gene; break
+	scene.world.evolution.learned.append(upgrade_gene)
+	scene.cell_ui.open_context({"kind":"organ","id":pore.id})
+	scene.cell_ui.sync(0)
+	var upgrade = scene.cell_ui.choices[-1]
+	upgrade.grab_focus()
+	scene.cell_ui.sync(0)
+	var upgrade_quote: Dictionary = scene.cell_ui.biomass_view.quote
+	expect(upgrade_quote.show_cost and upgrade_quote.cost == Sim.Genes.price(pore) and upgrade_quote.ap_needed == Sim.Genes.adaptation_price(pore),"Inspecting a real upgrade displays its tissue and AP costs")
+	expect(upgrade.description.contains("tissue") and upgrade.description.contains("AP"),"Upgrade tooltip retains precise tissue and adaptation prices")
+	expect(scene.cell_ui.biomass_view.rate_quote.preview and scene.cell_ui.biomass_view.rate_quote.has_organ and "Steady ATP" in scene.cell_ui.tip.text,"Upgrade inspection shows its proposed upkeep before spending")
+	var type_scale: float = scene.preferences.hud_scale
+	scene.preferences.hud_scale = 1.75
+	scene.cell_ui.sync(0)
+	expect(not Rect2(scene.cell_ui.tip_box.position,scene.cell_ui.tip_box.size).intersects(scene.cell_ui.biomass_view.comparison_bounds()),"Large upgrade tooltips keep stock, price and ATP sacs visible")
+	scene.preferences.hud_scale = type_scale
+	scene.cell_ui.sync(0)
+	var saved_upgrade_tissue: float = cell.biomass
+	var saved_upgrade_ap: int = scene.world.evolution.points
+	cell.biomass = 0
+	scene.world.evolution.points = 0
+	scene.cell_ui.sync(0)
+	expect(not scene.cell_ui.biomass_view.quote.enough and not scene.cell_ui.biomass_view.quote.ap_ready,"Upgrade inspection separately shows both insufficient resources")
+	cell.biomass = saved_upgrade_tissue
+	scene.world.evolution.points = saved_upgrade_ap
+	scene.cell_ui.close_context()
+	expect(not scene.cell_ui.biomass_view.quote.show_cost,"Closing upgrade choices clears the visual price")
 	scene.selected = 4
 	scene.cell_ui.sync(0)
 	var stock = scene.cell_ui.biomass_view
@@ -223,7 +257,33 @@ func run(test_host) -> void:
 	cell.energy = cell.energy_capacity()
 	scene.world.evolution.points = 7
 	scene.cell_ui.interior.sync()
-	expect(scene.cell_ui.interior.atp_fraction == 1 and scene.cell_ui.interior.coin_count == 7,"Full ATP and one coin per AP reflect real resources")
+	expect(scene.cell_ui.interior.atp_fraction == 1,"Full ATP remains in the internal sac")
+	scene.cell_ui.biomass_view.sync()
+	expect(scene.cell_ui.biomass_view.quote.ap_count == 7,"Top-right AP blobs count the actual available adaptation points")
+	scene.world.evolution.points = 0
+	scene.cell_ui.biomass_view.sync()
+	expect(scene.cell_ui.biomass_view.quote.ap_count == 0,"Empty AP stock shows no available gold blobs")
+	scene.world.evolution.points = 7
+	scene.cell_ui.biomass_view.sync()
+	expect(not scene.cell_ui.interior.anchors.has("coins") and scene.cell_ui.targets().all(func(target): return target.kind != "coins"),"Removed internal coins leave no invisible clickable node")
+	var saved_age: float = cell.age
+	var saved_selection: int = scene.selected
+	cell.age = maxf(1,cell.age)
+	scene.selected = -1
+	cell.energy_budget = preload("res://scripts/energy_budget.gd").new()
+	cell.energy_budget.record(cell.age-1,0,0,0,-1,"upkeep")
+	cell.energy_budget.record(cell.age,4,3,1,cell.organs[0].id,"pumping")
+	scene.cell_ui.keyboard_target = {"kind":"organ","id":cell.organs[0].id}
+	scene.cell_ui.hovered.clear()
+	scene.cell_ui.biomass_view.sync()
+	var budget: Dictionary = scene.cell_ui.biomass_view.rate_quote
+	expect(budget.has_organ and not budget.preview and is_equal_approx(budget.shown,1) and is_equal_approx(budget.rates.spent,1),"Installed organ's sac compares actual ATP/s against total drain on the same scale")
+	expect("Recent actual" in scene.cell_ui.describe(scene.cell_ui.keyboard_target) and "Pumping" in scene.cell_ui.describe({"kind":"atp"}),"Organ and ATP-sac hover explain actual costs and the cell's expense breakdown")
+	cell.age = saved_age
+	scene.selected = saved_selection
+	cell.energy_budget = preload("res://scripts/energy_budget.gd").new()
+	scene.cell_ui.keyboard_target.clear()
+
 	# Internal controls must not be mistaken for microtubule endpoints.
 	var groups: int = cell.membrane.skeleton.next_group
 	click(scene.cell_ui.screen_at({"kind":"assembly"}))
@@ -264,6 +324,21 @@ func run(test_host) -> void:
 	click(at(scene.world.player.local_point(0.7)))
 	click(at(scene.world.player.local_point(2.5)),MOUSE_BUTTON_LEFT,false)
 	expect(scene.world.player.membrane.skeleton.next_group == groups,"Microtubule editing remains unavailable during play")
+	# Follow zoom always centers the body; free zoom preserves the cursor's world point.
+	scene.camera_locked = true
+	scene.camera_offset = Vector2(85,-60)
+	scene.world.player.previous_position = scene.world.player.position
+	scene.manual_zoom = 1.2
+	scene._update_world(1)
+	var zoom_cursor: Vector2 = scene.camera_screen+Vector2(120,70)
+	scene._zoom_at(zoom_cursor,1.12)
+	expect(scene.camera_offset == Vector2.ZERO and Sim.Medium.offset(scene.render_camera,scene.world.player.position).length() < 0.001 and scene.world.camera_follows_player,"Locked wheel zoom recenters the cell even after a paused pan")
+	scene._toggle_camera()
+	var before: Vector2 = scene.render_camera+(zoom_cursor-scene.camera_screen)/scene.zoom
+	scene._zoom_at(zoom_cursor,1/1.12)
+	var after: Vector2 = scene.render_camera+(zoom_cursor-scene.camera_screen)/scene.zoom
+	expect(Sim.Medium.offset(before,after).length() < 0.001,"Free-view wheel zoom retains the cursor's world position")
+	scene._toggle_camera()
 	# Camera limits, large cells and readable physical calibration.
 	scene.cell_ui.close_context()
 	scene.selected = -1

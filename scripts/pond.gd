@@ -17,7 +17,6 @@ const TITLES := ["Flagellum","Protective cortex","Hunting spike","Repair body","
 const HELP := ["Flagella provide thrust. Anatomy chooses travel direction.","Protects the membrane directly beneath it. Coverage follows its membrane attachment.","A contact weapon with no senses or steering. Fast impacts puncture hard; slow pressure spends ATP for smaller wounds. Armor absorbs hits first. Pair spikes around a hunting receptor to line up collisions.","Uses biomass and ATP to repair organs and close punctures faster. Releases buffers that neutralize local acidity and accelerates receptor cleaning.","Senses and pumps nutrients into its opening. Secretes reusable enzymes that turn waste into food when aligned.","Reads nearby pheromones reporting larger or armed cells and retreats from their last reported location. This is the only organ that triggers flight.","Seeks brighter water. Light fixes dissolved carbon into biomass and food, releasing oxygen. Works best in bright habitat patches.","Spends ATP and biomass to fire toxins and receptor-blocking decoys toward a pheromone report received by a hunting or flight receptor.","Releases complementary particles that bind toxin into harmless waste. Costs small amounts of biomass and ATP.","Releases acidifying particles. Moderate acidity favors digestive enzymes; excess acidity costs ATP and stresses cells. Repair bodies release buffers.","Reads local pheromones reporting smaller or undefended prey. Faces and pursues the last reported location. Undefended means no functional spike, toxin vesicle or protective cortex at emission. Pair with spikes or toxins."]
 var music := preload("res://scripts/music_director.gd").new()
 var music_slider := HSlider.new()
-var pulse_slider := HSlider.new()
 var world: Simulation = Simulation.new()
 var archive_error := ""
 var archive = preload("res://scripts/lineage_archive.gd").new()
@@ -50,6 +49,7 @@ var tube_hint := Label.new()
 var scale_select := OptionButton.new()
 var fullscreen_check := CheckButton.new()
 var bloom_check := CheckButton.new()
+var ripple_check := CheckButton.new()
 var batches: Array[MultiMeshInstance2D] = []
 var buffers: Array[PackedFloat32Array] = []
 var views: Dictionary = {}
@@ -110,6 +110,7 @@ func _ready() -> void:
 	var light_material := ShaderMaterial.new()
 	light_material.shader = preload("res://shaders/light.gdshader")
 	light_layer.material = light_material
+	light_material.set_shader_parameter("water_ripples",preferences.water_ripples)
 	microscope_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var microscope_material := ShaderMaterial.new()
 	microscope_material.shader = preload("res://shaders/microscope.gdshader")
@@ -242,10 +243,7 @@ func _process(dt: float) -> void:
 	var music_start := Time.get_ticks_usec() if frame_trace != null else 0
 	music.update_music(dt)
 	if frame_trace != null: frame_trace.work("music",Time.get_ticks_usec()-music_start)
-	var particle_material: ShaderMaterial = batches[0].material
-	particle_material.set_shader_parameter("beat_pulse",music.pulse())
-	particle_material.set_shader_parameter("pulse_sources",music.pulse_sources)
-	particle_material.set_shader_parameter("canvas_aspect",get_viewport_rect().size.y/get_viewport_rect().size.x)
+
 	var inspection_start := Time.get_ticks_usec() if frame_trace != null else 0
 	var cursor := get_global_mouse_position()
 	var inspect_allowed := get_viewport_rect().has_point(cursor) and not settings_panel.visible and not camera_dragging and selected < 0 and moving_id < 0 and tube_start.is_empty() and cell_ui.context.is_empty() and get_viewport().gui_get_hovered_control() == null
@@ -279,6 +277,7 @@ func _update_world(alpha: float) -> void:
 	render_camera = world.player.previous_position+Simulation.Medium.offset(world.player.previous_position,world.player.position)*alpha+camera_offset if camera_locked else free_camera
 	world.camera_follows_player = camera_locked and camera_offset.length_squared() < 0.001
 	world.camera_position = render_camera
+	light_layer.material.set_shader_parameter("clock",world.time)
 	light_layer.material.set_shader_parameter("camera",render_camera)
 	light_layer.material.set_shader_parameter("view_size",size/zoom)
 	light_layer.material.set_shader_parameter("screen_center",camera_screen/size)
@@ -523,6 +522,10 @@ func _build_ui() -> void:
 	bloom_check.text = "Light bloom"
 	bloom_check.set_pressed_no_signal(preferences.bloom)
 	bloom_check.toggled.connect(set_bloom)
+	options.add_child(ripple_check)
+	ripple_check.text = "Water shimmer (background only)"
+	ripple_check.set_pressed_no_signal(preferences.water_ripples)
+	ripple_check.toggled.connect(set_water_ripples)
 	var music_label := _label(options,"Music volume · %d%%" % roundi(preferences.music_volume*100))
 	music_slider.max_value = 100
 	music_slider.step = 1
@@ -531,15 +534,6 @@ func _build_ui() -> void:
 	music_slider.value_changed.connect(func(value):
 		preferences.music_volume = value/100
 		music_label.text = "Music volume · %d%%" % roundi(value)
-		preferences.save_settings())
-	var pulse_label := _label(options,"Particle beat response · %d%%" % roundi(preferences.beat_pulse*100))
-	pulse_slider.max_value = 100
-	pulse_slider.step = 1
-	pulse_slider.value = preferences.beat_pulse*100
-	options.add_child(pulse_slider)
-	pulse_slider.value_changed.connect(func(value):
-		preferences.beat_pulse = value/100
-		pulse_label.text = "Particle beat response · %d%%" % roundi(value)
 		preferences.save_settings())
 	_button(options,"Sense view [S]",func(): show_senses = not show_senses)
 	_button(options,"Performance overlay [F3]",func(): show_debug = not show_debug)
@@ -596,6 +590,12 @@ func _layout() -> void:
 	settings_panel.position = Vector2(size.x-width-16,16)
 	settings_panel.size = Vector2(width,size.y-32)
 	preview.queue_redraw()
+
+func set_water_ripples(on: bool) -> void:
+	preferences.water_ripples = on
+	light_layer.material.set_shader_parameter("water_ripples",on)
+	ripple_check.set_pressed_no_signal(on)
+	preferences.save_settings()
 
 func set_bloom(on: bool) -> void:
 	preferences.bloom = on
@@ -671,7 +671,7 @@ func _finish_build() -> void:
 
 func placement_status() -> String:
 	if selected < 0: return ""
-	if world.evolution.points < 1: return "Needs an AP coin."
+	if world.evolution.points < 1: return "Needs an adaptation point."
 	if world.player.biomass < Simulation.Cell.organ_cost(Simulation.KINDS[selected]): return "Needs usable tissue; structural tissue stays protected."
 	if not world.player.can_fit(Simulation.KINDS[selected],0): return "Needs more membrane area."
 	return "Click the membrane · neighbors make room."
@@ -691,11 +691,11 @@ func _zoom_at(screen: Vector2, factor: float) -> void:
 	var before: Vector2 = render_camera+(screen-camera_screen)/zoom
 	manual_zoom = clampf(manual_zoom*factor,MIN_ZOOM,MAX_ZOOM)
 	focus_animating = false
+	if camera_locked: camera_offset = Vector2.ZERO
 	_update_world(1.0 if is_paused() else Engine.get_physics_interpolation_fraction())
 	var after: Vector2 = render_camera+(screen-camera_screen)/zoom
 	var correction := Simulation.Medium.offset(after,before)
-	if camera_locked: camera_offset += correction
-	else: free_camera = Simulation.Medium.wrap_position(free_camera+correction)
+	if not camera_locked: free_camera = Simulation.Medium.wrap_position(free_camera+correction)
 	_update_world(1.0 if is_paused() else Engine.get_physics_interpolation_fraction())
 	currents.queue_redraw()
 

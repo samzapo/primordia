@@ -44,6 +44,7 @@ static func run(check: Callable) -> void:
 	check.call(not h.clear_at(Vector2(4090,1280),3),"Solid branches continue across the habitat seam")
 	result = h.move(Vector2(4090,1180),Vector2(4090,1380),Vector2(0,100),4)
 	check.call(result[2] and result[0].y < 1271.1,"Swept contacts use the same periodic image as drawing")
+	h.particles_permeable = false # Historical contact-kernel parity, not current gameplay.
 	var grid = Sim.Grid.new()
 	var packets := [{"p":Vector2(4090,1380),"previous":Vector2(4090,1180),"v":Vector2(0,100),"alive":true,"updated":1,"amount":3.0,"kind":0,"owner":1}]
 	grid.rebuild(packets)

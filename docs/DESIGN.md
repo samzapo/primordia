@@ -198,3 +198,23 @@ Membrane attachments and placement previews face the local outward normal of the
 The owner requests a spark when two particles react. Sample successful pair contacts through both chemistry backends and display brief capped instanced flashes. A rejected collision, unary decay or particle source is not a successful pair reaction. Keep these effects independent of ecology, audio and random streams.
 
 [Revision 22](REVISION_22.md) records controls, regression checks and playtest limits.
+
+## Revision 23: porous colonies and clearer resource/flow cues
+
+The owner approves plant stems being permeable to chemical particles to prevent unreachable food pockets. Keep plant-cell and plant-spike geometry solid. Apply permeability to foreground transport, coarse offscreen transport and coarse chemical absorption/exposure; retain finite resources and solid separation of hidden cell hunting. Do not add food, teleport it to mouths or alter species-specific chemistry. Surface retention/slowing is a possible later refinement, not part of this fix.
+
+The owner asks for substantially longer flow streamers. Use three times the trail duration, a longer fading lifecycle, finer bounded strips and cached-field GPU integration. Preserve simulated flow, world-anchored seeds, RNG, pause behavior and a 640-strip limit. Check the presentation cost at the widest playable view.
+
+The owner replaces internal AP coins with small gold blobs at the top right alongside the build-only biomass display. Each blob is one actual available AP; zero is an empty outline. Remove the old coin node, hit target and transfer animations. This is presentation only and does not alter grant/spending rules.
+
+Locked follow-mode wheel zoom always centers on the cell, even after an editing pan. Free-camera zoom remains cursor-centered. Keep the 80% minimum, 12× maximum and no zoom readout.
+
+Hovering a construction or organ-upgrade choice (or focusing it with the keyboard) shows its real tissue/AP costs beside available stock. Required AP uses the same one-point gold blobs, with a shortfall tint. Exact tooltips remain; zero-AP restoration is visibly free. Previewing never spends resources.
+
+The owner requests the proposed ATP visual comparison, with obvious per-organ upkeep in build hover. Show actual production/spending on a common area scale, an installed/proposed organ's steady estimate, precise recent rates and shares on hover, and pre-purchase upgrade deltas. Keep estimates distinct from recent paid costs and distinguish gross production, stored income and overflow. Use bounded simulation-time averaging, pause-stable readings and presentation-only incoming packets. No economy changes.
+
+The owner requires larger cells to have greater fluid drag and lower swimming top speed at equal propulsion. Scale membrane drag with radius, preserving equal/opposite cell-fluid impulses and ordinary current advection. Use the same size-dependent drag in the coarse hunting mobility estimate. No role-based speed bonus or hard velocity cap.
+
+The owner asks for more pronounced local wakes and broad water ripples without occluding cells or causing dizziness. Extend plant/cell glints, draw every cell wake beneath all cell bodies, and keep broad slow caustic brightness variation in the water background only. No camera motion or full-scene refraction. The background shimmer can be disabled in settings and pauses with simulation time.
+
+The owner removes particle beat pulsing because it was not noticeable. Remove its shader work, per-frame visual preparation, preference and settings control. Preserve original progressive techno, audio timing, anatomy/lineage/proximity/environmental sonification and gameplay event accents. This supersedes earlier requests for beat-responsive particles.

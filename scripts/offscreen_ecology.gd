@@ -105,7 +105,7 @@ func advance(sim, cell, elapsed: float, hidden: bool = true) -> void:
 		for organ in cell.organs:
 			if organ.kind != "feeding" or cell.energy <= 0: continue
 			sim.fluid.suction(cell,cell.pore_center(organ),110*sqrt(organ.scale),24*organ.scale*organ.hp/organ.max_hp*Genes.factor(organ,"suction"),h)
-			cell.spend_energy(h*0.18*organ.scale*organ.scale,organ)
+			cell.spend_energy(h*0.18*organ.scale*organ.scale,organ,"pumping")
 		mark = Time.get_ticks_usec() if sim.profiling else 0
 		sim._motion_cell(cell,h)
 		if sim.profiling: sim.profile_usec["coarse_motion"] = sim.profile_usec.get("coarse_motion",0)+Time.get_ticks_usec()-mark
@@ -144,7 +144,7 @@ static func _swim(cell) -> float:
 	for organ in cell.organs:
 		if organ.kind == "propulsion":
 			thrust += 2600*organ.scale*organ.scale*organ.hp/organ.max_hp*Genes.factor(organ,"thrust")
-	return thrust/(90+cell.mass*0.2)
+	return thrust/(cell.fluid_drag()+cell.mass*0.2)
 
 func _feed(sim, cell, dt: float) -> void:
 	var mouth: Dictionary = {}
@@ -182,8 +182,8 @@ func _feed(sim, cell, dt: float) -> void:
 			capacity = maxf(0,30*cell.growth_scale()-cell.carbon)
 			rate = COLLECTION_SWEEP*2*(cell.extent()+18)*(relative+4)/area
 		if capacity <= 0 or not sim.chance(rate,dt): continue
-		# A solid stem still separates a resource pool; decorative fronds do not.
-		if not _clear_path(sim,cell.position,p.p): continue
+		# Dissolved resources permeate stems; legacy barriers are benchmark-only.
+		if not sim.habitat_geometry.particles_permeable and not _clear_path(sim,cell.position,p.p): continue
 		var amount := minf(p.amount,capacity)
 		p.amount -= amount
 		if p.amount <= 0.000001: p.alive = false
@@ -211,7 +211,7 @@ func _exposure(sim, cell, dt: float) -> void:
 		if sim.inherited_lineages.get(p.owner,p.owner) == cell.lineage_id(): continue
 		var delta := Medium.offset(cell.position,p.p)
 		if delta.length() > radius or not sim.chance(2.0,dt): continue
-		if not _clear_path(sim,cell.position,p.p): continue
+		if not sim.habitat_geometry.particles_permeable and not _clear_path(sim,cell.position,p.p): continue
 		if p.kind == sim.DECOY:
 			var bound := false
 			for organ in cell.organs:
@@ -268,14 +268,17 @@ func _hunt(sim, attacker, dt: float) -> void:
 		var rate := kill_rate(attacker,prey)
 		if rate <= 0: continue
 		var demand := 0.0
+		var shares := {}
 		var direction := Medium.offset(attacker.position,prey.position).normalized()
 		for organ in attacker.organs:
 			if organ.kind != "offensive" or organ.hp <= 0: continue
 			var facing: Vector2 = attacker.organ_normal(organ).rotated(attacker.angle)
 			# Charge the expected working contact, not every spike on the body.
-			demand += dt*1.2*organ.scale*organ.scale*Genes.factor(organ,"attack_cost")*maxf(0,facing.dot(direction))
+			var share: float = dt*1.2*organ.scale*organ.scale*Genes.factor(organ,"attack_cost")*maxf(0,facing.dot(direction))
+			demand += share
+			shares[organ.id] = share
 		demand *= CONTACT_DUTY
-		var paid: float = attacker.spend_energy(demand)
+		var paid: float = attacker.spend_energy(demand,{},"combat",shares)
 		rate *= minf(1,paid/maxf(0.000001,demand))
 		if sim.chance(rate,dt):
 			prey.death_hint = "Lost an offscreen hunting encounter"

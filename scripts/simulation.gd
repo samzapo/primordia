@@ -537,8 +537,8 @@ func _move_particles(dt: float) -> void:
 		background_particles = kernels.transport(particles,far_ids,fluid.velocity,camera,view_half,dt,revision,background_rng,transport_clock,true)
 	else:
 		background_particles = _transport_reference(far_ids,dt,background_rng,true)
-	# Swept stem contacts also apply to coarse material transport. Signals pass
-	# through every solid as before. Coarse biology/chemistry runs separately.
+	# Colonies are permeable to packets in both transport tiers. The retained
+	# historical solid-packet path is benchmark-only, never the game default.
 	habitat_geometry.move_particles(particles,far_ids,revision,grid,native_particles)
 	_settle_transport(far_ids,true)
 	profile_usec["background_transport"] = Time.get_ticks_usec()-mark
@@ -628,7 +628,7 @@ static func binding_threshold(a: int, b: int, acid: float) -> float:
 func _acid_stress(cell, dt: float) -> void:
 	var exposure := acidity.sample(cell.position)
 	var demand: float = maxf(0,exposure-0.15)*dt*5*cell.growth_scale()
-	var spent: float = cell.spend_energy(demand)
+	var spent: float = cell.spend_energy(demand,{},"acid stress")
 	var overload := maxf(0,exposure-0.5)*0.8+(demand-spent)*0.15/maxf(dt,0.00001)
 	cell.acid_stress = clampf(cell.acid_stress+(overload-0.12)*dt,0,1)
 	if cell.acid_stress > 0.6:
@@ -720,7 +720,7 @@ func _photosynthesize(cell, dt: float) -> void:
 		cell.fixed_carbon += amount
 		if cell == player: evolution.record("photo",amount)
 		cell.oxygen_produced += amount*2.5
-		cell.energy = minf(cell.energy_capacity(),cell.energy+amount*4)
+		cell.gain_energy(amount*4,organ)
 		var at: Vector2 = cell.organ_position(organ)+cell.organ_normal(organ).rotated(cell.angle)*16
 		spawn_particle(OXYGEN,at,Vector2.from_angle(rng.randf()*TAU)*12,amount*2.5,cell.id)
 		spawn_particle(NUTRIENT,at,Vector2.from_angle(rng.randf()*TAU)*18,food,cell.id)
@@ -747,7 +747,7 @@ func _suction(dt: float) -> void:
 			var local_dt: float = dt*cell.activity
 			var health: float = organ.hp/organ.max_hp
 			fluid.suction(cell,cell.pore_center(organ),110*sqrt(organ.scale),24*organ.scale*health*Genes.factor(organ,"suction"),local_dt)
-			cell.spend_energy(local_dt*0.18*organ.scale*organ.scale,organ)
+			cell.spend_energy(local_dt*0.18*organ.scale*organ.scale,organ,"pumping")
 
 func _steering_weight(organ: Dictionary, mode: String) -> float:
 	# Explicit flight is a safety drive, independent of feeding/hunting tuning.
@@ -923,7 +923,7 @@ func _metabolize(cell, dt: float) -> void:
 	var amount = minf(minf(cell.substrate,cell.oxygen),capacity)
 	cell.substrate -= amount
 	cell.oxygen -= amount
-	cell.energy = minf(cell.energy_capacity(),cell.energy+amount*5.0)
+	cell.gain_energy(amount*5.0)
 	cell.biomass += amount*0.7
 	cell.carbon += amount*0.1
 	cell.waste += amount*0.2
@@ -932,7 +932,7 @@ func _metabolize(cell, dt: float) -> void:
 	var fermented: float = minf(cell.substrate,maxf(0,capacity-amount))
 	if fermented > 0:
 		cell.substrate -= fermented
-		cell.energy = minf(cell.energy_capacity(),cell.energy+fermented*2)
+		cell.gain_energy(fermented*2)
 		cell.biomass += fermented*0.3
 		cell.waste += fermented*0.3
 		cell.carbon += fermented*0.1
@@ -984,7 +984,7 @@ func _emit_and_attack(cell, dt: float) -> void:
 			# Query only on a scheduled secretion attempt, rather than every tick.
 			if not _secretion_needed(cell,organ,kind): continue
 			cell.biomass -= 0.06
-			cell.spend_energy(energy_cost,organ)
+			cell.spend_energy(energy_cost,organ,"secretion")
 			var direction: Vector2 = cell.organ_normal(organ).rotated(cell.angle)
 			spawn_particle(kind,cell.organ_position(organ)+direction*10,direction*18*Genes.factor(organ,"dispersal"),0.06,cell.id)
 			particles[-1].capacity = 0.25 if kind in [ACID,BUFFER] else 0.06
@@ -1006,7 +1006,7 @@ func _emit_and_attack(cell, dt: float) -> void:
 		if cell.energy < maxf(12,2*burst) or cell.biomass < 0.18*burst: continue
 		spawn_particle(DECOY,cell.organ_position(organ),cell.threat*145,0.03*burst,cell.id)
 		spawn_particle(TOXIN,cell.organ_position(organ),cell.threat*170,0.15*burst,cell.id)
-		cell.spend_energy(2*burst,organ)
+		cell.spend_energy(2*burst,organ,"combat")
 		cell.biomass -= 0.18*burst
 		organ.consume_flash = 1
 		organ.burst_clock = 0.75*Genes.factor(organ,"cooldown")
@@ -1034,7 +1034,7 @@ func _motion_cell(cell, local_dt: float) -> void:
 			cell.velocity += impulse/cell.mass
 			cell.angular_velocity += arm.cross(impulse)/cell.inertia
 			steering_power += power
-			cell.spend_energy(energy_cost,organ)
+			cell.spend_energy(energy_cost,organ,"movement")
 	# Flagella can reverse their stroke to retreat while the receptor remains
 	# facing the threat. A paired steering impulse also acts on the medium.
 	if steering_power > 0:
@@ -1048,7 +1048,7 @@ func _motion_cell(cell, local_dt: float) -> void:
 			cell.angular_velocity += torque*local_dt/cell.inertia
 	for i in 6:
 		var arm = Vector2.from_angle(TAU*i/6.0+cell.angle)*cell.radius
-		fluid.exchange(cell,arm,local_dt,15.0)
+		fluid.exchange(cell,arm,local_dt,cell.fluid_drag()/6.0)
 	cell.angle = wrapf(cell.angle+cell.angular_velocity*local_dt,-PI,PI)
 	if coarse_mode:
 		var moved: Array = habitat_geometry.move(previous,Medium.wrap_position(previous+cell.velocity*local_dt),cell.velocity,cell.extent())
@@ -1164,7 +1164,7 @@ func _spike_contacts(dt: float, starts: Dictionary = {}) -> void:
 				# prevents deliberate tissue injury. No contact writes AI targets.
 				if prey.activity <= 0 or prey.lineage_id() == attacker.lineage_id(): continue
 				var local_dt := dt*minf(attacker.activity,prey.activity)
-				var energy: float = attacker.spend_energy(local_dt*1.2*organ.scale*organ.scale*Genes.factor(organ,"attack_cost"),organ)
+				var energy: float = attacker.spend_energy(local_dt*1.2*organ.scale*organ.scale*Genes.factor(organ,"attack_cost"),organ,"combat")
 				var damage: float = energy*12*Genes.factor(organ,"damage")+(minf(45,impact/prey.mass*0.9) if speed >= 6 else 0.0)
 				if damage <= 0: continue
 				prey.waste += prey.damage(damage,Medium.offset(prey.position,at).angle())
@@ -1235,7 +1235,7 @@ func _clear_receptors(cell, dt: float) -> void:
 		# bodies speed recovery; occupation cannot become a permanent disable.
 		organ.blocked = maxf(0,organ.blocked-dt*0.045)
 		var cleared: float = minf(organ.blocked,dt*0.18*(1+cell.count("regenerative")*1.5))
-		var energy: float = cell.spend_energy(cleared*1.2,organ)
+		var energy: float = cell.spend_energy(cleared*1.2,organ,"receptor cleaning")
 		organ.blocked = maxf(0,organ.blocked-energy/1.2)
 
 func _receptor_contacts() -> void:

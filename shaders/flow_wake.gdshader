@@ -16,7 +16,7 @@ void vertex() {
 	vec2 side = vec2(-axis.y,axis.x);
 	float radius = INSTANCE_CUSTOM.z;
 	// Only a few stout-stem samples; never imply impermeable fine foliage.
-	vec2 local = vec2((UV.x-0.24)*(radius*4.0+min(speed,70.0)*0.75),(UV.y-0.5)*radius*4.0);
+	vec2 local = vec2((UV.x-0.24)*(radius*7.0+min(speed,70.0)*1.5),(UV.y-0.5)*radius*6.0);
 	VERTEX = mod(p-camera+world_size*0.5,world_size)-world_size*0.5+axis*local.x+side*local.y;
 	strength = smoothstep(2.0,20.0,speed);
 	seed = INSTANCE_CUSTOM.w;
@@ -26,7 +26,7 @@ void fragment() {
 	float edge = 0.28*exp(-UV.x*1.6);
 	float aa = max(fwidth(q.y),0.009);
 	float contour = 1.0-smoothstep(aa,aa*3.0,abs(q.y-edge));
-	float drift = 0.5+0.5*sin(UV.x*24.0-clock*2.5+seed);
+	float drift = 0.5+0.5*sin(UV.x*24.0-clock*1.2+seed);
 	float fade = smoothstep(0.02,0.20,UV.x)*(1.0-smoothstep(0.64,1.0,UV.x));
-	COLOR = vec4(0.62,0.94,0.96,contour*fade*strength*(0.10+drift*0.10));
+	COLOR = vec4(0.62,0.94,0.96,contour*fade*strength*(0.16+drift*0.12));
 }

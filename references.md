@@ -92,7 +92,9 @@ This is a living design record. For each new biological or physical mechanic, re
 
 **Feeding-current source:** [Filter-feeding, near-field flows, and the morphologies of colonial choanoflagellates](https://arxiv.org/abs/1607.02892) (2016), a hydrodynamic study of flow-assisted feeding. Our inward pore pump is a simplified stand-in for appendage-driven feeding currents.
 
-**Game:** flagella, pursuit organs and feeding pumps exchange momentum with a finite-mass fluid grid. Nutrients and other cells respond to the resulting currents.
+**Game:** flagella, pursuit organs and feeding pumps exchange momentum with a finite-mass fluid grid. Nutrients and other cells respond to the resulting currents. Revision 23 scales total membrane drag as 90 × radius / 47, distributed across the existing six contacts: at equal propulsion larger cells swim more slowly relative to the water.
+
+**Size motivation:** the sphere friction coefficient in Stokes flow is proportional to radius, as used in [Size- and position-dependent cytoplasm viscoelasticity through hydrodynamic interactions with the cell surface](https://pmc.ncbi.nlm.nih.gov/articles/PMC9992773/) (PNAS, 2023, doi:10.1073/pnas.2216839120). We borrow that scaling rather than claiming to reproduce the paper’s confined cytoplasm model. Finite grid mass, deformation, eddies and discrete impulses modify actual terminal speeds; current advection is not speed-capped.
 
 **Abstraction:** we intentionally retain appreciable inertia and eddies for gameplay. This is not a strict zero-inertia Stokes-flow or incompressible-fluid solver. Direct particle/body shunting is a visual collision concession, not a conservation law.
 
@@ -293,3 +295,15 @@ Primordia compresses those pressures into authored light and rival-anatomy chang
 Mounting artwork and forces to a local membrane normal is a geometric/game abstraction. Purcell's microswimming work and the feeding-current study cited above still motivate appendage/fluid coupling; reversible axial propulsion is not a calibrated flagellar motor model. Paired tissue blobs compare areas representing existing material, not extra biomass or literal three-dimensional volume. Wider microtubule picking and the cell-adjacent lens exclusion are interface choices.
 
 The reaction spark visualizes a successful existing orientation-dependent pair rule, described above. It is not a claim that microscopic biochemical reactions make visible sparks, generate heat/light in this model, or transfer momentum. Its capped instanced shader adds no chemical species or random draw.
+
+## Particle-permeable plant-like colonies
+
+**Phenomenon:** dissolved substances can penetrate hydrated biological gels. [Cochran et al., Reduced susceptibility of thin Pseudomonas aeruginosa biofilms to hydrogen peroxide and monochloramine (2000)](https://pubmed.ncbi.nlm.nih.gov/10735239/) reports rapid peroxide delivery through an alginate gel model and distinguishes transport from biofilm resistance.
+
+**Game:** the scenery is treated as a porous colony at the chemical-packet scale. All chemical species follow their existing flow/diffusion through its stems, while whole cells and spikes still collide with those stems. Reduced-frequency absorption and chemical exposure use the same permeability; hidden cell hunting still cannot pass through a solid stem. Material and random streams are preserved.
+
+**Abstraction:** all-species permeability is a readability/playability choice, not a claim that every molecule crosses living plant tissue, an experiment-derived permeability coefficient, or a new biofilm model. There is no added adsorption, surface food production, changed diffusion coefficient or fluid/stem coupling. A future reversible surface-retention effect could restore some collection patches without a permanent trap; it is not implemented here.
+
+Longer flow-trail history uses the existing Earth Nullschool and fluid references above. Gold AP blobs and centered follow zoom are interface choices, not biological processes.
+
+Revision 23 strengthens these presentation-only disturbance cues and adds slow background caustic-like brightness variation. Cell wakes draw beneath all cell bodies; no refraction, surface-wave physics or camera displacement is claimed. The fluid/visual-flow sources above motivate the moving-water cues; the brightness pattern is an artistic abstraction.

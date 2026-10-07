@@ -167,10 +167,12 @@ func _preferences() -> void:
 	var pref = preload("res://scripts/preferences.gd").new()
 	pref.path = "user://music-test-preferences.cfg"
 	pref.music_volume = 0.31
-	pref.beat_pulse = 0
 	pref.save_settings()
 	var read = preload("res://scripts/preferences.gd").new()
 	read.path = pref.path
 	read.load_settings()
-	check(is_equal_approx(read.music_volume,0.31) and read.beat_pulse == 0,"Music volume and visual response persist independently")
+	check(is_equal_approx(read.music_volume,0.31),"Music volume persists without a particle beat setting")
+	var config := ConfigFile.new()
+	config.load(pref.path)
+	check(not config.has_section_key("display","beat_pulse"),"Saved settings remove the obsolete particle beat control")
 	DirAccess.remove_absolute(pref.path)

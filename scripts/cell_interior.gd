@@ -3,9 +3,6 @@ extends Node2D
 var game
 var anchors: Dictionary = {}
 var atp_fraction := 0.0
-var coin_count := 0
-var previous_coins := -1
-var coin_transfers: Array = []
 var bud_material := 0.0
 var bud_energy := 0.0
 
@@ -14,7 +11,7 @@ static func layout(cell) -> Dictionary:
 	for point in cell.membrane.points: radius = minf(radius,point.length())
 	return {"radius":radius,"nucleus":Vector2(-0.12,-0.10)*radius,
 		"assembly":Vector2(-0.38,0.29)*radius,"chemistry":Vector2(0.39,0.16)*radius,
-		"atp":Vector2(0.32,-0.39)*radius,"coins":Vector2(0.0,0.52)*radius,
+		"atp":Vector2(0.32,-0.39)*radius,
 		"bud":Vector2(-0.43,-0.44)*radius}
 
 func sync() -> void:
@@ -29,12 +26,6 @@ func sync() -> void:
 		position = game.Simulation.Medium.offset(game.render_camera,cell.position)
 		rotation = cell.angle
 	atp_fraction = clampf(cell.energy/maxf(0.01,cell.energy_capacity()),0,1)
-	coin_count = game.world.evolution.points
-	if previous_coins >= 0 and coin_count < previous_coins:
-		for i in mini(12,previous_coins-coin_count):
-			coin_transfers.append({"start":game.ui_time+i*0.045,"to":anchors.chemistry if game.selected >= 6 else anchors.assembly})
-	previous_coins = coin_count
-	coin_transfers = coin_transfers.filter(func(t): return game.ui_time-t.start < 0.55)
 	bud_material = clampf(cell.brood_mass/maxf(0.01,game.world.offspring_quote().material),0,1)
 	bud_energy = clampf(cell.brood_energy/60,0,1)
 	visible = not cell.dead and game.views.has(cell.id)
@@ -79,16 +70,6 @@ func _draw() -> void:
 		_ellipse(p,Vector2(0.063,0.13)*r,Color("235981"))
 		_ellipse(p-Vector2(0,r*0.02),Vector2(0.047,0.10)*r,Color("46dfcb"))
 		draw_circle(p-Vector2(0,r*0.055),r*0.025,Color("c8ffe1"))
-	# Each token is one AP. The run's finite grants bound this tiny visual cluster.
-	for i in coin_count:
-		var p: Vector2 = anchors.coins+Vector2((i%6-2.5)*0.066,-(i/6)*0.070)*r
-		var width := (0.30+0.70*absf(cos(game.ui_time*1.8+i*0.7)))*r*0.031
-		_ellipse(p,Vector2(width,r*0.032),Color("ed9d42"))
-		_ellipse(p-Vector2(0,r*0.008),Vector2(width*0.68,r*0.023),Color("ffe981"))
-	for transfer in coin_transfers:
-		var progress: float = clampf((game.ui_time-transfer.start)/0.55,0,1)
-		var p: Vector2 = anchors.coins.lerp(transfer.to,progress)+Vector2(0,-sin(progress*PI)*r*0.1)
-		_ellipse(p,Vector2(0.025,0.035)*r,Color("fff09b"))
 	at = anchors.bud
 	_ellipse(at,Vector2(0.17,0.145)*r,Color("9363ac"))
 	_ellipse(at,Vector2(0.15,0.125)*r,Color("4b3979"))
@@ -127,4 +108,12 @@ func _draw() -> void:
 			var fraction := clampf(1-p.distance_to(target)/maxf(0.01,original.distance_to(target)),0,1)
 			p = anchors.atp.lerp(target,fraction)
 			color = Color("ffe071")
+		elif packet.kind == "gain":
+			var organ: Dictionary = cell.organ_by_id(packet.organ_id)
+			var target: Vector2 = cell.local_point(packet.a if organ.is_empty() else organ.a)*0.96
+			var original: Vector2 = Vector2(-0.15,-0.15)*cell.radius
+			var fraction := clampf(1-p.distance_to(target)/maxf(0.01,original.distance_to(target)),0,1)
+			var source: Vector2 = anchors.nucleus if organ.is_empty() else target
+			p = source.lerp(anchors.atp,fraction)
+			color = Color("affff0")
 		draw_circle(p,3,color)

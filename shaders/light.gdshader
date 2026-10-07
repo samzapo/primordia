@@ -7,6 +7,8 @@ uniform sampler2D acidity_map : filter_linear, repeat_enable;
 uniform sampler2D light_map : filter_linear, repeat_enable;
 uniform float habitat_seed = 0.0;
 uniform bool fractal_color = true;
+uniform bool water_ripples = true;
+uniform float clock = 0.0;
 float lattice(vec2 p, vec2 period) {
 	p = mod(p,period);
 	return fract(sin(dot(p,vec2(127.1,311.7))+habitat_seed*0.13)*43758.5453);
@@ -38,5 +40,14 @@ void fragment() {
 	}
 	vec3 acidic_water = mix(vec3(0.20,0.035,0.22),vec3(0.48,0.045,0.23),smoothstep(0.35,0.95,acid));
 	acidic_water *= 0.65+light*0.35;
-	COLOR = vec4(mix(water,acidic_water,smoothstep(0.02,0.85,acid)*0.85),1.0);
+	water = mix(water,acidic_water,smoothstep(0.02,0.85,acid)*0.85);
+	if (water_ripples) {
+		// Slow world-anchored light caustics: no screen sampling or geometry warp.
+		vec2 phase = habitat_uv*6.283185;
+		float a = sin(phase.x*8.0+phase.y*6.0-clock*0.34);
+		float b = sin(phase.x*5.0-phase.y*7.0+clock*0.23);
+		float caustic = pow(max(0.0,a*b),3.0);
+		water = water*(1.0+0.035*a*b)+vec3(0.012,0.035,0.045)*caustic;
+	}
+	COLOR = vec4(water,1.0);
 }

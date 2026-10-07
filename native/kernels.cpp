@@ -408,7 +408,7 @@ public:
   Array membrane_mesh(const PackedVector2Array &outline) {
     // Same four explicit rings and triangles as the reference artwork. Batching
     // removes temporary script arrays; there is no silhouette or LOD change.
-    static const double rings[] = {.76,.90,1.,1.42};
+    static const double rings[] = {.76,.90,1.,1.95};
     int n = outline.size();
     PackedVector2Array vertices, uv;
     PackedColorArray colors;
@@ -668,7 +668,7 @@ public:
            oxygen_cap = body->call("oxygen_capacity"), carbon_cap = 30 * double(body->call("growth_scale"));
     int owner = body->get("id");
     bool photo = int(body->call("count","photosynthesis")) > 0;
-    bool solid = habitat->get("enabled");
+    bool solid = bool(habitat->get("enabled")) && !bool(habitat->get("particles_permeable"));
     for (int k=0;k<ids.size();++k) {
       Dictionary p = particles[int64_t(ids[k])];
       int kind = p[keys.kind];

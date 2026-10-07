@@ -120,7 +120,7 @@ static func _stems(check: Callable) -> void:
 		world.spawn_particle(Sim.PHEROMONE,Vector2(2048,1180))
 		world.revision += 1
 		world._move_particles(0.5)
-		check.call(world.particles[0].p.y < 1272 and world.particles[0].amount == 0.3,"Coarse material cannot tunnel through a thin offscreen stem")
+		check.call(world.particles[0].p.y > 1360 and world.particles[0].amount == 0.3,"Coarse material permeates offscreen stems while preserving its amount")
 		check.call(world.particles[1].p.y > 1320 and world.particles[1].v == Vector2.ZERO,"Coarse pheromone flow still passes through solids without launch momentum")
 		check.call(world.particles[0].previous == world.particles[0].p,"Coarse background movement cannot produce interpolation streaks")
 
@@ -157,5 +157,5 @@ static func _fast_promotion(check: Callable) -> void:
 		world.spawn_particle(Sim.WASTE,Vector2(200,100),Vector2.ZERO,0.3)
 		world.transport_clock += 0.5
 		world.step(DT)
-		check.call(world.particles[0].p.x < 342 and world.particles[0].p.x > 300,"Fast camera catch-up sweeps plants even when its endpoint leaves the local query")
+		check.call(world.particles[0].p.x > 490,"Fast camera catch-up carries dissolved material through plant stems")
 		check.call(world.particles[0].p == world.particles[0].previous,"Catch-up beyond the halo suppresses its interpolation trail")

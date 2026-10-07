@@ -15,6 +15,7 @@ var rival_name := ""
 var role := "grazer"
 var previous_position := Vector2.ZERO
 var previous_angle := 0.0
+var energy_budget := preload("res://scripts/energy_budget.gd").new()
 var target_id := -1
 var target_lineage := -1
 var target_memory := 0.0
@@ -317,11 +318,28 @@ func consumed(organ: Dictionary, amount: float) -> void:
 		organ.consume_clock = 0.28
 	reaction_flash = 1.0
 
-func spend_energy(amount: float, organ: Dictionary = {}) -> float:
+func spend_energy(amount: float, organ: Dictionary = {}, category: String = "upkeep", shares: Dictionary = {}) -> float:
 	var spent := minf(energy,maxf(0,amount))
 	energy -= spent
+	energy_budget.record(age,0,0,maxf(0,spent),organ.get("id",-1),category,shares)
 	if spent > 0: resource_effect("atp",organ.a if not organ.is_empty() else last_wound,spent,organ.get("id",-1))
 	return spent
+
+func gain_energy(amount: float, organ: Dictionary = {}) -> void:
+	var previous := energy
+	energy = minf(energy_capacity(),energy+amount)
+	var stored := maxf(0,energy-previous)
+	energy_budget.record(age,maxf(0,amount),stored,0,organ.get("id",-1),"production")
+	if stored > 0: resource_effect("gain",organ.get("a",0.0),stored,organ.get("id",-1))
+
+static func organ_upkeep(organ: Dictionary) -> float:
+	var area: float = float(organ.get("scale",1.0))*float(organ.get("scale",1.0))
+	var rate := area*Genes.factor(organ,"upkeep",0.0)
+	if organ.kind == "propulsion": rate += 0.3*area*Genes.factor(organ,"motion_cost")
+	elif organ.kind == "feeding": rate += 0.18*area
+	if organ.kind in ["feeding","neutralizing","acidifying","regenerative"]:
+		rate += (0.35 if organ.kind == "feeding" else 2.0)*area*Genes.factor(organ,"secretion")*0.15*Genes.factor(organ,"secretion_cost")
+	return rate
 
 func resource_effect(kind: String, a: float, amount: float, organ_id: int = -1) -> void:
 	var key := kind+str(organ_id)
@@ -425,7 +443,7 @@ func heal(dt: float) -> float:
 		# Repaired membrane incorporates mass into structure rather than deleting it.
 		biomass -= healed*0.05
 		body += healed*0.05
-		spend_energy(healed*0.2*repair_cost)
+		spend_energy(healed*0.2*repair_cost,{},"repair")
 		if healed > 0: resource_effect("repair",last_wound,healed*0.05)
 		for organ in organs:
 			var unit: float = organ.get("max_material",organ_cost(organ.kind,organ.scale)) / organ.max_hp
@@ -433,7 +451,7 @@ func heal(dt: float) -> float:
 			organ.hp += restore
 			organ.material += restore*unit
 			biomass -= restore*unit
-			spend_energy(restore*0.15*repair_cost,organ)
+			spend_energy(restore*0.15*repair_cost,organ,"repair")
 			if restore > 0: resource_effect("repair",organ.a,restore*unit,organ.id)
 	return leaked
 
@@ -556,19 +574,15 @@ func reserve(amount: float = 10.0, material_target: float = INF) -> void:
 		energy += atp
 	update_geometry()
 
+func fluid_drag() -> float:
+	# Stokes-inspired radius scaling. Baseline 47-unit cell retains total drag 90.
+	return 90.0*radius/47.0
+
 func operating_budget() -> Dictionary:
-	var basal := 0.264*growth_scale()
-	var motion := 0.0
-	var secretion := 0.0
-	for organ in organs:
-		var area: float = organ.scale*organ.scale
-		basal += area*Genes.factor(organ,"upkeep",0.0)
-		if organ.kind == "propulsion": motion += 0.3*area*Genes.factor(organ,"motion_cost")
-		elif organ.kind == "feeding": basal += 0.18*area
-		if organ.kind in ["feeding","neutralizing","acidifying","regenerative"]:
-			secretion += (0.35 if organ.kind == "feeding" else 2.0)*area*Genes.factor(organ,"secretion")*0.15*Genes.factor(organ,"secretion_cost")
+	var steady := 0.264*growth_scale()
+	for organ in organs: steady += organ_upkeep(organ)
 	var income := minf(substrate,oxygen)*5.0+maxf(0,substrate-oxygen)*2.0
-	return {"steady":basal+motion+secretion,"fuel":income}
+	return {"steady":steady,"fuel":income}
 
 func lineage_id() -> int:
 	return id if lineage < 0 else lineage

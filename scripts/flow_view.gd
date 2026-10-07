@@ -3,7 +3,8 @@ extends Node2D
 const Medium = preload("res://scripts/medium.gd")
 const MAX_STREAMERS := 640
 const MAX_WAKE_ANCHORS := 30
-const PAD := 192.0
+const PAD := 384.0
+const STRIP_SEGMENTS := 24
 var streamers := MultiMeshInstance2D.new()
 var wakes := MultiMeshInstance2D.new()
 var field: ImageTexture
@@ -47,10 +48,10 @@ static func strip_mesh() -> ArrayMesh:
 	var points := PackedVector2Array()
 	var uv := PackedVector2Array()
 	var indices := PackedInt32Array()
-	for i in 13:
+	for i in STRIP_SEGMENTS+1:
 		for side in 2:
-			points.append(Vector2(float(i)/12,side))
-			uv.append(Vector2(float(i)/12,side))
+			points.append(Vector2(float(i)/STRIP_SEGMENTS,side))
+			uv.append(Vector2(float(i)/STRIP_SEGMENTS,side))
 		if i > 0:
 			var a := (i-1)*2
 			indices.append_array(PackedInt32Array([a,a+2,a+3,a,a+3,a+1]))

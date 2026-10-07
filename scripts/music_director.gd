@@ -12,11 +12,9 @@ var ready_bank := false
 var enabled := true
 var observe_clock := 0.0
 var frame_cursor := 0
-var audible_time := 0.0
 var render_usec := 0
 var peak_render_usec := 0
 var skips := 0
-var pulse_sources := PackedVector4Array()
 var bank_ms := 0.0
 var bank_started := 0
 var startup_skips := 0
@@ -28,8 +26,6 @@ func initialize(owner_game) -> void:
 	var args := OS.get_cmdline_user_args()
 	enabled = ("--music-benchmark" in args) or (DisplayServer.get_name() != "headless" and not "--benchmark" in args and game.screenshot_path == "")
 	add_child(player)
-	pulse_sources.resize(6)
-	pulse_sources.fill(Vector4.ZERO)
 	if enabled and game.preferences.music_volume > 0: _prepare()
 
 func _prepare() -> void:
@@ -59,11 +55,9 @@ func reset() -> void:
 	player.stop()
 	playback = null
 	frame_cursor = 0
-	audible_time = 0
 	observe_clock = 0
 	score = Score.new()
 	if ready_bank: mixer.configure(Synth.cached_bank)
-	pulse_sources.fill(Vector4.ZERO)
 
 func update_music(dt: float) -> void:
 	if not enabled: return
@@ -81,7 +75,6 @@ func update_music(dt: float) -> void:
 	if game.preferences.music_volume <= 0:
 		score.reset_accents(game.world)
 		silence_clock += dt
-		pulse_sources.fill(Vector4.ZERO)
 		if not player.playing or silence_clock > 0.35:
 			player.stop()
 			playback = null
@@ -93,7 +86,6 @@ func update_music(dt: float) -> void:
 		score.reset_accents(game.world)
 		mixer.configure(Synth.cached_bank)
 		frame_cursor = 0
-		audible_time = 0
 		# The reference mixer can take tens of milliseconds. Prepare silence-free
 		# startup while the stream is stopped, then begin with a complete buffer.
 		var priming_frames := roundi(0.16*Synth.RATE)
@@ -123,26 +115,6 @@ func update_music(dt: float) -> void:
 	render_usec = Time.get_ticks_usec()-started
 	peak_render_usec = maxi(peak_render_usec,render_usec)
 	skips = maxi(0,playback.get_skips()-startup_skips)
-	# Subtract queued audio and output latency for visual phase, not wall-clock dt.
-	queued = capacity-playback.get_frames_available()
-	var time := maxf(0,(frame_cursor-queued)/float(Synth.RATE)-AudioServer.get_output_latency())
-	audible_time = maxf(audible_time,time)
-	_update_pulses()
-
-func _update_pulses() -> void:
-	pulse_sources.fill(Vector4.ZERO)
-	if not game.preferences.beat_pulse > 0: return
-	var size: Vector2 = game.get_viewport_rect().size
-	for i in score.sources.size():
-		var source: Dictionary = score.sources[i]
-		var at: Vector2 = game.camera_screen+source.offset*game.zoom
-		var reach: float = (source.radius+95)*game.zoom/size.x
-		pulse_sources[i] = Vector4(at.x/size.x,at.y/size.y,reach,source.gain)
-
-func pulse() -> float:
-	if not enabled or not ready_bank or not player.playing or game.preferences.music_volume <= 0: return 0
-	var phase := fposmod(audible_time,60.0/Synth.BPM)
-	return exp(-phase*12)*game.preferences.beat_pulse*(0.4 if game.is_paused() else 1)
 
 func _exit_tree() -> void:
 	player.stop()

@@ -1,7 +1,7 @@
 extends RefCounted
 ## Explicit radial mesh follows the actual star-shaped membrane, including dents.
 ## Rings give the shader an exact boundary coordinate without triangulating polygons.
-const RINGS := [0.76,0.90,1.0,1.42]
+const RINGS := [0.76,0.90,1.0,1.95]
 static var kernels = preload("res://scripts/backend.gd").create()
 static func arrays(outline: PackedVector2Array, native: bool = true) -> Array:
 	if native and kernels != null: return kernels.membrane_mesh(outline)

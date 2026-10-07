@@ -9,6 +9,9 @@ var symbol := ""
 var tint := Color("83ead2")
 var text_scale := 1.0
 var affordable := true
+var tissue_cost := -1.0
+var ap_cost := 0
+var rate_model: Dictionary = {}
 
 func _ready() -> void:
 	add_child(picture)
