@@ -319,6 +319,7 @@ class PrimordiaKernels : public RefCounted {
   uint64_t packet_epoch = 0, render_epoch = 0;
   int render_revision = -1, render_count = -1;
   bool packed_render_state=false;
+  bool reuse_chemistry_scratch=true;
   LiquidParticles liquid;
   ParcelTransport parcels;
   double physical_radius=0;
@@ -454,7 +455,7 @@ class PrimordiaKernels : public RefCounted {
     o.amount=v.amount; o.capacity=v.capacity; o.reacted=v.reacted; o.chemical_at=v.chemical_at;
     slot.chemical_loaded=true;
   }
-  std::vector<Particle> scratch;
+  std::vector<Particle> foreground_scratch, background_scratch;
   ChemicalNeighbors neighbors;
 
 protected:
@@ -466,6 +467,7 @@ protected:
     ClassDB::bind_method(D_METHOD("particle_solver_probe", "positions", "velocities", "dt"), &PrimordiaKernels::particle_solver_probe);
     ClassDB::bind_method(D_METHOD("particle_engine_metrics"), &PrimordiaKernels::particle_engine_metrics);
     ClassDB::bind_method(D_METHOD("particle_engine_reset_metrics"), &PrimordiaKernels::particle_engine_reset_metrics);
+    ClassDB::bind_method(D_METHOD("hotloop_configure", "scratch_reuse"), &PrimordiaKernels::hotloop_configure);
     ClassDB::bind_method(D_METHOD("neighbor_configure", "backend", "cache", "metrics"), &PrimordiaKernels::neighbor_configure, DEFVAL(false), DEFVAL(false));
     ClassDB::bind_method(D_METHOD("neighbor_metrics"), &PrimordiaKernels::neighbor_metrics);
     ClassDB::bind_method(D_METHOD("neighbor_reset_metrics"), &PrimordiaKernels::neighbor_reset_metrics);
@@ -540,6 +542,9 @@ protected:
 
 public:
 
+  void hotloop_configure(bool scratch_reuse) {
+    reuse_chemistry_scratch=scratch_reuse;
+  }
   bool neighbor_configure(String backend, bool cache, bool metrics) {
     int b=backend=="legacy" ? 0 : backend=="packed" ? 1 : backend=="bvh" ? 2 : backend=="quadtree" ? 3 : -1;
     if (b<0 || (physical_radius>0 && cache)) return false;
@@ -1556,11 +1561,13 @@ public:
       parcels.prepare(packet_slots,ids,flow,clock,dt,sample,wrapv);
     std::vector<int> liquid_ids;
     std::vector<Vector2> liquid_positions,liquid_motion;
-    for (int k = 0; k < ids.size(); ++k) {
+    const int id_count=ids.size();
+    for (int k = 0; k < id_count; ++k) {
+      const int id=int64_t(ids[k]);
       PacketState local, *value;
-      if (packet_frame) value=&packet(ids[k]).value;
+      if (packet_frame) value=&packet(id).value;
       else {
-        Dictionary d=particles[int64_t(ids[k])];
+        Dictionary d=particles[id];
         local.alive=d[keys.alive]; local.p=d[keys.p]; local.kind=int(d[keys.kind]);
         local.transport_at=d.get(keys.transport_at,clock-dt);
         local.v=d[keys.v]; local.angle=d[keys.angle]; local.age=d[keys.age]; local.spin=d[keys.spin];
@@ -1570,23 +1577,23 @@ public:
       if (!p.alive) continue;
       Vector2 at=p.p;
       if ((activity(at,camera,half)>0)==background) continue;
-      double previous_clock = packet_frame && !packet_slots[int64_t(ids[k])].has_transport_clock ? clock-dt : p.transport_at;
+      double previous_clock = packet_frame && !packet_slots[id].has_transport_clock ? clock-dt : p.transport_at;
       double t=clock<0 ? dt : std::max(0.,clock-previous_clock);
       if (t<=0) continue;
       ++count;
-      if (packet_frame) load_transport(packet_slots[int64_t(ids[k])]);
+      if (packet_frame) load_transport(packet_slots[id]);
       bool tracer=p.kind==3;
       Vector2 v=tracer ? Vector2() : p.v;
       double angle=p.angle;
       p.updated=revision; p.previous=at; p.jump=t>.05;
       if (clock>=0) {
         p.transport_at=clock;
-        if (packet_frame) packet_slots[int64_t(ids[k])].has_transport_clock=true;
+        if (packet_frame) packet_slots[id].has_transport_clock=true;
       }
       // Keep RNG call order explicit, matching the reference backend.
       double nx = rng->randfn(0, 1), ny = rng->randfn(0, 1);
-      if (background && parcels.enabled && parcels.contains(int64_t(ids[k]))) {
-        at=wrapv(at+parcels.displacement(int64_t(ids[k])));
+      if (background && parcels.enabled && parcels.contains(id)) {
+        at=wrapv(at+parcels.displacement(id));
       } else if (t <= .05) {
         at = wrapv(at + (v + sample(flow, at)) * t);
       } else {
@@ -1602,7 +1609,7 @@ public:
       p.p = wrapv(at + Vector2(nx, ny)*std::sqrt((tracer ? 240 : 12)*t));
       p.v = v * std::exp(-t * .8);
       if (liquid.enabled && pool_enabled && !background && !tracer && std::abs(t-dt)<.000001) {
-        liquid_ids.push_back(int64_t(ids[k]));
+        liquid_ids.push_back(id);
         liquid_positions.push_back(p.previous);
         liquid_motion.push_back(delta(p.previous,p.p)/dt);
       }
@@ -1613,9 +1620,9 @@ public:
       p.angle = angle;
       p.dir = tracer ? Vector2() : Vector2(std::cos(angle), std::sin(angle));
       if (packet_frame) {
-        packet_slots[int64_t(ids[k])].moved=true;
-        packet_positions.set(int64_t(ids[k]),p.p);
-        auto &slot=packet_slots[int64_t(ids[k])];
+        packet_slots[id].moved=true;
+        packet_positions.set(id,p.p);
+        auto &slot=packet_slots[id];
         if (pool_enabled) { slot.mask|=UPDATED|JUMP; continue; }
         Dictionary &d=slot.d;
         d[keys.updated]=p.updated; d[keys.previous]=p.previous; d[keys.transport_jump]=p.jump;
@@ -1624,7 +1631,7 @@ public:
         d[keys.previous_angle]=p.previous_angle; d[keys.angle]=p.angle; d[keys.direction]=p.dir;
         slot.original.v=p.v;
       } else {
-        Dictionary d=particles[int64_t(ids[k])];
+        Dictionary d=particles[id];
         d[keys.updated]=p.updated; d[keys.previous]=p.previous; d[keys.transport_jump]=p.jump;
         if (clock>=0) d[keys.transport_at]=p.transport_at;
         d[keys.p]=p.p; d[keys.v]=p.v; d[keys.age]=p.age;
@@ -1640,7 +1647,8 @@ public:
         // Keep only the solver's correction to the original imposed trajectory.
         Vector2 original_motion=delta(p.previous,packet_positions[id])/dt;
         p.v+=liquid_motion[k]-original_motion;
-        packet_positions.set(id,p.p);slot.moved=true;
+        packet_positions.set(id,p.p);
+        slot.moved=true;
       }
     }
     return count;
@@ -1660,10 +1668,16 @@ public:
     double loss = 0, recycled = 0;
     double max_radius = 0;
     bool fine_contacts=liquid.enabled && pool_enabled && !background;
-    scratch.clear();
-    scratch.reserve(ids.size());
-    for (int k = 0; k < ids.size(); ++k) {
-      Particle p;
+    auto &scratch=background && reuse_chemistry_scratch ? background_scratch : foreground_scratch;
+    // Separate activity tiers avoid destroying the foreground records for each
+    // small coarse pass. Retain scratch storage across passes.
+    // Every pass-dependent field below is reassigned before neighbor traversal.
+    if (!reuse_chemistry_scratch) scratch.clear();
+    const int id_count=ids.size();
+    scratch.resize(id_count);
+    for (int k = 0; k < id_count; ++k) {
+      auto &p=scratch[k];
+      p.handle=0;
       p.identity=int64_t(ids[k]);
       PacketState *numeric=nullptr;
       if (packet_frame) {
@@ -1685,7 +1699,6 @@ public:
       p.radius = radii[p.kind] * std::clamp(std::sqrt(p.amount / .3), .8, 1.7);
       if (!numeric) { p.d[keys.reaction_activity]=p.active; p.d[keys.contact_radius]=p.radius; }
       p.neighbor_bin=mod(int(std::floor(p.p.y/16)),160)*256+mod(int(std::floor(p.p.x/16)),256);
-      scratch.push_back(p);
       if (fine_contacts && p.active>0 && p.kind!=3 && numeric->jump) fine_contacts=false;
       if (p.active > 0 && p.kind != 3) max_radius=std::max(max_radius,p.radius);
     }
