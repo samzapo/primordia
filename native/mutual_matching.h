@@ -1,0 +1,80 @@
+#pragma once
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <vector>
+// Numeric-only two-pass matching. The caller owns unary chemistry and event publication.
+struct PairOutcome { int event=-1,other=-1,neutralizer=-1;double recycled=0,neutralized=0;bool reacted=false; };
+struct PairChoice {int partner=-1;godot::Vector2 impulse;};
+inline uint32_t pair_hash(uint32_t x){x^=x>>16;x*=0x7feb352du;x^=x>>15;x*=0x846ca68bu;return x^(x>>16);}
+template<class P,class Grid,class Offset,class Acid>
+void mutual_matching(std::vector<P> &ps,const Grid &grid,int lanes,uint32_t tick,
+                     double max_radius,double physical_radius,bool collisions,
+                     Offset offset,Acid acid,std::vector<PairChoice> &choices,std::vector<PairOutcome> &outcomes){
+ choices.assign(ps.size(),{});outcomes.assign(ps.size(),{});
+ auto available=[](const P &p){return p.alive&&p.active>0&&p.elapsed>0&&p.kind!=3;};
+ auto eligible=[](const P &a,const P &b,double acidity){
+  if((a.kind==6&&b.kind==2)||(a.kind==2&&b.kind==6))return acidity<.9;
+  if((a.kind==7&&b.kind==4)||(a.kind==4&&b.kind==7))return true;
+  if((a.kind==8&&b.kind==9)||(a.kind==9&&b.kind==8))return std::min(a.capacity,b.capacity)>0;
+  if(a.kind==2&&b.kind==1)return b.amount>=a.amount*.15&&acidity<.8;
+  if(a.kind==1&&b.kind==2)return a.amount>=b.amount*.15&&acidity<.8;
+  if((a.kind==0&&b.kind==4)||(a.kind==4&&b.kind==0))return true;
+  return a.kind==b.kind&&(a.kind==0||a.kind==1||a.kind==2||a.kind==5)&&a.amount+b.amount>0&&a.amount+b.amount<=1.4;
+ };
+ SimulationWorkers::shared().run(ps.size(),lanes,[&](size_t begin,size_t end){
+  for(size_t i=begin;i<end;++i){
+   const auto &p=ps[i];if(!available(p))continue;
+   auto &choice=choices[i];uint32_t best_score=0,best_random=0;uint64_t best_low=0,best_high=0;
+   grid.readonly_grid_visit(ps,int(i),std::max(p.radius,physical_radius)+max_radius+.001,[&](int j){
+    if(int(i)==j||!available(ps[j]))return false;
+    int low=p.identity<ps[j].identity?int(i):j,high=low==int(i)?j:int(i);
+    const auto &a=ps[low],&b=ps[high];auto d=offset(a.p,b.p);
+    double ds=d.length_squared(),c=a.radius+b.radius,physical=physical_radius>0?2*physical_radius:c;
+    if(ds>std::max(c,physical)*std::max(c,physical))return false;
+    double distance=std::sqrt(ds);godot::Vector2 n=ds>.000001?d/distance:godot::Vector2(1,0);
+    if(collisions&&ds<physical*physical)choice.impulse+=(low==int(i)?-n:n)*(physical-distance)*2;
+    if(p.reacted||ps[j].reacted||ds>c*c)return false;
+    bool enzyme=(a.kind==6&&b.kind==2)||(a.kind==2&&b.kind==6);
+    bool recycling=(a.kind==2&&b.kind==1)||(a.kind==1&&b.kind==2);
+    double acidity=(enzyme||recycling)?acid(a.p):0;
+    if(!eligible(a,b,acidity))return false;
+    double threshold=.5+(enzyme?.46*std::pow(std::clamp(std::abs(acidity-.4)/.4,0.,1.),2):0);
+    double alignment=std::min(double(a.dir.dot(n)),double(b.dir.dot(-n)));
+    if(alignment<threshold)return false;
+    uint64_t aid=a.handle?a.handle:uint64_t(a.identity)+1,bid=b.handle?b.handle:uint64_t(b.identity)+1;
+    uint64_t lo=std::min(aid,bid),hi=std::max(aid,bid);
+    uint32_t score=uint32_t(std::clamp(alignment,0.,1.)*1024);
+    uint32_t random=pair_hash(uint32_t(lo)^pair_hash(uint32_t(hi))^pair_hash(uint32_t(lo>>32))^pair_hash(uint32_t(hi>>32))^pair_hash(tick));
+    if(choice.partner<0||score>best_score||(score==best_score&&(random>best_random||(random==best_random&&(lo>best_low||(lo==best_low&&hi>best_high)))))){
+     choice.partner=j;best_score=score;best_random=random;best_low=lo;best_high=hi;
+    }
+    return false;
+   });
+  }
+ });
+ // Disjoint pairs permit exclusive writes. No engine objects, RNG or counters on workers.
+ SimulationWorkers::shared().run(ps.size(),lanes,[&](size_t begin,size_t end){
+  for(size_t i=begin;i<end;++i){
+   int j=choices[i].partner;
+   bool mutual=j>=0&&choices[j].partner==int(i);
+   if(mutual&&ps[i].identity>ps[j].identity)continue;
+   auto &a=ps[i];a.v+=choices[i].impulse;
+   if(!mutual)continue;
+   auto &b=ps[j];b.v+=choices[j].impulse;
+   P *u=&a,*v=&b;
+   if((u->kind==2&&v->kind==6)||(u->kind==4&&v->kind==7)||(u->kind==1&&v->kind==2)||(u->kind==4&&v->kind==0))std::swap(u,v);
+   auto &event=outcomes[i];event.reacted=true;event.other=j;
+   if(u->kind==6&&v->kind==2){v->kind=0;event.event=5;event.recycled=v->amount;}
+   else if(u->kind==7&&v->kind==4){event.neutralizer=u==&a?int(i):j;event.neutralized=v->amount;u->kind=2;u->amount+=v->amount;v->alive=false;event.event=6;}
+   else if((u->kind==8||u->kind==9)&&(v->kind==8||v->kind==9)){
+    double used=std::min(u->capacity,v->capacity);u->capacity-=used;v->capacity-=used;
+    if(u->capacity<=.000001)u->kind=2;if(v->capacity<=.000001)v->kind=2;
+   }else if(u->kind==2&&v->kind==1){
+    double amount=u->amount;u->kind=0;u->amount=amount*.6;v->kind=5;v->amount=amount*.4;event.event=2;event.recycled=amount*.6;
+   }else if(u->kind==0&&v->kind==4){u->kind=2;event.event=4;}
+   else {double total=u->amount+v->amount;u->v=u->v.lerp(v->v,v->amount/total);u->amount=total;v->alive=false;event.event=1;}
+   a.reacted=b.reacted=true;
+  }
+ });
+}

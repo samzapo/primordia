@@ -374,3 +374,7 @@ The biological rules are unchanged. [Godot thread-safety documentation](https://
 
 - Israeli and Itai, “A fast and simple randomized parallel algorithm for maximal matching” (1986): https://www.sciencedirect.com/science/article/pii/0020019086901444 — computational motivation for selecting disjoint reacting pairs in parallel. Primordia uses one mutual-best round, not the complete maximal-matching algorithm.
 - ReaDDy simulation documentation: https://readdy.github.io/simulation.html — scientific particle reaction simulations must resolve competing reaction partners. Primordia's alignment ranking and random tie-breaking are a gameplay approximation, not calibrated reaction kinetics, equilibrium sampling or detailed balance.
+
+## GPU cell-exchange engineering (Revision 36)
+
+[Godot RenderingDevice readback documentation](https://docs.godotengine.org/en/4.4/classes/class_renderingdevice.html#class-renderingdevice-method-buffer-get-data-async) motivates explicit asynchronous receipts and measuring feedback latency. This is an engineering constraint, not a biological claim. Feeding and membrane projection retain the game's existing finite uptake and visible-boundary abstractions; no new source of matter or scientific membrane-force model is introduced.

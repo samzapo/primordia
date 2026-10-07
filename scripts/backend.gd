@@ -12,4 +12,6 @@ static func native_available() -> bool:
 	return loaded and ClassDB.class_exists("PrimordiaKernels")
 static func create():
 	if OS.get_environment("PRIMORDIA_BACKEND") == "script" or not native_available(): return null
-	return ClassDB.instantiate("PrimordiaKernels")
+	var kernels=ClassDB.instantiate("PrimordiaKernels")
+	if OS.get_environment("PRIMORDIA_PAIR_MATCHING")=="1": kernels.pair_matching_configure(true)
+	return kernels

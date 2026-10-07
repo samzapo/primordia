@@ -1,5 +1,6 @@
 #include "music_mixer.h"
 #include "simulation_workers.h"
+#include "mutual_matching.h"
 #include "resident_reference.h"
 #include "chemical_neighbors.h"
 #include "liquid_particles.h"
@@ -324,6 +325,11 @@ class PrimordiaKernels : public RefCounted {
   bool reuse_chemistry_scratch=true;
   int simulation_threads=8;
   bool parallel_transport=true, parallel_contacts=true, compact_geometry=false;
+  bool pair_matching=false;
+  std::vector<uint64_t> matching_seen;
+  uint64_t matching_epoch=0,matching_jobs=0,matching_fallbacks=0;
+  std::vector<PairChoice> pair_choices;
+  std::vector<PairOutcome> pair_outcomes;
   std::vector<Vector2> contact_positions;
   std::vector<double> contact_radii;
   std::vector<int> contact_identities;
@@ -483,6 +489,7 @@ protected:
     ClassDB::bind_method(D_METHOD("particle_solver_probe", "positions", "velocities", "dt"), &PrimordiaKernels::particle_solver_probe);
     ClassDB::bind_method(D_METHOD("particle_engine_metrics"), &PrimordiaKernels::particle_engine_metrics);
     ClassDB::bind_method(D_METHOD("particle_engine_reset_metrics"), &PrimordiaKernels::particle_engine_reset_metrics);
+    ClassDB::bind_method(D_METHOD("pair_matching_configure", "enabled"), &PrimordiaKernels::pair_matching_configure);
     ClassDB::bind_method(D_METHOD("thread_configure", "threads", "transport", "contacts", "compact"), &PrimordiaKernels::thread_configure, DEFVAL(true), DEFVAL(true), DEFVAL(false));
     ClassDB::bind_method(D_METHOD("thread_metrics"), &PrimordiaKernels::thread_metrics);
     ClassDB::bind_method(D_METHOD("hotloop_configure", "scratch_reuse"), &PrimordiaKernels::hotloop_configure);
@@ -560,6 +567,7 @@ protected:
 
 public:
 
+  void pair_matching_configure(bool enabled) { pair_matching=enabled; }
   bool thread_configure(int threads,bool transport,bool contacts,bool compact) {
     if (threads<1 || threads>8) return false;
     simulation_threads=threads;parallel_transport=transport;parallel_contacts=contacts;compact_geometry=compact;
@@ -567,6 +575,7 @@ public:
   }
   Dictionary thread_metrics() const {
     Dictionary d; d["compact_geometry"]=compact_geometry;d["threads"]=simulation_threads;d["transport_jobs"]=int64_t(transport_jobs);
+    d["matching_jobs"]=int64_t(matching_jobs);d["matching_fallbacks"]=int64_t(matching_fallbacks);
     d["contact_jobs"]=int64_t(contact_jobs);d["contact_fallbacks"]=int64_t(contact_fallbacks);
     return d;
   }
@@ -1802,7 +1811,16 @@ public:
     double contact_radius=fine_contacts ? 0 : physical_radius;
     max_radius=std::max(max_radius,contact_radius);
     neighbors.begin(scratch,max_radius,background);
-    const bool screened=simulation_threads>1 && parallel_contacts && scratch.size()>=4096 &&
+    bool matching=pair_matching && pool_enabled && neighbors.backend==0 && !neighbors.caching && !liquid.enabled;
+    if (matching) {
+      matching_seen.resize(packet_slots.size());
+      if (++matching_epoch==0) {std::fill(matching_seen.begin(),matching_seen.end(),0);++matching_epoch;}
+      for (const auto &p:scratch) {
+        if (matching_seen[p.identity]==matching_epoch) {matching=false;++matching_fallbacks;break;}
+        matching_seen[p.identity]=matching_epoch;
+      }
+    }
+    const bool screened=!matching && simulation_threads>1 && parallel_contacts && scratch.size()>=4096 &&
       neighbors.backend==0 && !neighbors.caching && !neighbors.metrics;
     if (screened) {
       contact_lists.resize(scratch.size());
@@ -1858,7 +1876,7 @@ public:
         ++events[0];
         continue;
       }
-      if (p.kind == 3 || p.reacted)
+      if (matching || p.kind == 3 || p.reacted)
         continue;
       // Only omit bins beyond every possible cached contact radius. Keep
       // traversal order and a float-coordinate margin for boundary contacts.
@@ -1971,6 +1989,24 @@ public:
       } else {
         if (screened) ++contact_fallbacks;
         neighbors.visit(scratch,i,reach,apply_contact);
+      }
+    }
+    if (matching) {
+      ++matching_jobs;
+      mutual_matching(scratch,neighbors,simulation_threads,uint32_t(revision),max_radius,contact_radius,collisions,delta,
+        [&](Vector2 at){return acid_sample(acid,at);},pair_choices,pair_outcomes);
+      for (size_t i=0;i<pair_outcomes.size();++i) {
+        const auto &event=pair_outcomes[i];
+        if (!event.reacted) continue;
+        if (event.event>=0) ++events[event.event];
+        recycled+=event.recycled;
+        if (reaction_points.size()<64)
+          reaction_points.push_back(wrapv(scratch[i].p+delta(scratch[i].p,scratch[event.other].p)*.5));
+        if (event.neutralizer>=0 && neutralizations.size()<32) {
+          const auto &u=scratch[event.neutralizer];Dictionary cue;
+          cue["at"]=u.p;cue["source"]=u.d->get("owner",-1);cue["amount"]=event.neutralized;
+          neutralizations.push_back(cue);
+        }
       }
     }
     for (auto &p : scratch) {

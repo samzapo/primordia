@@ -4,6 +4,7 @@ extends RefCounted
 signal ready(ok: bool, reason: String)
 signal snapshot_ready(data: PackedFloat32Array)
 signal contacts_ready(data: Dictionary)
+signal exchange_ready(receipt: Dictionary)
 signal closed
 var texture := Texture2DRD.new()
 var rd: RenderingDevice
@@ -18,7 +19,10 @@ var dispatches := 0
 var readbacks := 0
 var width := 768
 var height := 1
+var _initialized:=false
+var _started:=false
 var _closing := false
+var _close_queued := false
 var _source := ""
 var interaction_mode := 0
 var acidity := 0.4
@@ -29,12 +33,64 @@ var contact_sets: Array[RID] = []
 var contact_buffers: Array[RID] = []
 var padded_count := 1
 var reaction_tick := 0
+var _grid_valid := false
+const Exchange=preload("res://scripts/resident_exchange.gd")
+var exchange_enabled:=false
+var exchange_busy:=false
+var exchange_serial:=0
+var exchange_readback_bytes:=0
+var exchange_upload_bytes:=0
+var exchange_fallbacks:=0
+var _exchange_source:=""
+var _exchange: RefCounted
+func configure_exchange() -> bool:
+	if _started or interaction_mode==0: return false
+	exchange_enabled=true
+	return true
+func exchange(cells: Array, emissions: Array=[], handles: Array=[], asynchronous: bool=true) -> bool:
+	if not exchange_enabled or exchange_busy or _closing or not _initialized: return false
+	var batch:=Exchange.prepare(cells,emissions,handles)
+	if batch.has("error"): return false
+	if batch.body_count+batch.emit_count+batch.inspect_count==0: return false
+	exchange_busy=true;exchange_serial+=1
+	batch["serial"]=exchange_serial
+	RenderingServer.call_on_render_thread(_exchange_rd.bind(batch,asynchronous))
+	return true
+func _exchange_rd(batch: Dictionary, asynchronous: bool) -> void:
+	# Feeding needs a fresh grid after transport, projection or emission.
+	if batch.feed_count>0 and not _grid_valid: _prepare_grid_rd()
+	exchange_upload_bytes+=_exchange.upload(batch)
+	_exchange.dispatch(1,batch,1)
+	if batch.body_count>0: _exchange.dispatch(2,batch,ceili(count/128.0))
+	if batch.body_count>0 or batch.emit_count>0: _grid_valid=false
+	if batch.inspect_count>0: _exchange.dispatch(3,batch,ceili(batch.inspect_count/128.0))
+	var size: int=(batch.body_count+batch.feed_count+batch.emit_count+batch.inspect_count*4)*16
+	var callback:=_exchange_received.bind(batch)
+	if asynchronous:
+		var error:=rd.buffer_get_data_async(_exchange.buffers[5],callback,0,size)
+		if error==OK: return
+		exchange_fallbacks+=1
+	# Preserve already-committed receipts if async readback is unsupported.
+	callback.call(rd.buffer_get_data(_exchange.buffers[5],0,size))
+func _exchange_received(bytes: PackedByteArray,batch: Dictionary) -> void:
+	var receipt:=Exchange.decode(bytes,batch)
+	receipt["serial"]=batch.serial;receipt["readback_bytes"]=bytes.size()
+	_exchange_main.call_deferred(receipt)
+func _exchange_main(receipt: Dictionary) -> void:
+	exchange_busy=false
+	exchange_readback_bytes+=receipt.readback_bytes
+	exchange_ready.emit(receipt)
+	if _closing and not exchange_busy: _finish_close()
+
 func configure_interactions(mode: String, acid: float = 0.4) -> bool:
-	if rd!=null or mode not in ["off","contacts","collisions","chemistry"] or not is_finite(acid) or acid<0 or acid>1: return false
+	if _started or mode not in ["off","contacts","collisions","chemistry"] or not is_finite(acid) or acid<0 or acid>1: return false
 	interaction_mode=["off","contacts","collisions","chemistry"].find(mode)
 	acidity=acid
 	return true
 func initialize(values: PackedFloat32Array, velocity: PackedVector2Array) -> void:
+	if _started:
+		push_error("Resident pool already initialized");return
+	_started=true
 	count = values.size()/12
 	if count < 1 or count > 100000 or values.size()%12 != 0 or velocity.size()!=2560:
 		_ready_main.call_deferred(false,"Invalid resident particle capacity or flow")
@@ -48,7 +104,11 @@ func initialize(values: PackedFloat32Array, velocity: PackedVector2Array) -> voi
 				_ready_main.call_deferred(false,"Nonfinite particle state");return
 		if values[k+7]<-1 or values[k+7]>10 or values[k+7]!=floor(values[k+7]) or values[k+9]<0 or values[k+10]<0 or (values[k+7]>=0 and (values[k+8]<=0 or values[k+8]>17)):
 			_ready_main.call_deferred(false,"Invalid particle kind, material or diameter");return
+		if exchange_enabled and values[k+11]!=0:
+			_ready_main.call_deferred(false,"Product reserves are not supported by the exchange prototype");return
 	while padded_count<count: padded_count*=2
+	if exchange_enabled:
+		_exchange_source=FileAccess.get_file_as_string("res://shaders/compute/resident_exchange.glsl.txt").replace("#[compute]","")
 	if interaction_mode>0:
 		for name in ["resident_contacts","resident_commit","resident_vote"]:
 			contact_sources.append(FileAccess.get_file_as_string("res://shaders/compute/"+name+".glsl.txt").replace("#[compute]",""))
@@ -93,6 +153,10 @@ func _initialize_rd(bytes: PackedByteArray, velocities: PackedByteArray) -> void
 		return
 	if interaction_mode>0 and not _initialize_contacts():
 		_ready_main.call_deferred(false,"Contact pipeline creation failed");return
+	if exchange_enabled:
+		_exchange=Exchange.new()
+		if not _exchange.initialize(rd,state,count,contact_buffers[0],contact_buffers[1],_exchange_source):
+			_ready_main.call_deferred(false,"Cell exchange pipeline creation failed");return
 	upload_bytes += bytes.size()+velocities.size()
 	_ready_main.call_deferred(true,"")
 func _initialize_contacts() -> bool:
@@ -137,7 +201,7 @@ func _contact_pass(stage: int, groups: int, level: int = 0, stride: int = 0, com
 	rd.compute_list_set_push_constant(list,params,32)
 	rd.compute_list_dispatch(list,groups,1,1)
 	rd.compute_list_end()
-func _contacts_rd() -> void:
+func _prepare_grid_rd() -> void:
 	_contact_pass(0,ceili(maxi(padded_count,40960)/128.0))
 	var level := 2
 	while level<=padded_count:
@@ -147,6 +211,9 @@ func _contacts_rd() -> void:
 			stride/=2
 		level*=2
 	_contact_pass(2,ceili(padded_count/128.0))
+	_grid_valid=true
+func _contacts_rd() -> void:
+	_prepare_grid_rd()
 	_contact_pass(3,ceili(count/128.0))
 	if interaction_mode>=2:
 		_contact_pass(5,ceili(count/128.0),0,0,true)
@@ -165,12 +232,14 @@ func _contact_snapshot_rd() -> void:
 	_contact_snapshot_main.call_deferred(result)
 func _contact_snapshot_main(result: Dictionary) -> void: contacts_ready.emit(result)
 func _ready_main(ok: bool, reason: String) -> void:
+	_initialized=ok
 	if ok: texture.texture_rd_rid=state
 	ready.emit(ok,reason)
 func advance(dt: float, tick: int) -> void:
 	assert(dt>0 and dt<=2 and tick>=0 and tick<=0xffffffff and not _closing)
 	RenderingServer.call_on_render_thread(_advance_rd.bind(dt,tick))
 func _advance_rd(dt: float, tick: int) -> void:
+	_grid_valid=false
 	var params := PackedByteArray()
 	params.resize(16);params.encode_u32(0,count);params.encode_float(4,dt);params.encode_u32(8,tick)
 	var list := rd.compute_list_begin()
@@ -183,11 +252,13 @@ func _advance_rd(dt: float, tick: int) -> void:
 	dispatches += 1
 	# Main device submission and barriers are owned by the renderer. No submit/sync.
 func upload(values: PackedFloat32Array) -> void:
-	assert(values.size()==count*12 and not _closing)
+	if exchange_enabled or values.size()!=count*12 or _closing:
+		push_error("Whole-pool upload is unavailable for exchange-owned slots");return
 	var padded := values.duplicate()
 	padded.resize(width*height*4)
 	RenderingServer.call_on_render_thread(_upload_rd.bind(padded.to_byte_array()))
 func _upload_rd(bytes: PackedByteArray) -> void:
+	_grid_valid=false
 	rd.texture_update(state,0,bytes)
 	upload_bytes += bytes.size()
 func snapshot() -> void:
@@ -203,10 +274,16 @@ func _snapshot_main(values: PackedFloat32Array) -> void:
 func close() -> void:
 	if _closing: return
 	_closing=true
+	if exchange_busy: return
+	_finish_close()
+func _finish_close() -> void:
+	if _close_queued: return
+	_close_queued=true
 	texture.texture_rd_rid=RID()
 	RenderingServer.call_on_render_thread(_close_rd)
 func _close_rd() -> void:
 	if rd != null:
+		if _exchange!=null: _exchange.close()
 		for resource in contact_sets+contact_pipelines+contact_shaders+contact_buffers+[bindings,pipeline,shader,state,flow]:
 			if resource.is_valid(): rd.free_rid(resource)
 	rd=null # Main RenderingDevice belongs to Godot; never free it.

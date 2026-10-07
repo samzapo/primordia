@@ -68,12 +68,16 @@ func run() -> void:
 		push_error("Packed/BVH/quadtree/cache comparison requires native kernels")
 		finish_scene(scene,1)
 		return
+	var matching := option("--pair-matching","off")
+	if matching not in ["on","off"] or (matching=="on" and (sim.kernels==null or neighbors!="legacy" or cache!="off")):
+		push_error("Pair matching requires native legacy-grid ownership and on/off");finish_scene(scene,1);return
 	var thread_text := option("--threads","8")
 	if not thread_text.is_valid_int() or int(thread_text)<1 or int(thread_text)>8:
 		push_error("Simulation threads must be 1 through 8")
 		finish_scene(scene,1)
 		return
 	if sim.kernels != null:
+		sim.kernels.pair_matching_configure(matching=="on")
 		sim.kernels.thread_configure(int(thread_text),option("--parallel-transport","on")=="on",option("--parallel-contacts","on")=="on",option("--compact-geometry","off")=="on")
 	var initial_player_biomass: float = sim.player.biomass
 	# Exercise real paid opening anatomy, not a free propulsion endowment.
@@ -156,6 +160,8 @@ func run() -> void:
 			finish_scene(scene,1)
 			return
 	elif "pool" not in switches and "legacy" not in switches: sim.enable_particle_pool()
+	if matching=="on" and (not sim.particle_pool or engine=="liquidfun"):
+		push_error("Matching comparison needs the native pool without LiquidFun");finish_scene(scene,1);return
 	var parcel_option := option("--parcels","off")
 	if parcel_option not in ["on","off"] or (parcel_option == "on" and not sim.configure_parcels(true)):
 		push_error("Parcel transport requires supported native ownership")
@@ -192,7 +198,7 @@ func run() -> void:
 		for key in phases: phases[key] /= tick_rows.size()
 		tick_rows.sort()
 		var tick_result := {"mode":"ticks","fluid":fluid_name,"locomotion":locomotion,"fixture":option("--fixture","dense"),"hotpaths":option("--hotpaths","all"),
-			"threading":sim.kernels.thread_metrics() if sim.kernels != null else {}, "particle_engine":sim.kernels.particle_engine_metrics() if sim.kernels != null else {}, "parcels":sim.kernels.parcel_metrics() if sim.kernels != null else {}, "neighbors":neighbor_summary(sim),"particle_collisions":sim.particle_collisions,"ticks":tick_rows.size(),"mean_ms":total/tick_rows.size(),"p95_ms":tick_rows[mini(tick_rows.size()-1,int(tick_rows.size()*0.95))],
+			"pair_matching":matching,"threading":sim.kernels.thread_metrics() if sim.kernels != null else {}, "particle_engine":sim.kernels.particle_engine_metrics() if sim.kernels != null else {}, "parcels":sim.kernels.parcel_metrics() if sim.kernels != null else {}, "neighbors":neighbor_summary(sim),"particle_collisions":sim.particle_collisions,"ticks":tick_rows.size(),"mean_ms":total/tick_rows.size(),"p95_ms":tick_rows[mini(tick_rows.size()-1,int(tick_rows.size()*0.95))],
 			"phases_ms":phases,"particles":sim.particle_count(),"simulation_seconds":sim.time-sim_started,
 			"rng":str(sim.rng.state),"background_rng":str(sim.background_rng.state),"ecology_rng":str(sim.ecology_rng.state)}
 		if not save_result(tick_result,option("--output","")):
@@ -215,7 +221,7 @@ func run() -> void:
 		"fluid_feedback":feedback,
 		"fluid_quality":preload("res://tests/fluid_compare_gpu.gd").summary(sim.experimental_fluid) if sim.experimental_fluid != null else {},
 		"requested_chemicals":int(packet_text),"distribution":distribution,"particle_sizes":sizes,"frame_step":frame_step,"particle_collisions":sim.particle_collisions,
-		"threading":sim.kernels.thread_metrics() if sim.kernels != null else {}, "particle_engine":sim.kernels.particle_engine_metrics() if sim.kernels != null else {}, "parcels":sim.kernels.parcel_metrics() if sim.kernels != null else {}, "neighbors":neighbor_summary(sim),"chemistry_events":sim.chemistry_events.duplicate(),"material_remaining":Fixture.packet_material(sim),
+		"pair_matching":matching,"threading":sim.kernels.thread_metrics() if sim.kernels != null else {}, "particle_engine":sim.kernels.particle_engine_metrics() if sim.kernels != null else {}, "parcels":sim.kernels.parcel_metrics() if sim.kernels != null else {}, "neighbors":neighbor_summary(sim),"chemistry_events":sim.chemistry_events.duplicate(),"material_remaining":Fixture.packet_material(sim),
 		"packed_particles":sim.native_particle_pipeline,"particle_pool":sim.particle_pool,"pool_metrics":sim.kernels.pool_metrics() if sim.kernels != null else {},"particle_render_cache":sim.native_particle_render_cache,
 		"simulation_seconds":sim.time-sim_started,"rng":str(sim.rng.state),"background_rng":str(sim.background_rng.state),"ecology_rng":str(sim.ecology_rng.state),
 		"locomotion":locomotion,"player_radius":sim.player.radius,"player_biomass":sim.player.biomass,"seconds":seconds,"hotpaths":option("--hotpaths","all"),"mode":option("--mode","live"),"fixture":option("--fixture","dense"),"music":scene.music.enabled,

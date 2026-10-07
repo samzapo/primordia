@@ -220,3 +220,7 @@ At the 80% view on the RTX 5080 workstation, matched initial 20k fixed-step whol
 The [Revision 35 GPU matching diagnostic](docs/REVISION_35.md) adds parallel
 mutual-choice reactions and circular contacts to the resident experiment.
 It remains separate from gameplay; cell coupling and phone validation are pending.
+
+[Revision 36](docs/REVISION_36.md) adds finite GPU cell-exchange tests and an
+opt-in complete-game CPU matching comparison. Whole-frame gains remain too
+small to justify changing the default; the GPU gameplay migration remains gated.

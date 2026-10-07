@@ -1,0 +1,116 @@
+#[compute]
+#version 450
+layout(local_size_x=128) in;
+layout(rgba32f,set=0,binding=0) uniform image2D state;
+layout(set=0,binding=1,std430) readonly buffer Bodies { vec4 bodies[]; };
+layout(set=0,binding=2,std430) readonly buffer Points { vec2 points[]; };
+layout(set=0,binding=3,std430) readonly buffer Feeds { vec4 feeds[]; };
+layout(set=0,binding=4,std430) readonly buffer Emissions { vec4 emissions[]; };
+layout(set=0,binding=5,std430) buffer Identity { uvec2 identity[]; };
+layout(set=0,binding=6,std430) buffer Receipts { vec4 receipts[]; };
+layout(set=0,binding=7,std430) readonly buffer Inspection { uvec2 inspection[]; };
+layout(set=0,binding=8,std430) readonly buffer Order { uvec2 order[]; };
+layout(set=0,binding=9,std430) readonly buffer Ranges { uvec2 ranges[]; };
+layout(push_constant,std430) uniform Params {uint count;uint body_count;uint feed_count;uint emit_count;uint inspect_count;uint stage;uint unused;uint unused2;} pc;
+const vec2 WORLD=vec2(4096,2560);
+ivec2 pixel(uint i){return ivec2(int(i%256u)*3,int(i/256u));}
+vec4 pose(uint i){return imageLoad(state,pixel(i));}
+vec4 motion(uint i){return imageLoad(state,pixel(i)+ivec2(1,0));}
+vec4 matter(uint i){return imageLoad(state,pixel(i)+ivec2(2,0));}
+vec2 offset(vec2 a,vec2 b){return mod(b-a+WORLD*.5,WORLD)-WORLD*.5;}
+uint bin(ivec2 p){p=ivec2(mod(vec2(p),vec2(256,160)));return uint(p.y*256+p.x);}
+float cross2(vec2 a,vec2 b){return a.x*b.y-a.y*b.x;}
+float support(uint body,float angle,bool visible){
+ vec4 shape=bodies[body*4u+1u];
+ uint start=uint(visible?shape.x:shape.z),n=uint(visible?shape.y:shape.w);
+ vec2 ray=vec2(cos(angle),sin(angle));
+ // Full outline search: same radial geometry, independent of art orientation.
+ for(uint k=0u;k<n;k++){
+  vec2 a=points[start+k],b=points[start+(k+1u)%n],edge=b-a;
+  float denom=cross2(ray,edge);if(abs(denom)<.000001)continue;
+  float t=cross2(a,ray)/denom,d=cross2(a,edge)/denom;
+  if(t>=0.&&t<=1.&&d>=0.)return length(mix(a,b,t));
+ }
+ return bodies[body*4u].w/1.05;
+}
+void shrink(uint i,vec4 v,vec4 m){
+ const float radii[11]=float[11](4.,2.5,3.,2.5,5.,3.,4.,4.,3.,3.,3.5);
+ if(m.y<=0.){v.w=-1.;m.x=0.;m.y=0.;}
+ else m.x=2.*radii[int(v.w)]*clamp(sqrt(m.y/.3),.8,1.7);
+ imageStore(state,pixel(i)+ivec2(1,0),v);
+ imageStore(state,pixel(i)+ivec2(2,0),m);
+}
+void main(){
+ uint i=gl_GlobalInvocationID.x;
+ if(pc.stage==0u){
+  if(i<pc.count)identity[i]=uvec2(motion(i).w>=0.?1u:0u,0xffffffffu);
+  return;
+ }
+ if(pc.stage==1u){
+  if(i!=0u)return;
+  for(uint b=0u;b<pc.body_count;b++)receipts[b]=vec4(0);
+  // One ordered finite transaction for overlapping mouths and competing cells.
+  for(uint f=0u;f<pc.feed_count;f++){
+   vec4 query=feeds[f*2u],meta=feeds[f*2u+1u];uint body=uint(meta.x);
+   uint channel=query.w==0.?0u:(query.w==1.?1u:2u);
+   vec4 budget=bodies[body*4u+2u],shape=bodies[body*4u];
+   float remaining=max(0.,budget[channel]-receipts[body][channel]),taken_total=0.;
+   float reach=query.z;
+   ivec2 lo=ivec2(floor((query.xy-reach)/16.)),hi=ivec2(floor((query.xy+reach)/16.));
+   for(int x=lo.x;x<=min(hi.x,lo.x+255)&&remaining>0.;x++)for(int y=lo.y;y<=min(hi.y,lo.y+159)&&remaining>0.;y++){
+    uvec2 range=ranges[bin(ivec2(x,y))];
+    for(uint k=range.x;k<range.y&&remaining>0.;k++){
+     uint slot=order[k].y;vec4 v=motion(slot),m=matter(slot);
+     if(v.w!=query.w)continue;
+     vec2 d=offset(query.xy,pose(slot).xy);float distance=length(d);
+     bool inside=query.w==1.?distance<support(body,atan(d.y,d.x)-shape.z,false)+14.:distance<=reach;
+     if(!inside)continue;
+     float taken=min(m.y,remaining);m.y-=taken;remaining-=taken;taken_total+=taken;
+     if(query.w!=1.&&identity[slot].y!=uint(budget.w))receipts[body].w+=taken;
+     shrink(slot,v,m);
+    }
+   }
+   receipts[body][channel]+=taken_total;
+   receipts[pc.body_count+f]=vec4(taken_total,0,0,0);
+  }
+  // Sparse paid emissions: explicit refusal at capacity, never overwrite live slots.
+  uint cursor=0u;
+  for(uint e=0u;e<pc.emit_count;e++){
+   while(cursor<pc.count&&(motion(cursor).w>=0.||identity[cursor].x==0x7fffffffu))cursor++;
+   uint receipt=pc.body_count+pc.feed_count+e;
+   receipts[receipt]=uintBitsToFloat(uvec4(0,0xffffffffu,0,0));
+   if(cursor==pc.count)continue;
+   identity[cursor]=uvec2(identity[cursor].x+1u,floatBitsToUint(emissions[e*4u+3u].x));
+   for(uint j=0u;j<3u;j++)imageStore(state,pixel(cursor)+ivec2(int(j),0),emissions[e*4u+j]);
+   receipts[receipt]=uintBitsToFloat(uvec4(1,cursor,identity[cursor].x,identity[cursor].y));
+   cursor++;
+  }
+  return;
+ }
+ if(pc.stage==2u){
+  if(i>=pc.count||motion(i).w<0.||motion(i).w==3.)return;
+  vec4 p=pose(i);
+  for(uint iteration=0u;iteration<3u;iteration++){
+   bool moved=false;
+   for(uint b=0u;b<pc.body_count;b++){
+    vec4 body=bodies[b*4u];vec2 d=offset(body.xy,p.xy);
+    float ds=dot(d,d);if(ds>(body.w+8.)*(body.w+8.))continue;
+    float angle=ds>.0001?atan(d.y,d.x):float(i)*2.4;
+    float edge=support(b,angle-body.z,true)+7.;
+    if(sqrt(ds)>=edge-.001)continue;
+    p.xy=mod(body.xy+vec2(cos(angle),sin(angle))*edge,WORLD);moved=true;
+   }
+   if(!moved)break;
+  }
+  imageStore(state,pixel(i),p);return;
+ }
+ if(pc.stage==3u){
+  if(i>=pc.inspect_count)return;
+  uvec2 handle=inspection[i];
+  uint at=pc.body_count+pc.feed_count+pc.emit_count+i*4u;
+  for(uint j=0u;j<4u;j++)receipts[at+j]=vec4(0);
+  if(handle.x>=pc.count||identity[handle.x].x!=handle.y||motion(handle.x).w<0.)return;
+  for(uint j=0u;j<3u;j++)receipts[at+j]=imageLoad(state,pixel(handle.x)+ivec2(int(j),0));
+  receipts[at+3u]=uintBitsToFloat(uvec4(1,handle.x,handle.y,identity[handle.x].y));
+ }
+}
