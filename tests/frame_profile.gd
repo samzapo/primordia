@@ -9,7 +9,7 @@ func run() -> void:
 	var fluid_name := option("--fluid","current")
 	var packet_text := option("--chemicals","0")
 	var distribution := option("--distribution","uniform")
-	var collisions := option("--particle-collisions","off")
+	var collisions := option("--particle-collisions","on")
 	if collisions not in ["on","off"]:
 		push_error("Particle collisions must be on or off")
 		quit(1)
@@ -62,6 +62,8 @@ func run() -> void:
 			finish_scene(scene,1)
 			return
 	var switches := option("--hotpaths","all").split(",")
+	if "reaction_bounds" in switches: sim.native_chemistry_bounds = false
+	if "reaction_acid" in switches: sim.native_chemistry_lazy_acid = false
 	if "legacy" in switches or "packets" in switches: sim.native_particle_pipeline = false
 	if "legacy" in switches or "render_cache" in switches: sim.native_particle_render_cache = false
 	if "legacy" in switches or "geometry" in switches: scene.native_geometry = false

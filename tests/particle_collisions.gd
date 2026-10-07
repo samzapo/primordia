@@ -26,7 +26,7 @@ static func fixture(backend: String, collisions: bool, hidden: bool, second_kind
 	return sim
 
 static func run(check: Callable) -> void:
-	check.call(not Sim.new(928).particle_collisions,"Particles overlap by default without changing oriented reaction rules")
+	check.call(Sim.new(928).particle_collisions,"Ordinary particles collide by default; overlap remains an explicit diagnostic")
 	for backend in ["script","native","pool"]:
 		if backend != "script" and Sim.new(928).kernels == null: continue
 		for hidden in [false,true]:

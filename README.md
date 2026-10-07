@@ -86,7 +86,7 @@ Escape settings offer **Music volume** control. Particle beat pulsing and its sl
 
 ## Living chemistry
 
-Chemical particles **overlap by default**, with current-driven motion and independent random-walk diffusion still active. Chemical reactions continue to require compatible species and facing. Escape → **Particle collisions** restores the former soft repulsion for comparison; the choice persists. Diffusion spreads clouds, while currents can still concentrate them. [Revision 28](docs/REVISION_28.md) records the visual trial and measurements: removing repulsion alone did not improve dense-frame performance.
+Chemical particles use **soft particle–particle repulsion** alongside current-driven motion and independent random-walk diffusion. Their forks and branches are artwork; physical encounters remain circular and reactions require compatible species and facing. [Revision 29](docs/REVISION_29.md) restores collisions after the overlap trial and optimizes the exact contact search and acidity work. The trial switch has been removed from settings; old saved trial choices are ignored. Diagnostic comparisons can still pass `--particle-collisions=off` to the frame profiler.
 
 **Cells are the only sources of external particles.** The initial clouds represent products of the existing cells' earlier life, with source-cell identifiers. There is no automatic food/oxygen habitat spawner. Respiration, lower-yield fermentation, photosynthesis, secretion, wounds, recycling and death sustain the particle economy. Replacing a dead NPC is an explicit population event with accounted material input. Hidden replacement remains preferred; forecasted tides can admit a bounded number of arrivals into safe visible space when wide zoom leaves no hidden habitat.
 

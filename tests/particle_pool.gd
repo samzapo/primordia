@@ -13,6 +13,8 @@ static func run(check: Callable) -> void:
 	for seed_value in [25171,846,619]:
 		var pooled = Sim.new(seed_value)
 		var mirrored = Sim.new(seed_value)
+		mirrored.native_chemistry_bounds = false
+		mirrored.native_chemistry_lazy_acid = false
 		pooled.view_half = Sim.VIEW/0.8/2
 		mirrored.view_half = pooled.view_half
 		check.call(pooled.enable_particle_pool() and pooled.particles.is_empty() and pooled.pheromones.is_empty(),"Pool imports once and leaves no public pose mirrors")
@@ -50,6 +52,7 @@ static func run(check: Callable) -> void:
 		mirrored.step(DT)
 		check.call(Compare.same_packets(pooled.particles,mirrored.particles) and same_cells(pooled,mirrored),"Dictionary execution resumes without a discontinuity")
 	chemistry_pairs(check)
+	contact_edges(check)
 	mutations(check)
 	handles(check)
 	optional_clocks(check)
@@ -66,6 +69,8 @@ static func same_cells(a,b) -> bool:
 static func chemistry_pairs(check: Callable) -> void:
 	var pooled = Sim.new(27)
 	var mirrored = Sim.new(27)
+	mirrored.native_chemistry_bounds = false
+	mirrored.native_chemistry_lazy_acid = false
 	for collisions in [false,true]:
 		for acid in [0.0,0.4,0.95]:
 			for aligned in [true,false]:
@@ -179,3 +184,40 @@ static func optional_clocks(check: Callable) -> void:
 				sim.kernels.transport(sim.particles,ids,sim.fluid.velocity,camera,Vector2(10,10),0.01,1,sim.rng,clock,background)
 				sim.kernels.chemistry(sim.particles,ids,sim.acidity.values,camera,Vector2(10,10),0.01,1,sim.rng,clock,background)
 			check.call(Compare.same_packets(pooled.particle_snapshots(),mirrored.particles) and pooled.rng.state==mirrored.rng.state,"Resident pool preserves absent-clock defaults in both transport tiers")
+
+
+static func contact_edges(check: Callable) -> void:
+	for hidden in [false,true]:
+		for collisions in [true,false]:
+			var fast = Sim.new(928)
+			var slow = Sim.new(928)
+			fast.particles.clear()
+			fast.grid.clear()
+			var fixture_rng := RandomNumberGenerator.new()
+			fixture_rng.seed = 34817
+			var anchors := [Vector2.ZERO,Vector2(15.9999,16.0001),Vector2(4095.9999,2559.9999),Vector2(31.9999,31.9999)]
+			for i in 220:
+				var at: Vector2 = fast.Medium.wrap_position(anchors[i%4]+Vector2(fixture_rng.randf_range(-10,10),fixture_rng.randf_range(-10,10)))
+				fast.spawn_particle(i%Sim.SPECIES_COUNT,at,Vector2(fixture_rng.randf_range(-2,2),fixture_rng.randf_range(-2,2)),[0.00001,0.3,1.4,2.0][i%4],91)
+				fast.particles[-1].chemical_at = 0.0
+			for i in fast.acidity.values.size(): fast.acidity.values[i] = fixture_rng.randf()
+			slow.particles = fast.particles.duplicate(true)
+			slow.acidity.values = fast.acidity.values.duplicate()
+			slow.native_chemistry_bounds = false
+			slow.native_chemistry_lazy_acid = false
+			var ids: Array[int] = []
+			for i in fast.particles.size(): ids.append(i)
+			for sim in [fast,slow]:
+				sim.particle_collisions = collisions
+				sim.camera_follows_player = false
+				sim.camera_position = Vector2(2048,1280) if hidden else Vector2.ZERO
+				sim.view_half = Vector2(100,100)
+				sim.rng.seed = 118
+				sim.grid.rebuild(sim.particles)
+			fast.enable_particle_pool()
+			for pass_index in 4:
+				for sim in [fast,slow]:
+					sim.time += 0.05
+					sim.revision += 1
+					sim._chemistry(0.05,ids,hidden)
+				check.call(Compare.same_packets(fast.particle_snapshots(),slow.particles) and fast.rng.state==slow.rng.state and fast.acidity.values==slow.acidity.values and fast.chemistry_events==slow.chemistry_events,"Tight contact bins and lazy acidity preserve dense wrapped/boundary encounters, repeated merges and every species")

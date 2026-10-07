@@ -110,12 +110,7 @@ func run(test_host) -> void:
 	scene.ripple_check.toggled.emit(false)
 	expect(not scene.preferences.water_ripples and scene.light_layer.material.get_shader_parameter("water_ripples") == false,"Water shimmer can be disabled without changing anatomy or the screen-copy pass")
 	scene.ripple_check.toggled.emit(true)
-	expect(not scene.world.particle_collisions and not scene.collisions_check.button_pressed,"Collision-free chemical particles are the default")
-	var collision_time: float = scene.world.time
-	var collision_rng: int = scene.world.rng.state
-	scene.collisions_check.toggled.emit(true)
-	expect(scene.world.particle_collisions and scene.preferences.particle_collisions and scene.world.time == collision_time and scene.world.rng.state == collision_rng,"Settings restores particle repulsion without restarting or advancing ecology")
-	scene.collisions_check.toggled.emit(false)
+	expect(scene.world.particle_collisions,"Ordinary gameplay restores particle collisions without consulting the old trial preference")
 	key(KEY_ESCAPE)
 	key(KEY_SPACE)
 	expect(not scene.camera_locked and not scene.is_paused(),"Space unlocks view without pausing")
@@ -740,8 +735,9 @@ func _native_pool() -> void:
 	expect(scene.inspector.hovered.is_empty(),"A consumed/decayed native handle cannot leave a ghost lens")
 	scene._restart()
 	expect(scene.world.particle_pool==false,"Dictionary fixture restart honors its explicit ownership setting")
+	scene.set_particle_collisions(false)
 	scene.use_particle_pool = true
 	scene._restart()
 	expect(scene.world.particle_pool and scene.world.particles.is_empty(),"Ordinary restart enables authoritative ownership by default")
-	expect(scene.world.particle_collisions,"Native and dictionary restarts retain the collision preference")
+	expect(scene.world.particle_collisions,"Ordinary restart restores collisions after any diagnostic override")
 	scene.set_particle_collisions(false)

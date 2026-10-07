@@ -27,8 +27,10 @@ var native_particles := kernels != null
 var native_background_chemistry := kernels != null
 var native_chemical_timestamps := true
 var native_chemistry_writes := true
-# Chemical overlap is allowed; this comparison switch restores soft repulsion.
-var particle_collisions := false
+# Ordinary gameplay retains particle collisions; overlap is diagnostic only.
+var particle_collisions := true
+var native_chemistry_bounds := true
+var native_chemistry_lazy_acid := true
 var native_transport_bookkeeping := kernels != null
 var native_particle_compaction := kernels != null
 var native_fluid := kernels != null
@@ -648,7 +650,7 @@ func _move_particles(dt: float) -> void:
 
 func _chemistry(dt: float, patch: Array[int] = [], background: bool = false) -> void:
 	if native_particles and (not background or native_background_chemistry):
-		var result: Dictionary = kernels.chemistry(particles,patch if background else local_particle_ids(),acidity.values,player.position if camera_follows_player else camera_position,view_half,dt,revision,rng,time if native_chemical_timestamps and (background_biology or background) else -1.0,background,native_chemistry_writes,particle_collisions)
+		var result: Dictionary = kernels.chemistry(particles,patch if background else local_particle_ids(),acidity.values,player.position if camera_follows_player else camera_position,view_half,dt,revision,rng,time if native_chemical_timestamps and (background_biology or background) else -1.0,background,native_chemistry_writes,particle_collisions,native_chemistry_bounds,native_chemistry_lazy_acid)
 		acidity.values = result.acid
 		respiration_loss += result.loss
 		recycled += result.recycled

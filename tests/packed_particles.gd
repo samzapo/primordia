@@ -15,6 +15,8 @@ static func run(check: Callable) -> void:
 		return
 	var slow = Sim.new(846)
 	slow.native_particle_pipeline = false
+	slow.native_chemistry_bounds = false
+	slow.native_chemistry_lazy_acid = false
 	mutation_checks(check)
 	# Every oriented pair/order and acid regime reaches the packed chemistry path.
 	for acid in [0.0,0.4,0.95]:
@@ -43,6 +45,8 @@ static func run(check: Callable) -> void:
 	fast = Sim.new(25171)
 	slow = Sim.new(25171)
 	slow.native_particle_pipeline = false
+	slow.native_chemistry_bounds = false
+	slow.native_chemistry_lazy_acid = false
 	for tick in 180:
 		if tick in [40,80,130]:
 			for sim in [fast,slow]:

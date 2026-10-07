@@ -57,7 +57,6 @@ var scale_select := OptionButton.new()
 var fullscreen_check := CheckButton.new()
 var bloom_check := CheckButton.new()
 var ripple_check := CheckButton.new()
-var collisions_check := CheckButton.new()
 var batches: Array[MultiMeshInstance2D] = []
 var buffers: Array[PackedFloat32Array] = []
 var views: Dictionary = {}
@@ -562,11 +561,6 @@ func _build_ui() -> void:
 	ripple_check.text = "Water shimmer (background only)"
 	ripple_check.set_pressed_no_signal(preferences.water_ripples)
 	ripple_check.toggled.connect(set_water_ripples)
-	options.add_child(collisions_check)
-	collisions_check.text = "Particle collisions"
-	collisions_check.tooltip_text = "Particles push each other apart. Chemical reactions still happen when this is off."
-	collisions_check.set_pressed_no_signal(preferences.particle_collisions)
-	collisions_check.toggled.connect(set_particle_collisions)
 	var music_label := _label(options,"Music volume · %d%%" % roundi(preferences.music_volume*100))
 	music_slider.max_value = 100
 	music_slider.step = 1
@@ -633,10 +627,8 @@ func _layout() -> void:
 	preview.queue_redraw()
 
 func set_particle_collisions(on: bool) -> void:
-	preferences.particle_collisions = on
+	# Explicit profiling comparison only; ordinary starts/restarts keep collisions.
 	world.particle_collisions = on
-	collisions_check.set_pressed_no_signal(on)
-	preferences.save_settings()
 
 func set_water_ripples(on: bool) -> void:
 	preferences.water_ripples = on
@@ -969,7 +961,6 @@ func _capture() -> void:
 	get_tree().quit(result)
 
 func _configure_backend() -> void:
-	world.particle_collisions = preferences.particle_collisions
 	if use_particle_pool and "--gpu-transport" not in OS.get_cmdline_user_args(): world.enable_particle_pool()
 	if "--gpu-transport" not in OS.get_cmdline_user_args(): return
 	var gpu = load("res://scripts/gpu_transport.gd").new()

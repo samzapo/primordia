@@ -512,8 +512,8 @@ protected:
                                   "camera", "half", "dt", "revision", "rng", "clock", "background"),
                          &PrimordiaKernels::transport, DEFVAL(-1.0), DEFVAL(false));
     ClassDB::bind_method(D_METHOD("chemistry", "particles", "ids", "acid",
-                                  "camera", "half", "dt", "revision", "rng", "clock", "background", "dirty_writes", "collisions"),
-                         &PrimordiaKernels::chemistry, DEFVAL(-1.0), DEFVAL(false), DEFVAL(true), DEFVAL(false));
+                                  "camera", "half", "dt", "revision", "rng", "clock", "background", "dirty_writes", "collisions", "tight_bounds", "lazy_acid"),
+                         &PrimordiaKernels::chemistry, DEFVAL(-1.0), DEFVAL(false), DEFVAL(true), DEFVAL(true), DEFVAL(true), DEFVAL(true));
     ClassDB::bind_method(
         D_METHOD("fluid_step", "velocity", "activity", "tide", "dt", "driven"),
         &PrimordiaKernels::fluid_step);
@@ -1545,7 +1545,7 @@ public:
   Dictionary chemistry(Array particles, TypedArray<int64_t> ids,
                        PackedFloat32Array acid, Vector2 camera, Vector2 half,
                        double dt, int revision,
-                       Ref<RandomNumberGenerator> rng, double clock, bool background, bool dirty_writes, bool collisions) {
+                       Ref<RandomNumberGenerator> rng, double clock, bool background, bool dirty_writes, bool collisions, bool tight_bounds, bool lazy_acid) {
     static const double radii[] = {4, 2.5, 3, 2.5, 5, 3, 4, 4, 3, 3, 3.5};
     static const double decay[] = {.003, .008, .006, 0.0,  .1, .001,
                                    .02,  .015, .008, .008, .08};
@@ -1555,6 +1555,7 @@ public:
     Array neutralizations;
     PackedVector2Array reaction_points;
     double loss = 0, recycled = 0;
+    double max_radius = 0;
     scratch.clear();
     scratch.reserve(ids.size());
     if (bins.empty())
@@ -1585,6 +1586,7 @@ public:
       if (!numeric) { p.d[keys.reaction_activity]=p.active; p.d[keys.contact_radius]=p.radius; }
       scratch.push_back(p);
       if (p.active > 0 && p.kind != 3) {
+        max_radius = std::max(max_radius, p.radius);
         int id = mod(int(std::floor(p.p.y / 16)),160)*256 + mod(int(std::floor(p.p.x / 16)),256);
         if (bins[id].empty()) occupied_bins.push_back(id);
         bins[id].push_back(k);
@@ -1617,10 +1619,13 @@ public:
       }
       if (p.kind == 3 || p.reacted)
         continue;
-      int lx = std::floor((p.p.x - 18) / 16),
-          hx = std::floor((p.p.x + 18) / 16),
-          ly = std::floor((p.p.y - 18) / 16),
-          hy = std::floor((p.p.y + 18) / 16);
+      // Only omit bins beyond every possible cached contact radius. Keep
+      // traversal order and a float-coordinate margin for boundary contacts.
+      double reach = tight_bounds ? p.radius + max_radius + .001 : 18.;
+      int lx = std::floor((p.p.x - reach) / 16),
+          hx = std::floor((p.p.x + reach) / 16),
+          ly = std::floor((p.p.y - reach) / 16),
+          hy = std::floor((p.p.y + reach) / 16);
       for (int x = lx; x <= hx && !p.reacted; ++x)
         for (int y = ly; y <= hy && !p.reacted; ++y)
           for (int j : bins[mod(y, 160) * 256 + mod(x, 256)]) {
@@ -1637,13 +1642,17 @@ public:
               continue;
             double dist = std::sqrt(dist2);
             Vector2 n = dist2 > .000001 ? d / dist : Vector2(1, 0);
-            double a = acid_sample(acid, p.p);
+            const bool enzyme_pair = (p.kind == 6 && b.kind == 2) || (p.kind == 2 && b.kind == 6);
+            // Most chemistry and every separation impulse are acid-independent.
+            double a = (!lazy_acid || enzyme_pair) ? acid_sample(acid, p.p) : 0.;
             double threshold = .5;
-            if ((p.kind == 6 && b.kind == 2) || (p.kind == 2 && b.kind == 6))
+            if (enzyme_pair)
               threshold +=
                   .46 * std::pow(std::clamp(std::abs(a - .4) / .4, 0., 1.), 2);
             bool reacted = false;
             if (p.dir.dot(n) >= threshold && b.dir.dot(-n) >= threshold) {
+              if (lazy_acid && ((p.kind == 2 && b.kind == 1) || (p.kind == 1 && b.kind == 2)))
+                a = acid_sample(acid, p.p);
               Particle *u = &p, *v = &b;
               if ((u->kind == 2 && v->kind == 6) ||
                   (u->kind == 4 && v->kind == 7) ||

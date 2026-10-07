@@ -4,7 +4,6 @@ var hud_scale := 1.0
 var fullscreen := false
 var bloom := true
 var water_ripples := true
-var particle_collisions := false
 var music_volume := 0.65
 var persist := true
 var path := "user://preferences.cfg"
@@ -17,7 +16,6 @@ func load_settings() -> void:
 	fullscreen = bool(config.get_value("display","fullscreen",false))
 	bloom = bool(config.get_value("display","bloom",true))
 	water_ripples = bool(config.get_value("display","water_ripples",true))
-	particle_collisions = bool(config.get_value("simulation","particle_collisions",false))
 	music_volume = clampf(float(config.get_value("audio","music_volume",0.65)),0,1)
 
 func save_settings() -> void:
@@ -27,6 +25,5 @@ func save_settings() -> void:
 	config.set_value("display","fullscreen",fullscreen)
 	config.set_value("display","bloom",bloom)
 	config.set_value("display","water_ripples",water_ripples)
-	config.set_value("simulation","particle_collisions",particle_collisions)
 	config.set_value("audio","music_volume",music_volume)
 	config.save(path)
