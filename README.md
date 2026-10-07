@@ -90,6 +90,8 @@ Chemical particles use **soft particle–particle repulsion** alongside current-
 
 [Revision 30](docs/REVISION_30.md) compares packed indexing, a CPU BVH, quadtree and buffered neighbor lists at 80% view, including clustered and large-cell fixtures. None demonstrates a reliable speed gain over the existing grid, which remains the default. The packed index reduces index memory; BVH, quadtree and caching are diagnostic options. The 50k/60 FPS target remains unmet.
 
+[Revision 33](docs/REVISION_33.md) adds an eight-thread native particle pipeline with deterministic random draws and ordered reaction commits. Independent transport and geometric contact screening run in parallel; small jobs and unsupported diagnostic paths remain serial.
+
 [Revision 32](docs/REVISION_32.md) reduces current-engine CPU overhead with reusable chemistry scratch and fewer particle-ID lookups. It preserves ordered contacts, chemistry, material and random streams, with a performance ablation and parity tests.
 
 [Revision 31](docs/REVISION_31.md) adds explicit original Google LiquidFun and conservative distant-transport parcel trials. Zoom/pan cannot improve feeding in these modes; material and individual orientations are retained. LiquidFun is slower in dense whole-game captures, and the current scheduler gives parcels little useful coverage. The established medium, particle engine and density remain default. This is a desktop comparison stage toward mobile/idle support; full-world saving, ARM64 exports and weighted collision/reaction parcels remain future work.

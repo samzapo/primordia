@@ -1,4 +1,5 @@
 #include "music_mixer.h"
+#include "simulation_workers.h"
 #include "chemical_neighbors.h"
 #include "liquid_particles.h"
 #include "parcel_transport.h"
@@ -102,7 +103,7 @@ struct RenderPacket {
   uint64_t epoch = 0;
 };
 struct Particle {
-  Dictionary d;
+  Dictionary *d=nullptr; // Cold metadata remains outside numeric scratch.
   Vector2 p, v, dir;
   double amount, capacity, active, radius, elapsed;
   int kind, identity, neighbor_bin;
@@ -320,6 +321,19 @@ class PrimordiaKernels : public RefCounted {
   int render_revision = -1, render_count = -1;
   bool packed_render_state=false;
   bool reuse_chemistry_scratch=true;
+  int simulation_threads=8;
+  bool parallel_transport=true, parallel_contacts=true, compact_geometry=false;
+  std::vector<Vector2> contact_positions;
+  std::vector<double> contact_radii;
+  std::vector<int> contact_identities;
+  uint64_t transport_jobs=0, contact_jobs=0, contact_fallbacks=0;
+  struct TransportJob { int id; double dt,nx,ny,angular; };
+  std::vector<TransportJob> transport_jobs_buffer;
+  std::vector<uint64_t> transport_seen;
+  uint64_t transport_epoch=0;
+  struct ContactList { std::vector<int> ids; bool complete=true; };
+  std::vector<ContactList> contact_lists;
+
   LiquidParticles liquid;
   ParcelTransport parcels;
   double physical_radius=0;
@@ -456,6 +470,7 @@ class PrimordiaKernels : public RefCounted {
     slot.chemical_loaded=true;
   }
   std::vector<Particle> foreground_scratch, background_scratch;
+  std::vector<Dictionary> chemistry_dictionaries;
   ChemicalNeighbors neighbors;
 
 protected:
@@ -467,6 +482,8 @@ protected:
     ClassDB::bind_method(D_METHOD("particle_solver_probe", "positions", "velocities", "dt"), &PrimordiaKernels::particle_solver_probe);
     ClassDB::bind_method(D_METHOD("particle_engine_metrics"), &PrimordiaKernels::particle_engine_metrics);
     ClassDB::bind_method(D_METHOD("particle_engine_reset_metrics"), &PrimordiaKernels::particle_engine_reset_metrics);
+    ClassDB::bind_method(D_METHOD("thread_configure", "threads", "transport", "contacts", "compact"), &PrimordiaKernels::thread_configure, DEFVAL(true), DEFVAL(true), DEFVAL(false));
+    ClassDB::bind_method(D_METHOD("thread_metrics"), &PrimordiaKernels::thread_metrics);
     ClassDB::bind_method(D_METHOD("hotloop_configure", "scratch_reuse"), &PrimordiaKernels::hotloop_configure);
     ClassDB::bind_method(D_METHOD("neighbor_configure", "backend", "cache", "metrics"), &PrimordiaKernels::neighbor_configure, DEFVAL(false), DEFVAL(false));
     ClassDB::bind_method(D_METHOD("neighbor_metrics"), &PrimordiaKernels::neighbor_metrics);
@@ -542,6 +559,16 @@ protected:
 
 public:
 
+  bool thread_configure(int threads,bool transport,bool contacts,bool compact) {
+    if (threads<1 || threads>8) return false;
+    simulation_threads=threads;parallel_transport=transport;parallel_contacts=contacts;compact_geometry=compact;
+    return true;
+  }
+  Dictionary thread_metrics() const {
+    Dictionary d; d["compact_geometry"]=compact_geometry;d["threads"]=simulation_threads;d["transport_jobs"]=int64_t(transport_jobs);
+    d["contact_jobs"]=int64_t(contact_jobs);d["contact_fallbacks"]=int64_t(contact_fallbacks);
+    return d;
+  }
   void hotloop_configure(bool scratch_reuse) {
     reuse_chemistry_scratch=scratch_reuse;
   }
@@ -1549,6 +1576,68 @@ public:
     }
     return count;
   }
+  int transport_pool_parallel(TypedArray<int64_t> ids,const PackedVector2Array &flow,
+      Vector2 camera,Vector2 half,double dt,int revision,
+      Ref<RandomNumberGenerator> rng,double clock,bool background) {
+    transport_jobs_buffer.clear();
+    transport_seen.resize(packet_slots.size(),0);
+    if (++transport_epoch==0) { std::fill(transport_seen.begin(),transport_seen.end(),0); ++transport_epoch; }
+    // All engine-array access and RNG calls stay on the submitting thread.
+    // The stream is exactly x, y, angle for each eligible packet, in ID order.
+    for (int k=0,n=ids.size();k<n;++k) {
+      int id=int64_t(ids[k]);
+      if (transport_seen[id]==transport_epoch) return -1; // Duplicate diagnostic IDs require sequential semantics.
+      transport_seen[id]=transport_epoch;
+      auto &slot=packet_slots[id];auto &p=slot.value;
+      if (!p.alive || ((activity(p.p,camera,half)>0)==background)) continue;
+      double previous=slot.has_transport_clock ? p.transport_at : clock-dt;
+      double t=clock<0 ? dt : std::max(0.,clock-previous);
+      if (t<=0) continue;
+      transport_jobs_buffer.push_back({id,t,0,0,0});
+    }
+    if (transport_jobs_buffer.empty()) return 0;
+    for (auto &job:transport_jobs_buffer) {
+      job.nx=rng->randfn(0,1);job.ny=rng->randfn(0,1);job.angular=rng->randfn(0,1);
+    }
+    // Obtain stable COW views before dispatch; no resizing or engine calls
+    // happen on workers. Each ordinary scheduler ID is unique.
+    const Vector2 *velocities=flow.ptr();
+    Vector2 *positions=packet_positions.ptrw();
+    auto sample_flow=[&](Vector2 p) {
+      p=wrapv(p)/64-Vector2(.5,.5);
+      int x=std::floor(p.x),y=std::floor(p.y);
+      return velocities[node(x,y)].lerp(velocities[node(x+1,y)],p.x-x)
+        .lerp(velocities[node(x,y+1)].lerp(velocities[node(x+1,y+1)],p.x-x),p.y-y);
+    };
+    SimulationWorkers::shared().run(transport_jobs_buffer.size(),simulation_threads,[&](size_t begin,size_t end) {
+      for (size_t k=begin;k<end;++k) {
+        const auto &job=transport_jobs_buffer[k];double t=job.dt;
+        auto &slot=packet_slots[job.id];auto &p=slot.value;
+        Vector2 at=p.p,v=p.kind==3 ? Vector2() : p.v;
+        bool tracer=p.kind==3;double angle=p.angle;
+        p.updated=revision;p.previous=at;p.jump=t>.05;
+        if (clock>=0) {p.transport_at=clock;slot.has_transport_clock=true;}
+        if (t<=.05) at=wrapv(at+(v+sample_flow(at))*t);
+        else {
+          int steps=std::clamp(int(std::ceil(t/.25)),1,8);
+          double h=t/steps,damping=std::exp(-.8*h);Vector2 launch=v;
+          for (int j=0;j<steps;++j) {
+            Vector2 midpoint=at+sample_flow(at)*(h*.5)+launch*((1-std::exp(-.4*h))/.8);
+            at=wrapv(at+sample_flow(midpoint)*h+launch*((1-damping)/.8));
+            launch*=damping;
+          }
+        }
+        p.p=wrapv(at+Vector2(job.nx,job.ny)*std::sqrt((tracer ? 240 : 12)*t));
+        p.v=v*std::exp(-t*.8);p.age=p.age+t;p.previous_angle=angle;
+        angle=wrap(angle+p.spin*t+job.angular*std::sqrt(1.2*t)+PI,TAU)-PI;
+        if (tracer) angle=0;
+        p.angle=angle;p.dir=tracer ? Vector2() : Vector2(std::cos(angle),std::sin(angle));
+        slot.moved=true;slot.mask|=UPDATED|JUMP;positions[job.id]=p.p;
+      }
+    });
+    ++transport_jobs;
+    return transport_jobs_buffer.size();
+  }
   int transport(Array particles, TypedArray<int64_t> ids,
                 const PackedVector2Array &flow, Vector2 camera, Vector2 half,
                 double dt, int revision, Ref<RandomNumberGenerator> rng,
@@ -1556,6 +1645,10 @@ public:
     // Keep the unscoped reference kernel unchanged for honest ablations.
     if (!packet_frame)
       return transport_dictionary(particles,ids,flow,camera,half,dt,revision,rng,clock,background);
+    if (pool_enabled && simulation_threads>1 && parallel_transport && ids.size()>=4096 && !liquid.enabled && !parcels.enabled) {
+      int result=transport_pool_parallel(ids,flow,camera,half,dt,revision,rng,clock,background);
+      if (result>=0) return result;
+    }
     int count = 0;
     if (parcels.enabled && pool_enabled && background)
       parcels.prepare(packet_slots,ids,flow,clock,dt,sample,wrapv);
@@ -1675,6 +1768,7 @@ public:
     if (!reuse_chemistry_scratch) scratch.clear();
     const int id_count=ids.size();
     scratch.resize(id_count);
+    if (!packet_frame) chemistry_dictionaries.resize(id_count);
     for (int k = 0; k < id_count; ++k) {
       auto &p=scratch[k];
       p.handle=0;
@@ -1682,22 +1776,22 @@ public:
       PacketState *numeric=nullptr;
       if (packet_frame) {
         auto &slot=packet(p.identity); load_chemistry(slot); numeric=&slot.value; slot.chemical=true;
-        p.handle=slot.handle; p.d=slot.d; p.p=numeric->p; p.v=numeric->v; p.dir=numeric->dir;
+        p.handle=slot.handle; p.d=&slot.d; p.p=numeric->p; p.v=numeric->v; p.dir=numeric->dir;
         p.amount=numeric->amount; p.capacity=numeric->capacity; p.kind=numeric->kind;
         p.alive=numeric->alive; p.reacted=numeric->reacted==revision;
       } else {
-        p.d=particles[p.identity];
-        p.p=p.d[keys.p]; p.v=p.d[keys.v]; p.dir=p.d[keys.direction];
-        p.amount=p.d[keys.amount]; p.capacity=p.d[keys.capacity]; p.kind=int(p.d[keys.kind]);
-        p.alive=p.d[keys.alive]; p.reacted=int(p.d.get(keys.reacted,-1))==revision;
+        chemistry_dictionaries[k]=particles[p.identity];p.d=&chemistry_dictionaries[k];
+        p.p=(*p.d)[keys.p]; p.v=(*p.d)[keys.v]; p.dir=(*p.d)[keys.direction];
+        p.amount=(*p.d)[keys.amount]; p.capacity=(*p.d)[keys.capacity]; p.kind=int((*p.d)[keys.kind]);
+        p.alive=(*p.d)[keys.alive]; p.reacted=int(p.d->get(keys.reacted,-1))==revision;
       }
       p.initial_v = p.v; p.initial_amount = p.amount; p.initial_capacity = p.capacity;
       p.initial_kind = p.kind; p.initial_alive = p.alive; p.initial_reacted = p.reacted;
       p.active = p.alive ? (background ? 1. : activity(p.p, camera, half)) : 0;
-      p.elapsed = background ? std::max(0., clock - (numeric ? (packet_slots[p.identity].has_chemical_clock ? numeric->chemical_at : clock) : double(p.d.get(keys.chemical_at, clock)))) : dt * p.active;
-      if (clock >= 0 && !background) { if (numeric) { numeric->chemical_at=clock; packet_slots[p.identity].has_chemical_clock=true; } else p.d[keys.chemical_at]=clock; }
+      p.elapsed = background ? std::max(0., clock - (numeric ? (packet_slots[p.identity].has_chemical_clock ? numeric->chemical_at : clock) : double(p.d->get(keys.chemical_at, clock)))) : dt * p.active;
+      if (clock >= 0 && !background) { if (numeric) { numeric->chemical_at=clock; packet_slots[p.identity].has_chemical_clock=true; } else (*p.d)[keys.chemical_at]=clock; }
       p.radius = radii[p.kind] * std::clamp(std::sqrt(p.amount / .3), .8, 1.7);
-      if (!numeric) { p.d[keys.reaction_activity]=p.active; p.d[keys.contact_radius]=p.radius; }
+      if (!numeric) { (*p.d)[keys.reaction_activity]=p.active; (*p.d)[keys.contact_radius]=p.radius; }
       p.neighbor_bin=mod(int(std::floor(p.p.y/16)),160)*256+mod(int(std::floor(p.p.x/16)),256);
       if (fine_contacts && p.active>0 && p.kind!=3 && numeric->jump) fine_contacts=false;
       if (p.active > 0 && p.kind != 3) max_radius=std::max(max_radius,p.radius);
@@ -1707,12 +1801,43 @@ public:
     double contact_radius=fine_contacts ? 0 : physical_radius;
     max_radius=std::max(max_radius,contact_radius);
     neighbors.begin(scratch,max_radius,background);
+    const bool screened=simulation_threads>1 && parallel_contacts && scratch.size()>=4096 &&
+      neighbors.backend==0 && !neighbors.caching && !neighbors.metrics;
+    if (screened) {
+      contact_lists.resize(scratch.size());
+      if (compact_geometry) {
+        contact_positions.resize(scratch.size());contact_radii.resize(scratch.size());contact_identities.resize(scratch.size());
+        for (size_t i=0;i<scratch.size();++i) {
+          contact_positions[i]=scratch[i].p;contact_radii[i]=scratch[i].radius;contact_identities[i]=scratch[i].identity;
+        }
+      }
+      SimulationWorkers::shared().run(scratch.size(),simulation_threads,[&](size_t begin,size_t end) {
+        for (size_t i=begin;i<end;++i) {
+          const auto &p=scratch[i];auto &list=contact_lists[i];list.ids.clear();list.complete=true;
+          if (!p.alive || p.active<=0 || p.kind==3 || p.reacted || p.elapsed<=0) continue;
+          double reach=tight_bounds ? std::max(p.radius,contact_radius)+max_radius+.001 : 18.;
+          neighbors.readonly_grid_visit(scratch,int(i),reach,[&](int j) {
+            int identity=compact_geometry ? contact_identities[j] : scratch[j].identity;
+            if (identity<=p.identity) return false;
+            // Only immutable geometry is screened; alive/kind/reacted/material
+            // are checked again during the original ordered commit below.
+            double radius=compact_geometry ? contact_radii[j] : scratch[j].radius;
+            Vector2 at=compact_geometry ? contact_positions[j] : scratch[j].p;
+            double c=std::max(p.radius+radius,contact_radius>0 ? contact_radius*2 : 0.);
+            if (delta(p.p,at).length_squared()>c*c) return false;
+            if (list.ids.size()==128) {list.ids.clear();list.complete=false;return true;}
+            list.ids.push_back(j);return false;
+          });
+        }
+      });
+      ++contact_jobs;
+    }
     for (int i = 0; i < int(scratch.size()); ++i) {
       auto &p = scratch[i];
       if (!p.alive || p.active <= 0 || p.kind == 3)
         continue;
       double t = p.elapsed;
-      if (clock >= 0 && background) { if (packet_frame) { packet_slots[p.identity].value.chemical_at=clock; packet_slots[p.identity].has_chemical_clock=true; } else p.d[keys.chemical_at]=clock; }
+      if (clock >= 0 && background) { if (packet_frame) { packet_slots[p.identity].value.chemical_at=clock; packet_slots[p.identity].has_chemical_clock=true; } else (*p.d)[keys.chemical_at]=clock; }
       if (t <= 0) continue;
       if (p.kind == 8 || p.kind == 9) {
         int n = node(std::floor(p.p.x / 64), std::floor(p.p.y / 64));
@@ -1737,7 +1862,7 @@ public:
       // Only omit bins beyond every possible cached contact radius. Keep
       // traversal order and a float-coordinate margin for boundary contacts.
       double reach = tight_bounds ? std::max(p.radius,contact_radius) + max_radius + .001 : 18.;
-      neighbors.visit(scratch,i,reach,[&](int j) {
+      auto apply_contact=[&](int j) {
         auto &b = scratch[j];
         if (b.identity <= p.identity) return false;
         neighbors.owned_candidate();
@@ -1777,7 +1902,7 @@ public:
             if (neutralizations.size() < 32) {
               Dictionary cue;
               cue["at"] = u->p;
-              cue["source"] = u->d.get("owner", -1);
+              cue["source"] = u->d->get("owner", -1);
               cue["amount"] = v->amount;
               neutralizations.push_back(cue);
             }
@@ -1839,7 +1964,13 @@ public:
           b.v += push * 8;
         }
         return false;
-      });
+      };
+      if (screened && contact_lists[i].complete) {
+        for (int j:contact_lists[i].ids) if (apply_contact(j)) break;
+      } else {
+        if (screened) ++contact_fallbacks;
+        neighbors.visit(scratch,i,reach,apply_contact);
+      }
     }
     for (auto &p : scratch) {
       if (packet_frame) {
@@ -1850,13 +1981,13 @@ public:
       }
       if (p.kind!=p.initial_kind || p.amount!=p.initial_amount || p.alive!=p.initial_alive)
         invalidate_particle_render(p.identity);
-      if (!dirty_writes || p.v != p.initial_v) p.d[keys.v] = p.v;
-      if (!dirty_writes || p.kind != p.initial_kind) p.d[keys.kind] = p.kind;
-      if (!dirty_writes || p.amount != p.initial_amount) p.d[keys.amount] = p.amount;
-      if (!dirty_writes || p.capacity != p.initial_capacity) p.d[keys.capacity] = p.capacity;
-      if (!dirty_writes || p.alive != p.initial_alive) p.d[keys.alive] = p.alive;
+      if (!dirty_writes || p.v != p.initial_v) (*p.d)[keys.v] = p.v;
+      if (!dirty_writes || p.kind != p.initial_kind) (*p.d)[keys.kind] = p.kind;
+      if (!dirty_writes || p.amount != p.initial_amount) (*p.d)[keys.amount] = p.amount;
+      if (!dirty_writes || p.capacity != p.initial_capacity) (*p.d)[keys.capacity] = p.capacity;
+      if (!dirty_writes || p.alive != p.initial_alive) (*p.d)[keys.alive] = p.alive;
       if (p.reacted && (!dirty_writes || !p.initial_reacted))
-        p.d[keys.reacted] = revision;
+        (*p.d)[keys.reacted] = revision;
     }
     Dictionary out;
     out["acid"] = acid;

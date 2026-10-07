@@ -246,6 +246,15 @@ public:
     if (metrics) search_sort_ms+=elapsed(mark);
     for (int j:candidates) { if (metrics) ++delivered; if (visitor(j)) return; }
   }
+  // Immutable legacy-grid traversal for parallel geometric screening.
+  // No counters, shared scratch, callbacks that mutate particles, or cache use.
+  template<class P,class F> void readonly_grid_visit(const std::vector<P> &ps,int i,double reach,F visitor) const {
+    const auto &p=ps[i];
+    int lx=std::floor((p.p.x-reach)/16),hx=std::floor((p.p.x+reach)/16),
+        ly=std::floor((p.p.y-reach)/16),hy=std::floor((p.p.y+reach)/16);
+    for (int x=lx;x<=hx;++x) for (int y=ly;y<=hy;++y)
+      for (int j:bins[mod(y,ROWS)*COLS+mod(x,COLS)]) if (visitor(j)) return;
+  }
   void owned_candidate() { if (metrics) ++owned; }
   void contact() { if (metrics) ++contacts; }
   uint64_t index_builds() const { return builds; }

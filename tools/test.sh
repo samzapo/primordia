@@ -5,6 +5,8 @@ source "$project_dir/tools/godot.sh"
 godot_bin="$(resolve_godot)"
 if [[ "${PRIMORDIA_BACKEND:-native}" != script ]]; then
   "$project_dir/tools/build_native.sh" >&2
+  cmake --build "$project_dir/build/native" --target primordia_worker_test --parallel "${PRIMORDIA_BUILD_JOBS:-2}" >&2
+  "$project_dir/build/native/primordia_worker_test"
 fi
 report_file="$(mktemp "${TMPDIR:-/tmp}/primordia-test.XXXXXX")"
 trap 'rm -f -- "$report_file"' EXIT

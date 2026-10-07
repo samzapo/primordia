@@ -4,8 +4,15 @@ project_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$project_dir"
 mkdir -p build
 : > build/.gdignore
+native_opt="${PRIMORDIA_NATIVE_OPT:-baseline}"
+case "$native_opt" in baseline|lto|pgo-generate|pgo-use) ;; *) echo "Invalid PRIMORDIA_NATIVE_OPT" >&2; exit 2 ;; esac
+profile_changed=false
+if [[ "$native_opt" == pgo-use && -f build/native/.source_stamp ]] &&
+   find build/native/pgo-data -type f -newer build/native/.source_stamp -print -quit | grep -q .; then
+  profile_changed=true
+fi
 # Fast launches after a successful build. Source/config updates trigger a rebuild.
-if [[ -f build/native/primordia.gdextension && -f build/native/libprimordia.so && -f build/native/.source_stamp ]] &&
+if [[ "$profile_changed" == false && -f build/native/.optimization_stamp && "$(cat build/native/.optimization_stamp)" == "$native_opt" && -f build/native/primordia.gdextension && -f build/native/libprimordia.so && -f build/native/.source_stamp ]] &&
    ! find native tools/build_native.sh tools/fetch_liquidfun.py -type f -newer build/native/.source_stamp -print -quit | grep -q .; then
   exit 0
 fi
@@ -17,7 +24,7 @@ if [[ ! -d build/godot-cpp/.git ]]; then
 fi
 [[ "$(git -C build/godot-cpp rev-parse HEAD)" == "$revision" ]] || { echo "Unexpected godot-cpp revision" >&2; exit 1; }
 python3 "$project_dir/tools/fetch_liquidfun.py"
-cmake -S native -B build/native -DCMAKE_BUILD_TYPE=Release
+cmake -S native -B build/native -DCMAKE_BUILD_TYPE=Release -DPRIMORDIA_NATIVE_OPT="$native_opt"
 cmake --build build/native --target primordia --parallel "${PRIMORDIA_BUILD_JOBS:-2}"
 cat > build/native/primordia.gdextension <<'EXTENSION'
 [configuration]
@@ -27,4 +34,5 @@ compatibility_minimum = "4.4"
 linux.x86_64 = "res://build/native/libprimordia.so"
 macos = "res://build/native/libprimordia.dylib"
 EXTENSION
+printf '%s\n' "$native_opt" > build/native/.optimization_stamp
 touch build/native/.source_stamp
