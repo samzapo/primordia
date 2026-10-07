@@ -27,7 +27,7 @@ Godot 4.7.2, Ryzen 9950X / RTX 5080, Mobile renderer, 1440×900 virtual Wayland 
 
 The fixed comparison starts with 50,000 finite chemical packets, ordinary cells and paid cilia, uniform distribution and the current fluid backend. Each trace displays 120 frames and advances one 1/60-second tick per frame: exactly two simulated seconds. Two trials per setting ran in reversed order.
 
-| Particle collisions | Whole-frame mean, trials | Whole-frame p95, trials | Packets remaining |
+| Particle collisions | Whole-frame mean, trials | Whole-frame p95, trials | Minimum packet count observed |
 | --- | --- | --- | --- |
 | On | 37.47 / 38.81 ms | 56.74 / 57.58 ms | 19,606 |
 | Off | 45.03 / 43.86 ms | 59.53 / 57.66 ms | 24,602 |
@@ -40,6 +40,8 @@ One eight-second live trial per mode also fails the 50k/60 FPS goal:
 | --- | --- | --- | --- |
 | On | 46.61 / 160.86 ms | 6.87 / 8.02 s | 16 |
 | Off | 101.58 / 292.15 ms | 6.18 / 8.02 s | 27 |
+
+The fixed traces recorded **30,972 packet merges with collisions on versus 26,121 off**. Each merge preserves the modeled material in one larger packet and retires its partner, explaining most of the approximately 5,000-packet count difference. Decay was slightly higher with collisions off (341 versus 299 events); accounted particle material ended at 640.84 off versus 639.32 on, a difference of about 0.24%. “More packets surviving” means more separate simulation packets here, not substantially more material. Repulsion changes encounter trajectories and approach directions, which matter to orientation-gated merging; whether extra encounter mixing explains the rate difference has not been isolated.
 
 Live scheduling amplifies slow frames through catch-up; these short, shrinking fixtures cannot establish sustained particle capacity or a general slowdown ratio. No default density increase or solver promotion accompanies this trial. Keeping the preferred overlap appearance will still require reducing reaction-query and per-packet costs.
 
