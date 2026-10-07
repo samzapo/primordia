@@ -365,3 +365,7 @@ Cell wakes use surrounding water velocity minus body velocity, transformed to th
 ## Revision 33: deterministic parallel computation
 
 The biological rules are unchanged. [Godot thread-safety documentation](https://docs.godotengine.org/en/stable/tutorials/performance/thread_safe_apis.html) motivates isolating native numerical work from scene/resource operations. [Box2D's independent-contact batching](https://box2d.org/posts/2024/08/simd-matters/) motivates parallel geometric screening; Primordia retains sequential reaction and impulse commits instead of adopting graph-colored solver semantics. [GCC optimization documentation](https://gcc.gnu.org/onlinedocs/gcc/Optimize-Options.html) underpins the separately measured LTO/PGO build experiments. These are computation techniques, not claims about new biological phenomena.
+
+## Resident particle transport/rendering experiment (Revision 34)
+
+[Godot's compute texture example](https://godotengine.org/asset-library/asset/2764) motivates main-device compute feeding Texture2DRD without per-frame readback. [Apple synchronization guidance](https://developer.apple.com/documentation/metal/synchronizing-cpu-and-gpu-work) motivates measuring dependency stalls; [Android thermal guidance](https://developer.android.com/games/optimize/adpf/thermal) motivates sustained tests. These are engineering references, not biological evidence. The synthetic fixture uses existing diffusion/advection abstractions and diagnostic noise; it omits reactions and biological transactions.

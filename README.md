@@ -90,6 +90,8 @@ Chemical particles use **soft particle–particle repulsion** alongside current-
 
 [Revision 30](docs/REVISION_30.md) compares packed indexing, a CPU BVH, quadtree and buffered neighbor lists at 80% view, including clustered and large-cell fixtures. None demonstrates a reliable speed gain over the existing grid, which remains the default. The packed index reduces index memory; BVH, quadtree and caching are diagnostic options. The 50k/60 FPS target remains unmet.
 
+Revision 34 adds an opt-in GPU-resident particle transport/drawing comparison and a generated touch benchmark. Ordinary gameplay keeps CPU chemistry and contacts. See [Revision 34](docs/REVISION_34.md) for commands and pending Pixel 9 Pro XL / Galaxy Z Flip7 validation.
+
 [Revision 33](docs/REVISION_33.md) adds an eight-thread native particle pipeline with deterministic random draws and ordered reaction commits. Independent transport and geometric contact screening run in parallel; small jobs and unsupported diagnostic paths remain serial.
 
 [Revision 32](docs/REVISION_32.md) reduces current-engine CPU overhead with reusable chemistry scratch and fewer particle-ID lookups. It preserves ordered contacts, chemistry, material and random streams, with a performance ablation and parity tests.

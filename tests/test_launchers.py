@@ -148,5 +148,23 @@ class SteamLaunchers(unittest.TestCase):
         self.assertIn("Usage:", result.stderr)
 
 
+    def test_resident_launcher_preserves_arguments(self):
+        self.install(self.steam)
+        for mode in ["gpu", "cpu-texture", "cpu-multimesh"]:
+            result = subprocess.run(
+                [BASH, str(PROJECT / "tools/particles_compare.sh"), mode,
+                 "--count=50000", "--output=path with spaces"],
+                cwd=self.root, env=self.env, text=True, capture_output=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("<--backend=" + mode + ">", result.stdout.splitlines())
+            self.assertIn("<--output=path with spaces>", result.stdout.splitlines())
+        result = subprocess.run(
+            [BASH, str(PROJECT / "tools/particles_compare.sh"), "bad"],
+            cwd=self.root, env=self.env, text=True, capture_output=True,
+        )
+        self.assertEqual(result.returncode, 2)
+
+
 if __name__ == "__main__":
     unittest.main()

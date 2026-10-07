@@ -6,7 +6,7 @@ layout(set=0,binding=0,std430) restrict buffer State { Particle particles[]; };
 layout(set=0,binding=1,std430) readonly buffer Flow { vec2 flow[]; };
 layout(push_constant,std430) uniform Params { uint count; float dt; float pad0; float pad1; } params;
 const vec2 WORLD=vec2(4096,2560);
-int node(ivec2 p) { p=(p%ivec2(64,40)+ivec2(64,40))%ivec2(64,40); return p.y*64+p.x; }
+int node(ivec2 p) { p=ivec2(mod(vec2(p),vec2(64,40))); return p.y*64+p.x; }
 vec2 sample_flow(vec2 p) { vec2 q=mod(p,WORLD)/64.-.5; ivec2 lo=ivec2(floor(q)); vec2 f=fract(q); return mix(mix(flow[node(lo)],flow[node(lo+ivec2(1,0))],f.x),mix(flow[node(lo+ivec2(0,1))],flow[node(lo+ivec2(1,1))],f.x),f.y); }
 void main(){
  uint i=gl_GlobalInvocationID.x; if(i>=params.count)return;

@@ -1,5 +1,6 @@
 #include "music_mixer.h"
 #include "simulation_workers.h"
+#include "resident_reference.h"
 #include "chemical_neighbors.h"
 #include "liquid_particles.h"
 #include "parcel_transport.h"
@@ -2050,6 +2051,7 @@ public:
 void initialize(ModuleInitializationLevel level) {
   if (level == MODULE_INITIALIZATION_LEVEL_SCENE) {
     ClassDB::register_class<PrimordiaKernels>();
+    ClassDB::register_class<PrimordiaResidentReference>();
     ClassDB::register_class<PrimordiaGrid>();
     ClassDB::register_class<PrimordiaMusicMixer>();
   }
