@@ -146,7 +146,7 @@ func momentum() -> Vector2:
 func can_couple(p: Vector2) -> bool:
 	return _weights(p) > 0.0001
 
-func suction(body, mouth: Vector2, reach: float, power: float, dt: float) -> void:
+func suction(body, mouth: Vector2, reach: float, power: float, dt: float, inflow_axis: Vector2 = Vector2.ZERO) -> void:
 	# ATP-driven local inflow changes the real medium. Return the exact opposite
 	# linear/angular impulse to the pumping cell; other cells feel it via drag.
 	var impulse := Vector2.ZERO
@@ -168,6 +168,10 @@ func suction(body, mouth: Vector2, reach: float, power: float, dt: float) -> voi
 		var arm := offset(body.position,at)
 		if arm.length() < body.radius*0.65: continue
 		var falloff := pow(1-distance/reach,2.0)*(1.0 if global_coupling else activity[i])
+		# A ciliary band preferentially draws from the receptor-selected side;
+		# ordinary pore pumping keeps its historical symmetric inflow.
+		if inflow_axis.length_squared() > 0.01:
+			falloff *= 0.15+0.85*maxf(0,(-delta/distance).dot(inflow_axis.normalized()))
 		var desired := delta/distance*power
 		var change := (desired-velocity[i])*(1-exp(-dt*2.2*falloff))
 		velocity[i] += change

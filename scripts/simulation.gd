@@ -88,6 +88,9 @@ var sound_events: Array = []
 const REACTION_SPARK_LIMIT := 128
 var reaction_sparks: Array[Dictionary] = []
 var reaction_serial := 0
+# Immutable, bounded presentation snapshots; no extra mass or random draws.
+var death_bursts: Array[Dictionary] = []
+var death_serial := 0
 var sound_sequence := 0
 var sound_recent: Dictionary = {}
 var pending_replacements: Array = []
@@ -125,7 +128,6 @@ func _init(seed_number: int = 20261004, profile: int = 0) -> void:
 	player.update_geometry()
 	player.membrane = Cell.Membrane.new(player.radius,absi(seed_value*1000003))
 	player.add_organ("feeding",0,"graze",false)
-	player.add_organ("propulsion",PI,"graze",false)
 	cells.append(player)
 	# Whole habitats are stored. Only organisms inside the microscope advance.
 	for i in 18:
@@ -742,12 +744,19 @@ func _seed_cell_products(cell) -> void:
 func _suction(dt: float) -> void:
 	for cell in cells:
 		if cell.dead or cell.activity <= 0: continue
-		for organ in cell.organs:
-			if organ.kind != "feeding" or cell.energy <= 0: continue
-			var local_dt: float = dt*cell.activity
-			var health: float = organ.hp/organ.max_hp
-			fluid.suction(cell,cell.pore_center(organ),110*sqrt(organ.scale),24*organ.scale*health*Genes.factor(organ,"suction"),local_dt)
-			cell.spend_energy(local_dt*0.18*organ.scale*organ.scale,organ,"pumping")
+		_suction_cell(cell,dt*cell.activity)
+
+func _suction_cell(cell, dt: float) -> void:
+	for organ in cell.organs:
+		if organ.kind not in ["feeding","cilia"] or organ.hp <= 0 or cell.energy <= 0: continue
+		var ciliary: bool = organ.kind == "cilia"
+		var cost: float = dt*(Cell.CILIA_PUMP if ciliary else Cell.PUMP_UPKEEP)*organ.scale*organ.scale
+		var health: float = organ.hp/organ.max_hp
+		var power: float = (Cell.CILIA_FLOW if ciliary else 24.0)*organ.scale*health*Genes.factor(organ,"suction")
+		if ciliary: power *= minf(1,cell.energy/maxf(0.000001,cost))
+		var at: Vector2 = cell.organ_position(organ)+cell.organ_normal(organ).rotated(cell.angle)*8 if ciliary else cell.pore_center(organ)
+		fluid.suction(cell,at,(Cell.CILIA_REACH if ciliary else 110.0)*sqrt(organ.scale),power,dt,cell.target if ciliary else Vector2.ZERO)
+		cell.spend_energy(cost,organ,"pumping")
 
 func _steering_weight(organ: Dictionary, mode: String) -> float:
 	# Explicit flight is a safety drive, independent of feeding/hunting tuning.
@@ -772,6 +781,34 @@ func _accept_signal(cell, packet: Dictionary) -> bool:
 	# Select a coherent direction/organ rather than cancelling opposing vectors.
 	# A different drive needs a 20% lead; memory and pheromone expiry stay bounded.
 	return packet.score*_steering_weight(incoming,packet.mode) > cell.target_score*_steering_weight(held,cell.target_mode)*1.2
+
+func _food_patch(bins: Dictionary, reach: float, cell) -> Dictionary:
+	var best: Dictionary = {}
+	var best_score := -1.0
+	for key in bins:
+		var total := 0.0
+		var center := Vector2.ZERO
+		var nearest := Vector2.ZERO
+		var nearest_distance := INF
+		for x in range(-1,2):
+			for y in range(-1,2):
+				var neighbor: Dictionary = bins.get(key+Vector2i(x,y),{})
+				if neighbor.is_empty(): continue
+				total += neighbor.mass
+				center += neighbor.moment
+				if neighbor.distance < nearest_distance:
+					nearest_distance = neighbor.distance
+					nearest = neighbor.nearest
+		if total <= 0: continue
+		center /= total
+		# Mild travel cost: mass wins over a nearby isolated speck.
+		var score: float = total/(1.0+center.length()/reach)
+		if score > best_score:
+			best_score = score
+			var inner: float = maxf(70,cell.extent()+22)
+			best = {"at":cell.position+(nearest if center.length() <= inner else center),
+				"mass":total,"inner":center.length() <= inner}
+	return best
 
 func _sense(cell, dt: float) -> void:
 	# A memory or in-flight signal cannot outlive its source organ.
@@ -799,7 +836,7 @@ func _sense(cell, dt: float) -> void:
 					best_score = light_score
 					best = {"score":0.7,"mode":"light","id":-1,"at":cell.position+direction*150,"a":organ.a,"organ_id":organ.id}
 				continue
-			var food := Vector2.ZERO
+			var food_bins: Dictionary = {}
 			var reports: Dictionary = {}
 			var candidates: Array = grid.query_kind(particles,receptor,reach,NUTRIENT if mode == "graze" else PHEROMONE)
 			if profiling:
@@ -812,7 +849,16 @@ func _sense(cell, dt: float) -> void:
 				var distance: float = Medium.offset(receptor,p.p).length()
 				if distance > reach: continue
 				if mode == "graze" and p.kind == NUTRIENT:
-					food += Medium.offset(cell.position,p.p).normalized()*p.amount/maxf(25,distance)
+					if p.amount <= 0: continue
+					var delta: Vector2 = Medium.offset(cell.position,p.p)
+					var key := Vector2i((delta/maxf(80,reach/4.0)).floor())
+					if not food_bins.has(key): food_bins[key] = {"mass":0.0,"moment":Vector2.ZERO,"nearest":delta,"distance":distance}
+					var bin: Dictionary = food_bins[key]
+					bin.mass += p.amount
+					bin.moment += delta*p.amount
+					if distance < bin.distance:
+						bin.nearest = delta
+						bin.distance = distance
 				elif p.kind == PHEROMONE and mode in ["hunt","flee"] and _pheromone_alive(p):
 					var report: Dictionary = p.get("report",{})
 					if report.is_empty() or report.lineage == cell.lineage_id(): continue
@@ -832,10 +878,11 @@ func _sense(cell, dt: float) -> void:
 				if weighted > best_score:
 					best_score = weighted
 					best = {"lineage":report.lineage,"score":score,"mode":mode,"id":report.id,"at":report.at,"a":organ.a,"organ_id":organ.id,"expires_at":detected.expires_at}
+			var patch: Dictionary = _food_patch(food_bins,reach,cell)
 			var food_score: float = _candidate_score(cell,strength,organ.id,"graze",-1)
-			if food.length() > 0.001 and best_score < food_score:
+			if not patch.is_empty() and best_score < food_score:
 				best_score = food_score
-				best = {"score":1.0,"mode":"graze","id":-1,"at":cell.position+food.normalized()*100,"a":organ.a,"organ_id":organ.id}
+				best = {"score":1.0,"mode":"graze","id":-1,"at":patch.at,"a":organ.a,"organ_id":organ.id}
 		if not best.is_empty():
 			cell.sensed = true
 			cell.signals.append({"lineage":best.get("lineage",-1),"score":best.score,"sample_at":time,"p":cell.local_point(best.a)*0.75,"mode":best.mode,"id":best.id,"at":best.at,"fear":best.mode == "flee","organ_id":best.organ_id,"expires_at":best.get("expires_at",INF)})
@@ -852,21 +899,27 @@ func _sense(cell, dt: float) -> void:
 			cell.target_expires_at = packet.expires_at
 			cell.target_memory = minf(1.2,packet.expires_at-time)
 	cell.signals = cell.signals.filter(func(packet): return packet.p.length() >= 5)
-	if cell.target_memory > 0:
+	var organ: Dictionary = cell.organ_by_id(cell.target_organ_id)
+	var share: float = cell.response_share(organ) if not organ.is_empty() else 0.0
+	var phase: float = fposmod(cell.age+cell.id*0.61803398875,cell.response_cycle)/cell.response_cycle
+	cell.drive_active = cell.target_memory > 0 and (cell.target_mode == "flee" or phase < share)
+	if cell.drive_active:
 		cell.facing = Medium.offset(cell.position,cell.target_position).normalized()
 		cell.target = -cell.facing if cell.target_mode == "flee" else cell.facing
 		cell.threat = cell.facing if cell.target_id >= 0 else Vector2.ZERO
 		cell.state = {"graze":"FORAGING","hunt":"FOLLOWING PREY PHEROMONE","light":"SEEKING LIGHT","flee":"FLEEING"}.get(cell.target_mode,"EXPLORING")
-		var organ: Dictionary = cell.organ_by_id(cell.target_organ_id)
 		cell.target_mouth = cell.organ_normal(organ).angle() if not organ.is_empty() else 0.0
 	else:
-		cell.target = Vector2.from_angle(cell.angle+sin(cell.age*0.4+cell.id)*0.6)
+		# A seeded wandering heading, independent of current body rotation and RNG.
+		var turn: float = floor(cell.age/cell.response_cycle)
+		var wander_hash: int = posmod((int(turn)+1)*73856093 ^ cell.id*19349663 ^ seed_value*83492791,65521)
+		cell.target = Vector2.from_angle(TAU*wander_hash/65521.0+sin(cell.age*0.4+cell.id)*0.3)
 		cell.facing = cell.target
 		cell.threat = Vector2.ZERO
-		cell.target_id = -1
+		if cell.target_memory <= 0: cell.target_id = -1
 		cell.target_mouth = 0
-		cell.state = "EXPLORING"
-	if cell.count("propulsion") == 0: cell.state = "DRIFTING · PORE PUMPING"
+		cell.state = "EXPLORING · RESPONSE CYCLE" if cell.target_memory > 0 else "EXPLORING"
+	if cell.count("propulsion")+cell.count("cilia") == 0: cell.state = "DRIFTING · PORE PUMPING"
 
 func _feed(cell) -> void:
 	var before: float = cell.eaten
@@ -913,7 +966,7 @@ func _metabolize(cell, dt: float) -> void:
 	# Storage mobilization bridges a food gap; it is not free ATP. It transfers
 	# existing tissue through the same limited metabolic pathways.
 	cell.reserve_activity = maxf(0,cell.reserve_activity-dt)
-	if cell.energy < 20 and cell.substrate < 1:
+	if cell.energy < 10 and cell.substrate < 1:
 		var mobilized: float = minf(maxf(0,cell.biomass-8),dt*0.3*cell.growth_scale())
 		cell.biomass -= mobilized
 		cell.substrate += mobilized
@@ -923,7 +976,7 @@ func _metabolize(cell, dt: float) -> void:
 	var amount = minf(minf(cell.substrate,cell.oxygen),capacity)
 	cell.substrate -= amount
 	cell.oxygen -= amount
-	cell.gain_energy(amount*5.0)
+	cell.gain_energy(amount*Cell.AEROBIC_ATP)
 	cell.biomass += amount*0.7
 	cell.carbon += amount*0.1
 	cell.waste += amount*0.2
@@ -932,7 +985,7 @@ func _metabolize(cell, dt: float) -> void:
 	var fermented: float = minf(cell.substrate,maxf(0,capacity-amount))
 	if fermented > 0:
 		cell.substrate -= fermented
-		cell.gain_energy(fermented*2)
+		cell.gain_energy(fermented*Cell.FERMENT_ATP)
 		cell.biomass += fermented*0.3
 		cell.waste += fermented*0.3
 		cell.carbon += fermented*0.1
@@ -942,7 +995,7 @@ func _metabolize(cell, dt: float) -> void:
 		cell.processed += fermented
 		cell.fermented += fermented
 		cell.fermentation_activity = 2
-	cell.spend_energy(dt*0.264*cell.growth_scale())
+	cell.spend_energy(dt*Cell.BASAL_UPKEEP*cell.growth_scale())
 	for organ in cell.organs: cell.spend_energy(dt*organ.scale*organ.scale*Genes.factor(organ,"upkeep",0.0),organ)
 	if cell.energy <= 0:
 		cell.health = maxf(0,cell.health-dt*2)
@@ -975,7 +1028,7 @@ func _emit_and_attack(cell, dt: float) -> void:
 			spawn_particle(CARBON,cell.position-Vector2.from_angle(cell.angle)*(cell.radius+12),Vector2.ZERO,amount,cell.id)
 	for organ in cell.organs:
 		var kind: int = {"feeding":ENZYME,"neutralizing":ANTITOXIN,"acidifying":ACID,"regenerative":BUFFER}.get(organ.kind,-1)
-		var energy_cost := 0.15*Genes.factor(organ,"secretion_cost")
+		var energy_cost := Cell.SECRETION_COST*Genes.factor(organ,"secretion_cost")
 		if kind < 0 or cell.biomass < 0.06 or cell.energy < energy_cost: continue
 		if kind != ENZYME and cell.energy < 12: continue
 		var rate := 0.35 if kind == ENZYME else 2.0
@@ -1020,15 +1073,15 @@ func _motion_cell(cell, local_dt: float) -> void:
 	var steering_power := 0.0
 	for organ in cell.organs:
 		if cell.energy <= 0: continue
-		var pursuing: bool = organ.kind in ["hunting","photosynthesis"] and organ.id == cell.target_organ_id and cell.target_memory > 0 and cell.target_mode in ["hunt","light"]
-		if organ.kind != "propulsion" and not pursuing: continue
+		var pursuing: bool = organ.kind in ["hunting","photosynthesis"] and organ.id == cell.target_organ_id and cell.drive_active and cell.target_memory > 0 and cell.target_mode in ["hunt","light"]
+		if organ.kind not in ["propulsion","cilia"] and not pursuing: continue
 		var arm: Vector2 = cell.organ_position(organ)-cell.position
-		var power: float = (2600.0 if organ.kind == "propulsion" else 1100.0)*organ.scale*organ.scale*(organ.hp/organ.max_hp)*Genes.factor(organ,"thrust")
-		var energy_cost: float = local_dt*0.3*organ.scale*organ.scale*Genes.factor(organ,"motion_cost")
+		var power: float = (2600.0 if organ.kind == "propulsion" else Cell.CILIA_THRUST if organ.kind == "cilia" else 1100.0)*organ.scale*organ.scale*(organ.hp/organ.max_hp)*Genes.factor(organ,"thrust")
+		var energy_cost: float = local_dt*(Cell.CILIA_MOTION if organ.kind == "cilia" else Cell.MOTION_UPKEEP)*organ.scale*organ.scale*Genes.factor(organ,"motion_cost")
 		power *= minf(1,cell.energy/maxf(0.000001,energy_cost))
 		var thrust: Vector2 = cell.organ_normal(organ).rotated(cell.angle)
 		# Flagella can reverse their stroke, but force follows their mounted axis.
-		if organ.kind == "propulsion" and thrust.dot(cell.target) < 0: thrust = -thrust
+		if organ.kind in ["propulsion","cilia"] and thrust.dot(cell.target) < 0: thrust = -thrust
 		var impulse: Vector2 = thrust*power*local_dt
 		if fluid.deposit(cell.position+arm,-impulse):
 			cell.velocity += impulse/cell.mass
@@ -1277,6 +1330,10 @@ func _toxin_contacts() -> void:
 func _die(cell, transferred: float = 0.0) -> void:
 	if cell.dead: return
 	if evolution.enabled: lineage.died(cell,self)
+	death_serial += 1
+	death_bursts.append({"serial":death_serial,"time":time,"at":cell.position,"radius":cell.radius,
+		"angle":cell.angle,"outline":cell.membrane.outline(),"lineage":cell.lineage_id(),"player":cell == player})
+	if death_bursts.size() > 32: death_bursts.pop_front()
 	cell.dead = true
 	cell.health = 0
 	var total: float = maxf(0,cell.organic_mass()-transferred)
@@ -1407,6 +1464,8 @@ func make_offspring(parent, quote: Dictionary):
 	child.energy = 40
 	child.organs = parent.organs.duplicate(true)
 	child.next_organ_id = parent.next_organ_id
+	child.exploration = parent.exploration
+	child.response_cycle = parent.response_cycle
 	for organ in child.organs:
 		organ.hp = organ.max_hp
 		organ.material = organ.max_material

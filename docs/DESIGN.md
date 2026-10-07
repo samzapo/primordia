@@ -218,3 +218,13 @@ The owner requires larger cells to have greater fluid drag and lower swimming to
 The owner asks for more pronounced local wakes and broad water ripples without occluding cells or causing dizziness. Extend plant/cell glints, draw every cell wake beneath all cell bodies, and keep broad slow caustic brightness variation in the water background only. No camera motion or full-scene refraction. The background shimmer can be disabled in settings and pauses with simulation time.
 
 The owner removes particle beat pulsing because it was not noticeable. Remove its shader work, per-frame visual preparation, preference and settings control. Preserve original progressive techno, audio timing, anatomy/lineage/proximity/environmental sonification and gameplay event accents. This supersedes earlier requests for beat-responsive particles.
+
+## Revision 24: sustainable operation and patch-aware foraging
+
+The owner reports ATP too tight to support new anatomy and requests signal strengths competing with random exploration. Routine ATP costs are reduced and food ATP yields increased, with unchanged finite material accounting, construction/AP rules, repair and combat. Emergency tissue mobilization starts later. Local grazing follows mass-weighted nutrient neighborhoods before targeting individual particles within a body-sized inner threshold.
+
+An inherited exploration gain competes with the chosen anatomical signal through a tunable response cycle, rather than averaging opposing vectors. Memory and sensing continue during wandering; flight remains explicit and immediate. The nucleus exposes local Behavior controls, without bringing back persistent panes or direct movement.
+
+The owner also requests seeing the death explosion before relocation, and wakes relative to surrounding liquid. Presentation holds the death site briefly before easing to the paid successor; real habitat/succession proceeds without delay. Cell wakes use external water/body slip in the membrane frame; plant wakes use local water flow. See [Revision 24](REVISION_24.md).
+
+The player starts with a grazing pore and **neither cilia nor a flagellum**. Both remain separate fixed-size assembly purchases, each costing eight tissue and one AP. Flagella emphasize thrust; cyan ciliary bands add weaker thrust plus a stronger directional local feeding current. Cilia use the receptor/exploration-selected heading, add no sensing or absorption, and pull hazards along with food. The current acts on the real fluid and returns equal/opposite momentum to the cell in detailed and coarse simulation. NPC flagella remain unchanged; offspring inherit paid anatomy normally. Cilia also contribute their own synthesized flutter-pluck rhythm.

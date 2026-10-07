@@ -130,7 +130,7 @@ func open_context(target: Dictionary) -> void:
 	var run = sim.evolution
 	match target.kind:
 		"assembly","chemistry":
-			for index in ([0,1,2,3,4,5,10] if target.kind == "assembly" else range(6,10)):
+			for index in ([0,1,2,3,4,5,10,11] if target.kind == "assembly" else range(6,10)):
 				var kind: String = sim.KINDS[index]
 				var cost: float = sim.Cell.organ_cost(kind)
 				_choice(game.TITLES[index],"%.0f tissue · 1 AP\n%s" % [cost,game.HELP[index]],game._select.bind(index),kind,"",cell.biomass >= cost and run.points >= 1,cost,1,{"kind":kind,"scale":1.0,"mutation":""})
@@ -149,7 +149,7 @@ func open_context(target: Dictionary) -> void:
 			if sim.Cell.tunable_steering(organ):
 				var strength: float = sim.Cell.steering_strength(organ)
 				var label: String = "Off" if strength == 0 else "%d%%" % roundi(strength*100)
-				var details := "Click to cycle Off / 25 / 50 / 100 / 200 / 400%. Changes steering priority; flight always wins."
+				var details := "Click to cycle Off / 25 / 50 / 100 / 200 / 400%. Changes signal priority and response time versus exploration; flight always wins."
 				if organ.kind == "feeding": details += "\nSuction, digestion and absorption still work even with steering Off."
 				elif organ.kind == "photosynthesis": details += "\nPhotosynthesis still works with steering Off."
 				_choice("Steering "+label,details,func():
@@ -188,6 +188,19 @@ func open_context(target: Dictionary) -> void:
 			if run.challenge == "" and run.tide < 6 and run.clock-run.tide*run.TIDE_SECONDS < 90:
 				_choice("Feeding risk","+2 AP next tide: collect 12 external food or fix 12 carbon (or a mixture); finish healthy.",_challenge.bind("metabolism"),"","Feed")
 			_choice("Family & goals",sim.lineage.summary(sim),open_context.bind({"kind":"lineage"}),"","Family")
+			_choice("Behavior","Tune wandering versus signals and the response cycle.",open_context.bind({"kind":"behavior"}),"","Explore")
+		"behavior":
+			var label: String = "Off" if cell.exploration == 0 else "%d%%" % roundi(cell.exploration*100)
+			_choice("Exploration "+label,"Relative wandering weight. Signal weight / (signal + exploration) determines following time. Flight bypasses this cycle. No resource cost.",func():
+				var steps: Array = sim.Cell.STEERING_STEPS
+				var index: int = steps.find(cell.exploration)
+				cell.set_exploration(steps[(index+1)%steps.size()])
+				open_context(target),"",label)
+			_choice("Cycle %.0fs" % cell.response_cycle,"Cycle between following a sensed goal and a seeded exploration heading. Click: 2 / 4 / 8 seconds. Memory and senses keep working throughout.",func():
+				var cycles: Array = sim.Cell.RESPONSE_CYCLES
+				cell.set_response_cycle(cycles[(cycles.find(cell.response_cycle)+1)%cycles.size()])
+				open_context(target),"","%.0fs" % cell.response_cycle)
+			_choice("Nucleus","Return to goals and blueprints.",open_context.bind({"kind":"nucleus"}),"","Back")
 		"bud":
 			_choice("Fund offspring","Transfer up to 10 usable tissue and 10 ATP to the reserve.",func():
 				cell.reserve(10,sim.offspring_quote().material)
@@ -268,7 +281,7 @@ func describe(target: Dictionary) -> String:
 	var sim = game.world
 	var run = sim.evolution
 	match target.kind:
-		"assembly": return "Assembly factory\nFlagella, armor, spikes, repair, feeding and flight."
+		"assembly": return "Assembly factory\nCilia, flagella, armor, spikes, repair, feeding and receptors."
 		"chemistry": return "Chemistry factory\nPhotosynthesis, toxins, neutralizers and acid."
 		"atp":
 			var rates: Dictionary = cell.energy_budget.rates(cell.age)
@@ -289,6 +302,7 @@ func describe(target: Dictionary) -> String:
 			if sim.Cell.tunable_steering(organ):
 				var strength: float = sim.Cell.steering_strength(organ)
 				result += "\nSteering "+("Off" if strength == 0 else "%d%%" % roundi(strength*100))
+				result += "\nFollow %.0f%% / explore %.0f%% · %.0fs cycle" % [cell.response_share(organ)*100,(1-cell.response_share(organ))*100,cell.response_cycle]
 			var rates: Dictionary = cell.energy_budget.rates(cell.age)
 			var upkeep: float = sim.Cell.organ_upkeep(organ)
 			var whole: float = cell.operating_budget().steady

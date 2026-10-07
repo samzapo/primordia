@@ -102,10 +102,7 @@ func advance(sim, cell, elapsed: float, hidden: bool = true) -> void:
 			cell.lost_organs.append(organ.duplicate(true))
 			sim.spawn_particle(sim.WASTE,cell.organ_position(organ),Vector2.ZERO,organ.material,cell.id)
 		sim._emit_and_attack(cell,h)
-		for organ in cell.organs:
-			if organ.kind != "feeding" or cell.energy <= 0: continue
-			sim.fluid.suction(cell,cell.pore_center(organ),110*sqrt(organ.scale),24*organ.scale*organ.hp/organ.max_hp*Genes.factor(organ,"suction"),h)
-			cell.spend_energy(h*0.18*organ.scale*organ.scale,organ,"pumping")
+		sim._suction_cell(cell,h)
 		mark = Time.get_ticks_usec() if sim.profiling else 0
 		sim._motion_cell(cell,h)
 		if sim.profiling: sim.profile_usec["coarse_motion"] = sim.profile_usec.get("coarse_motion",0)+Time.get_ticks_usec()-mark
@@ -142,8 +139,8 @@ static func _swim(cell) -> float:
 	if cell.energy <= 0: return 0.0
 	var thrust := 0.0
 	for organ in cell.organs:
-		if organ.kind == "propulsion":
-			thrust += 2600*organ.scale*organ.scale*organ.hp/organ.max_hp*Genes.factor(organ,"thrust")
+		if organ.kind in ["propulsion","cilia"]:
+			thrust += (2600.0 if organ.kind == "propulsion" else cell.CILIA_THRUST)*organ.scale*organ.scale*organ.hp/organ.max_hp*Genes.factor(organ,"thrust")
 	return thrust/(cell.fluid_drag()+cell.mass*0.2)
 
 func _feed(sim, cell, dt: float) -> void:
@@ -155,7 +152,10 @@ func _feed(sim, cell, dt: float) -> void:
 		if organ.kind != "feeding" or organ.hp <= 0: continue
 		if mouth.is_empty(): mouth = organ
 		var pump: float = 24*organ.scale*organ.hp/organ.max_hp*Genes.factor(organ,"suction") if cell.energy > 0 else 0.0
-		capture += 2*(cell.pore_radius(organ)+8)*(relative+pump+4)
+		var center: Vector2 = cell.pore_center(organ)
+		var arm: Vector2 = Medium.offset(cell.position,center)
+		var local_flow: float = (cell.velocity+arm.orthogonal()*cell.angular_velocity-sim.fluid.sample(center)).length()
+		capture += 2*(cell.pore_radius(organ)+8)*(local_flow+pump+4)
 	var area: float = PI*maxf(1,radius*radius-cell.radius*cell.radius)
 	if sim.native_feeding:
 		var rates := {"radius":radius,"dt":dt,"intake":intake,

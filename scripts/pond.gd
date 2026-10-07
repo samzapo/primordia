@@ -13,8 +13,8 @@ const MINT := Color("80efce")
 const GOLD := Color("f5d47b")
 const TEXT := Color("e5f5ec")
 const MUTED := Color("a3bfc5")
-const TITLES := ["Flagellum","Protective cortex","Hunting spike","Repair body","Grazing pore","Flight receptor","Photosynthesis","Toxin vesicle","Toxin neutralizer","Acid gland","Hunting receptor"]
-const HELP := ["Flagella provide thrust. Anatomy chooses travel direction.","Protects the membrane directly beneath it. Coverage follows its membrane attachment.","A contact weapon with no senses or steering. Fast impacts puncture hard; slow pressure spends ATP for smaller wounds. Armor absorbs hits first. Pair spikes around a hunting receptor to line up collisions.","Uses biomass and ATP to repair organs and close punctures faster. Releases buffers that neutralize local acidity and accelerates receptor cleaning.","Senses and pumps nutrients into its opening. Secretes reusable enzymes that turn waste into food when aligned.","Reads nearby pheromones reporting larger or armed cells and retreats from their last reported location. This is the only organ that triggers flight.","Seeks brighter water. Light fixes dissolved carbon into biomass and food, releasing oxygen. Works best in bright habitat patches.","Spends ATP and biomass to fire toxins and receptor-blocking decoys toward a pheromone report received by a hunting or flight receptor.","Releases complementary particles that bind toxin into harmless waste. Costs small amounts of biomass and ATP.","Releases acidifying particles. Moderate acidity favors digestive enzymes; excess acidity costs ATP and stresses cells. Repair bodies release buffers.","Reads local pheromones reporting smaller or undefended prey. Faces and pursues the last reported location. Undefended means no functional spike, toxin vesicle or protective cortex at emission. Pair with spikes or toxins."]
+const TITLES := ["Flagellum","Protective cortex","Hunting spike","Repair body","Grazing pore","Flight receptor","Photosynthesis","Toxin vesicle","Toxin neutralizer","Acid gland","Hunting receptor","Cilia"]
+const HELP := ["Flagella provide thrust. Anatomy chooses travel direction.","Protects the membrane directly beneath it. Coverage follows its membrane attachment.","A contact weapon with no senses or steering. Fast impacts puncture hard; slow pressure spends ATP for smaller wounds. Armor absorbs hits first. Pair spikes around a hunting receptor to line up collisions.","Uses biomass and ATP to repair organs and close punctures faster. Releases buffers that neutralize local acidity and accelerates receptor cleaning.","Senses and pumps nutrients into its opening. Secretes reusable enzymes that turn waste into food when aligned.","Reads nearby pheromones reporting larger or armed cells and retreats from their last reported location. This is the only organ that triggers flight.","Seeks brighter water. Light fixes dissolved carbon into biomass and food, releasing oxygen. Works best in bright habitat patches.","Spends ATP and biomass to fire toxins and receptor-blocking decoys toward a pheromone report received by a hunting or flight receptor.","Releases complementary particles that bind toxin into harmless waste. Costs small amounts of biomass and ATP.","Releases acidifying particles. Moderate acidity favors digestive enzymes; excess acidity costs ATP and stresses cells. Repair bodies release buffers.","Reads local pheromones reporting smaller or undefended prey. Faces and pursues the last reported location. Undefended means no functional spike, toxin vesicle or protective cortex at emission. Pair with spikes or toxins.","A short beating ciliary band provides propulsion and a strong local feeding current from the receptor-selected direction. Draws all particles with the water, including hazards; a grazing pore still consumes food."]
 var music := preload("res://scripts/music_director.gd").new()
 var music_slider := HSlider.new()
 var world: Simulation = Simulation.new()
@@ -26,6 +26,12 @@ var habitat_view := preload("res://scripts/habitat_view.gd").new()
 var currents := Node2D.new()
 var flow_view := FlowView.new()
 var reaction_view := ReactionSparks.new()
+var death_view := preload("res://scripts/death_view.gd").new()
+var death_focus_age := 2.0
+var death_focus_at := Vector2.ZERO
+var death_seen := 0
+var death_world
+var death_frame_dt := 0.0
 var show_reaction_sparks := true
 var membrane_depth := true
 var flow_streamers := true
@@ -87,7 +93,7 @@ var simulation_ms := 0.0
 var render_ms := 0.0
 var screenshot_path := ""
 var capture_frame := 0
-var notice := "Establish a lineage through three crises.\nFirst: feed, then fund a successor at the offspring bud.\nTab enters your cell · the nucleus explains your goal."
+var notice := "Establish a lineage through three crises.\nFirst: choose cilia or a flagellum at the assembly factory.\nFeed, grow and fund a successor at the offspring bud.\nTab enters your cell · the nucleus explains your goal."
 var notice_timer := 12.0
 
 func _ready() -> void:
@@ -125,6 +131,8 @@ func _ready() -> void:
 	add_child(world_layer)
 	world_layer.add_child(flow_view)
 	world_layer.add_child(reaction_view)
+	death_view.z_index = 11
+	world_layer.add_child(death_view)
 	world_layer.add_child(habitat_view)
 	habitat_view.z_index = 0
 	habitat_view.configure(world.habitat_geometry)
@@ -191,6 +199,7 @@ func _physics_process(dt: float) -> void:
 	var started := Time.get_ticks_usec()
 	var identity: int = world.player.id
 	world.step(dt)
+	_track_player_death()
 	if identity != world.player.id:
 		cell_ui.close_context()
 		camera_locked = true
@@ -210,6 +219,8 @@ func _can_edit_tubules() -> bool:
 func _process(dt: float) -> void:
 	var process_start := Time.get_ticks_usec() if frame_trace != null else 0
 	ui_time += dt
+	death_frame_dt = dt if not settings_panel.visible and not build_open else 0.0
+	death_focus_age += death_frame_dt
 	if focus_animating:
 		camera_zoom = lerpf(camera_zoom,manual_zoom,1-exp(-dt*10))
 		if absf(camera_zoom-manual_zoom) < 0.002: focus_animating = false
@@ -246,7 +257,7 @@ func _process(dt: float) -> void:
 
 	var inspection_start := Time.get_ticks_usec() if frame_trace != null else 0
 	var cursor := get_global_mouse_position()
-	var inspect_allowed := get_viewport_rect().has_point(cursor) and not settings_panel.visible and not camera_dragging and selected < 0 and moving_id < 0 and tube_start.is_empty() and cell_ui.context.is_empty() and get_viewport().gui_get_hovered_control() == null
+	var inspect_allowed := death_focus_age >= 1.8 and get_viewport_rect().has_point(cursor) and not settings_panel.visible and not camera_dragging and selected < 0 and moving_id < 0 and tube_start.is_empty() and cell_ui.context.is_empty() and get_viewport().gui_get_hovered_control() == null
 	inspector.update_lens(dt,cursor,alpha,inspect_allowed)
 	preview.queue_redraw()
 	var hover := _nearest_tubule(_player_relative(get_global_mouse_position()).rotated(-world.player.angle)) if _can_edit_tubules() and selected < 0 and moving_id < 0 and cell_ui.hit(get_global_mouse_position()).is_empty() else {}
@@ -262,6 +273,22 @@ func _process(dt: float) -> void:
 		capture_frame += 1
 		if capture_frame == 30: _capture.call_deferred()
 
+func _track_player_death() -> void:
+	if death_world != world:
+		death_world = world
+		death_seen = 0
+		death_focus_age = 2.0
+	for event in world.death_bursts:
+		if event.serial <= death_seen: continue
+		death_seen = event.serial
+		if not event.player or world.time-event.time > 1.8: continue
+		death_focus_age = 0
+		death_focus_at = event.at
+		cell_ui.close_context()
+		inspector.update_lens(0,get_global_mouse_position(),1,false)
+		camera_locked = true
+		camera_offset = Vector2.ZERO
+
 func _update_world(alpha: float) -> void:
 	var sync_start := Time.get_ticks_usec() if frame_trace != null else 0
 	var size := get_viewport_rect().size
@@ -274,8 +301,12 @@ func _update_world(alpha: float) -> void:
 	scale_bar.configure(size,zoom,preferences.hud_scale)
 	camera_screen = size*0.5
 	world.view_half = size/(2*zoom)
+	_track_player_death()
 	render_camera = world.player.previous_position+Simulation.Medium.offset(world.player.previous_position,world.player.position)*alpha+camera_offset if camera_locked else free_camera
-	world.camera_follows_player = camera_locked and camera_offset.length_squared() < 0.001
+	if death_focus_age < 1.8:
+		var blend: float = smoothstep(1.15,1.8,death_focus_age)
+		render_camera = Simulation.Medium.wrap_position(death_focus_at+Simulation.Medium.offset(death_focus_at,render_camera)*blend)
+	world.camera_follows_player = camera_locked and death_focus_age >= 1.8 and camera_offset.length_squared() < 0.001
 	world.camera_position = render_camera
 	light_layer.material.set_shader_parameter("clock",world.time)
 	light_layer.material.set_shader_parameter("camera",render_camera)
@@ -292,6 +323,8 @@ func _update_world(alpha: float) -> void:
 	currents.visible = not flow_streamers
 	flow_view.sync(world,render_camera,world.view_half,zoom,flow_streamers,flow_wakes)
 	reaction_view.sync(world,render_camera,world.view_half,zoom,show_reaction_sparks)
+	death_view.sync(world,render_camera,zoom,death_frame_dt)
+	death_frame_dt = 0
 	# Cached glyph variants preserve facing while dropping subpixel embellishment.
 	for kind in batches.size():
 		var simplified := int(2*Simulation.particle_radius(kind)*zoom < 6)
@@ -305,6 +338,7 @@ func _update_world(alpha: float) -> void:
 	var cells_start := Time.get_ticks_usec() if frame_trace != null else 0
 	var alive_ids: Dictionary = {}
 	for cell in world.cells:
+		if cell.dead: continue
 		var offset: Vector2 = Simulation.Medium.offset(render_camera,cell.position)
 		if absf(offset.x) > world.view_half.x+cell.extent()+80 or absf(offset.y) > world.view_half.y+cell.extent()+80: continue
 		alive_ids[cell.id] = true
@@ -626,6 +660,7 @@ func _update_hud() -> void:
 
 
 func _toggle_build() -> void:
+	if death_focus_age < 1.8: return
 	if settings_panel.visible or world.player.dead or world.evolution.terminal(): return
 	if build_open:
 		_finish_build()

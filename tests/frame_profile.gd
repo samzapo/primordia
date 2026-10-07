@@ -5,6 +5,11 @@ func option(name: String, fallback: String) -> String:
 		if arg.begins_with(name+"="): return arg.substr(name.length()+1)
 	return fallback
 func run() -> void:
+	var locomotion := option("--locomotion","none")
+	if locomotion not in ["none","flagellum","cilia","mixed"]:
+		push_error("Unknown locomotion fixture")
+		quit(1)
+		return
 	var frames_text := option("--frames","120")
 	var ticks_text := option("--ticks","480")
 	var steps_text := option("--max-steps","8")
@@ -26,6 +31,14 @@ func run() -> void:
 	scene.manual_zoom = 0.8
 	scene.show_reaction_sparks = option("--sparks","on") == "on"
 	var sim = scene.world
+	var initial_player_biomass: float = sim.player.biomass
+	# Exercise real paid opening anatomy, not a free propulsion endowment.
+	for kind in (["propulsion","cilia"] if locomotion == "mixed" else ["propulsion"] if locomotion == "flagellum" else ["cilia"] if locomotion == "cilia" else []):
+		if not sim.install(kind,PI if kind == "propulsion" else PI/2):
+			push_error("Profile locomotion purchase failed")
+			scene.queue_free()
+			quit(1)
+			return
 	var switches := option("--hotpaths","all").split(",")
 	if "legacy" in switches or "geometry" in switches: scene.native_geometry = false
 	if "legacy" in switches or "compact" in switches: sim.native_particle_compaction = false
@@ -52,7 +65,7 @@ func run() -> void:
 				sim.particles.append(item)
 		sim.grid.rebuild(sim.particles)
 	elif option("--fixture","dense") == "growth":
-		sim.player.biomass *= 256
+		sim.player.biomass = initial_player_biomass*256
 		sim.player.update_geometry()
 		sim.player.membrane = sim.Cell.Membrane.new(sim.player.radius)
 	if option("--fixture","dense") == "encounters":
@@ -90,7 +103,7 @@ func run() -> void:
 		for value in tick_rows: total += value
 		for key in phases: phases[key] /= tick_rows.size()
 		tick_rows.sort()
-		var tick_result := {"mode":"ticks","fixture":option("--fixture","dense"),"hotpaths":option("--hotpaths","all"),
+		var tick_result := {"mode":"ticks","locomotion":locomotion,"fixture":option("--fixture","dense"),"hotpaths":option("--hotpaths","all"),
 			"ticks":tick_rows.size(),"mean_ms":total/tick_rows.size(),"p95_ms":tick_rows[mini(tick_rows.size()-1,int(tick_rows.size()*0.95))],
 			"phases_ms":phases,"particles":sim.particles.size(),"simulation_seconds":sim.time-1.0,
 			"rng":str(sim.rng.state),"background_rng":str(sim.background_rng.state),"ecology_rng":str(sim.ecology_rng.state)}
@@ -110,7 +123,7 @@ func run() -> void:
 		if seconds > 0 and Time.get_ticks_usec() >= deadline: break
 	var rows: Array = scene.end_frame_trace()
 	var output := option("--output","")
-	var result := {"rows":rows,"seconds":seconds,"hotpaths":option("--hotpaths","all"),"mode":option("--mode","live"),"fixture":option("--fixture","dense"),"music":scene.music.enabled,
+	var result := {"rows":rows,"locomotion":locomotion,"player_radius":sim.player.radius,"player_biomass":sim.player.biomass,"seconds":seconds,"hotpaths":option("--hotpaths","all"),"mode":option("--mode","live"),"fixture":option("--fixture","dense"),"music":scene.music.enabled,
 		"engine":Engine.get_version_info().string,"cpu":OS.get_processor_name(),"gpu":RenderingServer.get_video_adapter_name(),
 		"display":DisplayServer.get_name(),"viewport":str(root.size),"zoom":scene.manual_zoom,"max_steps":Engine.max_physics_steps_per_frame,
 		"sparks":scene.show_reaction_sparks,"bloom":scene.preferences.bloom,"music_volume":scene.preferences.music_volume,"tick_rate":Engine.physics_ticks_per_second}

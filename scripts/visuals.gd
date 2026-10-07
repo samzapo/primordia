@@ -17,6 +17,16 @@ static func icon(c: Node2D, p: Vector2, kind: String, rotation: float, scale: fl
 			c.draw_circle(path[-1],2.5,MINT)
 			c.draw_circle(Vector2(-3,0),8,Color("1a7a87"))
 			c.draw_circle(Vector2(-1,-1),5,MINT)
+		"cilia":
+			c.draw_line(Vector2(-3,-12),Vector2(-3,12),Color("126a9b"),9,true)
+			for strand in (5 if detail else 3):
+				var base := Vector2(0,(strand-(2 if detail else 1))*5.0)
+				var hair := PackedVector2Array()
+				for i in 6:
+					var t := float(i)/5
+					hair.append(base+Vector2(t*24,sin(t*4-animation_time*10+strand*0.9)*t*6))
+				c.draw_polyline(hair,Color("2be2e6"),3.5,true)
+				if detail: c.draw_circle(hair[-1],1.5,Color("c5ffff"))
 		"protection":
 			var shield := PackedVector2Array([Vector2(-10,-16),Vector2(4,-17),Vector2(15,-9),Vector2(18,0),Vector2(15,9),Vector2(4,17),Vector2(-10,16)])
 			c.draw_colored_polygon(shield,Color("1966ad"))

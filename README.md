@@ -2,7 +2,7 @@
 
 A physics and chemistry simulation game about managing one small cell. Eat, grow and survive predation. **You never steer the cell:** its anatomy controls its behavior.
 
-This twenty-third playable revision uses **Godot 4.7.2**, a fixed-step simulation, deformable membranes, oriented chemical particles and procedural 2D artwork. Its vector artwork is authored in the project; cached particle textures and mipmaps generate automatically at runtime. The default Linux launcher builds a batched C++ GDExtension automatically; the GDScript reference backend remains available.
+This twenty-fourth playable revision uses **Godot 4.7.2**, a fixed-step simulation, deformable membranes, oriented chemical particles and procedural 2D artwork. Its vector artwork is authored in the project; cached particle textures and mipmaps generate automatically at runtime. The default Linux launcher builds a batched C++ GDExtension automatically; the GDScript reference backend remains available.
 
 ## Run with Steam Godot on Linux
 
@@ -17,8 +17,8 @@ The launcher finds Godot in standard Steam locations, custom Steam libraries and
 ## Controls
 
 - **Tab:** pause and zoom inside your cell; press Tab again to keep edits and resume. Enter also resumes when no choice or placement is active. There are no Undo, Apply or Cancel-plan controls. **Escape** opens settings without discarding edits.
-- **Click an intracellular factory:** the folded assembly ribbons offer seven physical organs; the chamber cluster offers the four chemistry organs. Choose a picture, then click the membrane. New organs have one fixed size and neighbors move aside. **1–9 / 0** remain construction shortcuts; **V** selects the hunting receptor.
-- **Click an installed organ:** move, recycle or apply an already-kept matching blueprint. Grazing pores, hunting receptors and photosynthetic organs also offer **Steering**: click to cycle Off, 25%, 50%, 100%, 200% and 400%. This changes directional preference, not size, power or feeding throughput. There is no resizing during placement or afterward. Recycling returns half the tissue and never refunds AP. Click a damaged attachment scar to restore its original anatomy.
+- **Click an intracellular factory:** the folded assembly ribbons offer eight physical organs; the chamber cluster offers the four chemistry organs. Choose a picture, then click the membrane. New organs have one fixed size and neighbors move aside. **1–9 / 0** remain construction shortcuts; **V** selects the hunting receptor. Cilia are available in the assembly factory.
+- **Click an installed organ:** move, recycle or apply an already-kept matching blueprint. Grazing pores, hunting receptors and photosynthetic organs also offer **Steering**: click to cycle Off, 25%, 50%, 100%, 200% and 400%. This changes directional priority and following time versus exploration; size, power and feeding throughput stay unchanged. There is no resizing during placement or afterward. Recycling returns half the tissue and never refunds AP. Click a damaged attachment scar to restore its original anatomy.
 - **Click the nucleus:** choose a blueprint and accept an optional challenge. Hover it for the next objective, crisis progress and forecasts; its family tree also offers known blueprints. **Click the offspring bud:** fund/reclaim reserves, release a juvenile, store a dormant successor or follow a living relative.
 - **In edit mode, drag on bare cell surface:** place a microtubule between membrane, interior or existing-link points. Hover within 16 screen pixels of an unobstructed tube (scaled with text size) and scroll to adjust tension; right-click it to remove it. Factories and organ controls take precedence. **Right-click** cancels a held organ/move or closes local choices.
 - **Wheel:** zoom around the cell in locked follow mode, or around the cursor in free view, from the 80% widest view to 12×. It never resizes organs. **Middle-drag** pans while editing or in free view. **Space** toggles position-follow without pausing or rotating the world. Leaving edit restores the previous observation view.
@@ -128,7 +128,7 @@ A Vulkan compute transport experiment is included, but **is not enabled by defau
 
 ## Procedural habitat
 
-Procedural generation and fractals are now a core visual direction. Large plant-like colonies include paired-leaf ferns, branching fans, curled spiral rosettes and radial colonies with five or seven arms. Each family has two seeded procedural variants. Their stout stems obstruct cells and drifting particles; contact slides along branches without consuming material. Fine fronds are decorative, and the scenery does not add food or oxygen sources.
+Procedural generation and fractals are now a core visual direction. Large plant-like colonies include paired-leaf ferns, branching fans, curled spiral rosettes and radial colonies with five or seven arms. Each family has two seeded procedural variants. Their stout stems obstruct cells; chemical particles permeate them. Contact slides along branches without consuming material. Fine fronds are decorative, and the scenery does not add food or oxygen sources.
 
 Water gains broad blue, teal, jade and violet regions from seamless multiscale noise. These patterns stay fixed in world space, with existing light, acidity tint and bloom layered over them. Plant art is cached in eight mipmapped textures per habitat. See [revision fifteen](docs/REVISION_15.md) for current shapes, the offscreen simulation margin and wide-view measurements, and [revision eight](docs/REVISION_8.md) for the original collision scope. These additions do not solve the remaining whole-game frame-rate problem documented in revision seven.
 
@@ -174,3 +174,15 @@ Only authored source and stable Godot `.uid` identifiers are tracked. `.godot/` 
 [Revision eleven](docs/REVISION_11.md) replaces the screen panels with cell-local construction, resource displays, nucleus/offspring controls and a temporary particle magnifier. The [original proposal](docs/CELL_INTERFACE_PROPOSAL.md) is retained with the owner's amendments; its Undo and resize ideas were rejected.
 
 The magnifier briefly follows the selected particle after it drifts away from the pointer, keeping its tooltip and orientation stable. Deliberate pointer movement releases it. [Revision fifteen](docs/REVISION_15.md) covers tracking, camera-edge simulation and the new plant families.
+
+## Revision 24: food patches and breathing room
+
+ATP from food is more productive and routine operation is cheaper, with the same prices for visible and offscreen cells. Repair/combat, AP, tissue prices, crisis goals and finite fuel remain. See [Revision 24](docs/REVISION_24.md) for parameters and validation.
+
+In build mode, click the **nucleus → Behavior** to cycle **Exploration** (Off / 25 / 50 / 100 / 200 / 400%) and **Cycle** (2 / 4 / 8 seconds). Default exploration is 25% with a four-second cycle. Each organ's steering gain determines its share of following time against this wandering weight: 100% signal versus 25% exploration means 80% following and 20% exploration; 25% versus 25% splits time equally. Flight always takes priority. Hover the organ for its current split. Tuning costs no tissue, ATP or AP and paid offspring inherit it.
+
+Grazing selects a locally sensed nutrient patch by mass, heads toward its centroid at distance, then targets actual particles nearby. A remote patch outside receptor reach is still unknown. No direct movement control or live-cell lookup is added.
+
+Death holds the camera on the membrane rupture for 1.15 seconds, then eases toward the actual successor over 0.65 seconds. Biology continues normally; there is no extra invulnerability or respawn reward. Wakes follow local fluid-relative motion, and a current-carried cell has little directional wake.
+
+The player starts with a grazing pore and **neither cilia nor a flagellum**. Both remain separate fixed-size assembly purchases, each costing eight tissue and one AP. Flagella emphasize thrust; cyan ciliary bands add weaker thrust plus a stronger directional local feeding current. Cilia use the receptor/exploration-selected heading, add no sensing or absorption, and pull hazards along with food. The current acts on the real fluid and returns equal/opposite momentum to the cell in detailed and coarse simulation. NPC flagella remain unchanged; offspring inherit paid anatomy normally. Cilia also contribute their own synthesized flutter-pluck rhythm.

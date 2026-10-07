@@ -1,13 +1,13 @@
 extends RefCounted
 ## Read-only musical observations. Rhythm is scheduled in audio sample frames.
 const Synth = preload("res://scripts/music_synth.gd")
-const KINDS := ["propulsion","protection","offensive","regenerative","feeding","sensing","photosynthesis","toxin","neutralizing","acidifying","hunting"]
-const INSTRUMENTS := [4,5,6,7,8,9,10,11,12,13,9]
+const KINDS := ["propulsion","protection","offensive","regenerative","feeding","sensing","photosynthesis","toxin","neutralizing","acidifying","hunting","cilia"]
+const INSTRUMENTS := [4,5,6,7,8,9,10,11,12,13,9,16]
 const PATTERNS := [
 	[2,6,10,14], [0,7,12], [0,3,6,10,14], [3,11],
-	[0,3,8,10,14], [1,4,9,12], [0,2,5,8,10,13], [3,6,11,14], [5,13], [0,3,7,10,15], [2,5,8,14]
+	[0,3,8,10,14], [1,4,9,12], [0,2,5,8,10,13], [3,6,11,14], [5,13], [0,3,7,10,15], [2,5,8,14], [1,3,5,9,11,13]
 ]
-const DEGREES := [0,7,0,12,3,10,7,0,12,3,5]
+const DEGREES := [0,7,0,12,3,10,7,0,12,3,5,2]
 const ROOTS := [0,8,3,10]
 var sources: Array = []
 var channels: Array = []

@@ -27,6 +27,7 @@ func _run() -> void:
 	_test_receptors()
 	preload("res://tests/pheromones.gd").run(expect)
 	preload("res://tests/steering.gd").run(expect)
+	preload("res://tests/foraging.gd").run(expect)
 	preload("res://tests/anatomy_geometry.gd").run(expect)
 	preload("res://tests/reaction_feedback.gd").run(expect)
 	_test_packing_and_size()
@@ -38,6 +39,8 @@ func _run() -> void:
 	preload("res://tests/music.gd").new().run(self)
 	_test_resource_animation()
 	preload("res://tests/energy_budget.gd").run(expect)
+	preload("res://tests/atp_balance.gd").run(expect)
+	preload("res://tests/cilia.gd").run(expect)
 	preload("res://tests/size_drag.gd").run(expect)
 	_test_growth_and_anchors()
 	_test_incremental_grid()
@@ -485,6 +488,7 @@ func _test_replay() -> void:
 
 func _test_ecosystem() -> void:
 	var sim = Sim.new()
+	expect(sim.install("propulsion",PI),"Opening ecosystem pays for a chosen flagellum")
 	sim.view_half = Sim.VIEW # Normal half-zoom play includes the local producer community.
 	var started := Time.get_ticks_usec()
 	var max_tick := 0
@@ -498,7 +502,7 @@ func _test_ecosystem() -> void:
 		if i%600 == 0: print("PROGRESS %.0fs | food %.1f | health %.1f | particles %d" % [sim.time,sim.player.processed,sim.player.health,sim.particles.size()])
 	var elapsed := (Time.get_ticks_usec()-started)/1000000.0
 	print("ECOSYSTEM: simulated=%.1f food=%.1f health=%.1f active=%d/%d particles=%d active_particles=%d wall=%.2fs max_tick=%.2fms" % [sim.time,sim.player.processed,sim.player.health,sim.active_cells,sim.cells.size(),sim.particles.size(),sim.active_particles,elapsed,max_tick/1000.0])
-	expect(sim.player.processed >= 10,"Default anatomy autonomously feeds and metabolizes")
+	expect(sim.player.processed >= 10,"A paid opening flagellum and pore autonomously feed and metabolize")
 	expect(not sim.won,"Early food processing is not lineage victory")
 	expect(sim.time >= 60,"Default anatomy leaves time to adapt")
 	expect(sim.player.energy >= 0 and sim.player.biomass >= 0 and sim.player.oxygen >= 0,"Resources remain nonnegative")

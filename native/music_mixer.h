@@ -23,7 +23,7 @@ class PrimordiaMusicMixer : public godot::RefCounted {
   int delay_index=0,peak=0,dropped=0;
   int64_t cursor=0;
   double master=0;
-  static constexpr int base[16] = {36,60,60,36,60,60,60,60,60,60,60,60,60,60,60,36};
+  static constexpr int base[17] = {36,60,60,36,60,60,60,60,60,60,60,60,60,60,60,36,60};
 protected:
   static void _bind_methods() {
     godot::ClassDB::bind_method(godot::D_METHOD("configure","samples"), &PrimordiaMusicMixer::configure);
@@ -45,7 +45,7 @@ public:
   }
   godot::PackedVector2Array render(int frames,const godot::Array &input,const godot::Array &sources,double volume) {
     godot::PackedVector2Array output;
-    if(frames<=0 || frames>16384 || bank.size()!=16 || left.empty()) return output;
+    if(frames<=0 || frames>16384 || bank.size()!=17 || left.empty()) return output;
     for(int lane=0;lane<7;++lane) {
       int64_t identity=-1; double gain=0,pan=0,light=.75,acid=0;
       if(lane<sources.size()) {
@@ -67,7 +67,7 @@ public:
     for(int n=0;n<input.size();++n) {
       godot::Dictionary e=input[n];
       Event v{int(e.get("offset",0)),int(e.get("instrument",-1)),int(e.get("lane",-1)),double(e.get("note",60.)),double(e.get("gain",0.))};
-      if(v.offset>=0 && v.offset<frames && v.instrument>=0 && v.instrument<16 && v.lane>=0 && v.lane<7 && std::isfinite(v.note) && std::isfinite(v.gain)) events.push_back(v);
+      if(v.offset>=0 && v.offset<frames && v.instrument>=0 && v.instrument<17 && v.lane>=0 && v.lane<7 && std::isfinite(v.note) && std::isfinite(v.gain)) events.push_back(v);
     }
     std::stable_sort(events.begin(),events.end(),[](const Event&a,const Event&b){return a.offset<b.offset;});
     output.resize(frames);

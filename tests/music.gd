@@ -12,7 +12,7 @@ func run(test_host) -> void:
 	var started := Time.get_ticks_usec()
 	var bank := Synth.make_bank()
 	print("MUSIC_BANK: ",(Time.get_ticks_usec()-started)/1000.0," ms")
-	check(bank.size() == 16,"Music has sixteen authored percussion/tonal instruments")
+	check(bank.size() == 17,"Music has seventeen authored percussion/tonal instruments including cilia")
 	var distinct := {}
 	for sample in bank:
 		var peak := 0.0
@@ -25,7 +25,7 @@ func run(test_host) -> void:
 		check(finite and peak > 0.05 and peak < 1.4 and square/sample.size() > 0.0001,"Every synthesized instrument is finite, audible and bounded")
 		check(absf(sample[0]) < 0.001 and absf(sample[-1]) < 0.001,"Instrument envelopes meet silence at both ends")
 		distinct[hash(sample)] = true
-	check(distinct.size() == 16,"Every instrument has a distinct synthesized waveform")
+	check(distinct.size() == 17,"Every instrument has a distinct synthesized waveform")
 	Synth.cached_bank = bank
 	_schedule()
 	_mixer(bank)
@@ -114,7 +114,7 @@ func _schedule() -> void:
 	check(bounded,"Musical events respect channel and gain limits")
 	var complete := true
 	for kind in range(4,14): complete = complete and heard.has(kind)
-	check(complete and regions.size() == 6,"All organ timbres can sing across a six-section progressive arrangement")
+	check(complete and heard.has(16) and regions.size() == 6,"All organ timbres can sing across a six-section progressive arrangement")
 	var a := Score.new()
 	var b := Score.new()
 	var whole: Array = a.events(0,22050)
@@ -135,7 +135,7 @@ func _mixer(bank: Array) -> void:
 	var channels: Array = score.channels.duplicate(true)
 	channels[1] = {"id":10,"gain":0.65,"pan":0.6}
 	var events: Array = []
-	for i in 16: events.append({"offset":i*43,"instrument":i,"lane":1,"note":Synth.BASE_NOTE[i],"gain":0.15})
+	for i in Synth.LENGTH.size(): events.append({"offset":i*43,"instrument":i,"lane":1,"note":Synth.BASE_NOTE[i],"gain":0.15})
 	var expected: PackedVector2Array = script.render(2048,events,channels,0.65)
 	var peak := 0.0
 	var rms := 0.0

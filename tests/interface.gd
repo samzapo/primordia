@@ -64,6 +64,20 @@ func run(test_host) -> void:
 	expect(scene.light_layer.material.get_shader_parameter("clock") == scene.world.time,"Broad water shimmer pauses with simulation time")
 	for view in scene.views.values():
 		expect(view.water_wake.z_index+view.z_index < 2 and view.water_wake.mesh == view.surface.mesh,"Stronger cell wakes share the deformed outline and draw behind all cell bodies")
+	# Wakes depend on external water/body slip, never absolute world speed.
+	var body = Sim.Cell.new()
+	var medium = Sim.Medium.new()
+	body.velocity = Vector2(25,-12)
+	medium.velocity.fill(body.velocity)
+	var slip: Vector2 = scene.CellView.relative_flow(body,medium,0)
+	expect(slip.length() < 0.001,"A current-carried cell has no directional wake")
+	medium.velocity.fill(Vector2(-15,8))
+	slip = scene.CellView.relative_flow(body,medium,0)
+	expect(slip.distance_to(Vector2(-40,20)) < 0.001,"Cell wakes follow water velocity minus apparent cell velocity")
+	body.velocity += Vector2(100,70)
+	medium.velocity.fill(Vector2(85,78))
+	expect(scene.CellView.relative_flow(body,medium,0).distance_to(slip) < 0.001,"A common world-frame velocity shift does not change a wake")
+	expect(scene.CellView.relative_flow(body,medium,PI/2).distance_to(slip.rotated(-PI/2)) < 0.001,"Wake direction transforms into the membrane's rotating local frame")
 	# Bounded diagnostics aggregate catch-up ticks without changing ecology.
 	var before_trace: int = hash(scene.world.particles)
 	var before_time: float = scene.world.time
@@ -113,7 +127,8 @@ func run(test_host) -> void:
 	scene._physics_process(DT)
 	expect(scene.build_open and scene.world.time == clock and scene.manual_zoom > 0.8,"Tab pauses biology and focuses inside the cell")
 	click(scene.cell_ui.screen_at({"kind":"assembly"}))
-	expect(scene.cell_ui.choices.size() == 7,"The assembly factory includes the separate illustrated hunting receptor")
+	expect(scene.cell_ui.choices.size() == 8,"The assembly factory includes the separate illustrated hunting receptor")
+	expect(scene.cell_ui.choices[7].kind == "cilia" and scene.cell_ui.choices[7].caption == "Cilia","Cilia have an illustrated assembly choice with ordinary tissue/AP prices")
 	expect(scene.cell_ui.choices[6].kind == "hunting" and scene.cell_ui.choices[6].caption == "Hunting receptor","Hunting is its own factory organ, not a spike mode")
 	scene.cell_ui.choices[6].pressed.emit()
 	expect(scene.selected == 10,"Hunting receptor selection reaches the normal membrane placement flow")
@@ -138,6 +153,14 @@ func run(test_host) -> void:
 	scene._update_world(1)
 	expect(cell.count("protection") == 0 and scene.views[cell.id].seen_revision > seen,"Recycling refreshes the paused drawing before resuming")
 	expect(scene.world.evolution.points == points,"Recycling does not refund AP")
+	scene.cell_ui.open_context({"kind":"behavior"})
+	var behavior_costs: Array = [cell.biomass,cell.energy,scene.world.evolution.points]
+	expect(scene.cell_ui.choices[0].caption == "Exploration 25%" and scene.cell_ui.choices[1].caption == "Cycle 4s","The nucleus exposes clear default exploration and response-cycle controls")
+	scene.cell_ui.choices[0].pressed.emit()
+	scene.cell_ui.choices[1].pressed.emit()
+	expect(cell.exploration == 0.5 and cell.response_cycle == 8 and behavior_costs == [cell.biomass,cell.energy,scene.world.evolution.points],"Behavior controls update immediately without charging tissue, ATP or AP")
+	cell.set_exploration(0.25)
+	cell.set_response_cycle(4)
 	# Steering lives on the organ; preview quantities are usable tissue only.
 	var pore: Dictionary = cell.organs.filter(func(item):return item.kind == "feeding")[0]
 	scene.cell_ui.open_context({"kind":"organ","id":pore.id})
@@ -616,6 +639,18 @@ func _lineage() -> void:
 	expect(scene.world == sim and sim.player.id != identity and sim.time > time and not sim.evolution.terminal(),"The scene continues the same habitat after fatal damage")
 	expect(sim.evolution.points == points and sim.evolution.learned == learned,"Scene handoff keeps the expedition economy")
 	expect(scene.music.frame_cursor >= score_clock,"Succession does not reset the musical transport")
+	var death_at: Vector2 = sim.death_bursts[-1].at
+	expect(scene.death_focus_age < 0.1 and Sim.Medium.offset(scene.render_camera,death_at).length() < 0.001,"The camera holds the original death site after immediate physiological succession")
+	expect(not scene.death_view.bursts.is_empty() and not scene.views.has(identity),"The dead membrane becomes visible rupture fragments while real lysis packets remain")
+	var biological_state: Array = [sim.time,sim.rng.state,sim.ecology_rng.state,sim.background_rng.state,hash(sim.particles)]
+	var before_frame: int = scene.music.frame_cursor
+	scene._process(0.5)
+	expect(Sim.Medium.offset(scene.render_camera,death_at).length() < 0.001,"Death-site framing stays fixed during the rupture hold")
+	scene._process(0.85)
+	expect(scene.death_focus_age > 1.15 and scene.death_focus_age < 1.8,"Camera handoff starts only after the visible death burst")
+	scene._process(0.6)
+	expect(Sim.Medium.offset(scene.render_camera,sim.player.position).length() < 0.001 and scene.death_view.bursts.is_empty(),"The camera reaches its successor and expired fragments clear")
+	expect(biological_state == [sim.time,sim.rng.state,sim.ecology_rng.state,sim.background_rng.state,hash(sim.particles)] and scene.music.frame_cursor >= before_frame,"Death presentation neither advances nor mutates biology and preserves musical transport")
 	scene.cell_ui.open_context({"kind":"lineage"})
 	scene._process(DT)
 	expect(scene.is_paused() and scene.cell_ui.visible and not scene.build_open,"History can pause observation without enabling anatomical edits")

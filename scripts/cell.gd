@@ -1,12 +1,27 @@
 extends RefCounted
 const Genes = preload("res://scripts/mutations.gd")
 const Membrane = preload("res://scripts/membrane.gd")
-const KINDS := ["propulsion", "protection", "offensive", "regenerative", "feeding", "sensing", "photosynthesis", "toxin", "neutralizing", "acidifying", "hunting"]
-const COST := [8.0, 10.0, 12.0, 10.0, 8.0, 6.0, 12.0, 12.0, 10.0, 12.0, 6.0]
-const WIDTH := [19.0, 34.0, 26.0, 27.0, 36.0, 20.0, 30.0, 26.0, 26.0, 26.0, 20.0]
+const KINDS := ["propulsion", "protection", "offensive", "regenerative", "feeding", "sensing", "photosynthesis", "toxin", "neutralizing", "acidifying", "hunting", "cilia"]
+const COST := [8.0, 10.0, 12.0, 10.0, 8.0, 6.0, 12.0, 12.0, 10.0, 12.0, 6.0, 8.0]
+const WIDTH := [19.0, 34.0, 26.0, 27.0, 36.0, 20.0, 30.0, 26.0, 26.0, 26.0, 20.0, 24.0]
 const SENSE_MODES := ["flee"]
 const MODES := ["graze"]
 const STEERING_STEPS := [0.0,0.25,0.5,1.0,2.0,4.0]
+const RESPONSE_CYCLES := [2.0,4.0,8.0]
+const BASAL_UPKEEP := 0.18
+const MOTION_UPKEEP := 0.20
+const PUMP_UPKEEP := 0.10
+const CILIA_MOTION := 0.16
+const CILIA_PUMP := 0.08
+const CILIA_THRUST := 1800.0
+const CILIA_REACH := 170.0
+const CILIA_FLOW := 52.0
+const SECRETION_COST := 0.10
+const AEROBIC_ATP := 7.0
+const FERMENT_ATP := 3.0
+var exploration := 0.25
+var response_cycle := 4.0
+var drive_active := false
 var id := 0
 var lineage := -1
 var generation := 0
@@ -284,6 +299,22 @@ func set_steering_strength(identity: int, strength: float) -> bool:
 	render_revision += 1
 	return true
 
+func response_share(organ: Dictionary) -> float:
+	var strength := steering_strength(organ)
+	return strength/maxf(0.000001,strength+exploration)
+
+func set_exploration(strength: float) -> bool:
+	if dead or not is_finite(strength): return false
+	exploration = clampf(strength,0,4)
+	render_revision += 1
+	return true
+
+func set_response_cycle(seconds: float) -> bool:
+	if dead or seconds not in RESPONSE_CYCLES: return false
+	response_cycle = seconds
+	render_revision += 1
+	return true
+
 func add_organ(kind: String, a: float, mode: String = "graze", paid: bool = true, size: float = 1.0) -> bool:
 	var k := KINDS.find(kind)
 	if dead or k < 0 or not can_fit(kind,a,size,paid): return false
@@ -335,10 +366,11 @@ func gain_energy(amount: float, organ: Dictionary = {}) -> void:
 static func organ_upkeep(organ: Dictionary) -> float:
 	var area: float = float(organ.get("scale",1.0))*float(organ.get("scale",1.0))
 	var rate := area*Genes.factor(organ,"upkeep",0.0)
-	if organ.kind == "propulsion": rate += 0.3*area*Genes.factor(organ,"motion_cost")
-	elif organ.kind == "feeding": rate += 0.18*area
+	if organ.kind == "propulsion": rate += MOTION_UPKEEP*area*Genes.factor(organ,"motion_cost")
+	elif organ.kind == "feeding": rate += PUMP_UPKEEP*area
+	elif organ.kind == "cilia": rate += (CILIA_MOTION+CILIA_PUMP)*area
 	if organ.kind in ["feeding","neutralizing","acidifying","regenerative"]:
-		rate += (0.35 if organ.kind == "feeding" else 2.0)*area*Genes.factor(organ,"secretion")*0.15*Genes.factor(organ,"secretion_cost")
+		rate += (0.35 if organ.kind == "feeding" else 2.0)*area*Genes.factor(organ,"secretion")*SECRETION_COST*Genes.factor(organ,"secretion_cost")
 	return rate
 
 func resource_effect(kind: String, a: float, amount: float, organ_id: int = -1) -> void:
@@ -579,9 +611,9 @@ func fluid_drag() -> float:
 	return 90.0*radius/47.0
 
 func operating_budget() -> Dictionary:
-	var steady := 0.264*growth_scale()
+	var steady := BASAL_UPKEEP*growth_scale()
 	for organ in organs: steady += organ_upkeep(organ)
-	var income := minf(substrate,oxygen)*5.0+maxf(0,substrate-oxygen)*2.0
+	var income := minf(substrate,oxygen)*AEROBIC_ATP+maxf(0,substrate-oxygen)*FERMENT_ATP
 	return {"steady":steady,"fuel":income}
 
 func lineage_id() -> int:

@@ -77,6 +77,14 @@ func sync(render_position: Vector2, render_angle: float, zoom: float, alpha: flo
 		label.scale = Vector2.ONE/zoom
 		label.position = Vector2(-label.size.x/2/zoom,-cell.extent()-22/zoom).rotated(-rotation)
 
+static func relative_flow(body, fluid, heading: float) -> Vector2:
+	var water := Vector2.ZERO
+	for i in 6:
+		var a: float = TAU*i/6.0
+		var at: Vector2 = body.position+body.local_point(a).rotated(heading)*1.35
+		water += fluid.sample(at)/6.0
+	return (water-body.velocity).rotated(-heading)
+
 func _sync_surface(render_angle: float, changed: bool) -> void:
 	if surface_revision != seen_revision or changed:
 		var mark := Time.get_ticks_usec() if game.frame_trace != null else 0
@@ -99,9 +107,9 @@ func _sync_surface(render_angle: float, changed: bool) -> void:
 	surface.material.set_shader_parameter("clock",game.world.time)
 	surface.material.set_shader_parameter("slip",slip)
 	surface.material.set_shader_parameter("wakes",false)
-	water_wake.material.set_shader_parameter("heading",render_angle)
+	water_wake.material.set_shader_parameter("relative_flow",relative_flow(cell,game.world.fluid,render_angle))
 	water_wake.material.set_shader_parameter("clock",game.world.time)
-	water_wake.material.set_shader_parameter("slip",slip)
+
 
 func _draw() -> void:
 	var mark := Time.get_ticks_usec() if game.frame_trace != null else 0

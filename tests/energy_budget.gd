@@ -40,10 +40,10 @@ static func run(check: Callable) -> void:
 	var other = Cell.new()
 	check.call(other.energy_budget.samples.is_empty(),"Another body starts with independent ATP history, rather than inheriting its parent drain")
 
-	check.call(is_equal_approx(Cell.organ_upkeep({"kind":"propulsion","scale":1.0}),0.3),"Default flagellum steady estimate matches its actual stroke cost")
-	check.call(is_equal_approx(Cell.organ_upkeep({"kind":"propulsion","scale":1.0,"mutation":"economical_flagellum"}),0.15),"Economical stroke preview halves the operational ATP estimate")
-	check.call(is_equal_approx(Cell.organ_upkeep({"kind":"feeding","scale":1.0,"mutation":"wide_pore"}),0.3325),"Wide-pore estimate includes pumping, secretion and trait upkeep")
-	check.call(is_equal_approx(Cell.organ_upkeep({"kind":"feeding","scale":1.0,"mutation":"enzyme_pore"}),0.348),"Enzyme-pore estimate includes both secretion-rate and per-packet cost changes")
+	check.call(is_equal_approx(Cell.organ_upkeep({"kind":"propulsion","scale":1.0}),0.2),"Default flagellum steady estimate matches its actual stroke cost")
+	check.call(is_equal_approx(Cell.organ_upkeep({"kind":"propulsion","scale":1.0,"mutation":"economical_flagellum"}),0.1),"Economical stroke preview halves the operational ATP estimate")
+	check.call(is_equal_approx(Cell.organ_upkeep({"kind":"feeding","scale":1.0,"mutation":"wide_pore"}),0.235),"Wide-pore estimate includes pumping, secretion and trait upkeep")
+	check.call(is_equal_approx(Cell.organ_upkeep({"kind":"feeding","scale":1.0,"mutation":"enzyme_pore"}),0.212),"Enzyme-pore estimate includes both secretion-rate and per-packet cost changes")
 
 	var observed = Sim.new(846)
 	var unobserved = Sim.new(846)

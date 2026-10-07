@@ -242,7 +242,7 @@ func run(owner_suite) -> void:
 	sim.acidity.values.fill(0.1)
 	sim._emit_and_attack(secreter,100)
 	check(is_equal_approx(secreter.biomass,secretion_mass-0.18),"waste, toxin and acid trigger three paid secretions")
-	check(is_equal_approx(secreter.energy,secretion_energy-0.45),"conditional secretion pays actual ATP")
+	check(is_equal_approx(secreter.energy,secretion_energy-3*Cell.SECRETION_COST),"conditional secretion pays actual ATP")
 	var secreted: Array = []
 	for packet in sim.particles:
 		if packet.kind in [sim.ENZYME,sim.ANTITOXIN,sim.BUFFER]: secreted.append(packet.kind)

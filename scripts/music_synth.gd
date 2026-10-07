@@ -3,8 +3,8 @@ extends RefCounted
 const RATE := 22050
 const MAX_VOICES := 40
 const BPM := 128.0
-const BASE_NOTE := [36,60,60,36,60,60,60,60,60,60,60,60,60,60,60,36]
-const LENGTH := [0.42,0.09,0.20,0.42,0.48,0.82,0.38,1.25,0.55,0.50,0.92,0.64,1.10,0.46,2.30,2.20]
+const BASE_NOTE := [36,60,60,36,60,60,60,60,60,60,60,60,60,60,60,36,60]
+const LENGTH := [0.42,0.09,0.20,0.42,0.48,0.82,0.38,1.25,0.55,0.50,0.92,0.64,1.10,0.46,2.30,2.20,0.38]
 static var cached_bank: Array = []
 var bank: Array = []
 var voices: Array = []
@@ -67,6 +67,7 @@ static func make_bank() -> Array:
 					value = (sin(p)+0.26*sin(p*0.5)+0.23*sin(p*1.006))*0.63
 					attack = minf(1,t/0.13)
 					end = minf(end,(LENGTH[instrument]-t)/0.60)
+				16: value = (sin(p)+0.28*sin(p*4))*exp(-t*10)*(0.7+0.3*cos(TAU*19*t))*0.65 # Ciliary flutter.
 			# A small smoothing filter keeps bright timbres rounded.
 			filtered = lerpf(filtered,value,0.74 if instrument in [1,2] else 0.55)
 			data[i] = filtered*attack*clampf(end,0,1)
