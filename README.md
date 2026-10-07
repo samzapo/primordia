@@ -224,3 +224,5 @@ It remains separate from gameplay; cell coupling and phone validation are pendin
 [Revision 36](docs/REVISION_36.md) adds finite GPU cell-exchange tests and an
 opt-in complete-game CPU matching comparison. Whole-frame gains remain too
 small to justify changing the default; the GPU gameplay migration remains gated.
+
+Revision 37 makes the resident GPU grid substantially cheaper and adds bounded, finite feeding-capacity reservations for queued cell exchange. This remains an opt-in GPU experiment; ordinary gameplay retains the CPU engine. See [Revision 37](docs/REVISION_37.md) for matched outcomes, rendered particle-scene measurements, exchange latency, and remaining integration work.

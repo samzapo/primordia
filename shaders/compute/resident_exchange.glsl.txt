@@ -11,7 +11,9 @@ layout(set=0,binding=6,std430) buffer Receipts { vec4 receipts[]; };
 layout(set=0,binding=7,std430) readonly buffer Inspection { uvec2 inspection[]; };
 layout(set=0,binding=8,std430) readonly buffer Order { uvec2 order[]; };
 layout(set=0,binding=9,std430) readonly buffer Ranges { uvec2 ranges[]; };
-layout(push_constant,std430) uniform Params {uint count;uint body_count;uint feed_count;uint emit_count;uint inspect_count;uint stage;uint unused;uint unused2;} pc;
+layout(set=0,binding=10,std430) buffer Budgets { vec4 budgets[]; };
+layout(set=0,binding=11,std430) buffer OxygenMask { uvec2 oxygen_mask[]; };
+layout(push_constant,std430) uniform Params {uint count;uint body_count;uint feed_count;uint emit_count;uint inspect_count;uint stage;uint accounts;uint parallel_oxygen;} pc;
 const vec2 WORLD=vec2(4096,2560);
 ivec2 pixel(uint i){return ivec2(int(i%256u)*3,int(i/256u));}
 vec4 pose(uint i){return imageLoad(state,pixel(i));}
@@ -46,14 +48,30 @@ void main(){
   if(i<pc.count)identity[i]=uvec2(motion(i).w>=0.?1u:0u,0xffffffffu);
   return;
  }
+ if(pc.stage==4u){
+  if(i>=pc.count)return;
+  uvec2 mask=uvec2(0);
+  if(motion(i).w==1.)for(uint b=0u;b<pc.body_count;b++){
+   vec4 body=bodies[b*4u];vec2 d=offset(body.xy,pose(i).xy);
+   // Same broad-phase bounds as the feeding query; exact physical support.
+   if(abs(d.x)>body.w+14.||abs(d.y)>body.w+14.)continue;
+   if(length(d)<support(b,atan(d.y,d.x)-body.z,false)+14.)
+    mask[b/32u]|=1u<<(b%32u);
+  }
+  oxygen_mask[i]=mask;return;
+ }
  if(pc.stage==1u){
   if(i!=0u)return;
-  for(uint b=0u;b<pc.body_count;b++)receipts[b]=vec4(0);
+  for(uint b=0u;b<pc.body_count;b++){
+   receipts[b]=vec4(0);
+   if(pc.accounts==1u)budgets[b]=bodies[b*4u+2u];
+  }
   // One ordered finite transaction for overlapping mouths and competing cells.
   for(uint f=0u;f<pc.feed_count;f++){
    vec4 query=feeds[f*2u],meta=feeds[f*2u+1u];uint body=uint(meta.x);
    uint channel=query.w==0.?0u:(query.w==1.?1u:2u);
-   vec4 budget=bodies[body*4u+2u],shape=bodies[body*4u];
+   vec4 budget=pc.accounts>0u?budgets[body]:bodies[body*4u+2u];
+   vec4 shape=bodies[body*4u];
    float remaining=max(0.,budget[channel]-receipts[body][channel]),taken_total=0.;
    float reach=query.z;
    ivec2 lo=ivec2(floor((query.xy-reach)/16.)),hi=ivec2(floor((query.xy+reach)/16.));
@@ -63,7 +81,8 @@ void main(){
      uint slot=order[k].y;vec4 v=motion(slot),m=matter(slot);
      if(v.w!=query.w)continue;
      vec2 d=offset(query.xy,pose(slot).xy);float distance=length(d);
-     bool inside=query.w==1.?distance<support(body,atan(d.y,d.x)-shape.z,false)+14.:distance<=reach;
+     bool inside=query.w==1.?(pc.parallel_oxygen>0u?((oxygen_mask[slot][body/32u]&(1u<<(body%32u)))!=0u):
+      distance<support(body,atan(d.y,d.x)-shape.z,false)+14.):distance<=reach;
      if(!inside)continue;
      float taken=min(m.y,remaining);m.y-=taken;remaining-=taken;taken_total+=taken;
      if(query.w!=1.&&identity[slot].y!=uint(budget.w))receipts[body].w+=taken;
@@ -73,6 +92,8 @@ void main(){
    receipts[body][channel]+=taken_total;
    receipts[pc.body_count+f]=vec4(taken_total,0,0,0);
   }
+  if(pc.accounts>0u)for(uint b=0u;b<pc.body_count;b++)
+   budgets[b].xyz=max(vec3(0),budgets[b].xyz-receipts[b].xyz);
   // Sparse paid emissions: explicit refusal at capacity, never overwrite live slots.
   uint cursor=0u;
   for(uint e=0u;e<pc.emit_count;e++){

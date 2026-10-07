@@ -378,3 +378,7 @@ The biological rules are unchanged. [Godot thread-safety documentation](https://
 ## GPU cell-exchange engineering (Revision 36)
 
 [Godot RenderingDevice readback documentation](https://docs.godotengine.org/en/4.4/classes/class_renderingdevice.html#class-renderingdevice-method-buffer-get-data-async) motivates explicit asynchronous receipts and measuring feedback latency. This is an engineering constraint, not a biological claim. Feeding and membrane projection retain the game's existing finite uptake and visible-boundary abstractions; no new source of matter or scientific membrane-force model is introduced.
+
+## Stable GPU binning and asynchronous capacity reservations (Revision 37)
+
+[AMD FidelityFX Parallel Sort](https://gpuopen.com/manuals/fidelityfx_sdk/techniques/parallel-sort/) describes count, prefix-scan and scatter stages. Primordia uses four stable four-bit passes to retain canonical bin/particle ordering while reducing dispatch overhead; this is a computational optimization, not a new biological law. [Godot RenderingDevice readback](https://docs.godotengine.org/en/stable/classes/class_renderingdevice.html#class-renderingdevice-method-buffer-get-data-async) documents asynchronous delivery after queued frames. Resident remaining-capacity accounts prevent duplicate allocation while those receipts are pending. They do not replace metabolism or confer extra material on cells.

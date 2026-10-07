@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Standalone resident transport/rendering diagnostic. Steam remains the default.
+# Standalone resident particle/rendering diagnostic. Steam remains the default.
 set -euo pipefail
 project_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$project_dir/tools/godot.sh"

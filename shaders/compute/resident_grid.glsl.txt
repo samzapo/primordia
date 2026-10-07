@@ -1,0 +1,46 @@
+#[compute]
+#version 450
+// Stable four-bit radix: count, scan block histograms, scatter.
+// Sixteen bin-key bits suffice for 40960 bins plus the inactive sentinel.
+layout(local_size_x=128) in;
+layout(set=0,binding=0,std430) readonly buffer InputOrder { uvec2 source[]; };
+layout(set=0,binding=1,std430) writeonly buffer OutputOrder { uvec2 target[]; };
+layout(set=0,binding=2,std430) buffer Histogram { uint histogram[]; };
+layout(set=0,binding=3,std430) buffer Offsets { uint offsets[]; };
+layout(set=0,binding=4,std430) buffer Totals { uint totals[]; };
+layout(push_constant,std430) uniform Params {uint count;uint groups;uint shift;uint stage;} pc;
+shared uint scratch[128];
+void main(){
+ uint lane=gl_LocalInvocationID.x,group=gl_WorkGroupID.x,i=gl_GlobalInvocationID.x;
+ if(pc.stage==0u){
+  if(lane<16u)scratch[lane]=0u;
+  barrier();
+  if(i<pc.count)atomicAdd(scratch[(source[i].x>>pc.shift)&15u],1u);
+  barrier();
+  if(lane<16u)histogram[group*16u+lane]=scratch[lane];
+  return;
+ }
+ if(pc.stage==1u){
+  // One workgroup per digit. Each lane scans a consecutive block interval.
+  uint chunk=(pc.groups+127u)/128u,start=lane*chunk,end=min(start+chunk,pc.groups);
+  uint sum=0u;
+  for(uint k=start;k<end;k++){offsets[k*16u+group]=sum;sum+=histogram[k*16u+group];}
+  scratch[lane]=sum;barrier();
+  for(uint distance=1u;distance<128u;distance*=2u){
+   uint previous=lane>=distance?scratch[lane-distance]:0u;
+   barrier();scratch[lane]+=previous;barrier();
+  }
+  uint base=lane==0u?0u:scratch[lane-1u];
+  for(uint k=start;k<end;k++)offsets[k*16u+group]+=base;
+  if(lane==127u)totals[group]=scratch[lane];
+  return;
+ }
+ uint digit=i<pc.count?(source[i].x>>pc.shift)&15u:16u;
+ scratch[lane]=digit;barrier();
+ if(i>=pc.count)return;
+ uint rank=0u;
+ for(uint k=0u;k<lane;k++)if(scratch[k]==digit)rank++;
+ uint base=0u;
+ for(uint d=0u;d<digit;d++)base+=totals[d];
+ target[base+offsets[group*16u+digit]+rank]=source[i];
+}

@@ -8,7 +8,8 @@ const MAX_POINTS:=8960
 const MAX_RECEIPTS:=MAX_BODIES+MAX_FEEDS+MAX_EMISSIONS+MAX_INSPECTIONS*4
 var shader:=RID()
 var pipeline:=RID()
-var bindings:=RID()
+var bindings: Array[RID]=[]
+var receipt_buffers: Array[RID]=[]
 var buffers: Array[RID]=[]
 var rd: RenderingDevice
 var count:=0
@@ -20,7 +21,10 @@ static func prepare(cells: Array, emissions: Array, handles: Array) -> Dictionar
 	var inspections:=PackedByteArray()
 	if cells.size()>MAX_BODIES or emissions.size()>MAX_EMISSIONS or handles.size()>MAX_INSPECTIONS:
 		return {"error":"Exchange capacity exceeded"}
+	var body_ids: Array[int]=[]
 	for cell in cells:
+		if cell.id in body_ids: return {"error":"Duplicate body identity"}
+		body_ids.append(cell.id)
 		if cell.dead or cell.activity<=0 or cell.id<0 or cell.id>16777215:
 			return {"error":"Only active living cells with exact numeric IDs may exchange"}
 		var b: int=bodies.size()/16
@@ -71,23 +75,28 @@ static func prepare(cells: Array, emissions: Array, handles: Array) -> Dictionar
 	return {"bodies":bodies.to_byte_array(),"points":points.to_byte_array(),"feeds":feeds.to_byte_array(),
 		"emissions":products,"inspections":inspections,
 		"body_count":cells.size(),"feed_count":feeds.size()/8,"emit_count":emissions.size(),"inspect_count":handles.size()}
-func initialize(device: RenderingDevice, texture: RID, slots: int, order: RID, ranges: RID, source: String) -> bool:
+func initialize(device: RenderingDevice, texture: RID, slots: int, order: RID, ranges: RID, source: String, queue_depth: int=1) -> bool:
 	rd=device;count=slots
-	for size in [MAX_BODIES*64,MAX_POINTS*8,MAX_FEEDS*32,MAX_EMISSIONS*64,count*8,MAX_RECEIPTS*16,MAX_INSPECTIONS*8]:
+	for size in [MAX_BODIES*64,MAX_POINTS*8,MAX_FEEDS*32,MAX_EMISSIONS*64,count*8,MAX_RECEIPTS*16,MAX_INSPECTIONS*8,MAX_BODIES*16,count*8]:
 		var buffer:=rd.storage_buffer_create(size);buffers.append(buffer)
 		if not buffer.is_valid(): return false
 	var text:=RDShaderSource.new();text.source_compute=source
 	var spirv:=rd.shader_compile_spirv_from_source(text)
 	if spirv.compile_error_compute!="": push_error(spirv.compile_error_compute);return false
 	shader=rd.shader_create_from_spirv(spirv);pipeline=rd.compute_pipeline_create(shader)
-	var uniforms: Array[RDUniform]=[]
-	var resources: Array=[texture]+buffers+[order,ranges]
-	for i in resources.size():
-		var u:=RDUniform.new();u.binding=i
-		u.uniform_type=RenderingDevice.UNIFORM_TYPE_IMAGE if i==0 else RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
-		u.add_id(resources[i]);uniforms.append(u)
-	bindings=rd.uniform_set_create(uniforms,shader,0)
-	if not pipeline.is_valid() or not bindings.is_valid(): return false
+	for slot in queue_depth:
+		var receipt:=buffers[5] if slot==0 else rd.storage_buffer_create(MAX_RECEIPTS*16)
+		receipt_buffers.append(receipt)
+		if not receipt.is_valid(): return false
+		var uniforms: Array[RDUniform]=[]
+		var resources: Array=[texture]+buffers.slice(0,7)+[order,ranges,buffers[7],buffers[8]]
+		resources[6]=receipt
+		for i in resources.size():
+			var u:=RDUniform.new();u.binding=i
+			u.uniform_type=RenderingDevice.UNIFORM_TYPE_IMAGE if i==0 else RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+			u.add_id(resources[i]);uniforms.append(u)
+		var set:=rd.uniform_set_create(uniforms,shader,0);bindings.append(set)
+		if not pipeline.is_valid() or not set.is_valid(): return false
 	dispatch(0,{},ceili(count/128.0))
 	return true
 func dispatch(stage: int, batch: Dictionary, groups: int) -> void:
@@ -95,9 +104,10 @@ func dispatch(stage: int, batch: Dictionary, groups: int) -> void:
 	params.encode_u32(0,count);params.encode_u32(4,batch.get("body_count",0))
 	params.encode_u32(8,batch.get("feed_count",0));params.encode_u32(12,batch.get("emit_count",0))
 	params.encode_u32(16,batch.get("inspect_count",0));params.encode_u32(20,stage)
+	params.encode_u32(24,batch.get("accounts",0));params.encode_u32(28,1 if batch.get("parallel_oxygen",false) else 0)
 	var list:=rd.compute_list_begin()
 	rd.compute_list_bind_compute_pipeline(list,pipeline)
-	rd.compute_list_bind_uniform_set(list,bindings,0)
+	rd.compute_list_bind_uniform_set(list,bindings[batch.get("ring_slot",0)],0)
 	rd.compute_list_set_push_constant(list,params,32);rd.compute_list_dispatch(list,groups,1,1)
 	rd.compute_list_end()
 func upload(batch: Dictionary) -> int:
@@ -121,6 +131,6 @@ static func decode(bytes: PackedByteArray,batch: Dictionary) -> Dictionary:
 			"owner":bytes.decode_s32(at+60) if valid else -1});at+=64
 	return result
 func close() -> void:
-	for resource in [bindings,pipeline,shader]+buffers:
+	for resource in bindings+[pipeline,shader]+buffers+receipt_buffers.slice(1):
 		if resource.is_valid(): rd.free_rid(resource)
 	buffers.clear()

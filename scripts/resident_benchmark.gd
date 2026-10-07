@@ -1,10 +1,13 @@
 extends Node2D
-## Standalone transport + rendering experiment; does not run game ecology.
+## Standalone particle/rendering experiments; does not run game ecology.
 signal finished(report: Dictionary)
 const GPU = preload("res://scripts/resident_particles.gd")
 const Fixture = preload("res://scripts/resident_fixture.gd")
 const Art = preload("res://scripts/particle_art.gd")
 var backend := "gpu"
+var interactions := "off"
+var grid_backend := "radix"
+var warmup_alive := 0
 var count := 50000
 var threads := 1
 var distribution := "uniform"
@@ -31,7 +34,7 @@ var warmup_complete := false
 func begin() -> void:
 	Fixture.load_native()
 	old_fps=Engine.max_fps
-	if backend not in ["gpu","cpu-texture","cpu-multimesh"] or count<1 or count>100000 or threads<1 or threads>8 or frames<2 or frames>10000 or seconds<0 or seconds>1800 or not is_finite(seconds) or fps_limit not in [0,30,60] or distribution not in ["uniform","clustered","seam"]:
+	if interactions not in ["off","contacts","collisions","chemistry"] or grid_backend not in ["bitonic","radix"] or (interactions!="off" and backend!="gpu") or backend not in ["gpu","cpu-texture","cpu-multimesh"] or count<1 or count>100000 or threads<1 or threads>8 or frames<2 or frames>10000 or seconds<0 or seconds>1800 or not is_finite(seconds) or fps_limit not in [0,30,60] or distribution not in ["uniform","clustered","seam"]:
 		_fail("Invalid benchmark options")
 		return
 	if seconds>0 and fps_limit==0:
@@ -43,6 +46,7 @@ func begin() -> void:
 	initial=Fixture.make(count,distribution)
 	if distribution=="seam": camera=Vector2.ZERO
 	gpu=GPU.new()
+	gpu.configure_grid(grid_backend);gpu.configure_interactions(interactions)
 	gpu.ready.connect(_on_ready,CONNECT_ONE_SHOT)
 	gpu.initialize(initial,Fixture.flow())
 func _on_ready(ok: bool, reason: String) -> void:
@@ -129,7 +133,9 @@ func _post() -> void:
 		_finish.call_deferred()
 func _start_measurement() -> void:
 	gpu.snapshot()
-	await gpu.snapshot_ready
+	var warm: PackedFloat32Array=await gpu.snapshot_ready
+	for k in range(0,warm.size(),12):
+		if warm[k+7]>=0: warmup_alive+=1
 	# Fence warmup before starting the measured window; no readback inside it.
 	get_viewport().get_texture().get_image()
 	if _ending: return
@@ -150,20 +156,24 @@ func _finish() -> void:
 	var drain_ms := (Time.get_ticks_usec()-drain_start)/1000.0
 	var valid := Fixture.compare(tail,tail)
 	var material := 0.0
-	for k in range(0,tail.size(),12): material+=tail[k+9]
+	var alive := 0
+	for k in range(0,tail.size(),12):
+		material+=tail[k+9]
+		if tail[k+7]>=0: alive+=1
 	var material_before := 0.0
 	for k in range(0,initial.size(),12): material_before+=initial[k+9]
 	var compared := {}
 	if backend=="cpu-texture": compared=Fixture.compare(cpu.snapshot(),tail)
 	# No timing claims for correctness readback or screenshot.
 	if image_output!="": final_image.save_png(image_output)
-	var report := {"backend":backend,"particles":count,"threads":threads,"distribution":distribution,"zoom":0.8,
+	var report := {"backend":backend,"interactions":interactions,"grid_backend":grid_backend,"grid_builds":gpu.grid_builds,"grid_dispatches":gpu.grid_dispatches,
+		"particles":count,"warmup_alive":warmup_alive,"final_alive":alive,"threads":threads,"distribution":distribution,"zoom":0.8,
 		"engine":Engine.get_version_info().string,"cpu":OS.get_processor_name(),"gpu":RenderingServer.get_video_adapter_name(),
 		"os":OS.get_name(),"renderer":RenderingServer.get_current_rendering_method(),"viewport":str(get_viewport_rect().size),
 		"fps_limit":fps_limit,"fixed_dt":1.0/60,"warmup_ticks":warmup,"measured_ticks":rows.size(),"total_ticks":tick,"measured_simulation_seconds":rows.size()/60.0,
 		"rows":rows,"finite":valid.finite,"material_before":material_before,"material_after":material,"upload_bytes":gpu.upload_bytes,
 		"dispatches":gpu.dispatches,"state_readbacks":gpu.readbacks,"viewport_readbacks":2,"timed_window_readbacks":0,"final_drain_and_readback_ms":drain_ms,"texture_roundtrip":compared,
-		"scope":"Synthetic fixed-inventory transport and rendering only. No collisions, reactions, cells, feeding, music or live catch-up. Not game FPS. Counter-based diagnostic noise is not gameplay RNG.",
+		"scope":"Synthetic GPU transport/drawing with explicitly selected contact/reaction mode. No cells, feeding, physiology, music or live catch-up. Not game FPS. Chemistry may shrink the population; counter-based diagnostic noise is not gameplay RNG.",
 		"thermal":"External device telemetry required; no thermal or energy claim from frame timings alone."}
 	var file := FileAccess.open(output,FileAccess.WRITE)
 	if file==null: report["error"]="Cannot write "+output

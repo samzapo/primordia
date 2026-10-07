@@ -16,11 +16,13 @@ func run() -> void:
 		push_error("Invalid seconds");quit(1);return
 	runner.seconds=float(seconds)
 	runner.backend=option("--backend","gpu")
+	runner.interactions=option("--interactions","off")
+	runner.grid_backend=option("--grid","radix")
 	runner.distribution=option("--distribution","uniform")
 	runner.output=option("--output","user://resident-report.json")
 	runner.image_output=option("--image-output","")
 	root.add_child(runner)
 	runner.finished.connect(func(report):
 		if report.has("error"): push_error(report.error)
-		quit(1 if report.has("error") or not report.get("finite",false) or report.get("material_before",-1)!=report.get("material_after",-2) else 0))
+		quit(1 if report.has("error") or not report.get("finite",false) or (runner.interactions!="chemistry" and report.get("material_before",-1)!=report.get("material_after",-2)) else 0))
 	runner.begin()
