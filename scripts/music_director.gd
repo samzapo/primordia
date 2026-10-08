@@ -10,6 +10,7 @@ var playback: AudioStreamGeneratorPlayback
 var bank_job: Thread
 var ready_bank := false
 var enabled := true
+var refill_between_ticks := true # profiler ablation; ordinary playback services every tick
 var observe_clock := 0.0
 var frame_cursor := 0
 var render_usec := 0
@@ -80,6 +81,12 @@ func update_music(dt: float) -> void:
 			playback = null
 			return
 	else: silence_clock = 0
+	refill()
+
+func refill() -> void:
+	# Catch-up ticks can starve _process for longer than the audio queue. Refill
+	# from the same sample clock between ticks; do not observe or mutate ecology.
+	if not enabled or not ready_bank or (game.preferences.music_volume <= 0 and not player.playing): return
 	var started := Time.get_ticks_usec()
 	if not player.playing:
 		# Unmute starts a fresh musical phrase; biology is never restarted.

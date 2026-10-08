@@ -25,8 +25,9 @@ func run() -> void:
 	var first:=await play(false)
 	var second:=await play(true)
 	for key in first:
-		if first[key] is float: check(absf(first[key]-second[key])<.00001,"Zoom/pan must not alter "+key)
-		else: check(first[key]==second[key],"Zoom/pan must not alter "+key)
+		if first[key] is float: check(absf(first[key]-second[key])<.00001,"Zoom must not alter "+key)
+		else: check(first[key]==second[key],"Zoom must not alter "+key)
+	await promotion()
 	await lifecycle()
 	await escrow()
 	print("RESIDENT_GAMEPLAY_VALIDATION ",checks," checks")
@@ -39,11 +40,13 @@ func play(change_camera: bool) -> Dictionary:
 	for i in 240:
 		if change_camera:
 			sim.view_half=Vector2(40,30) if i%2==0 else Vector2(1000,800)
-			sim.camera_follows_player=false;sim.camera_position=Vector2(i*17,i*7)
+			sim.camera_follows_player=true
 		sim.step(1.0/60)
 		check(sim.resident!=null,"No fallback in normal gameplay")
 		check(sim.particles.is_empty() and sim.pheromones.is_empty(),"No retained particle pose mirror")
-		check(sim.active_cells==sim.cells.size(),"All living habitat cells advance")
+		check(sim.active_cells>0 and sim.active_cells<sim.cells.size(),"Only nearby cells run at detailed cadence")
+		for cell in sim.cells:
+			if not cell.dead: check(absf(cell.age+cell.coarse_elapsed-sim.time)<.00001,"Offscreen age retains all unresolved elapsed time")
 	check(bridge.gpu.readbacks==0,"No full readback during gameplay")
 	var elapsed: float=(Time.get_ticks_usec()-start_time)/240000.0
 	var packets: Array=bridge.snapshots()
@@ -81,13 +84,17 @@ func lifecycle() -> void:
 	sim.step(1.0/60)
 	check(sim.resident!=null and bridge.pending.is_empty(),"Large death release reaches resident pool")
 	# A stable generation handle follows the same packet; no full pool picking.
+	var before_pick: int=bridge.gpu.exchange_readback_bytes
 	var packet: Dictionary=bridge.inspect(Vector2(2048,1280),4096)
+	check(bridge.gpu.exchange_readback_bytes-before_pick==80,"Picking downloads only its five-vector result, not field/inventory/cues")
 	check(not packet.is_empty(),"Sparse GPU particle picking")
 	var inspection_time: float=sim.time
 	var inspection_rng: int=sim.rng.state
 	var detached: Dictionary=sim.particle_snapshot(packet._index)
 	check(detached._resident_handle==packet._resident_handle,"Detached snapshot preserves resident slot generation")
+	before_pick=bridge.gpu.exchange_readback_bytes
 	var followed: Dictionary=bridge.inspect(Vector2.ZERO,1,packet._resident_handle)
+	check(bridge.gpu.exchange_readback_bytes-before_pick==64,"Tracking downloads only its generation-checked packet")
 	check(not followed.is_empty() and followed._resident_handle==packet._resident_handle,"Sparse tracking keeps generation identity")
 	check(sim.time==inspection_time and sim.rng.state==inspection_rng,"Inspection does not advance ecology")
 	bridge.close();await bridge.gpu.closed
@@ -108,3 +115,23 @@ func escrow() -> void:
 	check(absf(before-after)<.000001,"Fallback retains device material and every refused paid emission")
 	check(sim.particle_count()==15,"Fallback retains tiny emission as well as regular packets")
 	await bridge.gpu.closed
+
+func promotion() -> void:
+	var sim=Simulation.new(390015)
+	sim.profiling=true
+	var bridge=await start(sim)
+	for i in 24: sim.step(1.0/60)
+	var distant
+	for cell in sim.cells:
+		if cell.activity<=0 and not cell.dead and cell.coarse_elapsed>0: distant=cell;break
+	check(distant!=null,"Fixture has a distant cell with unresolved time")
+	var before_age: float=distant.age
+	var elapsed: float=distant.coarse_elapsed
+	sim.camera_follows_player=false;sim.camera_position=distant.position
+	sim.step(1.0/60)
+	check(absf(distant.age-before_age-elapsed-1.0/60)<.00001 and distant.coarse_elapsed==0,"Entering detail drains elapsed time exactly once")
+	sim.step(1.0/60)
+	check(absf(distant.age-sim.time)<.00001,"Detailed age resumes without a frozen interval")
+	check(sim.profile_counts.get("membrane_updates",0)==sim.active_cells,"Only detailed cells solve membranes after promotion")
+	check(sim.particles.is_empty() and bridge.gpu.readbacks==0,"Promotion never downloads or mirrors the particle pool")
+	bridge.close();await bridge.gpu.closed

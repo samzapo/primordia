@@ -105,3 +105,50 @@ static func run(check: Callable) -> void:
 	error=0
 	for i in native_membrane.COUNT: error=maxf(error,native_membrane.points[i].distance_to(reference_membrane.points[i]))
 	check.call(error<0.01,"Native edge/pressure solves agree with the reference tension network")
+
+
+	for global in [false,true]:
+		for radius in [16.0,47.0,231.0]:
+			for at in [Vector2(4095,2558),Vector2(302,418),Vector2(-50,2620)]:
+				var ref = Sim.Medium.new()
+				ref.global_coupling = global
+				ref.set_camera(Vector2(40,40),Vector2(340,280))
+				var water: PackedVector2Array = ref.velocity.duplicate()
+				var a = Sim.Cell.new()
+				var b = Sim.Cell.new()
+				for body in [a,b]:
+					body.position=at;body.radius=radius;body.mass=radius*3;body.inertia=body.mass*radius*radius*.5
+					body.angle=.73;body.velocity=Vector2(30,-18);body.angular_velocity=.2
+				var initial: Vector2 = ref.momentum()+a.velocity*a.mass
+				var max_error := 0.0
+				for tick in 30:
+					for i in 6: ref.exchange(a,Vector2.from_angle(TAU*i/6.0+a.angle)*a.radius,1.0/180,a.fluid_drag()/6)
+					water=fast.kernels.fluid_body_exchange(water,ref.activity,b,1.0/180,global)
+					max_error=maxf(max_error,a.velocity.distance_to(b.velocity))
+					max_error=maxf(max_error,absf(a.angular_velocity-b.angular_velocity))
+				for i in water.size(): max_error=maxf(max_error,water[i].distance_to(ref.velocity[i]))
+				check.call(max_error<.0001,"Batched drag matches six ordered impulses across seams, sizes and activity")
+				check.call((ref.momentum()+a.velocity*a.mass).distance_to(initial)<.5,"Drag retains equal and opposite water/body momentum")
+
+	for seed in 12:
+		var membrane = Sim.Cell.Membrane.new(16+seed*19,seed)
+		membrane.native_outline = false
+		for tick in 20: membrane.step(1.0/60,16+seed*19,Vector2(60,-40),tick/60.0)
+		membrane.compress(seed*.7,8,16+seed*19)
+		var reference: PackedVector2Array = membrane.outline()
+		var batched: PackedVector2Array = fast.kernels.membrane_outline(membrane.points)
+		var max_error := 0.0
+		for i in reference.size(): max_error=maxf(max_error,reference[i].distance_to(batched[i]))
+		check.call(max_error<.0001,"Batched radial outline retains deformed membrane silhouette")
+		var flow = Sim.Medium.new()
+		var at := Vector2(4090,2558)
+		var angle := seed*.3
+		var velocity := Vector2(-10,12)
+		var angular := seed*.05
+		var traction: PackedVector2Array=fast.kernels.fluid_traction(flow.velocity,membrane.points,at,angle,velocity,angular)
+		max_error=0
+		for i in membrane.points.size():
+			var arm: Vector2=membrane.points[i].rotated(angle)
+			var expected_traction: Vector2=(flow.sample(at+arm)-velocity-arm.orthogonal()*angular).rotated(-angle).limit_length(90)
+			max_error=maxf(max_error,expected_traction.distance_to(traction[i]))
+		check.call(max_error<.0001,"Batched membrane traction matches wrapped bilinear water sampling")

@@ -5,6 +5,7 @@ const COUNT := 28
 var kernels = preload("res://scripts/backend.gd").create()
 var native_constraints := kernels != null
 var native_compression := true
+var native_outline: bool = kernels != null and kernels.has_method("membrane_outline")
 const Network = preload("res://scripts/cytoskeleton.gd")
 var skeleton = Network.new()
 var maximum_radius := 47.0
@@ -160,6 +161,10 @@ func refresh_arcs() -> void:
 
 func outline() -> PackedVector2Array:
 	if not outline_dirty: return cached_outline
+	if native_outline:
+		cached_outline = kernels.membrane_outline(points)
+		outline_dirty = false
+		return cached_outline
 	var curve := PackedVector2Array()
 	# Interpolate positive radii across ordered angles. Cartesian Catmull-Rom
 	# can loop after contact compression and trigger CanvasItem triangulation

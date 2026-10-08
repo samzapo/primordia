@@ -89,4 +89,27 @@ The resident backend is an explicit playable desktop option: tools/playtest.sh r
 
 Resident particles own all chemical state and sparse emitted metadata. Keep ordinary CPU arrays empty; draw from the texture. Cells retain real resources and shared physiology/membrane/contact code. Credit intake/loss/events exactly once, drain toxin overflow before projection, and retain every refused or sub-float paid emission. Preserve field chemistry, immutable family-safe perception, secretion demand, generation-safe inspection, reaction sparks/music, build pause, cancellation, restart, and paid same-world succession.
 
-This desktop path advances the whole habitat at detailed cadence. Do not restore offscreen freezing, add resource bonuses, or let display zoom affect intake or recruitment. CPU fallback explicitly exports state/metadata plus escrow, never resets; benchmarks must reject fallback as a GPU measurement. Keep bounds explicit and retain diagnostic ablations. Future phone coarsening must preserve finite accounting.
+Revision 39 originally advanced the whole habitat at detailed cadence; Revision 40 and the owner's large-world direction supersede that scope. Do not restore offscreen freezing, add resource bonuses, or let display zoom affect intake or recruitment. CPU fallback explicitly exports state/metadata plus escrow, never resets; benchmarks must reject fallback as a GPU measurement. Keep bounds explicit and retain diagnostic ablations. Future phone coarsening must preserve finite accounting.
+
+
+## Revision 40 — performance checkpoint and bounded-world target
+
+Read docs/REVISION_40.md and the October 7 bounded-world contract in DESIGN.md.
+The existing CPU offscreen behavior is the owner's successful reference. Target
+bounded nearby GPU particles plus sparse CPU world chunks, not a whole-world GPU
+pass. The current cell-tier implementation is intermediate: particle/fluid
+storage remains a fixed whole-habitat torus; do not claim streaming is complete.
+
+Keep coarse CPU physiology and paid hunting shared, GPU uptake finite, promotion
+elapsed time exact, hazards time-scaled and overflow retries on the same lottery.
+Zoom must not change feeding; use the fixed widest-view footprint plus halo.
+Camera/zoom easing for future chunk preparation is authorized, without resource
+gains or visible frozen boundaries. Preserve CPU default and full-detail ablation.
+
+Native body-fluid, traction and outline batches retain ordered formulas and
+reference tests. Main RenderingDevice changes stay on its render thread. Sparse
+picking must not download chemistry/field totals. Music refills between ticks;
+bounded catch-up is a responsiveness safeguard that can slow simulated time.
+Always report simulation/wall rate, count scope, real frame costs and native
+availability. Workstation results do not establish Threadripper/3090 performance
+or sustained 50k/mobile/large-world readiness.

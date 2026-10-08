@@ -557,6 +557,13 @@ protected:
     ClassDB::bind_method(D_METHOD("chemistry", "particles", "ids", "acid",
                                   "camera", "half", "dt", "revision", "rng", "clock", "background", "dirty_writes", "collisions", "tight_bounds", "lazy_acid"),
                          &PrimordiaKernels::chemistry, DEFVAL(-1.0), DEFVAL(false), DEFVAL(true), DEFVAL(true), DEFVAL(true), DEFVAL(true));
+    ClassDB::bind_method(D_METHOD("membrane_outline", "points"),
+                         &PrimordiaKernels::membrane_outline);
+    ClassDB::bind_method(D_METHOD("fluid_traction", "water", "points", "position", "angle", "velocity", "angular"),
+                         &PrimordiaKernels::fluid_traction);
+    ClassDB::bind_method(
+        D_METHOD("fluid_body_exchange", "velocity", "activity", "body", "dt", "global_coupling"),
+        &PrimordiaKernels::fluid_body_exchange);
     ClassDB::bind_method(
         D_METHOD("fluid_step", "velocity", "activity", "tide", "dt", "driven"),
         &PrimordiaKernels::fluid_step);
@@ -2037,6 +2044,92 @@ public:
     out["neutralizations"] = neutralizations;
     out["reaction_points"] = reaction_points;
     return out;
+  }
+  PackedVector2Array membrane_outline(const PackedVector2Array &points) {
+    PackedVector2Array curve;
+    const int n=points.size();
+    if (n<3) return curve;
+    curve.resize(n*4); Vector2 *out=curve.ptrw();
+    for (int i=0;i<n;++i) {
+      double before=points[(i+n-1)%n].length(), start=points[i].length(),
+             end=points[(i+1)%n].length(), after=points[(i+2)%n].length();
+      double angle=points[i].angle();
+      double angle_delta=wrap(double(points[(i+1)%n].angle())-angle,TAU);
+      for (int j=0;j<4;++j) {
+        double t=j/4.;
+        double radius=.5*((2*start)+(-before+end)*t+
+                      (2*before-5*start+4*end-after)*t*t+
+                      (-before+3*start-3*end+after)*t*t*t);
+        radius=std::clamp(radius,std::max(.1,std::min(start,end)*.95),
+                          std::max(start,end)*1.05);
+        double a=angle+angle_delta*t;
+        out[i*4+j]=Vector2(std::cos(a),std::sin(a))*radius;
+      }
+    }
+    return curve;
+  }
+  PackedVector2Array fluid_traction(const PackedVector2Array &water,
+                                    const PackedVector2Array &points,
+                                    Vector2 position, double angle,
+                                    Vector2 velocity, double angular) {
+    PackedVector2Array result;
+    if (water.size()!=2560) return result;
+    result.resize(points.size()); Vector2 *out=result.ptrw();
+    for (int i=0;i<points.size();++i) {
+      Vector2 arm=points[i].rotated(angle);
+      // Match Medium.sample's two horizontal lerps, then the vertical lerp.
+      Vector2 q=wrapv(position+arm)/64.-Vector2(.5,.5);
+      int x=std::floor(q.x), y=std::floor(q.y);
+      double fx=double(q.x)-x, fy=double(q.y)-y;
+      Vector2 top=water[node(x,y)].lerp(water[node(x+1,y)],fx);
+      Vector2 bottom=water[node(x,y+1)].lerp(water[node(x+1,y+1)],fx);
+      Vector2 relative=(top.lerp(bottom,fy)-velocity-arm.orthogonal()*angular).rotated(-angle);
+      out[i]=relative.limit_length(90);
+    }
+    return result;
+  }
+  PackedVector2Array fluid_body_exchange(PackedVector2Array water,
+                                         const PackedFloat32Array &active,
+                                         Object *body, double dt, bool global) {
+    // Six ordered implicit impulses, identical to Medium.exchange. Later
+    // samples see earlier impulses; never parallelize this conservative scatter.
+    if (!body || water.size()!=2560 || active.size()!=2560) return water;
+    Vector2 position=body->get("position"), velocity=body->get("velocity");
+    double angle=body->get("angle"), radius=body->get("radius");
+    double angular=body->get("angular_velocity"), mass=body->get("mass"),
+           inertia=body->get("inertia");
+    double strength=double(body->call("fluid_drag"))/6.;
+    Vector2 *v=water.ptrw();
+    for (int i=0;i<6;++i) {
+      double a=TAU*i/6.+angle;
+      Vector2 arm=Vector2(std::cos(a),std::sin(a))*radius;
+      Vector2 q=wrapv(position+arm)/64.-Vector2(.5,.5);
+      int x=std::floor(q.x), y=std::floor(q.y);
+      int ids[4]={node(x,y),node(x+1,y),node(x,y+1),node(x+1,y+1)};
+      double fx=double(q.x)-x, fy=double(q.y)-y;
+      double weights[4]={(1-fx)*(1-fy),fx*(1-fy),(1-fx)*fy,fx*fy};
+      for (int k=0;k<4;++k) weights[k]*=global?1.:active[ids[k]];
+      double total=weights[0]+weights[1]+weights[2]+weights[3];
+      if (total<.0001) continue;
+      Vector2 flow;
+      double inverse_fluid_mass=0;
+      for (int k=0;k<4;++k) {
+        weights[k]/=total;
+        flow+=v[ids[k]]*weights[k];
+        inverse_fluid_mass+=weights[k]*weights[k]/22.;
+      }
+      Vector2 relative=flow-velocity-Vector2(-arm.y,arm.x)*angular;
+      double speed=relative.length();
+      if (speed<.00001) continue;
+      Vector2 axis=relative/speed;
+      double inverse_mass=1./mass+std::pow(arm.cross(axis),2)/inertia+inverse_fluid_mass;
+      Vector2 impulse=relative*(1-std::exp(-strength*inverse_mass*dt))/inverse_mass;
+      velocity+=impulse/mass;
+      angular+=arm.cross(impulse)/inertia;
+      for (int k=0;k<4;++k) v[ids[k]]-=impulse*weights[k]/22.;
+    }
+    body->set("velocity",velocity);body->set("angular_velocity",angular);
+    return water;
   }
   PackedVector2Array fluid_step(const PackedVector2Array &v,
                                 const PackedFloat32Array &a,

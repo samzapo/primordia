@@ -12,7 +12,7 @@ layout(set=0,binding=7,std430) buffer Nominations { uvec2 nomination[]; };
 layout(set=0,binding=8,std430) readonly buffer Order { uvec2 order[]; };
 layout(set=0,binding=9,std430) readonly buffer Ranges { uvec2 ranges[]; };
 layout(set=0,binding=10,std430) buffer Receipt { vec4 receipt[]; };
-layout(push_constant,std430) uniform Params {uint count;uint bodies_count;uint stage;uint output_at;} pc;
+layout(push_constant,std430) uniform Params {uint count;uint bodies_count;uint stage;uint output_at;vec4 scope;} pc;
 const vec2 WORLD=vec2(4096,2560);
 ivec2 pixel(uint i){return ivec2(int(i%256u)*3,int(i/256u));}
 vec2 offset(vec2 a,vec2 b){return mod(b-a+WORLD*.5,WORLD)-WORLD*.5;}
@@ -26,6 +26,12 @@ float support(uint body,float angle){
   if(t>=0.&&t<=1.&&d>=0.)return length(mix(a,b,t));
  }
  return bodies[body*4u].w/1.05;
+}
+uint hash32(uint x){x=((x^(x>>16))*0x7feb352du);x=((x^(x>>15))*0x846ca68bu);return x^(x>>16);}
+bool hidden(vec2 p){return pc.scope.z<0.||any(greaterThanEqual(abs(offset(pc.scope.xy,p)),pc.scope.zw+vec2(128)));}
+bool encounter(uint slot,uint body,float dt){
+ uint key=slot^hash32(identity[slot].x)^hash32(info[body].x)^hash32(uint(bodies[body*4u+3u].z))^0x761abcd1u;
+ return (float(hash32(key)>>8)+.5)/16777216.<1.-exp(-2.*dt);
 }
 void consume(uint slot){
  vec4 v=imageLoad(state,pixel(slot)+ivec2(1,0));v.w=-1.;
@@ -43,10 +49,13 @@ void main(){
   for(uint b=0u;b<pc.bodies_count;b++){
    if(info[b].y==lineage)continue;
    vec4 body=bodies[b*4u];vec2 delta=offset(body.xy,p.xy);
+   float coarse_dt=bodies[b*4u+3u].x;
+   if(coarse_dt>0.&&(!hidden(p.xy)||!encounter(i,b,coarse_dt)))continue;
    if(v.w==4.){
-    if(abs(delta.x)>body.w+5.||abs(delta.y)>body.w+5.)continue;
+    float bound=body.w+(coarse_dt>0.?24.:5.);
+    if(abs(delta.x)>bound||abs(delta.y)>bound)continue;
     float angle=atan(delta.y,delta.x);
-    if(length(delta)<=support(b,angle-body.z)+5.){nomination[i].x=b;return;}
+    if(length(delta)<=(coarse_dt>0.?body.w+24.:support(b,angle-body.z)+5.)){nomination[i].x=b;return;}
    }else{
     for(uint d=info[b].z;d<info[b].z+info[b].w;d++){
      vec4 q=decoys[d*2u],meta=decoys[d*2u+1u];vec2 direction=offset(q.xy,p.xy);
@@ -67,7 +76,7 @@ void main(){
  uint output_at=pc.output_at+b*129u;
  receipt[output_at]=vec4(0);
  for(uint k=1u;k<=128u;k++)receipt[output_at+k]=vec4(0);
- vec4 body=bodies[b*4u];float reach=body.w+5.;
+ vec4 body=bodies[b*4u];float reach=body.w+(bodies[b*4u+3u].x>0.?24.:5.);
  ivec2 lo=ivec2(floor((body.xy-reach)/16.)),hi=ivec2(floor((body.xy+reach)/16.));
  uint taken=0u,deferred=0u;
  for(int x=lo.x;x<=min(hi.x,lo.x+255);x++)for(int y=lo.y;y<=min(hi.y,lo.y+159);y++){

@@ -272,3 +272,57 @@ The owner approves an original Google LiquidFun comparison, uniform physical rad
 Zoom must never change feeding effectiveness or generate material. Experimental engines/parcels pin their integration footprint independently of display zoom and free pan. Near-cell transport/chemistry remains individual; distant same-species cohorts may share advection calculations while retaining every child's material, identity, rotational state and independent diffusion.
 
 The first parcel stage shares transport only. True weighted collision/reaction parcels must conserve amount, capacity, product, momentum and cloud/heading distributions, refine before biological contacts, and use separate merge/split thresholds with bounded work. A stock equal-radius LiquidFun point is not an arbitrary weighted parcel. Reaction closure, long-horizon balance, mobile ARM64 builds, full habitat saves and elapsed-time offline ecology remain later gates. See [Revision 31](REVISION_31.md) for the comparison and measured limits.
+
+
+## Bounded particle simulation and large worlds — owner direction, October 7, 2026
+
+The existing CPU version's appearance and coarse offscreen behavior are the
+reference to preserve. The GPU upgrade should make the nearby chemical soup
+denser and smoother. A larger world must not require a larger per-frame GPU
+particle simulation. This supersedes Revision 39's whole-habitat detailed
+backend as the architecture target; offscreen cell coarsening alone is not enough.
+
+Use a hybrid with a bounded GPU simulation window and sparse CPU-managed world
+chunks. A halo outside the visible region covers transport, sensing and
+interactions before they become visible. Detail is tied to a fixed gameplay
+footprint, not display zoom. Distant ecology retains real elapsed time, paid
+physiology, family-safe pheromone information, finite resource uptake and lysis.
+Do not improve performance by changing stats or removing offscreen competition.
+
+Only resident chunks take fine particle steps. Far chunks use scheduled coarse
+updates or timestamped lazy catch-up, with finite material and conservative
+boundary transfers. Never traverse every stored chunk or particle each frame.
+Unvisited chunks can be generated from their coordinates and seed; persistent
+changes belong in an indexed backing store. Finite memory/disk and the amount of
+active ecology remain real limits; world dimensions need not determine frame work.
+
+Chunk ownership transfers must be transactional: exactly one authoritative owner
+per packet or coarse material parcel, no double feeding at overlaps, no loss at
+capacity refusal, preserved chemical species/amounts and secretion metadata.
+Inspection handles are generation-safe; stale pheromones expire by world time.
+Promotion reconstructs detail from retained state without creating material,
+repairing cells, resetting hazards, or letting camera movement farm resources.
+
+Implementation sequence:
+1. Retain the working CPU game and measure it as the behavior baseline.
+2. Add chunk-local coordinates, an ownership ledger, sparse residency/scheduling
+   and a conservative seam-transfer prototype; do not redesign biology.
+3. Run the existing GPU particle pipeline only on a bounded local population.
+   Keep the existing CPU coarse ecology outside, adapting its storage interface.
+4. Validate entry/exit, rapid travel, zoom, save/reload, capacity overflow,
+   cross-boundary flow/reactions/feeding and shared material accounting.
+5. Compare dense on-screen gameplay at fixed local density while increasing the
+   stored world by 10x and 100x. Resident slots, dispatch work, per-frame chunk
+   visits and transfer budget must remain bounded; report catch-up latency too.
+
+Current Revision 40 cell tiers are an intermediate performance checkpoint.
+The GPU particle and fluid buffers still cover the fixed 4096 x 2560 torus;
+streamed ownership and arbitrary-size world support are not implemented yet.
+
+The owner accepts slower zoom/camera transitions when needed to prepare chunk
+boundaries. Prefer a resident window sized for the current 80% widest view plus a
+halo; zooming in must not evict that window or change feeding rules. If future
+zoom-out or camera travel exceeds prepared coverage, prefetch first and ease the
+view within available coverage. Rate limits are presentation constraints, never
+extra simulated time, refreshed particle hazards, resource gains or visible
+freeze/pop-in. Do not slow ordinary zoom merely to hide unbounded transfer work.

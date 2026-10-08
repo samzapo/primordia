@@ -35,6 +35,8 @@ var native_chemistry_lazy_acid := true
 var native_transport_bookkeeping := kernels != null
 var native_particle_compaction := kernels != null
 var native_fluid := kernels != null
+var native_body_fluid: bool = kernels != null and kernels.has_method("fluid_body_exchange")
+var native_traction: bool = kernels != null and kernels.has_method("fluid_traction")
 var native_render := kernels != null
 var native_exclusion := kernels != null
 var native_feeding := kernels != null
@@ -258,11 +260,11 @@ func screen_position(p: Vector2) -> Vector2:
 	return view_half+Medium.offset(camera_position if not camera_follows_player else player.position,p)
 
 func activity_at(p: Vector2) -> float:
-	if resident != null: return 1.0
+	if resident != null and resident.full_detail: return 1.0
 	return Medium.visibility(p,player.position if camera_follows_player else camera_position,view_half)
 
 func activity_for_cell(cell) -> float:
-	if resident != null: return 1.0
+	if resident != null and resident.full_detail: return 1.0
 	# A visible membrane or appendage must not freeze when its center is outside.
 	var half: Vector2 = view_half+Vector2.ONE*(cell.extent()+80)
 	return Medium.visibility(cell.position,player.position if camera_follows_player else camera_position,half)
@@ -388,8 +390,8 @@ func step(dt: float) -> void:
 		var shown_half:=view_half
 		var shown_camera:=camera_position
 		var shown_follow:=camera_follows_player
-		# Recruitment trigger geometry is also independent of display zoom/pan.
-		view_half=VIEW*.5/.8;camera_position=player.position;camera_follows_player=true
+		# Fixed widest playable footprint prevents zoom from changing feeding.
+		view_half=resident.detail_half
 		resident.step(dt)
 		view_half=shown_half;camera_position=shown_camera;camera_follows_player=shown_follow
 		return
@@ -540,9 +542,12 @@ func _biology_after_feed(cell, local_dt: float) -> void:
 	if profiling: profile_usec["organ_geometry"] = profile_usec.get("organ_geometry",0)+Time.get_ticks_usec()-organ_mark
 	var traction_mark := Time.get_ticks_usec() if profiling else 0
 	var traction := PackedVector2Array()
-	for point in cell.membrane.points:
-		var arm: Vector2 = point.rotated(cell.angle)
-		traction.append((fluid.sample(cell.position+arm)-cell.velocity-arm.orthogonal()*cell.angular_velocity).rotated(-cell.angle).limit_length(90))
+	if native_traction:
+		traction = kernels.fluid_traction(fluid.velocity,cell.membrane.points,cell.position,cell.angle,cell.velocity,cell.angular_velocity)
+	else:
+		for point in cell.membrane.points:
+			var arm: Vector2 = point.rotated(cell.angle)
+			traction.append((fluid.sample(cell.position+arm)-cell.velocity-arm.orthogonal()*cell.angular_velocity).rotated(-cell.angle).limit_length(90))
 	if profiling: profile_usec["traction"] = profile_usec.get("traction",0)+Time.get_ticks_usec()-traction_mark
 	var membrane_mark := Time.get_ticks_usec() if profiling else 0
 	cell.membrane.step(local_dt,cell.radius,cell.shape_acceleration.rotated(-cell.angle),cell.age+cell.id*1.7,1.0,traction)
@@ -1281,9 +1286,12 @@ func _motion_cell(cell, local_dt: float) -> void:
 			fluid.deposit(cell.position+arm,-impulse)
 			fluid.deposit(cell.position-arm,impulse)
 			cell.angular_velocity += torque*local_dt/cell.inertia
-	for i in 6:
-		var arm = Vector2.from_angle(TAU*i/6.0+cell.angle)*cell.radius
-		fluid.exchange(cell,arm,local_dt,cell.fluid_drag()/6.0)
+	if native_body_fluid:
+		fluid.velocity = kernels.fluid_body_exchange(fluid.velocity,fluid.activity,cell,local_dt,fluid.global_coupling)
+	else:
+		for i in 6:
+			var arm = Vector2.from_angle(TAU*i/6.0+cell.angle)*cell.radius
+			fluid.exchange(cell,arm,local_dt,cell.fluid_drag()/6.0)
 	cell.angle = wrapf(cell.angle+cell.angular_velocity*local_dt,-PI,PI)
 	if coarse_mode:
 		var moved: Array = habitat_geometry.move(previous,Medium.wrap_position(previous+cell.velocity*local_dt),cell.velocity,cell.extent())

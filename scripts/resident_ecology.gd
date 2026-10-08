@@ -17,11 +17,19 @@ var reason:=""
 var capacity:=65536
 var elapsed_usec:=0
 var fallback_reason:=""
+# Display zoom never changes ecology resolution. The view sets this to its
+# widest playable footprint (including aspect ratio); activity adds a halo.
+var detail_half:=Vector2(800,500)
+var full_detail:=false # Benchmark ablation.
+var coarse_period:=0.1
+var coarse_cells:=0
+var scheduled: Dictionary={}
+
 signal returned_to_cpu(message: String)
 signal initialized(ok: bool, message: String)
 
 func start(sim, slots: int=65536) -> void:
-	world=weakref(sim);capacity=slots
+	world=weakref(sim);capacity=slots;detail_half=sim.VIEW*.5/.8
 	sim.disable_particle_pool()
 	var packets: Array=sim.particles
 	if packets.size()>capacity:
@@ -44,6 +52,7 @@ func start(sim, slots: int=65536) -> void:
 		if ok:
 			sim.particles=[];sim.pheromones=[];sim.grid.rebuild([])
 			sim.resident=self;sim.particle_engine="resident";sim.fluid.global_coupling=true
+			sim.fluid.set_camera(sim.WORLD*.5,sim.WORLD*.5)
 			ready=true
 		else:
 			gpu.close();sim.enable_particle_pool()
@@ -87,6 +96,11 @@ func _queries(sim, cells: Array,dt: float) -> Array:
 
 func _receipt(cells: Array=[],queries: Array=[],options: Dictionary={}) -> Dictionary:
 	var sim=world.get_ref()
+	# A backdated coarse pheromone can already have expired. It carries no
+	# material; count it once and never submit a dead emission to the GPU.
+	for i in range(pending.size()-1,-1,-1):
+		if pending[i].kind==sim.PHEROMONE and (not pending[i].alive or pending[i].expires_at<=sim.time):
+			pending.remove_at(i);sim.chemistry_events.decay+=1
 	# Paid output remains escrowed until the device accepts it. Do not discard a
 	# death burst just because one emission batch has fewer slots.
 	while pending.size()>256:
@@ -126,80 +140,141 @@ func _account_chemistry(chemistry: Dictionary) -> void:
 		for pair in [["enzyme",5],["neutralize",6],["recycle",8],["spoil",9],["combine",10]]:
 			sim.chemistry_events[pair[0]]+=chemistry.pairs[pair[1]]
 
+func _schedule(sim, dt: float) -> Dictionary:
+	var selected: Array=[]
+	var times: Dictionary={}
+	var coarse: Dictionary={}
+	var delayed: Dictionary={}
+	sim.active_cells=0;coarse_cells=0;sim.offscreen_ecology.visits=0
+	for cell in _living(sim):
+		if not scheduled.has(cell.id):
+			scheduled[cell.id]=true
+			cell.coarse_due=coarse_period*(0.25+fposmod(cell.id*0.61803398875,0.75))
+		cell.previous_position=cell.position;cell.previous_angle=cell.angle
+		cell.activity=1.0 if sim.activity_for_cell(cell)>0 else 0.0
+		if cell.activity>0:
+			sim.active_cells+=1
+			selected.append(cell);times[cell.id]=dt+cell.coarse_elapsed
+			# Drain the short unresolved interval once on promotion. Use exact
+			# feeding/exposure here, never widened hidden uptake in visible water.
+			if cell.coarse_elapsed>0: delayed[cell.id]=true
+			cell.coarse_due=coarse_period*(0.25+fposmod(cell.id*0.61803398875,0.75))
+		else:
+			coarse_cells+=1
+			cell.coarse_elapsed+=dt;cell.coarse_due-=dt
+			if cell.coarse_due>0: continue
+			selected.append(cell);times[cell.id]=cell.coarse_elapsed;delayed[cell.id]=true
+			coarse[cell.id]=sim.offscreen_ecology.feeding_request(sim,cell,cell.coarse_elapsed,sim.offscreen_ecology.period)
+			cell.coarse_due+=coarse_period
+	return {"cells":selected,"times":times,"coarse":coarse,"delayed":delayed}
+
+func _credit(cell, receipt: Dictionary, index: int, pore: int) -> int:
+	var sim=world.get_ref()
+	var intake=receipt.intake[index]
+	cell.substrate+=intake[0];cell.oxygen+=intake[1];cell.carbon+=intake[2]
+	cell.eaten+=intake[0];cell.foreign_intake+=intake[3]
+	if intake[0]>0: sim._record_sound("feeding",cell.position,cell.id,intake[0])
+	for organ in cell.organs:
+		if organ.kind=="feeding": cell.consumed(organ,receipt.pores[pore]);pore+=1
+	pore+=1
+	if cell.count("photosynthesis")>0: pore+=1
+	return pore
+
 func step(dt: float) -> void:
 	var sim=world.get_ref()
 	if not ready or sim.evolution.terminal() or sim.build_original!=null or (sim.player.dead and not sim.evolution.enabled): return
 	var start:=Time.get_ticks_usec()
+	gpu.exchange_prepare_usec=0;gpu.exchange_wait_usec=0
 	sim.time+=dt;sim.transport_clock+=dt;sim.revision+=1
 	sim.profile_counts.clear();sim.profile_usec.clear()
-	for name in ["sensing","feeding","organ_geometry","traction","membrane","contacts","coarse_chemistry","coarse_feeding","coarse_motion"]:
+	for name in ["sensing","feeding","organ_geometry","traction","membrane","contacts","coarse_chemistry","coarse_feeding","coarse_motion","offscreen_biology"]:
 		sim.profile_usec[name]=0
+	var schedule:=_schedule(sim,dt)
+	var cells: Array=schedule.cells
+	var center: Vector2=sim.player.position if sim.camera_follows_player else sim.camera_position
+	var scope:=Vector4(center.x,center.y,sim.view_half.x,sim.view_half.y)
 	var mark:=Time.get_ticks_usec()
-	sim.fluid.set_camera(sim.WORLD*.5,sim.WORLD*.5)
+	# Cheap habitat field and GPU transport remain continuous. Only cell
+	# detail is tiered; no full particle download or frozen offscreen clouds.
 	if sim.native_fluid:
 		sim.fluid.velocity=sim.kernels.fluid_step(sim.fluid.velocity,sim.fluid.activity,sim.fluid.tide,dt,sim.fluid.driven)
 		if sim.revision%6==0: sim.acidity.values=sim.kernels.acid_step(sim.acidity.values,sim.fluid.velocity,sim.fluid.activity,dt*6)
 	else:
 		sim.fluid.step(dt)
 		if sim.revision%6==0: sim.acidity.step(dt*6,sim.fluid)
-	var cells:=_living(sim)
-	sim.active_cells=cells.size()
+	# Coarse bodies pay their own elapsed suction inside advance_body.
 	for cell in cells:
-		cell.previous_position=cell.position;cell.previous_angle=cell.angle;cell.activity=1
-		cell.age+=dt;cell.hurt_flash=maxf(0,cell.hurt_flash-dt*2);cell.reaction_flash=maxf(0,cell.reaction_flash-dt*2)
-	sim._suction(dt)
+		if not schedule.delayed.has(cell.id): sim._suction_cell(cell,dt)
 	sim.profile_usec["fluid"]=Time.get_ticks_usec()-mark
 	mark=Time.get_ticks_usec()
 	gpu.environment(sim.fluid.velocity,sim.acidity.values);gpu.advance(dt,sim.revision)
-	for cell in cells: cell.animate_resources(dt);sim._clear_receptors(cell,dt)
-	var queries:=_queries(sim,cells,dt)
-	var receipt:=_receipt(cells,queries,{"projection":false})
+	var queries: Array=[]
+	for cell in cells:
+		var h: float=schedule.times[cell.id]
+		cell.activity=1
+		cell.animate_resources(h);sim._clear_receptors(cell,h)
+		queries.append_array(_queries(sim,[cell],h))
+	var receipt:=_receipt(cells,queries,{"projection":false,"coarse":schedule.coarse,"scope":scope})
 	sim.profile_usec["particles"]=Time.get_ticks_usec()-mark
-	if receipt.has("error"): fallback(receipt.error)
+	if receipt.has("error"):
+		fallback(receipt.error);return
 	mark=Time.get_ticks_usec()
 	needed.clear()
-	if not receipt.has("error"):
-		for i in queries.size():
-			if queries[i].mode in ["waste","toxin"]: needed[Vector2i(queries[i].id,queries[i].organ_id)]=receipt.senses[i].valid
+	for i in queries.size():
+		if queries[i].mode in ["waste","toxin"]: needed[Vector2i(queries[i].id,queries[i].organ_id)]=receipt.senses[i].valid
 	var pore:=0
-	for i in cells.size():
-		var cell=cells[i]
+	var foreground_rng: RandomNumberGenerator=sim.rng
+	# Credit every paid receipt before an offscreen hunt can kill a batch peer.
+	for i in cells.size(): pore=_credit(cells[i],receipt,i,pore)
+	for cell in cells:
+		var h: float=schedule.times[cell.id]
+		var delayed: bool=schedule.delayed.has(cell.id)
+		var body_start:=Time.get_ticks_usec()
+		sim.rng=sim.ecology_rng if delayed else foreground_rng
+		sim.coarse_mode=delayed
+		sim.coarse_event_at=sim.time
+		cell.age+=h;cell.coarse_handling=maxf(0,cell.coarse_handling-h)
+		cell.hurt_flash=maxf(0,cell.hurt_flash-h*2);cell.reaction_flash=maxf(0,cell.reaction_flash-h*2)
 		var sense_start:=Time.get_ticks_usec()
-		sim._sense(cell,dt,Perception.for_cell(queries,receipt.senses,cell) if not receipt.has("error") else {})
+		sim._sense(cell,h,Perception.for_cell(queries,receipt.senses,cell))
 		sim.profile_usec["sensing"]+=Time.get_ticks_usec()-sense_start
-		if receipt.has("error"): sim._feed(cell)
-		else:
-			var intake=receipt.intake[i]
-			cell.substrate+=intake[0];cell.oxygen+=intake[1];cell.carbon+=intake[2]
-			cell.eaten+=intake[0];cell.foreign_intake+=intake[3]
-			if intake[0]>0: sim._record_sound("feeding",cell.position,cell.id,intake[0])
-			for organ in cell.organs:
-				if organ.kind=="feeding": cell.consumed(organ,receipt.pores[pore]);pore+=1
-			pore+=1
-			if cell.count("photosynthesis")>0: pore+=1
-		sim._biology_after_feed(cell,dt)
-	if receipt.get("_capacity",false): fallback("Particle capacity reached; preserved paid emissions")
+		if delayed:
+			sim.offscreen_ecology.advance_body(sim,cell,h)
+			cell.coarse_elapsed=0;cell.activity=0
+			cell.previous_position=cell.position;cell.previous_angle=cell.angle;cell.render_revision+=1
+			sim.offscreen_ecology.visits+=1
+			sim.profile_usec["offscreen_biology"]+=Time.get_ticks_usec()-body_start
+		else: sim._biology_after_feed(cell,h)
+	sim.rng=foreground_rng;sim.coarse_mode=false
 	sim.profile_usec["biology"]=Time.get_ticks_usec()-mark
 	mark=Time.get_ticks_usec()
 	sim._step_cell_motion(dt)
 	sim.profile_usec["motion"]=Time.get_ticks_usec()-mark
 	mark=Time.get_ticks_usec()
-	if sim.resident!=null:
-		receipt=_receipt(cells,[],{"feeding":false,"exposure":true,"projection":false})
-		if receipt.has("error"): fallback(receipt.error)
-		else:
-			while true:
-				_apply_exposure(cells,receipt.exposure)
-				if receipt.get("_capacity",false):
-					fallback("Particle capacity reached; preserved paid emissions");break
-				if receipt.exposure.deferred==0:
-					gpu.project_cached(cells.size());break
-				receipt=_receipt(cells,[],{"feeding":false,"exposure":true,"projection":false})
-				if receipt.has("error"): fallback(receipt.error);break
-
-	if sim.resident==null: sim._toxin_contacts();sim._receptor_contacts();sim._exclude_particles()
-	for cell in sim.cells.duplicate():
+	# Same two handoffs per tick as detailed-only gameplay: due coarse cells
+	# share the intake and exposure batches instead of adding per-cell fences.
+	for cell in cells: cell.activity=1
+	var options: Dictionary={"feeding":false,"exposure":true,"projection":false,"coarse":schedule.coarse,"scope":scope}
+	receipt=_receipt(cells,[],options)
+	if receipt.has("error"): fallback(receipt.error)
+	else:
+		while true:
+			_apply_exposure(cells,receipt.exposure)
+			if receipt.get("_capacity",false):
+				fallback("Particle capacity reached; preserved paid emissions");break
+			if receipt.exposure.deferred==0:
+				gpu.project_cached(cells.size());break
+			# Identical hazard seed on overflow retries: one exposure lottery,
+			# not additional chances for every receipt-capacity drain.
+			receipt=_receipt(cells,[],options)
+			if receipt.has("error"): fallback(receipt.error);break
+	for cell in cells: cell.activity=0.0 if schedule.coarse.has(cell.id) else 1.0
+	sim.rng=sim.ecology_rng;sim.coarse_mode=true;sim.coarse_event_at=sim.time
+	for cell in cells:
 		if cell.health<=0 and not cell.dead: sim._die(cell)
+	for cell in cells:
+		if schedule.coarse.has(cell.id): sim.offscreen_ecology._hunt(sim,cell,schedule.times[cell.id])
+	sim.rng=foreground_rng;sim.coarse_mode=false
 	sim.spawn_clock+=dt
 	if sim.spawn_clock>=.5:
 		sim.spawn_clock-=.5;sim._replace_population()
@@ -208,6 +283,10 @@ func step(dt: float) -> void:
 		sim.lineage.recover(sim,dt)
 	sim.evolution.advance(dt,sim);sim.won=sim.evolution.status=="won"
 	sim.profile_usec["ecology"]=Time.get_ticks_usec()-mark
+	sim.profile_counts["coarse_cells"]=coarse_cells
+	sim.profile_counts["coarse_updates"]=sim.offscreen_ecology.visits
+	sim.profile_usec["gpu_receipt_prepare"]=gpu.exchange_prepare_usec
+	sim.profile_usec["gpu_receipt_wait"]=gpu.exchange_wait_usec
 	elapsed_usec=Time.get_ticks_usec()-start
 
 func _apply_exposure(cells: Array,exposure: Dictionary) -> void:
@@ -267,12 +346,12 @@ func inspect(at: Vector2,reach: float,handle: Vector2i=Vector2i(-1,-1),zoom: flo
 	var result: Dictionary
 	var packet: Dictionary
 	if handle.x>=0:
-		result=gpu.exchange_sync([],[],[handle],[],{"feeding":false,"projection":false})
+		result=gpu.exchange_sync([],[],[handle],[],{"feeding":false,"projection":false,"chemistry":false})
 		if result.has("error") or not result.inspections[0].valid: return {}
 		packet=decode(result.inspections[0].state,result.inspections[0].owner,sim)
 	else:
 		var query={"at":at,"reach":reach,"id":0,"lineage":0,"mass":0,"mode":"inspect","target_id":-1,"incumbent":false,"inner":zoom}
-		result=gpu.exchange_sync([],[],[],[query],{"feeding":false,"projection":false})
+		result=gpu.exchange_sync([],[],[],[query],{"feeding":false,"projection":false,"chemistry":false})
 		if result.has("error") or not result.senses[0].valid: return {}
 		var found=result.senses[0]
 		packet=decode(found.state,found.owner,sim);handle=found.handle

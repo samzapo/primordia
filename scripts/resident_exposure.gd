@@ -55,11 +55,13 @@ func upload(batch: Dictionary) -> int:
 		if not data.is_empty(): rd.buffer_update(buffers[pair[0]],0,data.size(),data);bytes+=data.size()
 	return bytes
 func dispatch(stage: int, batch: Dictionary) -> void:
-	var params:=PackedByteArray();params.resize(16)
+	var params:=PackedByteArray();params.resize(32)
 	params.encode_u32(0,count);params.encode_u32(4,batch.body_count);params.encode_u32(8,stage);params.encode_u32(12,batch.exposure_offset)
+	var scope: Vector4=batch.get("scope",Vector4(0,0,-1,-1))
+	params.encode_float(16,scope.x);params.encode_float(20,scope.y);params.encode_float(24,scope.z);params.encode_float(28,scope.w)
 	var list:=rd.compute_list_begin()
 	rd.compute_list_bind_compute_pipeline(list,pipeline);rd.compute_list_bind_uniform_set(list,sets[batch.ring_slot],0)
-	rd.compute_list_set_push_constant(list,params,16)
+	rd.compute_list_set_push_constant(list,params,32)
 	rd.compute_list_dispatch(list,ceili(count/128.0) if stage==0 else maxi(1,batch.body_count),1,1)
 	rd.compute_list_end()
 static func decode(bytes: PackedByteArray,batch: Dictionary) -> Dictionary:

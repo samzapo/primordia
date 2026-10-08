@@ -34,24 +34,32 @@ func run() -> void:
 		return
 	var frames_text := option("--frames","120")
 	var ticks_text := option("--ticks","480")
-	var steps_text := option("--max-steps","8")
+	var steps_text := option("--max-steps","auto")
 	var seconds_text := option("--seconds","0")
-	if not frames_text.is_valid_int() or int(frames_text) < 2 or int(frames_text) > 5900 or not ticks_text.is_valid_int() or int(ticks_text) < 1 or int(ticks_text) > 6000 or not steps_text.is_valid_int() or int(steps_text) < 1 or int(steps_text) > 8 or not seconds_text.is_valid_float() or not is_finite(float(seconds_text)) or float(seconds_text) < 0 or float(seconds_text) > 120:
-		push_error("Profile requires 2..5900 frames, 1..6000 ticks, 1..8 catch-up steps and 0..120 seconds")
+	if not frames_text.is_valid_int() or int(frames_text) < 2 or int(frames_text) > 5900 or not ticks_text.is_valid_int() or int(ticks_text) < 1 or int(ticks_text) > 6000 or (steps_text!="auto" and (not steps_text.is_valid_int() or int(steps_text) < 1 or int(steps_text) > 8)) or not seconds_text.is_valid_float() or not is_finite(float(seconds_text)) or float(seconds_text) < 0 or float(seconds_text) > 120:
+		push_error("Profile requires 2..5900 frames, 1..6000 ticks, auto or 1..8 catch-up steps and 0..120 seconds")
 		quit(1)
 		return
 	if option("--fixture","dense") not in ["normal","dense","growth","encounters"] or option("--mode","live") not in ["live","frozen","ticks"]:
 		push_error("Unknown profile fixture or mode")
 		quit(1)
 		return
+	var delay_text := option("--tick-delay-ms","0")
+	var sync_mode := option("--vsync","off")
+	var tick_audio := option("--tick-audio","on")
+	if not delay_text.is_valid_float() or not is_finite(float(delay_text)) or float(delay_text)<0 or float(delay_text)>100 or sync_mode not in ["on","off"] or tick_audio not in ["on","off"]:
+		push_error("Invalid diagnostic tick delay, VSync or audio-service mode");quit(1);return
 	Engine.max_fps=int(option("--fps-limit","0"))
-	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
-	Engine.max_physics_steps_per_frame = int(option("--max-steps","8"))
+	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if sync_mode=="on" else DisplayServer.VSYNC_DISABLED)
+	Engine.max_physics_steps_per_frame = 2 if steps_text=="auto" else int(steps_text)
 	var scene = load("res://scenes/pond.tscn").instantiate()
+	scene.manage_catchup = steps_text=="auto"
+	scene.diagnostic_tick_cost_ms = float(delay_text)
 	scene.use_particle_pool = false # Import after fixture setup and ablation switches.
 	root.add_child(scene)
 	scene.set_physics_process(false)
 	scene.music.enabled = option("--music","on") == "on"
+	scene.music.refill_between_ticks = tick_audio == "on"
 	scene.manual_zoom = 0.8
 	scene.show_reaction_sparks = option("--sparks","on") == "on"
 	scene.set_particle_collisions(collisions == "on")
@@ -106,7 +114,10 @@ func run() -> void:
 	if "legacy" in switches or "obstacles" in switches: sim.habitat_geometry.native_bounds = false
 	if "legacy" in switches or "feeding" in switches: sim.native_feeding = false
 	if "legacy" in switches or "contacts" in switches: sim.native_contacts = false
+	if "body_fluid" in switches: sim.native_body_fluid = false
+	if "traction" in switches: sim.native_traction = false
 	for cell in sim.cells:
+		if "outline" in switches: cell.membrane.native_outline = false
 		if "legacy" in switches or "surface" in switches: cell.fast_support = false
 		if "legacy" in switches or "dents" in switches: cell.membrane.native_compression = false
 	if option("--fixture","dense") in ["dense","encounters"]:
@@ -172,7 +183,9 @@ func run() -> void:
 		scene._start_resident()
 		while scene.resident_starting: await process_frame
 		if sim.resident==null: push_error("Resident gameplay initialization failed");finish_scene(scene,1);return
-	if option("--full-habitat","off")=="on" and sim.resident==null: sim.integration_half=sim.WORLD*.5
+	if option("--full-habitat","off")=="on":
+		if sim.resident!=null: sim.resident.full_detail=true
+		else: sim.integration_half=sim.WORLD*.5
 	# Ordinary profiles retain their old warmup. Chemical comparison measures
 	# initial finite clouds immediately after presentation/audio warmup.
 	if int(packet_text)==0:
@@ -216,6 +229,12 @@ func run() -> void:
 		return
 	if sim.kernels != null: sim.kernels.neighbor_reset_metrics(); sim.kernels.particle_engine_reset_metrics()
 	scene.begin_frame_trace()
+	if float(delay_text)>0:
+		physics_frame.connect(func():
+			if not is_instance_valid(scene) or not scene.is_physics_processing(): return
+			var begin := Time.get_ticks_usec()
+			OS.delay_usec(int(float(delay_text)*1000))
+			if scene.frame_trace != null: scene.frame_trace.work("injected_delay",Time.get_ticks_usec()-begin))
 	scene.set_physics_process(option("--mode","live") != "frozen" and frame_step == "live")
 	var seconds := float(option("--seconds","0"))
 	var deadline := Time.get_ticks_usec()+int(seconds*1000000)
@@ -227,7 +246,7 @@ func run() -> void:
 	if option("--particle-backend","cpu")=="resident" and sim.resident==null:
 		push_error("Resident benchmark fell back to CPU; no GPU performance claim");finish_scene(scene,1);return
 	var output := option("--output","")
-	var result := {"rows":rows,"fluid":fluid_name,"fluid_settings":sim.experimental_fluid.metrics if sim.experimental_fluid != null else {},
+	var result := {"rows":rows,"injected_tick_delay_ms":float(delay_text),"tick_audio":tick_audio,"vsync":sync_mode,"fluid":fluid_name,"fluid_settings":sim.experimental_fluid.metrics if sim.experimental_fluid != null else {},
 		"fluid_feedback":feedback,
 		"fluid_quality":preload("res://tests/fluid_compare_gpu.gd").summary(sim.experimental_fluid) if sim.experimental_fluid != null else {},
 		"backend":option("--particle-backend","cpu"),"full_habitat":option("--full-habitat","off"),"resident_readbacks":sim.resident.gpu.readbacks if sim.resident!=null else 0,"requested_chemicals":int(packet_text),"distribution":distribution,"particle_sizes":sizes,"frame_step":frame_step,"particle_collisions":sim.particle_collisions,
@@ -235,8 +254,8 @@ func run() -> void:
 		"packed_particles":sim.native_particle_pipeline,"particle_pool":sim.particle_pool,"pool_metrics":sim.kernels.pool_metrics() if sim.kernels != null else {},"particle_render_cache":sim.native_particle_render_cache,
 		"simulation_seconds":sim.time-sim_started,"rng":str(sim.rng.state),"background_rng":str(sim.background_rng.state),"ecology_rng":str(sim.ecology_rng.state),
 		"locomotion":locomotion,"player_radius":sim.player.radius,"player_biomass":sim.player.biomass,"seconds":seconds,"hotpaths":option("--hotpaths","all"),"mode":option("--mode","live"),"fixture":option("--fixture","dense"),"music":scene.music.enabled,
-		"engine":Engine.get_version_info().string,"cpu":OS.get_processor_name(),"gpu":RenderingServer.get_video_adapter_name(),
-		"display":DisplayServer.get_name(),"viewport":str(root.size),"zoom":scene.manual_zoom,"max_steps":Engine.max_physics_steps_per_frame,
+		"source_commit":OS.get_environment("PRIMORDIA_PROFILE_COMMIT"),"native_cells":sim.kernels != null,"engine":Engine.get_version_info().string,"cpu":OS.get_processor_name(),"gpu":RenderingServer.get_video_adapter_name(),
+		"display":DisplayServer.get_name(),"viewport":str(root.size),"zoom":scene.manual_zoom,"max_steps":Engine.max_physics_steps_per_frame,"catchup_policy":steps_text,
 		"sparks":scene.show_reaction_sparks,"bloom":scene.preferences.bloom,"music_volume":scene.preferences.music_volume,"tick_rate":Engine.physics_ticks_per_second}
 	if option("--image-output","")!="": root.get_texture().get_image().save_png(option("--image-output",""))
 	if not save_result(result,output):

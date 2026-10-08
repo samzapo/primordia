@@ -110,6 +110,30 @@ class SteamLaunchers(unittest.TestCase):
             self.assertIn("<--rendering-method>\n<mobile>", result.stdout)
             self.assertIn("<--example=literal $()>", result.stdout)
 
+    def test_profile_launcher_preserves_backend_and_literal_options(self):
+        self.install(self.steam)
+        # Redirect the output into the disposable fixture, not a real report.
+        for backend in ["resident", "cpu", "cpu-matching"]:
+            result = subprocess.run(
+                [BASH, str(PROJECT / "tools/profile_playtest.sh"), backend,
+                 "--seconds=4", "--output=" + str(self.root / "literal $().json")],
+                env=self.env, text=True, capture_output=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            args = result.stdout.splitlines()
+            self.assertIn("<tests/frame_profile.gd>", args)
+            self.assertIn("<--particle-backend=" + ("cpu" if backend=="cpu-matching" else backend) + ">", args)
+            self.assertIn("<--pair-matching=" + ("on" if backend=="cpu-matching" else "off") + ">", args)
+            self.assertIn("<--vsync=on>", args)
+            self.assertIn("<--max-steps=auto>", args)
+            self.assertLess(args.index("<--seconds=4>"), args.index("<--seconds=30>"))
+            self.assertIn("<--output=" + str(self.root / "literal $().json") + ">", args)
+
+    def test_profile_rejects_unknown_backend(self):
+        result = subprocess.run([BASH, str(PROJECT / "tools/profile_playtest.sh"), "invalid"],
+                                env=self.env, text=True, capture_output=True)
+        self.assertEqual(result.returncode, 2)
+
     def test_playtest_rejects_unknown_backend(self):
         result = subprocess.run([BASH, str(PROJECT / "tools/playtest.sh"), "typo"],
                                 env=self.env, text=True, capture_output=True)

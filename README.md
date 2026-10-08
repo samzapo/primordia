@@ -16,7 +16,7 @@ The launcher finds Godot in standard Steam locations, custom Steam libraries and
 
 ## Desktop backend playtest
 
-The complete resident GPU game is ready for a desktop playtest:
+The resident GPU game is available for desktop comparison. A reported Threadripper/RTX 3090 performance failure is being addressed in [Revision 40](docs/REVISION_40.md):
 
 ~~~sh
 ./tools/playtest.sh resident      # GPU particles, reactions, queries and drawing
@@ -24,9 +24,9 @@ The complete resident GPU game is ready for a desktop playtest:
 ./tools/playtest.sh cpu           # Existing CPU chemistry
 ~~~
 
-These launchers find Steam Godot and use the same Mobile renderer. **F3 shows the active backend.** The GPU option retains cell-local editing, music, chemistry, predation and paid family succession, and advances offscreen cells under the same detailed rules. If a resident limit is reached, it preserves the habitat and continues on CPU.
+These launchers find Steam Godot and use the same Mobile renderer. **F3 shows the backend, count scope, whole-frame timing and simulation/wall speed.** The GPU option retains cell-local editing, music, chemistry, predation and paid family succession, and advances distant cells with shared coarse CPU physiology while nearby cells receive full detail. If a resident limit is reached, it preserves the habitat and continues on CPU.
 
-On the RTX 5080 workstation, wide-view live tests held approximately 60 FPS, including a habitat-wide 50k start that ended at 36k particles. This is not sustained 50k performance or a phone result. See [Revision 39](docs/REVISION_39.md) for frame/tick comparisons, validation and limits. The ordinary launcher above remains the CPU default.
+Resident now separates detailed/coarse cell counts, but its particle counter still covers the whole habitat; CPU matching reports its nearby detailed particles separately. The target is a bounded local GPU particle window with the working CPU offscreen ecology outside it. That streaming architecture is not implemented yet. The earlier RTX 5080 results did not transfer to the owner’s Threadripper/RTX 3090. See [Revision 40](docs/REVISION_40.md) for repairs, measurements, the overload slowdown tradeoff, and the Steam-compatible `./tools/profile_playtest.sh resident` capture command. [Revision 39](docs/REVISION_39.md) retains the original coupling evidence and limits. The ordinary launcher above remains the CPU default.
 
 ## Controls
 

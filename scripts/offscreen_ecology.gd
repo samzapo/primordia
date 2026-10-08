@@ -89,26 +89,7 @@ func advance(sim, cell, elapsed: float, hidden: bool = true) -> void:
 		if cell.health <= 0:
 			_kill(sim,cell)
 			break
-		sim._acid_stress(cell,h)
-		sim._photosynthesize(cell,h)
-		sim._metabolize(cell,h)
-		cell.heal(h)
-		for leak in cell.leaks:
-			var normal := Vector2.from_angle(cell.angle+leak.a)
-			sim._emit_material(sim.NUTRIENT,cell.position+cell.local_point(leak.a).rotated(cell.angle)+normal*12,leak.amount,normal*12,cell.id)
-		if cell.waste >= 0.2:
-			sim._emit_material(sim.WASTE,cell.position-Vector2.from_angle(cell.angle)*(cell.radius+12),cell.waste,Vector2.ZERO,cell.id)
-			cell.waste = 0
-		_resize(cell)
-		while cell.occupied() > cell.perimeter() and not cell.organs.is_empty():
-			var organ: Dictionary = cell.organs.pop_back()
-			cell.lost_organs.append(organ.duplicate(true))
-			sim.spawn_particle(sim.WASTE,cell.organ_position(organ),Vector2.ZERO,organ.material,cell.id)
-		sim._emit_and_attack(cell,h)
-		sim._suction_cell(cell,h)
-		mark = Time.get_ticks_usec() if sim.profiling else 0
-		sim._motion_cell(cell,h)
-		if sim.profiling: sim.profile_usec["coarse_motion"] = sim.profile_usec.get("coarse_motion",0)+Time.get_ticks_usec()-mark
+		advance_body(sim,cell,h)
 		if hidden: _hunt(sim,cell,h)
 		if cell.health <= 0 and not cell.dead: _kill(sim,cell)
 	cell.previous_position = cell.position
@@ -118,6 +99,28 @@ func advance(sim, cell, elapsed: float, hidden: bool = true) -> void:
 	sim.fluid.global_coupling = old_coupling
 	sim.coarse_mode = old_mode
 	sim.rng = foreground_rng
+
+func advance_body(sim, cell, h: float) -> void:
+	sim._acid_stress(cell,h)
+	sim._photosynthesize(cell,h)
+	sim._metabolize(cell,h)
+	cell.heal(h)
+	for leak in cell.leaks:
+		var normal := Vector2.from_angle(cell.angle+leak.a)
+		sim._emit_material(sim.NUTRIENT,cell.position+cell.local_point(leak.a).rotated(cell.angle)+normal*12,leak.amount,normal*12,cell.id)
+	if cell.waste >= 0.2:
+		sim._emit_material(sim.WASTE,cell.position-Vector2.from_angle(cell.angle)*(cell.radius+12),cell.waste,Vector2.ZERO,cell.id)
+		cell.waste = 0
+	_resize(cell)
+	while cell.occupied() > cell.perimeter() and not cell.organs.is_empty():
+		var organ: Dictionary = cell.organs.pop_back()
+		cell.lost_organs.append(organ.duplicate(true))
+		sim.spawn_particle(sim.WASTE,cell.organ_position(organ),Vector2.ZERO,organ.material,cell.id)
+	sim._emit_and_attack(cell,h)
+	sim._suction_cell(cell,h)
+	var mark := Time.get_ticks_usec() if sim.profiling else 0
+	sim._motion_cell(cell,h)
+	if sim.profiling: sim.profile_usec["coarse_motion"] = sim.profile_usec.get("coarse_motion",0)+Time.get_ticks_usec()-mark
 
 static func _resize(cell) -> void:
 	var old_radius: float = cell.radius
@@ -145,6 +148,25 @@ static func _swim(cell) -> float:
 		if organ.kind in ["propulsion","cilia"]:
 			thrust += (2600.0 if organ.kind == "propulsion" else cell.CILIA_THRUST)*organ.scale*organ.scale*organ.hp/organ.max_hp*Genes.factor(organ,"thrust")
 	return thrust/(cell.fluid_drag()+cell.mass*0.2)
+
+static func feeding_request(sim, cell, dt: float, period: float) -> Dictionary:
+	# Same unresolved swept collection model as _feed; GPU consumption still
+	# competes for actual packets and ordinary storage capacity.
+	var capture := 0.0
+	var relative: float=(cell.velocity-sim.fluid.sample(cell.position)).length()
+	var radius: float=cell.extent()+FEED_MARGIN+minf(60,relative*period)
+	for organ in cell.organs:
+		if organ.kind!="feeding" or organ.hp<=0: continue
+		var pump: float=24*organ.scale*organ.hp/organ.max_hp*Genes.factor(organ,"suction") if cell.energy>0 else 0.0
+		var center: Vector2=cell.pore_center(organ)
+		var arm: Vector2=Medium.offset(cell.position,center)
+		var local_flow: float=(cell.velocity+arm.orthogonal()*cell.angular_velocity-sim.fluid.sample(center)).length()
+		capture+=2*(cell.pore_radius(organ)+8)*(local_flow+pump+4)
+	var area: float=PI*maxf(1,radius*radius-cell.radius*cell.radius)
+	return {"dt":dt,"radius":radius,"nutrient":COLLECTION_SWEEP*capture/area,
+		"oxygen":COLLECTION_SWEEP*2*(cell.extent()+14)*(relative+4)/area,
+		"carbon":COLLECTION_SWEEP*2*(cell.extent()+18)*(relative+4)/area if _functional(cell,"photosynthesis")>0 else 0.0,
+		"seed":sim.revision&0xffffff}
 
 func _feed(sim, cell, dt: float) -> void:
 	var mouth: Dictionary = {}

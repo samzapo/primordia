@@ -13,7 +13,7 @@ var receipt_buffers: Array[RID]=[]
 var buffers: Array[RID]=[]
 var rd: RenderingDevice
 var count:=0
-static func prepare(cells: Array, emissions: Array, handles: Array) -> Dictionary:
+static func prepare(cells: Array, emissions: Array, handles: Array, feeding: bool=true, coarse: Dictionary={}) -> Dictionary:
 	var bodies:=PackedFloat32Array()
 	var points:=PackedVector2Array()
 	var feeds:=PackedFloat32Array()
@@ -27,6 +27,13 @@ static func prepare(cells: Array, emissions: Array, handles: Array) -> Dictionar
 		body_ids.append(cell.id)
 		if cell.dead or cell.activity<=0 or cell.id<0 or cell.id>16777215:
 			return {"error":"Only active living cells with exact numeric IDs may exchange"}
+		var rates: Dictionary=coarse.get(cell.id,{})
+		if not rates.is_empty():
+			for name in ["dt","radius","nutrient","oxygen","carbon","seed"]:
+				if not rates.has(name) or not (rates[name] is float or rates[name] is int) or not is_finite(rates[name]) or rates[name]<0:
+					return {"error":"Invalid coarse encounter parameters"}
+			if rates.dt<=0 or rates.radius<=0 or rates.seed>16777215 or floor(rates.seed)!=rates.seed:
+				return {"error":"Invalid coarse interval, radius or seed"}
 		var b: int=bodies.size()/16
 		var visual: PackedVector2Array=cell.membrane.outline()
 		var physical: PackedVector2Array=cell.membrane.points
@@ -39,14 +46,17 @@ static func prepare(cells: Array, emissions: Array, handles: Array) -> Dictionar
 		bodies.append_array(PackedFloat32Array([cell.position.x,cell.position.y,cell.angle,cell.extent(),
 			start,visual.size(),physical_start,physical.size(),
 			maxf(0,cell.gut_capacity()-cell.substrate),maxf(0,cell.oxygen_capacity()-cell.oxygen),
-			maxf(0,30*cell.growth_scale()-cell.carbon),cell.id,0,0,0,0]))
-		for organ in cell.organs:
-			if organ.kind!="feeding": continue
-			var center: Vector2=cell.pore_center(organ)
-			feeds.append_array(PackedFloat32Array([center.x,center.y,cell.pore_radius(organ)+8,0,b,0,0,0]))
-		feeds.append_array(PackedFloat32Array([cell.position.x,cell.position.y,cell.extent()+14,1,b,0,0,0]))
-		if cell.count("photosynthesis")>0:
-			feeds.append_array(PackedFloat32Array([cell.position.x,cell.position.y,cell.extent()+18,5,b,0,0,0]))
+			maxf(0,30*cell.growth_scale()-cell.carbon),cell.id,rates.get("dt",0),rates.get("radius",0),rates.get("seed",0),0]))
+		if feeding:
+			var first := true
+			for organ in cell.organs:
+				if organ.kind!="feeding": continue
+				var center: Vector2=cell.pore_center(organ) if rates.is_empty() else cell.position
+				feeds.append_array(PackedFloat32Array([center.x,center.y,cell.pore_radius(organ)+8 if rates.is_empty() else rates.radius,0,b,rates.get("nutrient",0) if first else 0,rates.get("dt",0),0]))
+				first=false
+			feeds.append_array(PackedFloat32Array([cell.position.x,cell.position.y,cell.extent()+14 if rates.is_empty() else rates.radius,1,b,rates.get("oxygen",0),rates.get("dt",0),0]))
+			if cell.count("photosynthesis")>0:
+				feeds.append_array(PackedFloat32Array([cell.position.x,cell.position.y,cell.extent()+18 if rates.is_empty() else rates.radius,5,b,rates.get("carbon",0),rates.get("dt",0),0]))
 	if feeds.size()/8>MAX_FEEDS: return {"error":"Too many feeding requests"}
 	for v in bodies+feeds:
 		if not is_finite(v): return {"error":"Nonfinite cell state"}
@@ -100,15 +110,17 @@ func initialize(device: RenderingDevice, texture: RID, slots: int, order: RID, r
 	dispatch(0,{},ceili(count/128.0))
 	return true
 func dispatch(stage: int, batch: Dictionary, groups: int) -> void:
-	var params:=PackedByteArray();params.resize(32)
+	var params:=PackedByteArray();params.resize(48)
 	params.encode_u32(0,count);params.encode_u32(4,batch.get("body_count",0))
 	params.encode_u32(8,batch.get("feed_count",0));params.encode_u32(12,batch.get("emit_count",0))
 	params.encode_u32(16,batch.get("inspect_count",0));params.encode_u32(20,stage)
 	params.encode_u32(24,batch.get("accounts",0));params.encode_u32(28,1 if batch.get("parallel_oxygen",false) else 0)
+	var scope: Vector4=batch.get("scope",Vector4(0,0,-1,-1))
+	params.encode_float(32,scope.x);params.encode_float(36,scope.y);params.encode_float(40,scope.z);params.encode_float(44,scope.w)
 	var list:=rd.compute_list_begin()
 	rd.compute_list_bind_compute_pipeline(list,pipeline)
 	rd.compute_list_bind_uniform_set(list,bindings[batch.get("ring_slot",0)],0)
-	rd.compute_list_set_push_constant(list,params,32);rd.compute_list_dispatch(list,groups,1,1)
+	rd.compute_list_set_push_constant(list,params,48);rd.compute_list_dispatch(list,groups,1,1)
 	rd.compute_list_end()
 func upload(batch: Dictionary) -> int:
 	var bytes:=0

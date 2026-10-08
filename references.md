@@ -390,3 +390,7 @@ This revision implements the existing [pheromone-plume abstraction](#pheromone-p
 ## Playable resident ecology (Revision 39)
 
 [Revision 39](docs/REVISION_39.md) moves existing diffusion, binding, uptake, receptor competition, acid buffering and lysis abstractions onto a resident numerical representation. Their motivating phenomena and qualifications remain in the biological sections above; there is no new biological mechanism or source of matter. Parallel partner competition follows the computational references under Revision 35. Full-habitat execution and explicit CPU/GPU resource receipts are engineering choices, not claims of molecular fidelity. Tiny emission accumulation preserves finite material across numerical precisions; it is not a biological minimum-dose rule.
+
+## Frame budgeting and native batching (Revision 40)
+
+[Godot Engine fixed-step/catch-up documentation](https://docs.godotengine.org/en/stable/classes/class_engine.html#class-engine-property-max-physics-steps-per-frame) explains the distinction between rendering rate and simulation speed when catch-up is bounded. Primordia reports both clocks and retains fixed numerical steps; the safeguard is not a biological acceleration. Native batching retains the existing finite-mass fluid impulse and radial membrane abstractions and their references above. This revision introduces no new biological mechanic.

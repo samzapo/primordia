@@ -26,6 +26,8 @@ func run() -> void:
 	await geometry()
 	print("EXCHANGE phase identity")
 	await identity_and_emissions()
+	await coarse_feeding()
+	await coarse_hazard()
 	print("EXCHANGE_VALIDATION ",checks," checks")
 	quit()
 func finite_feeding() -> void:
@@ -138,3 +140,48 @@ func oxygen_and_carbon() -> void:
 		check(absf(cell.oxygen-oxygen-result.intake[0][1])<0.000002,"Native oxygen agreement")
 		check(absf(cell.carbon-carbon-result.intake[0][2])<0.000002,"Native carbon agreement")
 	gpu.close();await gpu.closed
+
+
+func coarse_feeding() -> void:
+	var a=Cell.new(81,Vector2(3800,100))
+	var b=Cell.new(82,a.position)
+	for cell in [a,b]:
+		cell.add_organ("feeding",0,"graze",false)
+		cell.substrate=cell.gut_capacity()-.15;cell.oxygen=cell.oxygen_capacity()
+	# Hidden packet competes between two cells; wrapped foreground packet is
+	# protected even though the widened collection sphere reaches it.
+	var data:=packet(0,Vector2(3700,100),.5)
+	data.append_array(packet(0,Vector2(4,100),.5))
+	var gpu=await setup(data)
+	var rates: Dictionary={}
+	for cell in [a,b]: rates[cell.id]={"dt":.1,"radius":400,"nutrient":1000,"oxygen":0,"carbon":0,"seed":91}
+	var options: Dictionary={"coarse":rates,"scope":Vector4(4090,100,20,20),"projection":false}
+	var receipt: Dictionary=gpu.exchange_sync([a,b],[],[],[],options)
+	check(not receipt.has("error"),"Coarse requests accepted")
+	check(absf(receipt.intake[0][0]-.15)<.00001 and absf(receipt.intake[1][0]-.15)<.00001,"Coarse consumers share real packet and individual capacity")
+	gpu.snapshot();var values: PackedFloat32Array=await gpu.snapshot_ready
+	check(absf(values[9]-.2)<.00001 and values[21]==.5,"Widened feeding leaves foreground material untouched across seam")
+	check(absf(values[9]+values[21]+receipt.intake[0][0]+receipt.intake[1][0]-1)<.00001,"Coarse competition conserves material")
+	gpu.close();await gpu.closed
+
+func coarse_hazard() -> void:
+	# Compare one leap with two half leaps against the same exponential hazard.
+	# Tiny packets avoid storage caps biasing the statistical measurement.
+	const N:=4096
+	var totals: Array[float]=[]
+	for steps in [1,2]:
+		var cell=Cell.new(83,Vector2(1000,1000))
+		cell.add_organ("feeding",0,"graze",false);cell.oxygen=cell.oxygen_capacity()
+		var data:=PackedFloat32Array()
+		for i in N: data.append_array(packet(0,cell.position+Vector2(80+i%8,i%11),.00001))
+		var gpu=await setup(data)
+		var total:=0.0
+		for j in steps:
+			var rate: Dictionary={83:{"dt":.1/steps,"radius":100,"nutrient":4,"oxygen":0,"carbon":0,"seed":400+j}}
+			var result: Dictionary=gpu.exchange_sync([cell],[],[],[],{"coarse":rate,"projection":false})
+			check(not result.has("error"),"Hazard leap accepted")
+			total+=result.intake[0][0]
+		totals.append(total/.00001/N)
+		check(absf(totals[-1]-(1-exp(-.4)))<.035,"Finite packet uptake matches elapsed-time hazard within sampling error")
+		gpu.close();await gpu.closed
+	check(absf(totals[0]-totals[1])<.035,"Halving the coarse step does not double feeding")

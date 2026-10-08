@@ -64,5 +64,28 @@ func run() -> void:
 	var final: Dictionary=gpu.exchange_sync([cell,other],[],[],[],{"feeding":false,"exposure":true,"projection":false})
 	check(final.exposure.hits[0].is_empty(),"Drained exposure stays empty")
 	gpu.close();await gpu.closed
+	await coarse_exposure()
 	print("RESIDENT_EXPOSURE_VALIDATION ",checks," checks")
 	quit()
+
+func coarse_exposure() -> void:
+	var cell=Cell.new(21,Vector2(1000,1000))
+	var data:=PackedFloat32Array()
+	var metadata: Array=[]
+	for i in 2048:
+		data.append_array(packet(4,cell.position+Vector2.from_angle(i)*2,0,.00001))
+		metadata.append({"slot":i,"owner":22 if i<1024 else 21,"lineage":22 if i<1024 else 21})
+	var gpu=await setup(data,metadata)
+	var rates: Dictionary={21:{"dt":.1,"radius":150,"nutrient":0,"oxygen":0,"carbon":0,"seed":78}}
+	var options: Dictionary={"feeding":false,"exposure":true,"projection":false,"coarse":rates}
+	var receipt: Dictionary=gpu.exchange_sync([cell],[],[],[],options)
+	var expected: int=receipt.exposure.hits[0].size()+receipt.exposure.deferred
+	check(expected>128 and absf(expected-1024*(1-exp(-.2)))<40,"Offscreen toxin hazard is time-scaled and family-safe")
+	var total: int=receipt.exposure.hits[0].size()
+	while receipt.exposure.deferred>0:
+		receipt=gpu.exchange_sync([cell],[],[],[],options)
+		total+=receipt.exposure.hits[0].size()
+	check(total==expected,"Overflow retry never rerolls the coarse exposure lottery")
+	receipt=gpu.exchange_sync([cell],[],[],[],options)
+	check(receipt.exposure.hits[0].is_empty(),"Completed hazard interval cannot consume more toxins")
+	gpu.close();await gpu.closed

@@ -25,6 +25,10 @@ func settle() -> void:
 	scene._update_world(1)
 
 func run(test_host) -> void:
+	var pond_script = preload("res://scripts/pond.gd")
+	test_host.expect(pond_script.catchup_limit(34,8)==1,"Over-budget ticks yield after one step")
+	test_host.expect(pond_script.catchup_limit(10,1)==2,"Recovered ticks allow bounded catch-up")
+	test_host.expect(pond_script.catchup_limit(14,1)==1 and pond_script.catchup_limit(14,2)==2,"Catch-up hysteresis avoids threshold oscillation")
 	host = test_host
 	scene = load("res://scenes/pond.tscn").instantiate()
 	scene.use_particle_pool = false # Dictionary-edit fixtures; pool UI has separate checks.

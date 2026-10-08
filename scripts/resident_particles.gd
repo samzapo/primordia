@@ -89,6 +89,8 @@ func report_sync(slot: int) -> PackedByteArray:
 	var result: PackedByteArray=_export_data.metadata;_export_data={}
 	return result
 var _sync_semaphore:=Semaphore.new()
+var exchange_prepare_usec:=0
+var exchange_wait_usec:=0
 func configure_exposure() -> bool:
 	if _started or not perception_enabled: return false
 	exposure_enabled=true
@@ -96,9 +98,12 @@ func configure_exposure() -> bool:
 # A bounded blocking fence avoids multi-frame biology lag. Only compact receipts
 # cross the device boundary; render-thread ownership remains unchanged.
 func exchange_sync(cells: Array, emissions: Array=[], handles: Array=[], queries: Array=[], options: Dictionary={}) -> Dictionary:
+	var started:=Time.get_ticks_usec()
+	var prior_prepare:=exchange_prepare_usec
 	options=options.duplicate();options["synchronous"]=true
 	if not exchange(cells,emissions,handles,false,queries,options): return {"error":"Resident exchange refused: "+exchange_error}
 	_sync_semaphore.wait()
+	exchange_wait_usec+=Time.get_ticks_usec()-started-(exchange_prepare_usec-prior_prepare)
 	var result:=_sync_receipt
 	_sync_receipt={}
 	_exchange_main(result)
@@ -122,14 +127,14 @@ func environment(velocity: PackedVector2Array, values: PackedFloat32Array) -> bo
 		if not vector.is_finite(): return false
 	for value in values:
 		if not is_finite(value) or value<0 or value>1: return false
-	var zero:=PackedByteArray();zero.resize(count*16)
-	rd.buffer_update(contact_buffers[8],0,zero.size(),zero)
-	var zero_stats:=PackedByteArray();zero_stats.resize(64)
-	rd.buffer_update(contact_buffers[5],0,64,zero_stats)
 	var acid:=PackedFloat32Array([1]);acid.append_array(values)
 	RenderingServer.call_on_render_thread(_environment_rd.bind(velocity.to_byte_array(),acid.to_byte_array()))
 	return true
 func _environment_rd(velocity: PackedByteArray, values: PackedByteArray) -> void:
+	# Main-device mutation belongs on the render thread. Clear on-device instead
+	# of allocating/uploading one megabyte of zeros on every gameplay tick.
+	rd.buffer_clear(contact_buffers[8],0,count*16)
+	rd.buffer_clear(contact_buffers[5],0,64)
 	rd.buffer_update(flow,0,velocity.size(),velocity)
 	rd.buffer_update(contact_buffers[7],0,values.size(),values)
 	environment_upload_bytes+=velocity.size()+values.size()
@@ -180,14 +185,16 @@ func end_capacity_epoch() -> bool:
 	_accounts_started=false;_account_ids.clear();_account_instances.clear();_account_caps.clear()
 	return true
 func exchange(cells: Array, emissions: Array=[], handles: Array=[], asynchronous: bool=true, queries: Array=[], options: Dictionary={}) -> bool:
+	var prepare_started:=Time.get_ticks_usec()
 	exchange_error="Unavailable or busy"
 	if not exchange_enabled or exchange_inflight>=exchange_queue_depth or _closing or not _initialized: return false
-	var batch:=Exchange.prepare(cells,emissions,handles)
+	var batch:=Exchange.prepare(cells,emissions,handles,options.get("feeding",true),options.get("coarse",{}))
 	if batch.has("error"): exchange_error=batch.error;return false
+	batch["scope"]=options.get("scope",Vector4(0,0,-1,-1))
+	batch["chemistry"]=chemistry_enabled and options.get("chemistry",true)
 	batch["projection"]=options.get("projection",true)
 	batch["synchronous"]=options.get("synchronous",false)
 	batch["exposure"]=options.get("exposure",false) and exposure_enabled
-	if not options.get("feeding",true): batch.feeds=PackedByteArray();batch.feed_count=0
 	if batch.exposure:
 		var exposure_batch:=Exposure.prepare(cells)
 		if exposure_batch.has("error"): exchange_error=exposure_batch.error;return false
@@ -211,12 +218,13 @@ func exchange(cells: Array, emissions: Array=[], handles: Array=[], asynchronous
 	exchange_inflight+=1;exchange_peak_inflight=maxi(exchange_peak_inflight,exchange_inflight)
 	exchange_busy=exchange_inflight>=exchange_queue_depth;exchange_serial+=1
 	batch["serial"]=exchange_serial;batch["ring_slot"]=slot
-	if chemistry_enabled:
+	if batch.chemistry:
 		batch["chemistry_offset"]=batch.body_count+batch.feed_count+batch.emit_count+batch.inspect_count*4+batch.get("query_count",0)*5
-	batch["exposure_offset"]=batch.body_count+batch.feed_count+batch.emit_count+batch.inspect_count*4+batch.get("query_count",0)*5+(Chemistry.RECEIPT_VECTORS if chemistry_enabled else 0)
+	batch["exposure_offset"]=batch.body_count+batch.feed_count+batch.emit_count+batch.inspect_count*4+batch.get("query_count",0)*5+(Chemistry.RECEIPT_VECTORS if batch.chemistry else 0)
 	batch["parallel_oxygen"]=exchange_parallel_oxygen
 	batch["accounts"]=0 if not exchange_resident_capacity else (2 if _accounts_started else 1)
 	if exchange_resident_capacity: _accounts_started=true
+	exchange_prepare_usec+=Time.get_ticks_usec()-prepare_started
 	RenderingServer.call_on_render_thread(_exchange_rd.bind(batch,asynchronous))
 	return true
 func _exchange_rd(batch: Dictionary, asynchronous: bool) -> void:
@@ -242,7 +250,7 @@ func _exchange_rd(batch: Dictionary, asynchronous: bool) -> void:
 	if (batch.body_count>0 and batch.projection) or batch.emit_count>0: _grid_valid=false
 	if batch.inspect_count>0: _exchange.dispatch(3,batch,ceili(batch.inspect_count/128.0))
 	var size: int=(batch.body_count+batch.feed_count+batch.emit_count+batch.inspect_count*4+batch.get("query_count",0)*5)*16
-	if chemistry_enabled:
+	if batch.chemistry:
 		_chemistry.receipt(batch)
 		batch["chemistry_tick"]=_chemistry.last_tick
 		size+=Chemistry.RECEIPT_VECTORS*16
@@ -266,7 +274,7 @@ func _exchange_received(bytes: PackedByteArray,batch: Dictionary) -> void:
 	if perception_enabled:
 		var at: int=(batch.body_count+batch.feed_count+batch.emit_count+batch.inspect_count*4)*16
 		receipt["senses"]=Perception.decode(bytes,at,batch.query_count)
-	if chemistry_enabled:
+	if batch.chemistry:
 		receipt["chemistry"]=Chemistry.decode(bytes,batch.chemistry_offset)
 		receipt.chemistry["tick"]=batch.chemistry_tick
 	if batch.exposure: receipt["exposure"]=Exposure.decode(bytes,batch)

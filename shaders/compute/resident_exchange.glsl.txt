@@ -13,7 +13,7 @@ layout(set=0,binding=8,std430) readonly buffer Order { uvec2 order[]; };
 layout(set=0,binding=9,std430) readonly buffer Ranges { uvec2 ranges[]; };
 layout(set=0,binding=10,std430) buffer Budgets { vec4 budgets[]; };
 layout(set=0,binding=11,std430) buffer OxygenMask { uvec2 oxygen_mask[]; };
-layout(push_constant,std430) uniform Params {uint count;uint body_count;uint feed_count;uint emit_count;uint inspect_count;uint stage;uint accounts;uint parallel_oxygen;} pc;
+layout(push_constant,std430) uniform Params {uint count;uint body_count;uint feed_count;uint emit_count;uint inspect_count;uint stage;uint accounts;uint parallel_oxygen;vec4 scope;} pc;
 const vec2 WORLD=vec2(4096,2560);
 ivec2 pixel(uint i){return ivec2(int(i%256u)*3,int(i/256u));}
 vec4 pose(uint i){return imageLoad(state,pixel(i));}
@@ -35,6 +35,13 @@ float support(uint body,float angle,bool visible){
  }
  return bodies[body*4u].w/1.05;
 }
+uint hash32(uint x){x=((x^(x>>16))*0x7feb352du);x=((x^(x>>15))*0x846ca68bu);return x^(x>>16);}
+bool hidden(vec2 p){return pc.scope.z<0.||any(greaterThanEqual(abs(offset(pc.scope.xy,p)),pc.scope.zw+vec2(128)));}
+bool encounter(uint slot,uint body,uint channel,float rate,float dt){
+ uint key=slot^hash32(identity[slot].x)^hash32(uint(bodies[body*4u+2u].w))^hash32(uint(bodies[body*4u+3u].z))^hash32(channel+3901u);
+ float roll=(float(hash32(key)>>8)+.5)/16777216.;
+ return roll<1.-exp(-max(0.,rate)*dt);
+}
 void shrink(uint i,vec4 v,vec4 m){
  const float radii[11]=float[11](4.,2.5,3.,2.5,5.,3.,4.,4.,3.,3.,3.5);
  if(m.y<=0.){v.w=-1.;m.x=0.;m.y=0.;}
@@ -52,6 +59,7 @@ void main(){
   if(i>=pc.count)return;
   uvec2 mask=uvec2(0);
   if(motion(i).w==1.)for(uint b=0u;b<pc.body_count;b++){
+   if(bodies[b*4u+3u].x>0.)continue;
    vec4 body=bodies[b*4u];vec2 d=offset(body.xy,pose(i).xy);
    // Same broad-phase bounds as the feeding query; exact physical support.
    if(abs(d.x)>body.w+14.||abs(d.y)>body.w+14.)continue;
@@ -80,8 +88,9 @@ void main(){
     for(uint k=range.x;k<range.y&&remaining>0.;k++){
      uint slot=order[k].y;vec4 v=motion(slot),m=matter(slot);
      if(v.w!=query.w)continue;
+     if(meta.z>0.&&(!hidden(pose(slot).xy)||!encounter(slot,body,channel,meta.y,meta.z)))continue;
      vec2 d=offset(query.xy,pose(slot).xy);float distance=length(d);
-     bool inside=query.w==1.?(pc.parallel_oxygen>0u?((oxygen_mask[slot][body/32u]&(1u<<(body%32u)))!=0u):
+     bool inside=meta.z>0.?distance<=reach:query.w==1.?(pc.parallel_oxygen>0u?((oxygen_mask[slot][body/32u]&(1u<<(body%32u)))!=0u):
       distance<support(body,atan(d.y,d.x)-shape.z,false)+14.):distance<=reach;
      if(!inside)continue;
      float taken=min(m.y,remaining);m.y-=taken;remaining-=taken;taken_total+=taken;

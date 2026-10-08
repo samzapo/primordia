@@ -83,6 +83,17 @@ var particle_lod := PackedByteArray()
 var build_open := false
 var show_senses := false
 var show_debug := false
+var manage_catchup := true
+var diagnostic_tick_cost_ms := 0.0 # benchmark-only injected latency
+var frame_ticks := 0
+var frame_tick_usec := 0
+var last_frame_ticks := 0
+var last_frame_sim_ms := 0.0
+var last_frame_ms := 0.0
+var perf_previous_usec := 0
+var perf_wall_seconds := 0.0
+var perf_sim_seconds := 0.0
+var simulation_rate := 1.0
 var ui_time := 0.0
 var hud_clock := 0.0
 var zoom := 1.0
@@ -102,6 +113,7 @@ var notice := "Establish a lineage through three crises.\nFirst: choose cilia or
 var notice_timer := 12.0
 
 func _ready() -> void:
+	if manage_catchup: Engine.max_physics_steps_per_frame = 2
 	var args := OS.get_cmdline_user_args()
 	preferences.persist = DisplayServer.get_name() != "headless" and not Array(args).any(func(a): return a.begins_with("--capture=") or a == "--benchmark")
 	preferences.load_settings()
@@ -199,6 +211,13 @@ func _ready() -> void:
 	add_child(music)
 	music.initialize(self)
 
+static func catchup_limit(tick_ms: float, current: int) -> int:
+	# When one tick already exhausts the 60 Hz budget, extra catch-up steps
+	# cannot recover real time. Leave a presentation/input opportunity instead.
+	if tick_ms > 16.0: return 1
+	if tick_ms < 12.0: return 2
+	return clampi(current,1,2)
+
 func _physics_process(dt: float) -> void:
 	if is_paused(): return
 	var started := Time.get_ticks_usec()
@@ -211,8 +230,16 @@ func _physics_process(dt: float) -> void:
 		camera_offset = Vector2.ZERO
 		free_camera = world.player.position
 		_message(world.lineage.notices[-1] if not world.lineage.notices.is_empty() else world.evolution.objective(world))
-	if frame_trace != null: frame_trace.tick(Time.get_ticks_usec()-started,dt)
-	simulation_ms = lerpf(simulation_ms,(Time.get_ticks_usec()-started)/1000.0,0.15)
+	var tick_usec := Time.get_ticks_usec()-started
+	frame_ticks += 1
+	frame_tick_usec += tick_usec
+	perf_sim_seconds += dt
+	if frame_trace != null: frame_trace.tick(tick_usec,dt)
+	simulation_ms = lerpf(simulation_ms,tick_usec/1000.0,0.15)
+	if manage_catchup: Engine.max_physics_steps_per_frame = catchup_limit(simulation_ms+diagnostic_tick_cost_ms,Engine.max_physics_steps_per_frame)
+	var music_start := Time.get_ticks_usec()
+	if music.refill_between_ticks: music.refill()
+	if frame_trace != null: frame_trace.work("music",Time.get_ticks_usec()-music_start)
 	if not flow_streamers and world.revision%4 == 0: currents.queue_redraw()
 
 func is_paused() -> bool:
@@ -222,6 +249,18 @@ func _can_edit_tubules() -> bool:
 	return build_open and not settings_panel.visible and not world.player.dead and not world.evolution.terminal()
 
 func _process(dt: float) -> void:
+	var now := Time.get_ticks_usec()
+	last_frame_ticks = frame_ticks
+	last_frame_sim_ms = frame_tick_usec/1000.0
+	frame_ticks = 0;frame_tick_usec = 0
+	last_frame_ms = (now-perf_previous_usec)/1000.0 if perf_previous_usec > 0 else 0.0
+	perf_previous_usec = now
+	if is_paused(): perf_wall_seconds = 0;perf_sim_seconds = 0
+	else:
+		perf_wall_seconds += last_frame_ms/1000.0
+		if perf_wall_seconds >= 1.0:
+			simulation_rate = perf_sim_seconds/perf_wall_seconds
+			perf_wall_seconds = 0;perf_sim_seconds = 0
 	var process_start := Time.get_ticks_usec() if frame_trace != null else 0
 	ui_time += dt
 	death_frame_dt = dt if not settings_panel.visible and not build_open else 0.0
@@ -306,6 +345,7 @@ func _update_world(alpha: float) -> void:
 	scale_bar.configure(size,zoom,preferences.hud_scale)
 	camera_screen = size*0.5
 	world.view_half = size/(2*zoom)
+	if world.resident!=null: world.resident.detail_half=size/(2*base_zoom*MIN_ZOOM)
 	_track_player_death()
 	render_camera = world.player.previous_position+Simulation.Medium.offset(world.player.previous_position,world.player.position)*alpha+camera_offset if camera_locked else free_camera
 	if death_focus_age < 1.8:
@@ -668,7 +708,15 @@ func _update_hud() -> void:
 		light_factor_shown = world.evolution.light_factor
 	if acidity_texture.get_width() > 0: acidity_texture.update(Image.create_from_data(64,40,false,Image.FORMAT_RF,world.acidity.values.to_byte_array()))
 	debug_label.visible = show_debug and not settings_panel.visible
-	debug_label.text = "%s · %d FPS · tick %.2f ms · view sync %.2f ms\n%d active cells / %d particles" % ["Resident GPU" if world.resident!=null else "GPU experiment" if world.gpu_transport != null else "Native CPU" if world.kernels != null else "GDScript",Engine.get_frames_per_second(),simulation_ms,render_ms,world.active_cells,world.active_particles]
+	var backend := "Resident GPU + native cells" if world.resident != null and world.kernels != null else "Resident GPU + SCRIPT cells" if world.resident != null else "GPU experiment" if world.gpu_transport != null else "Native CPU" if world.kernels != null else "GDScript"
+	debug_label.text = "%s · %d FPS · frame %.1f ms\n%d ticks/frame · simulation %.1f ms/frame · tick %.2f ms\nSimulation/wall %.2f× · view sync %.2f ms" % [backend,Engine.get_frames_per_second(),last_frame_ms,last_frame_ticks,last_frame_sim_ms,simulation_ms,simulation_rate,render_ms]
+	if world.resident != null:
+		debug_label.text += "\nDetailed region: %d cells · Coarse: %d cells\nGPU habitat particles: %d" % [world.active_cells,world.resident.coarse_cells,world.particle_count()]
+	else:
+		debug_label.text += "\nDetailed region: %d cells / %d particles\nHabitat total: %d living cells / %d particles" % [world.active_cells,world.active_particles,world.cells.filter(func(c): return not c.dead).size(),world.particle_count()]
+	if world.resident != null:
+		var p: Dictionary = world.profile_usec
+		debug_label.text += "\nTick: flow %.1f · particles %.1f · biology %.1f · motion %.1f · exposure %.1f ms\nGPU receipts: prepare %.1f · handoff %.1f ms" % [p.get("fluid",0)/1000.0,p.get("particles",0)/1000.0,p.get("biology",0)/1000.0,p.get("motion",0)/1000.0,p.get("ecology",0)/1000.0,p.get("gpu_receipt_prepare",0)/1000.0,p.get("gpu_receipt_wait",0)/1000.0]
 	if music.ready_bank: debug_label.text += "\nMusic mix %.2f ms · underruns %d" % [music.render_usec/1000.0,music.skips]
 	debug_label.position = Vector2(16,16 if not build_open else 52*preferences.hud_scale)
 	debug_label.add_theme_font_size_override("font_size",roundi(15*preferences.hud_scale))
