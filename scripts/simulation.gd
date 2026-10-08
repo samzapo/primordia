@@ -530,13 +530,17 @@ func _biology_after_feed(cell, local_dt: float) -> void:
 		_emit_material(NUTRIENT,cell.position+cell.local_point(leak.a).rotated(cell.angle)+normal*12,leak.amount,normal*12,cell.id)
 	# Tiny continuous emissions are aggregated into material-bearing packets.
 	if cell.waste >= 0.2:
-		_emit_material(WASTE,cell.position-Vector2.from_angle(cell.angle)*(cell.radius+12),cell.waste,Vector2.ZERO,cell.id)
+		_emit_material(WASTE,cell.excretion_position(),cell.waste,Vector2.ZERO,cell.id)
 		cell.waste = 0
 	var organ_mark := Time.get_ticks_usec() if profiling else 0
 	cell.update_geometry()
 	# Shrinkage can shed crowded organs, releasing their remaining material.
 	while cell.occupied() > cell.perimeter() and not cell.organs.is_empty():
-		var organ: Dictionary = cell.organs.pop_back()
+		var index: int = cell.organs.size()-1
+		while index >= 0 and cell.inherent(cell.organs[index]): index -= 1
+		if index < 0: break
+		var organ: Dictionary = cell.organs[index]
+		cell.organs.remove_at(index)
 		cell.lost_organs.append(organ.duplicate(true))
 		spawn_particle(WASTE,cell.organ_position(organ),Vector2.ZERO,organ.material,cell.id)
 	if profiling: profile_usec["organ_geometry"] = profile_usec.get("organ_geometry",0)+Time.get_ticks_usec()-organ_mark
@@ -547,7 +551,7 @@ func _biology_after_feed(cell, local_dt: float) -> void:
 	else:
 		for point in cell.membrane.points:
 			var arm: Vector2 = point.rotated(cell.angle)
-			traction.append((fluid.sample(cell.position+arm)-cell.velocity-arm.orthogonal()*cell.angular_velocity).rotated(-cell.angle).limit_length(90))
+			traction.append((fluid.sample(cell.position+arm)-cell.velocity-Vector2(-arm.y,arm.x)*cell.angular_velocity).rotated(-cell.angle).limit_length(90))
 	if profiling: profile_usec["traction"] = profile_usec.get("traction",0)+Time.get_ticks_usec()-traction_mark
 	var membrane_mark := Time.get_ticks_usec() if profiling else 0
 	cell.membrane.step(local_dt,cell.radius,cell.shape_acceleration.rotated(-cell.angle),cell.age+cell.id*1.7,1.0,traction)
@@ -922,10 +926,10 @@ func _suction_cell(cell, dt: float) -> void:
 		var ciliary: bool = organ.kind == "cilia"
 		var cost: float = dt*(Cell.CILIA_PUMP if ciliary else Cell.PUMP_UPKEEP)*organ.scale*organ.scale
 		var health: float = organ.hp/organ.max_hp
-		var power: float = (Cell.CILIA_FLOW if ciliary else 24.0)*organ.scale*health*Genes.factor(organ,"suction")
-		if ciliary: power *= minf(1,cell.energy/maxf(0.000001,cost))
+		var power: float = (Cell.CILIA_FLOW if ciliary else Cell.ORAL_FLOW)*organ.scale*health*Genes.factor(organ,"suction")
+		power *= minf(1,cell.energy/maxf(0.000001,cost))
 		var at: Vector2 = cell.organ_position(organ)+cell.organ_normal(organ).rotated(cell.angle)*8 if ciliary else cell.pore_center(organ)
-		fluid.suction(cell,at,(Cell.CILIA_REACH if ciliary else 110.0)*sqrt(organ.scale),power,dt,cell.target if ciliary else Vector2.ZERO)
+		fluid.suction(cell,at,(Cell.CILIA_REACH if ciliary else Cell.ORAL_REACH)*sqrt(organ.scale),power,dt,cell.target if ciliary else Vector2.ZERO)
 		cell.spend_energy(cost,organ,"pumping")
 
 func _steering_weight(organ: Dictionary, mode: String) -> float:
@@ -1178,6 +1182,7 @@ func _metabolize(cell, dt: float) -> void:
 		cell.processed += fermented
 		cell.fermented += fermented
 		cell.fermentation_activity = 2
+	cell.decay_energy(dt)
 	cell.spend_energy(dt*Cell.BASAL_UPKEEP*cell.growth_scale())
 	for organ in cell.organs: cell.spend_energy(dt*organ.scale*organ.scale*Genes.factor(organ,"upkeep",0.0),organ)
 	if cell.energy <= 0:
@@ -1211,7 +1216,7 @@ func _emit_and_attack(cell, dt: float) -> void:
 			if cell.carbon <= (3.0 if cell.count("photosynthesis") == 0 else 20.0): break
 			var amount: float = minf(0.3,cell.carbon)
 			cell.carbon -= amount
-			spawn_particle(CARBON,cell.position-Vector2.from_angle(cell.angle)*(cell.radius+12),Vector2.ZERO,amount,cell.id)
+			spawn_particle(CARBON,cell.excretion_position(),Vector2.ZERO,amount,cell.id)
 	for organ in cell.organs:
 		var kind: int = {"feeding":ENZYME,"neutralizing":ANTITOXIN,"acidifying":ACID,"regenerative":BUFFER}.get(organ.kind,-1)
 		var energy_cost := Cell.SECRETION_COST*Genes.factor(organ,"secretion_cost")
@@ -1282,7 +1287,7 @@ func _motion_cell(cell, local_dt: float) -> void:
 		var torque := clampf(cell.inertia*(error*12-cell.angular_velocity*7),-steering_power*cell.radius,steering_power*cell.radius)
 		var arm: Vector2 = Vector2.from_angle(cell.angle)*cell.radius*0.8
 		if fluid.can_couple(cell.position+arm) and fluid.can_couple(cell.position-arm):
-			var impulse: Vector2 = arm.orthogonal().normalized()*torque*local_dt/(2*arm.length())
+			var impulse: Vector2 = Vector2(-arm.y,arm.x).normalized()*torque*local_dt/(2*arm.length())
 			fluid.deposit(cell.position+arm,-impulse)
 			fluid.deposit(cell.position-arm,impulse)
 			cell.angular_velocity += torque*local_dt/cell.inertia
@@ -1640,7 +1645,7 @@ func offspring_quote() -> Dictionary:
 	var tissue := 0.0
 	for organ in player.organs: tissue += organ.get("max_material",Cell.organ_cost(organ.kind,organ.scale))
 	var radius := maxf(34,player.occupied()/(TAU*0.8))
-	var body := maxf(30,pow(radius/47.0,3)*78-12)
+	var body := maxf(30,pow(radius/47.0,2)*78-12)
 	var inherited_body := minf(body,maxf(0,player.body-30))
 	return {"body":body,"body_transfer":inherited_body,"biomass":12.0,"material":body+12+6+8+tissue-inherited_body,"total_material":body+12+6+8+tissue,"energy":60.0,"oxygen":12.0}
 
@@ -1681,6 +1686,7 @@ func make_offspring(parent, quote: Dictionary):
 	child.membrane = Cell.Membrane.new(child.radius)
 	child.membrane.skeleton = Cell.clone_state(parent.membrane.skeleton)
 	child.membrane.skeleton.begin(child.radius)
+	child.update_geometry()
 	return child
 
 func divide_lineage(dormant: bool = false, follow: bool = true) -> bool:

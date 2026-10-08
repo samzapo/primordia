@@ -37,7 +37,7 @@ func run(owner_suite) -> void:
 	sim.evolution.accept_challenge("stability",sim.player)
 	sim.step(10)
 	check(sim.time == 0 and sim.evolution.clock == 0,"preview pauses physics and tides")
-	sim.remove(0)
+	sim.remove(sim.player.organs.size()-1)
 	check(sim.build_waste > 0 and absf(total(sim)-initial_mass) < 0.01,"preview recycling accounts for deferred debris")
 	sim.cancel_build()
 	check(sim.player == original and sim.evolution.points == 3,"cancel restores anatomy and AP")
@@ -46,9 +46,9 @@ func run(owner_suite) -> void:
 	check(sim.evolution.offers == offers,"opening and cancelling cannot reroll offers")
 	sim.begin_build()
 	var radius: float = sim.player.radius
-	var capacity: float = sim.player.energy_capacity()
+	var capacity: float = sim.player.energy_reference()
 	sim.player.reserve(10)
-	check(is_equal_approx(sim.player.radius,radius) and is_equal_approx(sim.player.energy_capacity(),capacity),"reserve allocation preserves volume and operating capacity")
+	check(is_equal_approx(sim.player.radius,radius) and is_equal_approx(sim.player.energy_reference(),capacity),"reserve allocation preserves volume and operating capacity")
 	check(is_equal_approx(total(sim),initial_mass),"reserving transfers tissue without new material")
 	sim.undo_build()
 	check(sim.player.brood_mass == 0 and sim.player.brood_energy == 0,"undo restores reserves")
@@ -63,7 +63,7 @@ func run(owner_suite) -> void:
 	sim.player.update_geometry()
 	sim.player.membrane = Cell.Membrane.new(sim.player.radius)
 	var twin = Cell.clone_state(sim.player)
-	var id: int = sim.player.organs[0].id
+	var id: int = sim.player.organs[-1].id
 	var start_points: int = sim.evolution.points
 	for size in [1.05,1.1,1.15,1.2]: check(sim.resize_organ(id,size),"small enlargement accepted")
 	var direct: Dictionary = twin.resize_organ(id,1.2)
@@ -72,6 +72,7 @@ func run(owner_suite) -> void:
 	check(sim.resize_organ(id,0.8) and sim.resize_organ(id,1.2),"shrink and regrow supported")
 	check(sim.evolution.points < spent,"shrink cannot refund or reset purchased capacity")
 	for gene in Sim.Genes.DATA:
+		if Sim.Genes.DATA[gene].kind == "feeding": continue
 		var cell = Cell.new()
 		cell.biomass = 500
 		cell.update_geometry()

@@ -62,13 +62,18 @@ static func icon(c: Node2D, p: Vector2, kind: String, rotation: float, scale: fl
 			c.draw_line(Vector2(0,-4),Vector2(0,4),Color("d0ffbe"),3,true)
 			c.draw_line(Vector2(-4,0),Vector2(4,0),Color("d0ffbe"),3,true)
 		"feeding":
-			# Contract the aperture on real ingestion; attachment remains anchored.
-			var center := Vector2(9-pulse*2,0)
-			c.draw_circle(center,18,Color("ac6439"))
-			c.draw_circle(center+Vector2(0,-1),15.5,GOLD.lerp(Color("fff18a"),pulse*0.8))
-			c.draw_circle(center,10.5*(1-0.22*pulse),Color("312154"))
-			c.draw_arc(center,14,2.9,4.9,steps,Color("ffed89"),4,true)
-			if detail: c.draw_arc(center+Vector2(3,0),6,0.9,TAU-0.9,steps,Color("ec8b3b"),3,true)
+			var lip := PackedVector2Array()
+			for i in 17:
+				var t := -PI/2+PI*i/16.0
+				lip.append(Vector2(-cos(t)*(16-2*pulse),sin(t)*21))
+			c.draw_polyline(lip,Color("31537c"),10,true)
+			c.draw_polyline(lip,Color("6ee6d4").lerp(Color("fff1ab"),pulse),4,true)
+			if detail:
+				for i in range(1,16,2):
+					var hair: Vector2 = lip[i]
+					var tip := hair+Vector2(7+2*sin(animation_time*7+i),-hair.y*0.18)
+					c.draw_line(hair,tip,Color("caf7be"),1.5,true)
+			c.draw_circle(Vector2(-14,0),4*(1+0.3*pulse),Color("e1f5ac"))
 		"sensing":
 			c.draw_line(Vector2(-6,0),Vector2(11,0),Color("7634b2"),8,true)
 			c.draw_line(Vector2(-3,0),Vector2(12,0),PURPLE,5,true)

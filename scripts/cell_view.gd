@@ -19,6 +19,9 @@ var surface := MeshInstance2D.new()
 var water_wake := MeshInstance2D.new()
 var surface_revision := -1
 var depth_style := false
+var sound_waves := Node2D.new()
+var nucleus_center := Vector2.ZERO
+var nucleus_size := 0.0
 
 func _ready() -> void:
 	# Keep each shaded body immediately behind its own contents, so another
@@ -38,6 +41,8 @@ func _ready() -> void:
 	appendages.z_index = 1
 	add_child(appendages)
 	appendages.draw.connect(_draw_organs)
+	add_child(sound_waves)
+	sound_waves.draw.connect(_draw_sound_waves)
 
 func sync(render_position: Vector2, render_angle: float, zoom: float, alpha: float) -> void:
 	if art_lineage != cell.lineage_id():
@@ -50,6 +55,7 @@ func sync(render_position: Vector2, render_angle: float, zoom: float, alpha: flo
 	last_age = cell.age
 	var drift: Vector2 = (-cell.shape_acceleration.rotated(-render_angle)*0.002+Vector2(0,-cell.angular_velocity)*cell.radius*0.025).limit_length(cell.radius*0.055)
 	nucleus_lag = nucleus_lag.lerp(drift,1-exp(-elapsed*6))
+	sound_waves.queue_redraw()
 	position = render_position
 	rotation = render_angle
 	if depth_style != game.membrane_depth:
@@ -151,6 +157,10 @@ func _draw() -> void:
 			var q: Vector2 = Vector2.from_angle(vesicle.angle)*support*vesicle.distance
 			var color: Color = [palette[1].lightened(0.16),palette[3],palette[2].lightened(0.13)][vesicle.tone]
 			draw_circle(q,minf(cell.radius*vesicle.radius,support*0.12),color)
+	if cell != game.world.player and cell.substrate > 0.05:
+		var food_at: Vector2 = cell.local_point(0)*0.60
+		draw_circle(food_at,5,Color("93e9af"))
+		draw_circle(food_at-Vector2.ONE,1.5,Color("d8ffe2"))
 	var safe_radius: float = cell.radius
 	for point in outline: safe_radius = minf(safe_radius,point.length())
 	var nucleus: Vector2 = Vector2(-0.12,-0.10)*safe_radius+nucleus_lag
@@ -160,6 +170,8 @@ func _draw() -> void:
 		for i in range(0,core.size(),2): reduced_core.append(core[i])
 		core = reduced_core
 	var size := safe_radius*0.28
+	nucleus_center = nucleus
+	nucleus_size = size
 	draw_colored_polygon(Transform2D(0,Vector2.ONE*size*1.18,0,nucleus+Vector2(0,size*0.1))*core,palette[0])
 	draw_colored_polygon(Transform2D(0,Vector2.ONE*size,0,nucleus)*core,palette[5].darkened(0.2))
 	draw_colored_polygon(Transform2D(0,Vector2.ONE*size*0.74,0,nucleus-Vector2.ONE*size*0.08)*core,palette[5])
@@ -182,6 +194,10 @@ func _draw() -> void:
 
 func _draw_organs() -> void:
 	var mark := Time.get_ticks_usec() if game.frame_trace != null else 0
+	# A small shared waste outlet, attached to the actual pellicle.
+	var outlet: Vector2 = cell.local_point(cell.excretion_angle())
+	var outlet_normal: Vector2 = cell.local_normal(cell.excretion_angle())
+	appendages.draw_line(outlet-outlet_normal.orthogonal()*5,outlet+outlet_normal.orthogonal()*5,Color("9677cb"),3,true)
 	for organ in cell.organs:
 		var point: Vector2 = cell.local_point(organ.a)
 		var normal: Vector2 = cell.organ_normal(organ)
@@ -208,3 +224,27 @@ func _draw_organs() -> void:
 			appendages.draw_arc(at,19*organ.scale,-PI/2,-PI/2+TAU*organ.hp/organ.max_hp,24,Color("fc8c90"),2,true)
 
 	if game.frame_trace != null: game.frame_trace.work("organ_draw_commands",Time.get_ticks_usec()-mark)
+
+func _draw_sound_waves() -> void:
+	if game.music == null: return
+	for wave in game.music.waves:
+		if wave.source != cell.id: continue
+		var at: Vector2 = nucleus_center
+		var start: float = nucleus_size
+		if wave.organ_id == -2:
+			at = cell.local_point(0)*0.60
+			if cell == game.world.player:
+				for parcel in game.cell_ui.interior.ecology.parcels:
+					if parcel.kind == "food": at = parcel.p; break
+			start = 4
+		elif wave.organ_id >= 0:
+			var organ: Dictionary = cell.organ_by_id(wave.organ_id)
+			if organ.is_empty(): continue
+			at = cell.local_point(organ.a)
+			start = 10*organ.scale
+		var phase: float = wave.age/0.65
+		var tint: Color = game.music.Score.note_color(wave.note)
+		# Concentric local waves show scheduled notes, never pulse chemical particles.
+		for i in 2:
+			var progress := clampf(phase-i*0.12,0,1)
+			sound_waves.draw_arc(at,start+progress*30,0,TAU,24,Color(tint,(1-progress)*wave.strength*(0.8 if i == 0 else 0.35)),1.2/game.zoom,true)

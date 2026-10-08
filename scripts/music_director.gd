@@ -21,6 +21,35 @@ var bank_started := 0
 var startup_skips := 0
 var buffer_capacity := 0
 var silence_clock := 0.0
+var visual_notes: Array = []
+var waves: Array = []
+var audible_frame := 0
+
+func _queue_visual_notes(events: Array, start: int) -> void:
+	for event in events:
+		if visual_notes.size() >= 128: break
+		var cue: Dictionary = event.duplicate()
+		cue["at"] = start+event.offset
+		visual_notes.append(cue)
+
+func _update_waves(dt: float) -> void:
+	if playback == null or game.preferences.music_volume <= 0:
+		visual_notes.clear()
+		waves.clear()
+		return
+	for wave in waves: wave.age += minf(dt,0.1)
+	waves = waves.filter(func(wave): return wave.age < 0.65)
+	var queued := buffer_capacity-playback.get_frames_available()
+	audible_frame = maxi(audible_frame,frame_cursor-queued-roundi(AudioServer.get_output_latency()*Synth.RATE))
+	while not visual_notes.is_empty() and visual_notes[0].at <= audible_frame:
+		var cue: Dictionary = visual_notes.pop_front()
+		var age := float(audible_frame-cue.at)/Synth.RATE
+		if age > 0.65 or waves.size() >= 64: continue
+		var lane: int = cue.lane
+		if score.channels[lane].id != cue.source or score.channels[lane].gain <= 0: continue
+		cue["age"] = maxf(0,age)
+		cue["strength"] = minf(1,score.channels[lane].gain*cue.gain*4)
+		waves.append(cue)
 
 func initialize(owner_game) -> void:
 	game = owner_game
@@ -56,11 +85,15 @@ func reset() -> void:
 	player.stop()
 	playback = null
 	frame_cursor = 0
+	audible_frame = 0
+	visual_notes.clear()
+	waves.clear()
 	observe_clock = 0
 	score = Score.new()
 	if ready_bank: mixer.configure(Synth.cached_bank)
 
 func update_music(dt: float) -> void:
+	_update_waves(dt)
 	if not enabled: return
 	if bank_job != null and not bank_job.is_alive():
 		var bank: Array = bank_job.wait_to_finish()
@@ -93,6 +126,9 @@ func refill() -> void:
 		score.reset_accents(game.world)
 		mixer.configure(Synth.cached_bank)
 		frame_cursor = 0
+		audible_frame = 0
+		visual_notes.clear()
+		waves.clear()
 		# The reference mixer can take tens of milliseconds. Prepare silence-free
 		# startup while the stream is stopped, then begin with a complete buffer.
 		var priming_frames := roundi(0.16*Synth.RATE)
@@ -107,6 +143,7 @@ func refill() -> void:
 			playback = null
 			push_warning("Music could not prime its playback buffer.")
 			return
+		_queue_visual_notes(priming_events,0)
 		frame_cursor = priming_frames
 	var capacity := buffer_capacity
 	var target := mini(capacity,roundi(0.16*Synth.RATE))
@@ -117,6 +154,7 @@ func refill() -> void:
 		var events := score.events(frame_cursor,count)
 		var buffer: PackedVector2Array = mixer.render(count,events,score.channels,game.preferences.music_volume)
 		if not playback.push_buffer(buffer): break
+		_queue_visual_notes(events,frame_cursor)
 		frame_cursor += count
 		needed -= count
 	render_usec = Time.get_ticks_usec()-started

@@ -19,6 +19,11 @@ const CILIA_FLOW := 52.0
 const SECRETION_COST := 0.10
 const AEROBIC_ATP := 7.0
 const FERMENT_ATP := 3.0
+# In this 2D habitat, enclosed area is the represented cytoplasmic volume.
+const TISSUE_AREA := Membrane.COUNT*0.5*sin(TAU/Membrane.COUNT)*47.0*47.0/78.0
+const ATP_TURNOVER := 0.002
+const ORAL_FLOW := 64.0
+const ORAL_REACH := 170.0
 var exploration := 0.25
 var response_cycle := 4.0
 var drive_active := false
@@ -127,9 +132,11 @@ func organic_mass() -> float:
 	return body + biomass + organ_mass() + substrate + waste + carbon + brood_mass
 
 func update_geometry() -> void:
-	# Effective volume is retained cytoplasm. Sphere radius projected into 2D;
-	# usable membrane capacity is its simulated perimeter, not a claim of 3D packing.
-	radius = 47.0 * pow(maxf(8, body + biomass + brood_mass) / 78.0, 1.0/3.0)
+	# One retained tissue unit adds exactly TISSUE_AREA of represented volume.
+	radius = tissue_radius(maxf(8,body+biomass+brood_mass))
+	membrane.oral_angle = NAN
+	for organ in organs:
+		if inherent(organ): membrane.oral_angle = organ.a
 	mass = maxf(4, organic_mass()*0.45)
 	inertia = (body + biomass + substrate + waste + carbon + brood_mass) * radius * radius * 0.5
 	for organ in organs:
@@ -190,6 +197,13 @@ func arc_gap(a: float, b: float) -> float:
 func organ_position(organ: Dictionary) -> Vector2:
 	return position + (local_point(organ.a) + organ_normal(organ)*5*organ.scale).rotated(angle)
 
+func excretion_angle() -> float:
+	return (membrane.oral_angle if is_finite(membrane.oral_angle) else 0.0)+PI*0.85
+
+func excretion_position() -> Vector2:
+	var a := excretion_angle()
+	return position+(local_point(a)+local_normal(a)*12).rotated(angle)
+
 func support(world_angle: float) -> float:
 	return local_point(surface_parameter(world_angle-angle)).length()
 
@@ -226,8 +240,23 @@ func gut_capacity() -> float:
 func oxygen_capacity() -> float:
 	return 30.0*growth_scale()
 
-func energy_capacity() -> float:
+static func tissue_radius(amount: float) -> float:
+	return 47.0*sqrt(maxf(0,amount)/78.0)
+
+static func inherent(organ: Dictionary) -> bool:
+	return organ.get("inherent",false)
+
+func energy_reference() -> float:
+	# A concentration scale for turnover and drawing, never a storage ceiling.
 	return 100.0*growth_scale()
+
+func atp_decay_rate() -> float:
+	return ATP_TURNOVER*energy*energy/energy_reference()
+
+func decay_energy(dt: float) -> void:
+	# Exact positive integration of dE/dt = -k E² / reference. Coarse-safe.
+	if dt <= 0 or energy <= 0: return
+	spend_energy(energy-energy/(1+ATP_TURNOVER*energy/energy_reference()*dt),{},"turnover")
 
 static func organ_cost(kind: String, size: float = 1.0) -> float:
 	var k := KINDS.find(kind)
@@ -250,7 +279,7 @@ func can_fit(kind: String, a: float, size: float = 1.0, paid: bool = true) -> bo
 	var k := KINDS.find(kind)
 	if k < 0 or not is_finite(a) or not is_finite(size) or size < 0.5: return false
 	var cost := organ_cost(kind,size) if paid else 0.0
-	var length := perimeter()*pow(maxf(8,body+biomass+brood_mass-cost)/maxf(8,body+biomass+brood_mass),1.0/3.0)
+	var length := perimeter()*pow(maxf(8,body+biomass+brood_mass-cost)/maxf(8,body+biomass+brood_mass),0.5)
 	return occupied()+WIDTH[k]*size+4 <= length
 
 func parameter_at_arc(distance: float) -> float:
@@ -323,13 +352,18 @@ func add_organ(kind: String, a: float, mode: String = "graze", paid: bool = true
 		if mode == "graze": mode = required
 		if mode != required: return false
 	elif not MODES.has(mode): return false
-	var cost := organ_cost(kind,size)
+	if kind == "feeding" and (paid or count("feeding") > 0): return false
+	var cost := 0.0 if kind == "feeding" else organ_cost(kind,size)
 	if paid and biomass < cost: return false
-	var length := perimeter()*pow(maxf(8,body+biomass+brood_mass-(cost if paid else 0.0))/maxf(8,body+biomass+brood_mass),1.0/3.0)
+	var length := perimeter()*pow(maxf(8,body+biomass+brood_mass-(cost if paid else 0.0))/maxf(8,body+biomass+brood_mass),0.5)
 	_make_room(a,WIDTH[k]*size+4,length)
 	if paid: biomass -= cost
 	var max_health := (70.0 if kind == "protection" else 25.0)*size*size
 	organs.append({"id":next_organ_id,"kind":kind,"a":fposmod(a,TAU),"scale":size,"mode":mode,"hp":max_health,"max_hp":max_health,"material":cost,"max_material":cost,"mutation":"","steering":1.0,"growth_spent":size*size,"ap_spent":maxi(1,ceili(size*size-0.000001)),"target_id":-1,"progress":0.0,"coverage":0.0,"feeding":false,"link":Vector2.ZERO,"feedback":"","consume_flash":0.0,"consume_clock":0.0,"charge_flash":0.0,"consumed_total":0.0,"blocked":0.0})
+	if kind == "feeding":
+		organs[-1]["inherent"] = true
+		organs[-1].ap_spent = 0
+		organs[-1].growth_spent = 0
 	next_organ_id += 1
 	update_geometry()
 	render_revision += 1
@@ -358,7 +392,7 @@ func spend_energy(amount: float, organ: Dictionary = {}, category: String = "upk
 
 func gain_energy(amount: float, organ: Dictionary = {}) -> void:
 	var previous := energy
-	energy = minf(energy_capacity(),energy+amount)
+	energy += maxf(0,amount)
 	var stored := maxf(0,energy-previous)
 	energy_budget.record(age,maxf(0,amount),stored,0,organ.get("id",-1),"production")
 	if stored > 0: resource_effect("gain",organ.get("a",0.0),stored,organ.get("id",-1))
@@ -402,7 +436,7 @@ func animate_resources(dt: float) -> void:
 	resource_packets = resource_packets.filter(func(packet): return packet.life > 0)
 
 func recycle(index: int) -> float:
-	if dead or index < 0 or index >= organs.size(): return -1.0
+	if dead or index < 0 or index >= organs.size() or inherent(organs[index]): return -1.0
 	var material: float = organs[index].material
 	biomass += material * 0.5
 	organs.remove_at(index)
@@ -426,6 +460,7 @@ func damage(amount: float, world_angle: float) -> float:
 	var hit = -1
 	var distance = INF
 	for i in organs.size():
+		if inherent(organs[i]): continue # A groove is exposed membrane, not armor.
 		var arc = absf(arc_gap(organs[i].a,local_angle))
 		if arc < organ_width(organs[i])*0.6 and arc < distance:
 			hit = i
@@ -478,6 +513,7 @@ func heal(dt: float) -> float:
 		spend_energy(healed*0.2*repair_cost,{},"repair")
 		if healed > 0: resource_effect("repair",last_wound,healed*0.05)
 		for organ in organs:
+			if inherent(organ): continue
 			var unit: float = organ.get("max_material",organ_cost(organ.kind,organ.scale)) / organ.max_hp
 			var restore = minf(organ.max_hp-organ.hp,minf(dt*1.3*repair,minf(biomass/unit,energy/(0.15*repair_cost))))
 			organ.hp += restore
@@ -508,7 +544,7 @@ static func clone_state(source):
 
 func move_organ(identity: int, a: float) -> bool:
 	var organ := organ_by_id(identity)
-	if organ.is_empty() or not is_finite(a): return false
+	if organ.is_empty() or inherent(organ) or not is_finite(a): return false
 	organs.erase(organ)
 	_make_room(a,organ_width(organ),perimeter())
 	organ.a = fposmod(a,TAU)
@@ -518,7 +554,7 @@ func move_organ(identity: int, a: float) -> bool:
 
 func resize_quote(identity: int, size: float) -> Dictionary:
 	var organ := organ_by_id(identity)
-	if organ.is_empty() or not is_finite(size) or size < 0.5: return {}
+	if organ.is_empty() or inherent(organ) or not is_finite(size) or size < 0.5: return {}
 	var ratio: float = size*size/(organ.scale*organ.scale)
 	var growth: float = organ.get("growth_spent",organ.scale*organ.scale)+maxf(0,size*size-organ.scale*organ.scale)
 	var paid: int = organ.get("ap_spent",maxi(1,ceili(organ.scale*organ.scale-0.000001)))
@@ -529,7 +565,7 @@ func resize_organ(identity: int, size: float) -> Dictionary:
 	var quote := resize_quote(identity,size)
 	if quote.is_empty(): return {}
 	var cost: float = maxf(0,quote.material)
-	var available := perimeter()*pow(maxf(8,body+biomass+brood_mass-cost)/maxf(8,body+biomass+brood_mass),1.0/3.0)
+	var available := perimeter()*pow(maxf(8,body+biomass+brood_mass-cost)/maxf(8,body+biomass+brood_mass),0.5)
 	if biomass < cost or occupied()-organ_width(organ)+WIDTH[KINDS.find(organ.kind)]*size+4 > available: return {}
 	biomass -= cost
 	var debris: float = maxf(0,-quote.material)*0.5
@@ -551,7 +587,7 @@ func resize_organ(identity: int, size: float) -> Dictionary:
 
 func specialize(identity: int, gene: String) -> bool:
 	var organ := organ_by_id(identity)
-	if organ.is_empty() or not Genes.DATA.has(gene) or organ.get("mutation","") != "" or Genes.DATA[gene].kind != organ.kind: return false
+	if organ.is_empty() or inherent(organ) or not Genes.DATA.has(gene) or organ.get("mutation","") != "" or Genes.DATA[gene].kind != organ.kind: return false
 	var cost := Genes.price(organ)
 	if biomass < cost: return false
 	var health: float = organ.hp/organ.max_hp
@@ -572,7 +608,7 @@ func restore_organ(identity: int) -> bool:
 	for record in lost_organs:
 		if record.id != identity: continue
 		var cost: float = record.max_material
-		var available := perimeter()*pow(maxf(8,body+biomass+brood_mass-cost)/maxf(8,body+biomass+brood_mass),1.0/3.0)
+		var available := perimeter()*pow(maxf(8,body+biomass+brood_mass-cost)/maxf(8,body+biomass+brood_mass),0.5)
 		if biomass < cost or occupied()+organ_width(record) > available: return false
 		var organ: Dictionary = record.duplicate(true)
 		_make_room(organ.a,organ_width(organ),available)
@@ -599,7 +635,7 @@ func reserve(amount: float = 10.0, material_target: float = INF) -> void:
 		brood_energy += atp
 	else:
 		var tissue := minf(brood_mass,-amount)
-		var atp := minf(brood_energy,minf(-amount,maxf(0,energy_capacity()-energy)))
+		var atp := minf(brood_energy,-amount)
 		brood_mass -= tissue
 		biomass += tissue
 		brood_energy -= atp
@@ -611,7 +647,7 @@ func fluid_drag() -> float:
 	return 90.0*radius/47.0
 
 func operating_budget() -> Dictionary:
-	var steady := BASAL_UPKEEP*growth_scale()
+	var steady := BASAL_UPKEEP*growth_scale()+atp_decay_rate()
 	for organ in organs: steady += organ_upkeep(organ)
 	var income := minf(substrate,oxygen)*AEROBIC_ATP+maxf(0,substrate-oxygen)*FERMENT_ATP
 	return {"steady":steady,"fuel":income}

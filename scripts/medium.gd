@@ -149,8 +149,6 @@ func can_couple(p: Vector2) -> bool:
 func suction(body, mouth: Vector2, reach: float, power: float, dt: float, inflow_axis: Vector2 = Vector2.ZERO) -> void:
 	# ATP-driven local inflow changes the real medium. Return the exact opposite
 	# linear/angular impulse to the pumping cell; other cells feel it via drag.
-	var impulse := Vector2.ZERO
-	var torque := 0.0
 	var candidates := active_indices
 	if local_suction:
 		candidates = PackedInt32Array()
@@ -172,11 +170,13 @@ func suction(body, mouth: Vector2, reach: float, power: float, dt: float, inflow
 		# ordinary pore pumping keeps its historical symmetric inflow.
 		if inflow_axis.length_squared() > 0.01:
 			falloff *= 0.15+0.85*maxf(0,(-delta/distance).dot(inflow_axis.normalized()))
-		var desired := delta/distance*power
-		var change := (desired-velocity[i])*(1-exp(-dt*2.2*falloff))
-		velocity[i] += change
-		var momentum_change := change*NODE_MASS
-		impulse += momentum_change
-		torque += arm.cross(momentum_change)
-	body.velocity -= impulse/body.mass
-	body.angular_velocity -= torque/body.inertia
+		# A pump imposes inflow relative to its moving membrane. Solve the paired
+		# body/node impulse with both inertias, avoiding world-anchored feedback.
+		var surface_velocity: Vector2 = body.velocity+Vector2(-arm.y,arm.x)*body.angular_velocity
+		var correction: Vector2 = delta/distance*power-(velocity[i]-surface_velocity)
+		var axis := correction.normalized()
+		var inverse_mass: float = 1.0/NODE_MASS+1.0/body.mass+pow(arm.cross(axis),2)/body.inertia
+		var momentum_change: Vector2 = correction*(1-exp(-dt*2.2*falloff))/inverse_mass
+		velocity[i] += momentum_change/NODE_MASS
+		body.velocity -= momentum_change/body.mass
+		body.angular_velocity -= arm.cross(momentum_change)/body.inertia

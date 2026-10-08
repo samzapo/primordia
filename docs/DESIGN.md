@@ -349,3 +349,24 @@ Streaming costs CPU time on the current small world; do not describe it as a
 measured speedup over the all-GPU reference or as infinite-world/50k/mobile
 completion. Next scaling work includes tiled fields, cell scheduling and smoother
 cold preparation. The ordinary CPU game remains the owner's successful reference.
+
+## Revision 42 — built-in oral anatomy and intracellular editing
+
+Paramecium motivates the first anatomy set: a ciliated oral groove is inherent
+membrane structure shared by all generated cells, not a purchasable organ.
+Preserve paid propulsion choices, actual local membrane normals, shared feeding
+and current physics, and exposed-membrane vulnerability. Ciliary and oral pumps
+act relative to the moving liquid/body pair with conservative reaction impulses.
+
+Represent retained tissue volume linearly by enclosed 2D area and use the same
+unit in build-cost previews. ATP is uncapped, with increasing concentration
+turnover and a growing sac rather than a fixed-capacity gauge. AP is represented
+by internal gold vacuoles. Build mode freezes outside biology while bounded
+internal stock parcels keep circulating; no editor resource generation.
+
+Hide explanations behind optional inspection, keep compact cell-local actions,
+and preserve necessary affordability feedback. The nucleus supplies the main
+beat; other notes must have an actual anatomical source. Remove anonymous
+backing music and soften other organisms. Source-local pitch-colored waves
+follow audible notes, not chemical-particle behavior. See [Revision 42](REVISION_42.md)
+and the biological motivations and explicit abstractions in [references.md](../references.md).

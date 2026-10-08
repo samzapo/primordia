@@ -133,10 +133,15 @@ func run(test_host) -> void:
 	scene._physics_process(DT)
 	expect(scene.build_open and scene.world.time == clock and scene.manual_zoom > 0.8,"Tab pauses biology and focuses inside the cell")
 	click(scene.cell_ui.screen_at({"kind":"assembly"}))
-	expect(scene.cell_ui.choices.size() == 8,"The assembly factory includes the separate illustrated hunting receptor")
-	expect(scene.cell_ui.choices[7].kind == "cilia" and scene.cell_ui.choices[7].caption == "Cilia","Cilia have an illustrated assembly choice with ordinary tissue/AP prices")
-	expect(scene.cell_ui.choices[6].kind == "hunting" and scene.cell_ui.choices[6].caption == "Hunting receptor","Hunting is its own factory organ, not a spike mode")
-	scene.cell_ui.choices[6].pressed.emit()
+	expect(scene.cell_ui.choices.size() == 5,"Factory offers four choices plus another page")
+	scene.cell_ui.choices[-1].pressed.emit()
+	var found_cilia := false
+	var hunt
+	for choice in scene.cell_ui.choices:
+		found_cilia = found_cilia or choice.kind == "cilia"
+		if choice.kind == "hunting": hunt = choice
+	expect(found_cilia and hunt != null,"Cilia and hunting remain illustrated purchases on the second page")
+	hunt.pressed.emit()
 	expect(scene.selected == 10,"Hunting receptor selection reaches the normal membrane placement flow")
 	click(scene.cell_ui.screen_at({"kind":"assembly"}))
 	scene.cell_ui.choices[1].pressed.emit()
@@ -170,28 +175,30 @@ func run(test_host) -> void:
 	# Steering lives on the organ; preview quantities are usable tissue only.
 	var pore: Dictionary = cell.organs.filter(func(item):return item.kind == "feeding")[0]
 	scene.cell_ui.open_context({"kind":"organ","id":pore.id})
-	expect(scene.cell_ui.choices.size() == 3 and scene.cell_ui.choices[2].caption == "Steering 100%","A pore exposes its signal strength as a local anatomical choice")
+	expect(scene.cell_ui.choices.size() == 1 and scene.cell_ui.choices[0].caption == "Steering 100%","A pore exposes its signal strength as a local anatomical choice")
 	var resource_state: Array = [cell.biomass,cell.energy,scene.world.evolution.points]
-	for i in 3: scene.cell_ui.choices[2].pressed.emit()
-	expect(Sim.Cell.steering_strength(pore) == 0 and scene.cell_ui.choices[2].caption == "Steering Off","Clicking the local strength choice cycles to steering Off")
+	for i in 3: scene.cell_ui.choices[0].pressed.emit()
+	expect(Sim.Cell.steering_strength(pore) == 0 and scene.cell_ui.choices[0].caption == "Steering Off","Clicking the local strength choice cycles to steering Off")
 	expect(resource_state == [cell.biomass,cell.energy,scene.world.evolution.points],"Local tuning spends no physical resource or adaptation point")
 	expect(scene.cell_ui.describe({"kind":"organ","id":pore.id}).contains("Steering Off"),"Organ inspection immediately reports its steering setting")
-	for i in 3: scene.cell_ui.choices[2].pressed.emit()
+	for i in 3: scene.cell_ui.choices[0].pressed.emit()
 	scene.cell_ui.close_context()
 	# The actual kept upgrade price feeds both the tooltip and visual cost comparison.
+	cell.add_organ("propulsion",PI,"graze",false)
+	var upgraded: Dictionary = cell.organs[-1]
 	var upgrade_gene := ""
 	for gene in Sim.Genes.DATA:
-		if Sim.Genes.DATA[gene].kind == "feeding": upgrade_gene = gene; break
+		if Sim.Genes.DATA[gene].kind == "propulsion": upgrade_gene = gene; break
 	scene.world.evolution.learned.append(upgrade_gene)
-	scene.cell_ui.open_context({"kind":"organ","id":pore.id})
+	scene.cell_ui.open_context({"kind":"organ","id":upgraded.id})
 	scene.cell_ui.sync(0)
 	var upgrade = scene.cell_ui.choices[-1]
 	upgrade.grab_focus()
 	scene.cell_ui.sync(0)
 	var upgrade_quote: Dictionary = scene.cell_ui.biomass_view.quote
-	expect(upgrade_quote.show_cost and upgrade_quote.cost == Sim.Genes.price(pore) and upgrade_quote.ap_needed == Sim.Genes.adaptation_price(pore),"Inspecting a real upgrade displays its tissue and AP costs")
+	expect(upgrade_quote.show_cost and upgrade_quote.cost == Sim.Genes.price(upgraded) and upgrade_quote.ap_needed == Sim.Genes.adaptation_price(upgraded),"Inspecting a real upgrade displays its tissue and AP costs")
 	expect(upgrade.description.contains("tissue") and upgrade.description.contains("AP"),"Upgrade tooltip retains precise tissue and adaptation prices")
-	expect(scene.cell_ui.biomass_view.rate_quote.preview and scene.cell_ui.biomass_view.rate_quote.has_organ and "Steady ATP" in scene.cell_ui.tip.text,"Upgrade inspection shows its proposed upkeep before spending")
+	expect(scene.cell_ui.biomass_view.rate_quote.preview and scene.cell_ui.biomass_view.rate_quote.has_organ and not scene.cell_ui.tip.text.contains("\n"),"Upgrade inspection shows its proposed upkeep before spending")
 	var type_scale: float = scene.preferences.hud_scale
 	scene.preferences.hud_scale = 1.75
 	scene.cell_ui.sync(0)
@@ -208,11 +215,11 @@ func run(test_host) -> void:
 	scene.world.evolution.points = saved_upgrade_ap
 	scene.cell_ui.close_context()
 	expect(not scene.cell_ui.biomass_view.quote.show_cost,"Closing upgrade choices clears the visual price")
-	scene.selected = 4
+	scene.selected = 0
 	scene.cell_ui.sync(0)
 	var stock = scene.cell_ui.biomass_view
 	var quote: Dictionary = stock.quote
-	expect(stock.visible and quote.available == cell.biomass and quote.cost == Sim.Cell.organ_cost("feeding"),"The build preview compares usable biomass with the selected fixed-size organ cost")
+	expect(stock.visible and quote.available == cell.biomass and quote.cost == Sim.Cell.organ_cost("propulsion"),"The build preview compares usable biomass with the selected fixed-size organ cost")
 	expect(is_equal_approx(pow(quote.cost_radius/quote.stock_radius,2),quote.cost/quote.available),"Available and required blobs use the same area scale")
 	var usable: float = cell.biomass
 	cell.biomass = 100000
@@ -282,13 +289,13 @@ func run(test_host) -> void:
 	scene.cell_ui.close_context()
 	cell.energy = 0
 	scene.cell_ui.interior.sync()
-	expect(scene.cell_ui.interior.atp_fraction == 0,"An empty ATP resource renders an empty sac")
-	cell.energy = cell.energy_capacity()
+	expect(scene.cell_ui.interior.atp_size == 0,"An empty ATP resource renders an empty sac")
+	cell.energy = cell.energy_reference()
 	scene.world.evolution.points = 7
 	scene.cell_ui.interior.sync()
-	expect(scene.cell_ui.interior.atp_fraction == 1,"Full ATP remains in the internal sac")
+	expect(scene.cell_ui.interior.atp_size > 0,"Positive ATP produces a nonempty elastic sac")
 	scene.cell_ui.biomass_view.sync()
-	expect(scene.cell_ui.biomass_view.quote.ap_count == 7,"Top-right AP blobs count the actual available adaptation points")
+	expect(scene.cell_ui.biomass_view.quote.ap_count == 7,"The cost comparison reads actual available AP")
 	scene.world.evolution.points = 0
 	scene.cell_ui.biomass_view.sync()
 	expect(scene.cell_ui.biomass_view.quote.ap_count == 0,"Empty AP stock shows no available gold blobs")

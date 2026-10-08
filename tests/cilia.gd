@@ -25,6 +25,7 @@ static func fixture():
 	return sim
 
 static func run(check: Callable) -> void:
+	stress(check)
 	var sim = Sim.new(77)
 	check.call(sim.player.count("propulsion") == 0 and sim.player.count("cilia") == 0 and sim.player.count("feeding") == 1,"Starter has a pore and no free locomotion organ")
 	check.call(sim.lineage.dormant[0].count("propulsion")+sim.lineage.dormant[0].count("cilia") == 0,"Founder reserve preserves the same bare starter anatomy")
@@ -70,6 +71,17 @@ static func run(check: Callable) -> void:
 	check.call(cell.velocity.length() > 0 and (sim.fluid.momentum()+cell.velocity*cell.mass-before).length() < 0.01,"Cilia propel the body through conservative fluid impulses")
 	check.call(is_equal_approx(energy-cell.energy,Cell.CILIA_MOTION*0.1),"Ciliary motion pays its own ATP rate")
 	check.call(Cell.organ_upkeep(cell.organs[0]) == Cell.CILIA_PUMP+Cell.CILIA_MOTION,"Cilia preview includes both motion and feeding-current upkeep")
+
+	# Steering torque must be paired too, not add the same rotation to water.
+	sim = fixture()
+	cell = sim.player
+	cell.facing = Vector2.UP
+	sim._motion_cell(cell,0.125)
+	var steering_momentum: float = cell.angular_velocity*cell.inertia
+	for i in sim.fluid.velocity.size():
+		var node := Vector2(i%Medium.COLS+0.5,int(i/Medium.COLS)+0.5)*Medium.SIZE
+		steering_momentum += Medium.offset(Vector2(2048,1280),node).cross(sim.fluid.velocity[i]*Medium.NODE_MASS)
+	check.call(absf(steering_momentum) < 0.1,"Ciliary steering applies opposite angular momentum to the water")
 	sim = fixture()
 	cell = sim.player
 	cell.energy = 0
@@ -101,3 +113,34 @@ static func run(check: Callable) -> void:
 	sim.offscreen_ecology.advance(sim,cell,1)
 	check.call(cell.age == 1 and cell.velocity.length() > 0 and not sim.fluid.global_coupling and not sim.coarse_mode,"Hidden cilia use the ordinary paid pumping and motion functions")
 	check.call(cell.organic_mass() <= old_material+0.00001,"Hidden cilia grant no material or nutrient bonus")
+
+static func stress(check: Callable) -> void:
+	# Finite powered four-band fixture, including the actual offscreen substep.
+	for dt in [1.0/60,0.125,0.5]:
+		var sim = fixture()
+		var cell = sim.player
+		for i in range(1,4): cell.add_organ("cilia",TAU*i/4,"graze",false)
+		cell.energy = 10000
+		sim.fluid.driven = false
+		var common := Vector2(180,-90)
+		cell.velocity = common
+		sim.fluid.velocity.fill(common)
+		var peak := 0.0
+		var spin := 0.0
+		var finite := true
+		for i in 600:
+			cell.target = Vector2.from_angle(i*dt*0.17)
+			cell.facing = cell.target
+			# Both body and fluid response use the same paid path as live/coarse play.
+			sim._suction_cell(cell,dt)
+			sim._motion_cell(cell,dt)
+			if i%20 == 0:
+				for v in sim.fluid.velocity:
+					finite = finite and v.is_finite()
+					peak = maxf(peak,(v-common).length())
+				spin = maxf(spin,absf(cell.angular_velocity))
+				finite = finite and cell.velocity.is_finite() and is_finite(cell.angular_velocity)
+				if not finite or peak > 2000: break
+		print("CILIA_STRESS ",{"dt":dt,"seconds":600*dt,"peak_current_relative_to_initial":peak,"peak_spin":spin,"remaining_ATP":cell.energy})
+		check.call(finite and peak < 600 and spin < 20,"Four ciliary bands remain bounded in a strong moving current at dt="+str(dt))
+		check.call(cell.energy < 10000 and cell.energy > 0,"Ciliary stress fixture pays from a finite ATP stock")

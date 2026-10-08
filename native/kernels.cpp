@@ -2133,7 +2133,7 @@ public:
       double fx=double(q.x)-x, fy=double(q.y)-y;
       Vector2 top=water[node(x,y)].lerp(water[node(x+1,y)],fx);
       Vector2 bottom=water[node(x,y+1)].lerp(water[node(x+1,y+1)],fx);
-      Vector2 relative=(top.lerp(bottom,fy)-velocity-arm.orthogonal()*angular).rotated(-angle);
+      Vector2 relative=(top.lerp(bottom,fy)-velocity-Vector2(-arm.y,arm.x)*angular).rotated(-angle);
       out[i]=relative.limit_length(90);
     }
     return result;

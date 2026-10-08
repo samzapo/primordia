@@ -45,5 +45,6 @@ static func run(check: Callable) -> void:
 	cell.oxygen = 0.25
 	cell.health = 100
 	sim._metabolize(cell,1)
-	var expected: float = 0.25*Cell.AEROBIC_ATP+0.75*Cell.FERMENT_ATP-Cell.BASAL_UPKEEP*cell.growth_scale()
+	var yield_atp: float = 0.25*Cell.AEROBIC_ATP+0.75*Cell.FERMENT_ATP
+	var expected: float = yield_atp/(1+Cell.ATP_TURNOVER*yield_atp/cell.energy_reference())-Cell.BASAL_UPKEEP*cell.growth_scale()
 	check.call(is_equal_approx(cell.energy,expected),"Mixed respiration and fermentation pay exact revised yields and basal cost")

@@ -138,3 +138,18 @@ unreclaimed dead/expired slots. Record whole frames and sim/wall rates, not only
 mean ticks. The current fixed habitat/fluid grid and all-cell scheduling still
 need further scaling; do not claim an unbounded whole game or sustained 50k/mobile
 performance. Whole-GPU reference: frame profiler --resident-streaming=off.
+
+## Revision 42 anatomy and audio invariants
+
+- Generated cells and successors retain one inherent oral groove. It uses the
+  legacy feeding structure type but is neither a purchase nor armor; do not
+  allow recycling, moving, resizing or specializing it through organ tools.
+- Tissue volume is represented linearly by membrane area. ATP has no storage
+  cap; concentration-dependent turnover is shared by fine and coarse biology.
+- Intracellular parcels in build mode represent existing resources only.
+  Internal animation cannot advance external biology or grant ATP, tissue/AP.
+- No anonymous backing music. Notes identify their nucleus, equipped organ or
+  real food vacuole; visible pitch-colored waves follow audio playback.
+- All suction uses body-relative linear and angular velocity with paired
+  impulses. Godot Vector2.orthogonal() has the opposite sign to (-y,x);
+  use (-y,x) for angular surface velocity and positive steering torque.

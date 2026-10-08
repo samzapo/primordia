@@ -101,7 +101,10 @@ func _schedule() -> void:
 	var counts := PackedFloat32Array()
 	counts.resize(Score.KINDS.size())
 	counts.fill(1)
-	score.sources = [{"id":0,"lane":1,"gain":1.0,"mass":160.0,"counts":counts}]
+	var mounts := {}
+	for i in Score.KINDS.size(): mounts[Score.KINDS[i]] = i
+	score.sources = [{"id":0,"lane":1,"gain":1.0,"mass":160.0,"counts":counts,"mounts":mounts}]
+	score.lead_id = 0
 	var heard := {}
 	var regions := {}
 	var bounded := true

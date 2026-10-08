@@ -67,6 +67,7 @@ func _draft() -> void:
 	var useful: Array = []
 	var other: Array = []
 	for key in Genes.DATA:
+		if Genes.DATA[key].kind == "feeding": continue
 		if key in learned: continue
 		if Genes.DATA[key].kind in ["feeding","regenerative","protection","photosynthesis","neutralizing"]: useful.append(key)
 		else: other.append(key)
@@ -224,7 +225,7 @@ func newcomer(cell, sim) -> void:
 		var titles := ["Spindle","Cinder","Bastion"]
 		cell.rival_name = titles[stage]
 		rivals[stage] = cell.id
-		var anatomy: Array = [["protection","feeding"],["toxin"],["protection","regenerative"]][stage]
+		var anatomy: Array = [["protection","cilia"],["toxin"],["protection","regenerative"]][stage]
 		for organ_kind in anatomy:
 			for i in 12:
 				if cell.add_organ(organ_kind,TAU*i/12,"graze",true): break
@@ -235,7 +236,7 @@ func newcomer(cell, sim) -> void:
 	elif tide >= 5 and newcomer_count%2 == 0 and cell.role == "hunter": kind = "protection"
 	var adaptive := clock >= resistance_clock and newcomer_count%3 == 0 and counter_budget > 0 and resistance != ""
 	if adaptive:
-		kind = {"toxin":"neutralizing","spike":"protection","acid":"regenerative","photo":"feeding"}.get(resistance,kind)
+		kind = {"toxin":"neutralizing","spike":"protection","acid":"regenerative","photo":"cilia"}.get(resistance,kind)
 	if kind != "":
 		for i in 12:
 			if cell.biomass < cell.organ_cost(kind)+2: break

@@ -34,6 +34,7 @@ func _run() -> void:
 	preload("res://tests/habitat.gd").run(expect)
 	preload("res://tests/porous_habitat.gd").run(expect)
 	preload("res://tests/art.gd").run(expect)
+	preload("res://tests/paramecium.gd").run(expect)
 	_test_metabolism()
 	_test_anatomy()
 	_test_receptors()
@@ -849,7 +850,9 @@ func _test_autonomous_hunting() -> void:
 	prey.update_geometry()
 	prey.membrane = Membrane.new(prey.radius)
 	for i in 160: sim.spawn_particle(Sim.OXYGEN,cell.position+Vector2.from_angle(i*2.4)*(70+i%40*5),Vector2.ZERO,0.4,prey.id)
-	for i in 1800: sim.step(DT)
+	# Area-linear growth makes this large hunter slower. Keep the same seeded
+	# anatomy and require a real kill and ingestion within sixty seconds.
+	for i in 3600: sim.step(DT)
 	print("HUNT: kills=%d eaten=%.2f processed=%.2f health=%.1f" % [sim.kills,cell.eaten,cell.processed,cell.health])
 	expect(sim.kills >= 1 and cell.eaten > 0,"Autonomous spike pursuit kills prey and the grazing pore consumes released food")
 	expect(cell.processed > 0 and cell.health > 0,"Hunting contributes to ordinary metabolism and survival")

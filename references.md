@@ -409,3 +409,11 @@ preparation are engineering mechanisms. Returning a chunk as a unit does not
 combine its particles into one reactant or average their orientations. Large
 steps approximate paths and encounters outside the display; they are not an
 exact substitute for a continuously resolved molecular trajectory.
+
+## Paramecium-inspired anatomy and resource presentation (Revision 42)
+
+- **Oral groove and feeding current:** [Ishida, Allen and Fok (2001), *Phagosome formation in Paramecium*](https://pubmed.ncbi.nlm.nih.gov/11831772/) observed coordinated oral/somatic cilia transporting particles into nascent digestive vacuoles. This motivates a membrane vestibule with ciliary inflow and visible food vacuoles. Primordia gives every playable creature this basic anatomy; that is a shared game rule, not a claim that all real cells have a mouth. Propulsive ciliary bands remain optional paid anatomy.
+- **Contractile vacuoles:** [Stock et al. (2002), *Osmoregulation in Paramecium*](https://pubmed.ncbi.nlm.nih.gov/12006618/) measured ion gradients associated with water movement through the cytosol and contractile vacuole. The paired pulsating vacuoles and radial canals are currently an anatomical illustration. They do not yet simulate osmolarity or create water/energy resources.
+- **ATP turnover:** [Alberts et al., *Catalysis and the Use of Energy by Cells*](https://www.ncbi.nlm.nih.gov/books/NBK26838/) describes coupled ATP use and regeneration. The visual ATP sac is a deliberate interface metaphor: ATP is not normally accumulated in a dedicated storage sack. The quadratic concentration-dependent loss is a game balance law, not a measured ATP hydrolysis law. It provides a soft cost for stockpiling without a hard storage ceiling.
+- **Volume and internal circulation:** enclosed 2D area represents retained tissue volume; it is not a literal 3D cross-section. Food/waste vacuoles represent the existing metabolic pools. Their bounded internal transport continues in the editor without advancing outside time or converting those pools into free resources. Gold AP vacuoles represent fictional adaptation currency.
+- **Music:** anatomy-to-note mappings, the nucleus beat and pitch-colored sound waves are artistic sonification. They are not claims about audible sound produced by cells. The inherited motif survives through the instruments present in each descendant.

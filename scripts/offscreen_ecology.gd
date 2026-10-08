@@ -109,7 +109,7 @@ func advance_body(sim, cell, h: float) -> void:
 		var normal := Vector2.from_angle(cell.angle+leak.a)
 		sim._emit_material(sim.NUTRIENT,cell.position+cell.local_point(leak.a).rotated(cell.angle)+normal*12,leak.amount,normal*12,cell.id)
 	if cell.waste >= 0.2:
-		sim._emit_material(sim.WASTE,cell.position-Vector2.from_angle(cell.angle)*(cell.radius+12),cell.waste,Vector2.ZERO,cell.id)
+		sim._emit_material(sim.WASTE,cell.excretion_position(),cell.waste,Vector2.ZERO,cell.id)
 		cell.waste = 0
 	_resize(cell)
 	while cell.occupied() > cell.perimeter() and not cell.organs.is_empty():

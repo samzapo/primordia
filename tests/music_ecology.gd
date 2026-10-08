@@ -93,7 +93,7 @@ func _lineage_and_events() -> void:
 	var accents := {}
 	for event in score.events(400001,50000):
 		if event.has("accent"): accents[event.accent] = true
-	check(accents.size() == 3,"Feeding, neutralization and division each produce their musical phrase")
+	check(accents.is_empty(),"Habitat events cannot produce an anonymous backing phrase")
 	check(world.sound_events == snapshot and world.rng.state == rng_state,"Reading the bounded audio journal never consumes events or ecology randomness")
 	score.observe(world,world.player.position,Vector2(600,380),false)
 	check(score.pending.is_empty(),"Repeated observation does not replay prior reactions")
@@ -117,7 +117,7 @@ func _cue_bounds() -> void:
 		world._record_sound("feeding",world.player.position,i)
 	check(world.sound_events.size() == 64 and world.sound_recent.size() <= 64,"Long runs retain at most 64 presentation events and coalescing keys")
 	score.observe(world,world.player.position,Vector2(600,380),true)
-	check(score.pending.is_empty() and score.scheduled.is_empty(),"Editing discards event accents while retaining the musical bed")
+	check(score.pending.is_empty() and score.scheduled.is_empty(),"Editing discards habitat accents while retaining anatomical voices")
 	score.paused = false
 	world.time += 0.2
 	world._record_sound("neutralize",world.player.position,world.player.id)

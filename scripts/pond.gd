@@ -13,7 +13,7 @@ const MINT := Color("80efce")
 const GOLD := Color("f5d47b")
 const TEXT := Color("e5f5ec")
 const MUTED := Color("a3bfc5")
-const TITLES := ["Flagellum","Protective cortex","Hunting spike","Repair body","Grazing pore","Flight receptor","Photosynthesis","Toxin vesicle","Toxin neutralizer","Acid gland","Hunting receptor","Cilia"]
+const TITLES := ["Flagellum","Protective cortex","Hunting spike","Repair body","Oral groove","Flight receptor","Photosynthesis","Toxin vesicle","Toxin neutralizer","Acid gland","Hunting receptor","Cilia"]
 const HELP := ["Flagella provide thrust. Anatomy chooses travel direction.","Protects the membrane directly beneath it. Coverage follows its membrane attachment.","A contact weapon with no senses or steering. Fast impacts puncture hard; slow pressure spends ATP for smaller wounds. Armor absorbs hits first. Pair spikes around a hunting receptor to line up collisions.","Uses biomass and ATP to repair organs and close punctures faster. Releases buffers that neutralize local acidity and accelerates receptor cleaning.","Senses and pumps nutrients into its opening. Secretes reusable enzymes that turn waste into food when aligned.","Reads nearby pheromones reporting larger or armed cells and retreats from their last reported location. This is the only organ that triggers flight.","Seeks brighter water. Light fixes dissolved carbon into biomass and food, releasing oxygen. Works best in bright habitat patches.","Spends ATP and biomass to fire toxins and receptor-blocking decoys toward a pheromone report received by a hunting or flight receptor.","Releases complementary particles that bind toxin into harmless waste. Costs small amounts of biomass and ATP.","Releases acidifying particles. Moderate acidity favors digestive enzymes; excess acidity costs ATP and stresses cells. Repair bodies release buffers.","Reads local pheromones reporting smaller or undefended prey. Faces and pursues the last reported location. Undefended means no functional spike, toxin vesicle or protective cortex at emission. Pair with spikes or toxins.","A short beating ciliary band provides propulsion and a strong local feeding current from the receptor-selected direction. Draws all particles with the water, including hazards; a grazing pore still consumes food."]
 var music := preload("res://scripts/music_director.gd").new()
 var music_slider := HSlider.new()
@@ -294,6 +294,7 @@ func _process(dt: float) -> void:
 			if archive_error != "": _message(archive_error+"\nHistory remains in memory for this session; saving will retry.")
 		_update_hud()
 		_layout()
+	cell_ui.interior.animate(dt)
 	cell_ui.sync(dt)
 	if frame_trace != null: frame_trace.work("ui",Time.get_ticks_usec()-ui_start)
 	var music_start := Time.get_ticks_usec() if frame_trace != null else 0
@@ -754,7 +755,7 @@ func _toggle_build() -> void:
 	tube_start.clear()
 	cell_ui.close_context()
 	cell_ui.keyboard_target.clear()
-	_message("Click a factory to assemble organs · nucleus for blueprints · bud for offspring.")
+	_message("Click a factory · hold Alt for details.")
 	_layout()
 
 func _finish_build() -> void:

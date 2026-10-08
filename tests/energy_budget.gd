@@ -9,12 +9,12 @@ static func run(check: Callable) -> void:
 	var organ: Dictionary = cell.organs[0]
 	cell.energy_budget.record(0,0,0,0,-1,"upkeep")
 	cell.age = 1
-	cell.energy = cell.energy_capacity()-1
+	cell.energy = cell.energy_reference()-1
 	cell.gain_energy(4)
 	cell.spend_energy(0.5,organ,"movement")
 	var rates: Dictionary = cell.energy_budget.rates(cell.age)
-	check.call(is_equal_approx(rates.production,4) and is_equal_approx(rates.stored,1) and is_equal_approx(rates.overflow,3),"ATP accounting separates gross production, accepted reserve income and capacity overflow")
-	check.call(is_equal_approx(rates.spent,0.5) and is_equal_approx(rates.net,3.5) and is_equal_approx(rates.reserve_net,0.5),"Production surplus and actual reserve change differ honestly at capacity")
+	check.call(is_equal_approx(rates.production,4) and is_equal_approx(rates.stored,4) and is_equal_approx(rates.overflow,0),"ATP accepts all production beyond the former storage ceiling")
+	check.call(is_equal_approx(rates.spent,0.5) and is_equal_approx(rates.net,3.5) and is_equal_approx(rates.reserve_net,3.5),"Production surplus agrees with uncapped reserve change")
 	check.call(is_equal_approx(rates.organs[organ.id],0.5) and is_equal_approx(rates.categories.movement,0.5),"Actual organ spending is attributed to its identity and purpose")
 	var energy: float = cell.energy
 	var material: float = cell.organic_mass()

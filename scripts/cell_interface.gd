@@ -50,6 +50,7 @@ func initialize(owner_game) -> void:
 	reset()
 
 func reset() -> void:
+	interior.ecology = Interior.Ecology.new()
 	close_context()
 	keyboard_index = -1
 	keyboard_target.clear()
@@ -130,22 +131,23 @@ func open_context(target: Dictionary) -> void:
 	var run = sim.evolution
 	match target.kind:
 		"assembly","chemistry":
-			for index in ([0,1,2,3,4,5,10,11] if target.kind == "assembly" else range(6,10)):
+			for index in ([0,1,2,3,5,10,11] if target.kind == "assembly" else range(6,10)):
 				var kind: String = sim.KINDS[index]
 				var cost: float = sim.Cell.organ_cost(kind)
 				_choice(game.TITLES[index],"%.0f tissue · 1 AP\n%s" % [cost,game.HELP[index]],game._select.bind(index),kind,"",cell.biomass >= cost and run.points >= 1,cost,1,{"kind":kind,"scale":1.0,"mutation":""})
 		"organ":
 			var organ: Dictionary = cell.organ_by_id(target.id)
 			if organ.is_empty(): close_context(); return
-			_choice("Move","Choose a new membrane location. No resource cost.",func():
-				game.moving_id = target.id
-				game.placement_angle = organ.a
-				close_context()
-				game._message("Choose a membrane location · right-click cancels the move."),"","Move")
-			_choice("Recycle","Returns half the tissue as usable biomass; half becomes waste. AP is not refunded.",func():
-				sim.remove(cell.organs.find(organ))
-				close_context()
-				game._message("Organelle recycled · no AP refund."),"","Recycle")
+			if not cell.inherent(organ):
+				_choice("Move","Choose a new membrane location. No resource cost.",func():
+					game.moving_id = target.id
+					game.placement_angle = organ.a
+					close_context()
+					game._message("Choose a membrane location · right-click cancels the move."),"","Move")
+				_choice("Recycle","Returns half the tissue as usable biomass; half becomes waste. AP is not refunded.",func():
+					sim.remove(cell.organs.find(organ))
+					close_context()
+					game._message("Organelle recycled · no AP refund."),"","Recycle")
 			if sim.Cell.tunable_steering(organ):
 				var strength: float = sim.Cell.steering_strength(organ)
 				var label: String = "Off" if strength == 0 else "%d%%" % roundi(strength*100)
@@ -157,7 +159,7 @@ func open_context(target: Dictionary) -> void:
 					var index: int = steps.find(strength)
 					cell.set_steering_strength(organ.id,steps[(index+1)%steps.size()])
 					open_context(target),"",label)
-			if organ.get("mutation","") == "":
+			if not cell.inherent(organ) and organ.get("mutation","") == "":
 				for gene in run.learned:
 					var data: Dictionary = sim.Genes.DATA[gene]
 					if data.kind != organ.kind: continue
@@ -227,7 +229,7 @@ func open_context(target: Dictionary) -> void:
 			_choice("Known blueprints","Recall a discovered blueprint as this tide's one draft choice; installation costs remain.",open_context.bind({"kind":"archive","page":0}),"","Genes")
 			_choice("Earlier history","Cycle this family tree, then previous expeditions.",open_context.bind({"kind":"lineage","page":page+1} if last > 4 else {"kind":"past","page":0}),"","History")
 		"archive":
-			var known: Array = game.archive.discovered.filter(func(gene): return gene not in run.learned)
+			var known: Array = game.archive.discovered.filter(func(gene): return gene not in run.learned and sim.Genes.DATA[gene].kind != "feeding")
 			var page: int = int(target.get("page",0))
 			for gene in known.slice(page*3,page*3+3):
 				var data: Dictionary = sim.Genes.DATA[gene]
@@ -245,6 +247,19 @@ func open_context(target: Dictionary) -> void:
 				_choice("Expedition %d" % [entry.id+1],description,game._message.bind(description),"",str(entry.id+1))
 			if first > 0: _choice("Earlier expeditions","Previous histories.",open_context.bind({"kind":"past","page":page+1}),"","Older")
 			_choice("Current family","Return.",open_context.bind({"kind":"lineage"}),"","Back")
+	# At most four actions plus a next-page node around any structure.
+	if choices.size() > 5:
+		var all_choices: Array[Button] = choices.duplicate()
+		var page := posmod(int(target.get("menu_page",0)),ceili(all_choices.size()/4.0))
+		choices = []
+		for i in all_choices.size():
+			if i >= page*4 and i < page*4+4: choices.append(all_choices[i])
+			else:
+				remove_child(all_choices[i])
+				all_choices[i].queue_free()
+		var next := target.duplicate()
+		next["menu_page"] = page+1
+		_choice("More","Next choices.",open_context.bind(next),"","…")
 	if not choices.is_empty():
 		for i in choices.size():
 			choices[i].focus_neighbor_left = choices[(i-1+choices.size())%choices.size()].get_path()
@@ -281,7 +296,7 @@ func describe(target: Dictionary) -> String:
 	var sim = game.world
 	var run = sim.evolution
 	match target.kind:
-		"assembly": return "Assembly factory\nCilia, flagella, armor, spikes, repair, feeding and receptors."
+		"assembly": return "Assembly factory\nCilia, flagella, armor, spikes, repair and receptors."
 		"chemistry": return "Chemistry factory\nPhotosynthesis, toxins, neutralizers and acid."
 		"atp":
 			var rates: Dictionary = cell.energy_budget.rates(cell.age)
@@ -289,7 +304,7 @@ func describe(target: Dictionary) -> String:
 			for category in ["upkeep","movement","pumping","secretion","repair","combat","acid stress","receptor cleaning"]:
 				var rate: float = rates.categories.get(category,0.0)
 				if rate > 0.005: breakdown += "\n%s −%.2f/s" % [category.capitalize(),rate]
-			return "ATP %.0f / %.0f\nProduced +%.2f/s · spent −%.2f/s\nProduction surplus %+.2f/s · reserve change %+.2f/s\nUnused at capacity %.2f/s · recent %.1fs\nSteady estimate %.2f/s; pursuit/repair/combat extra.%s\nReserve funding/reclaim transfers excluded." % [cell.energy,cell.energy_capacity(),rates.production,rates.spent,rates.net,rates.reserve_net,rates.overflow,rates.seconds,cell.operating_budget().steady,breakdown]
+			return "ATP · +%.2f/s −%.2f/s\nStored %.1f · turnover %.2f/s\n%s" % [rates.production,rates.spent,cell.energy,cell.atp_decay_rate(),breakdown]
 		"nucleus": return "%s\n%s\n%s" % [run.objective(sim),run.forecast(),"Blueprint ready · click to choose." if not run.chosen else "%d blueprints kept." % run.learned.size()]
 		"lineage": return "FAMILY TREE\n"+sim.lineage.summary(sim)+"\n"+run.forecast()
 		"archive": return "Known blueprints · %d\nOne draft choice per tide; recalling grants no free anatomy." % game.archive.discovered.size()
@@ -318,6 +333,7 @@ func describe(target: Dictionary) -> String:
 func _tooltip(value: String, at: Vector2) -> void:
 	tip_box.visible = value != ""
 	if value == "": return
+	if not Input.is_key_pressed(KEY_ALT): value = value.split("\n")[0]
 	var s: float = game.preferences.hud_scale
 	tip.custom_minimum_size.x = minf(320*s,get_viewport_rect().size.x-48)
 	tip.add_theme_font_size_override("font_size",roundi(16*s))
@@ -368,14 +384,14 @@ func sync(_dt: float) -> void:
 	var s: float = game.preferences.hud_scale
 	var size := get_viewport_rect().size
 	var cell_screen: Vector2 = game.camera_screen+interior.position*game.zoom
-	message.visible = game.notice_timer > 0 or game.world.evolution.terminal()
-	message.text = game.notice
+	message.visible = (game.notice_timer > 3) or game.world.evolution.terminal()
+	message.text = game.notice if Input.is_key_pressed(KEY_ALT) else game.notice.split("\n")[0]
 	message.custom_minimum_size.x = minf(500*s,size.x-48)
 	message.size.x = message.custom_minimum_size.x
 	message.add_theme_font_size_override("font_size",roundi(16*s))
 	message.position = (cell_screen+Vector2(-message.size.x*0.5,game.world.player.radius*game.zoom+35)).clamp(Vector2(16,16),size-message.size-Vector2(16,16))
 	edit_hint.visible = game.build_open
-	edit_hint.text = game.world.evolution.objective(game.world)+"\nPaused · Tab / Enter to resume · click a factory" if game.selected < 0 and game.moving_id < 0 else "Place on membrane · right-click to cancel · wheel zooms"
+	edit_hint.text = "Tab · return to habitat" if game.selected < 0 and game.moving_id < 0 else "Place on membrane · right-click cancels"
 	edit_hint.add_theme_font_size_override("font_size",roundi(14*s))
 	edit_hint.size = Vector2(minf(540*s,size.x-32),0)
 	edit_hint.position = Vector2((size.x-edit_hint.size.x)*0.5,14)
@@ -426,11 +442,11 @@ func sync(_dt: float) -> void:
 			hovered_price = {"tissue":inspected_choice.tissue_cost,"ap":inspected_choice.ap_cost,"rate_model":inspected_choice.rate_model}
 	else:
 		if not context.is_empty() and choices.is_empty(): _tooltip(describe(context),screen_at(context))
-		elif not hovered.is_empty() and game.selected < 0 and game.moving_id < 0: _tooltip(describe(hovered),screen_at(hovered))
+		elif not hovered.is_empty() and (game.build_open or Input.is_key_pressed(KEY_ALT)) and (hovered.kind != "body" or Input.is_key_pressed(KEY_ALT)) and game.selected < 0 and game.moving_id < 0: _tooltip(describe(hovered),screen_at(hovered))
 		elif not keyboard_target.is_empty() and game.selected < 0: _tooltip(describe(keyboard_target),screen_at(keyboard_target))
 		elif game.selected >= 0:
 			var cost: float = game.Simulation.Cell.organ_cost(game.Simulation.KINDS[game.selected])
-			_tooltip("%s · %.0f tissue · 1 AP\n%s" % [game.TITLES[game.selected],cost,game.placement_status()],cursor)
+			_tooltip("%s\n%.0f tissue · 1 AP\n%s" % [game.TITLES[game.selected],cost,game.placement_status()],cursor)
 		else:
 			tip_box.hide()
 	biomass_view.sync()

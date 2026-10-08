@@ -1,8 +1,10 @@
 extends Node2D
-## Player-only resource artwork and clickable structures; no simulated bodies.
+## Intracellular resource parcels and anatomy; the outside can pause independently.
+const Ecology = preload("res://scripts/interior_ecology.gd")
+var ecology := Ecology.new()
 var game
 var anchors: Dictionary = {}
-var atp_fraction := 0.0
+var atp_size := 0.0
 var bud_material := 0.0
 var bud_energy := 0.0
 
@@ -25,10 +27,17 @@ func sync() -> void:
 	else:
 		position = game.Simulation.Medium.offset(game.render_camera,cell.position)
 		rotation = cell.angle
-	atp_fraction = clampf(cell.energy/maxf(0.01,cell.energy_capacity()),0,1)
+	# A full, elastic sac changes size rather than filling a fixed tank.
+	atp_size = anchors.radius*0.13*sqrt(log(1+maxf(0,cell.energy)/cell.energy_reference()*3))
+	ecology.sync(cell,game.world.evolution.points)
 	bud_material = clampf(cell.brood_mass/maxf(0.01,game.world.offspring_quote().material),0,1)
 	bud_energy = clampf(cell.brood_energy/60,0,1)
 	visible = not cell.dead and game.views.has(cell.id)
+	queue_redraw()
+
+func animate(dt: float) -> void:
+	if not visible or game.settings_panel.visible: return
+	ecology.step(dt,game.world.player)
 	queue_redraw()
 
 func _ellipse(at: Vector2, extent: Vector2, color: Color, fill: float = 1.0) -> void:
@@ -46,13 +55,34 @@ func _draw() -> void:
 	var r: float = anchors.radius
 	var cell = game.world.player
 	var at: Vector2 = anchors.atp
-	_ellipse(at+Vector2(0,r*0.025),Vector2(0.15,0.22)*r,Color("182751"))
-	_ellipse(at,Vector2(0.145,0.215)*r,Color("46717f"))
-	_ellipse(at,Vector2(0.118,0.184)*r,Color("254854"))
-	_ellipse(at,Vector2(0.118,0.184)*r,Color("ffd94b"),atp_fraction)
-	draw_arc(at,0.13*r,PI,PI*1.47,12,Color("b6f5d9"),r*0.032,true)
-	if atp_fraction < 0.18:
-		draw_arc(at,0.22*r,0,TAU,24,Color(1,0.62,0.25,0.3+0.25*sin(game.ui_time*4)),r*0.025,true)
+	if atp_size > 0.05:
+		var sac := Vector2(0.86,1.16)*atp_size
+		_ellipse(at+Vector2(0,1),sac*1.10,Color("745344"))
+		_ellipse(at,sac,Color("efbb4c"))
+		_ellipse(at-Vector2.ONE*atp_size*0.12,sac*0.76,Color("ffe58e"))
+		draw_arc(at,atp_size*0.72,PI,PI*1.47,12,Color("fff5c7"),maxf(0.8,atp_size*0.13),true)
+	else:
+		draw_arc(at,1.5,0,TAU,12,Color("bc9459"),0.6,true)
+	# Food vacuoles and AP tokens are actual stock parcels, never extra currency.
+	for parcel in ecology.parcels:
+		var color := Color("f8c650") if parcel.kind == "ap" else Color("93e9af") if parcel.kind == "food" else Color("aa78c7")
+		draw_circle(parcel.p,parcel.radius*1.15,Color(color.darkened(0.4),0.60))
+		draw_circle(parcel.p,parcel.radius,color)
+		draw_circle(parcel.p-Vector2.ONE*parcel.radius*0.25,parcel.radius*0.28,color.lightened(0.65))
+	# Paired contractile vacuoles and radial canals. Osmotic anatomy is currently
+	# a visual model; it does not fabricate a second water/ATP resource balance.
+	for side in [-1,1]:
+		var center := Vector2(0.02,side*0.62)*r
+		var phase := fposmod(ecology.clock*0.23+(0.5 if side < 0 else 0),1)
+		var swell := 0.35+0.65*sin(phase*PI)
+		for i in 6:
+			var ray := Vector2.from_angle(TAU*i/6)
+			draw_line(center+ray*r*0.05,center+ray*r*0.17,Color(0.55,0.94,0.93,0.30),r*0.026,true)
+		_ellipse(center,Vector2.ONE*r*0.082*swell,Color("75d9df"))
+		_ellipse(center-Vector2.ONE*r*0.015,Vector2.ONE*r*0.045*swell,Color("bbfff0"))
+	# Small micronucleus beside the macronucleus: the family reserve's landmark.
+	draw_circle(anchors.nucleus+Vector2(-0.23,0.06)*r,r*0.075,Color("a86bd8"))
+	draw_circle(anchors.nucleus+Vector2(-0.25,0.04)*r,r*0.035,Color("edb3ef"))
 	# Folded assembly ribbons, not an extra equipped organ.
 	at = anchors.assembly
 	for i in 3:
@@ -78,7 +108,7 @@ func _draw() -> void:
 	if game.world.evolution.offspring_id >= 0:
 		draw_arc(at,0.16*r,-PI/2,-PI/2+TAU*clampf(game.world.evolution.viable_seconds/60,0,1),24,Color("9cf4b4"),r*0.045,true)
 	# Three crisis arcs and tiny dormant bodies show the goal and insurance.
-	for i in 3:
+	for i in (3 if game.build_open else 0):
 		var a := -PI/2+i*TAU/3
 		var fraction: float = clampf(game.world.evolution.crisis_seconds[i]/60,0,1)
 		draw_arc(anchors.nucleus,r*0.31,a,a+1.7,16,Color("547299"),r*0.026,true)
@@ -87,7 +117,7 @@ func _draw() -> void:
 		_ellipse(anchors.bud+Vector2(-0.12+i*0.10,-0.21)*r,Vector2(0.035,0.045)*r,Color("a6ead4"))
 	if bud_material >= 1 and bud_energy >= 1:
 		draw_arc(at,0.21*r,0,TAU,24,Color(1,0.92,0.61,0.5+0.25*sin(game.ui_time*3)),r*0.025,true)
-	if not game.world.evolution.chosen:
+	if game.build_open and not game.world.evolution.chosen:
 		draw_circle(anchors.nucleus+Vector2(0.22,-0.20)*r,r*(0.04+0.008*sin(game.ui_time*2)),Color("fff19c"))
 	if game.build_open:
 		for key in ["assembly","chemistry","nucleus","bud"]:

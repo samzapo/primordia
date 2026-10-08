@@ -9,6 +9,7 @@ var native_outline: bool = kernels != null and kernels.has_method("membrane_outl
 const Network = preload("res://scripts/cytoskeleton.gd")
 var skeleton = Network.new()
 var maximum_radius := 47.0
+var oral_angle := NAN
 var points := PackedVector2Array()
 var previous := PackedVector2Array()
 var edge_lambda := PackedFloat32Array()
@@ -109,6 +110,16 @@ func step(dt: float, radius: float, acceleration: Vector2, time: float, _aspect:
 		var corrected := points[i].normalized()*length
 		previous[i] += corrected-points[i]
 		points[i] = corrected
+	# A permanent shallow vestibule. Apply before area normalization so the
+	# displaced volume remains elsewhere in the gel. Same curve drives physics.
+	if is_finite(oral_angle):
+		for i in COUNT:
+			var distance := absf(wrapf(TAU*i/COUNT-oral_angle,-PI,PI))
+			if distance > 0.5: continue
+			var weight := pow(0.5+0.5*cos(PI*distance/0.5),1.5)
+			var corrected := points[i].normalized()*minf(points[i].length(),radius*(1-0.36*weight))
+			previous[i] += corrected-points[i]
+			points[i] = corrected
 	var enclosed := 0.0
 	for i in COUNT: enclosed += points[i].cross(points[(i+1)%COUNT])*0.5
 	var pressure_scale := sqrt(COUNT*radius*radius*sin(TAU/COUNT)*0.5/maxf(0.001,enclosed))

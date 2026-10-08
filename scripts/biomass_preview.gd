@@ -40,7 +40,7 @@ func sync() -> void:
 	var s: float = game.preferences.hud_scale
 	var view := get_viewport_rect().size
 	var maximum := minf(68*s,minf(view.x*0.095,view.y*0.14))
-	var factor := minf(10*s,maximum/sqrt(maxf(1,maxf(amount,cost))))
+	var factor := minf(sqrt(game.Simulation.Cell.TISSUE_AREA/PI)*game.zoom,maximum/sqrt(maxf(1,maxf(amount,cost))))
 	quote = {"available":amount,"cost":cost,"stock_radius":sqrt(amount)*factor,
 		"cost_radius":sqrt(cost)*factor,"maximum":maximum,
 		"ap_count":maxi(0,game.world.evolution.points),"ap_needed":ap_needed,"show_cost":showing_cost,
@@ -88,6 +88,7 @@ func _caption(value: String, at: Vector2, tint: Color) -> void:
 
 func _draw() -> void:
 	if quote.is_empty() or game == null: return
+	if not quote.show_cost and game.cell_ui.hovered.get("kind","") not in ["organ","atp"]: return
 	var s: float = game.preferences.hud_scale
 	var maximum: float = quote.maximum
 	var stock := Vector2(get_viewport_rect().size.x-24*s-maximum,76*s+maximum)
@@ -97,7 +98,7 @@ func _draw() -> void:
 		draw_arc(stock,12*s,0,TAU,32,Color("a3f5dc"),1.5*s,true)
 		_caption("Empty",stock+Vector2(0,5*s),Color("d3fff1"))
 	_caption("Available tissue",stock+Vector2(0,maximum+24*s),Color("d3fff1"))
-	_draw_ap(stock+Vector2(0,maximum+60*s),s,quote.ap_count,"Available AP")
+	# Available AP lives inside the cell, one gold vacuole per point.
 	if quote.show_cost:
 		var tint := Color("ffd68a") if quote.enough else Color("ff829e")
 		_blob(needed,quote.cost_radius,tint)

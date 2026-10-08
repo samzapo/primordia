@@ -20,7 +20,7 @@ static func swim(size_factor: float, flagella: int) -> float:
 	for i in 1200:
 		sim.fluid.velocity.fill(Vector2.ZERO)
 		sim.fluid.activity.fill(1)
-		body.energy = body.energy_capacity()
+		body.energy = body.energy_reference()
 		sim._motion_cell(body,1.0/60)
 		if i >= 1100: total += body.velocity.length()/100.0
 	return total
@@ -31,7 +31,7 @@ static func run(check: Callable) -> void:
 	large.body = baseline.body*8
 	large.biomass = baseline.biomass*8
 	large.update_geometry()
-	check.call(is_equal_approx(large.radius/baseline.radius,2) and is_equal_approx(large.fluid_drag()/baseline.fluid_drag(),2),"Eightfold body volume doubles radius and membrane drag")
+	check.call(is_equal_approx(large.radius/baseline.radius,sqrt(8)) and is_equal_approx(large.fluid_drag()/baseline.fluid_drag(),sqrt(8)),"Eightfold represented volume scales radius and membrane drag by sqrt(8)")
 	var small_speed := swim(1,1)
 	var big_speed := swim(8,1)
 	var powered_speed := swim(8,2)

@@ -149,6 +149,6 @@ static func run(check: Callable) -> void:
 		max_error=0
 		for i in membrane.points.size():
 			var arm: Vector2=membrane.points[i].rotated(angle)
-			var expected_traction: Vector2=(flow.sample(at+arm)-velocity-arm.orthogonal()*angular).rotated(-angle).limit_length(90)
+			var expected_traction: Vector2=(flow.sample(at+arm)-velocity-Vector2(-arm.y,arm.x)*angular).rotated(-angle).limit_length(90)
 			max_error=maxf(max_error,expected_traction.distance_to(traction[i]))
 		check.call(max_error<.0001,"Batched membrane traction matches wrapped bilinear water sampling")
