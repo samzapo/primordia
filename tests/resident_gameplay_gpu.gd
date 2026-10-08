@@ -101,10 +101,10 @@ func lifecycle() -> void:
 func escrow() -> void:
 	var sim=Simulation.new(390013)
 	sim.cells=[sim.player];sim.particles=[];sim.pheromones=[];sim.grid.rebuild([])
-	for i in 4: sim.spawn_particle(sim.NUTRIENT,Vector2(100+i*20,100),Vector2.ZERO,.3,7)
+	for i in 4: sim.spawn_particle(sim.NUTRIENT,sim.player.position+Vector2(i*20,0),Vector2.ZERO,.3,7)
 	var bridge=await start(sim,4)
-	for i in 10: sim.spawn_particle(sim.WASTE,Vector2(100,100),Vector2.ZERO,.1,7)
-	sim.spawn_particle(sim.NUTRIENT,Vector2(100,100),Vector2.ZERO,1e-100,7)
+	for i in 10: sim.spawn_particle(sim.WASTE,sim.player.position,Vector2.ZERO,.1,7)
+	sim.spawn_particle(sim.NUTRIENT,sim.player.position,Vector2.ZERO,1e-100,7)
 	check(bridge.trace_emissions.size()==1,"Sub-float material retained as emission escrow")
 	var receipt: Dictionary=bridge._receipt([],[],{"feeding":false,"projection":false})
 	check(receipt.get("_capacity",false),"Capacity refusal is explicit")

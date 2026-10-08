@@ -56,6 +56,47 @@ func configure_perception(now: float=0.0) -> bool:
 	perception_enabled=true;perception_time=now
 	_perception=Perception.new()
 	return true
+const Transfer=preload("res://scripts/resident_transfer.gd")
+var bounded_dispatch:=true
+var _high_water:=1
+var work_count:=1
+var work_padded:=1
+func _set_work_count(value: int) -> void:
+	work_count=clampi(value,1,count) if transfer_enabled and bounded_dispatch else count
+	work_padded=1
+	while work_padded<work_count: work_padded*=2
+	for component in [_exchange,_perception,_exposure,_transfer,_chemistry]:
+		if component!=null: component.count=work_count
+	if _radix!=null:
+		_radix.count=work_padded;_radix.groups=ceili(work_padded/128.0)
+	_grid_valid=false
+var transfer_enabled:=false
+var _transfer
+var _transfer_source:=""
+var _transfer_pending: Dictionary={}
+var transfer_readback_bytes:=0
+var transfer_calls:=0
+func configure_transfer(local_sources: bool=true) -> bool:
+	if _started or not perception_enabled: return false
+	transfer_enabled=true;_perception.local_sources=local_sources
+	return true
+func take_outside(region: Vector4) -> Dictionary:
+	if not _transfer_pending.is_empty(): return _transfer_pending
+	if not transfer_enabled or not _initialized or _closing:
+		return {"error":"Transfer unavailable or unacknowledged"}
+	if not Vector2(region.x,region.y).is_finite() or not Vector2(region.z,region.w).is_finite() or region.z<0 or region.w<0:
+		return {"error":"Invalid transfer bounds"}
+	RenderingServer.call_on_render_thread(func():
+		_transfer_pending=_transfer.take(region);_grid_valid=false;_sync_semaphore.post())
+	_sync_semaphore.wait()
+	transfer_calls+=1;transfer_readback_bytes+=_transfer_pending.readback_bytes
+	_transfer_pending["ticket"]=transfer_calls
+	_transfer_pending["time"]=perception_time
+	return _transfer_pending
+func acknowledge_transfer(ticket: int) -> bool:
+	if _transfer_pending.get("ticket",-1)!=ticket: return false
+	_transfer_pending={}
+	return true
 const Exposure=preload("res://scripts/resident_exposure.gd")
 var exposure_enabled:=false
 var _exposure: RefCounted
@@ -192,6 +233,7 @@ func exchange(cells: Array, emissions: Array=[], handles: Array=[], asynchronous
 	if batch.has("error"): exchange_error=batch.error;return false
 	batch["scope"]=options.get("scope",Vector4(0,0,-1,-1))
 	batch["chemistry"]=chemistry_enabled and options.get("chemistry",true)
+	batch["summaries"]=options.get("summaries",false)
 	batch["projection"]=options.get("projection",true)
 	batch["synchronous"]=options.get("synchronous",false)
 	batch["exposure"]=options.get("exposure",false) and exposure_enabled
@@ -210,7 +252,7 @@ func exchange(cells: Array, emissions: Array=[], handles: Array=[], asynchronous
 		_perception.sources=perception_batch.sources
 		perception_batch.erase("sources")
 		batch.merge(perception_batch)
-		batch["source_count"]=_perception.sources.size()
+		batch["source_count"]=Perception.MAX_SOURCES if _perception.local_sources else _perception.sources.size()
 		batch["now"]=perception_time
 		batch["spread_queries"]=perception_spread_queries
 	var slot:=_exchange_slots.find(false)
@@ -218,9 +260,9 @@ func exchange(cells: Array, emissions: Array=[], handles: Array=[], asynchronous
 	exchange_inflight+=1;exchange_peak_inflight=maxi(exchange_peak_inflight,exchange_inflight)
 	exchange_busy=exchange_inflight>=exchange_queue_depth;exchange_serial+=1
 	batch["serial"]=exchange_serial;batch["ring_slot"]=slot
-	if batch.chemistry:
-		batch["chemistry_offset"]=batch.body_count+batch.feed_count+batch.emit_count+batch.inspect_count*4+batch.get("query_count",0)*5
-	batch["exposure_offset"]=batch.body_count+batch.feed_count+batch.emit_count+batch.inspect_count*4+batch.get("query_count",0)*5+(Chemistry.RECEIPT_VECTORS if batch.chemistry else 0)
+	batch["summary_offset"]=batch.body_count+batch.feed_count+batch.emit_count+batch.inspect_count*4+batch.get("query_count",0)*5
+	batch["chemistry_offset"]=batch.summary_offset+(batch.get("query_count",0)*Perception.SUMMARY_VECTORS if batch.summaries else 0)
+	batch["exposure_offset"]=batch.chemistry_offset+(Chemistry.RECEIPT_VECTORS if batch.chemistry else 0)
 	batch["parallel_oxygen"]=exchange_parallel_oxygen
 	batch["accounts"]=0 if not exchange_resident_capacity else (2 if _accounts_started else 1)
 	if exchange_resident_capacity: _accounts_started=true
@@ -228,28 +270,29 @@ func exchange(cells: Array, emissions: Array=[], handles: Array=[], asynchronous
 	RenderingServer.call_on_render_thread(_exchange_rd.bind(batch,asynchronous))
 	return true
 func _exchange_rd(batch: Dictionary, asynchronous: bool) -> void:
+	if batch.emit_count>0: _set_work_count(_high_water+batch.emit_count)
 	# Expiry is global, independent of camera or receptor presence.
-	if perception_enabled: _perception.dispatch(1,batch,batch.now,ceili(count/64.0))
+	if perception_enabled: _perception.dispatch(1,batch,batch.now,ceili(work_count/64.0))
 	# Sensing samples the same pre-feeding state for every receptor in this batch.
 	if (batch.feed_count>0 or batch.get("query_count",0)>0) and not _grid_valid: _prepare_grid_rd()
 	if perception_enabled:
 		exchange_upload_bytes+=_perception.upload(batch)
 		if batch.query_count>0: _perception.dispatch(4 if batch.spread_queries else 3,batch,batch.now,batch.query_count if batch.spread_queries else ceili(batch.query_count/64.0))
 	exchange_upload_bytes+=_exchange.upload(batch)
-	if batch.feed_count>0 and batch.parallel_oxygen: _exchange.dispatch(4,batch,ceili(count/128.0))
+	if batch.feed_count>0 and batch.parallel_oxygen: _exchange.dispatch(4,batch,ceili(work_count/128.0))
 	_exchange.dispatch(1,batch,1)
 	if perception_enabled and batch.emit_count>0:
 		_perception.dispatch(2,batch,batch.now,ceili(batch.emit_count/64.0))
-		_perception.dispatch(1,batch,batch.now,ceili(count/64.0))
+		_perception.dispatch(1,batch,batch.now,ceili(work_count/64.0))
 	if batch.emit_count>0: _grid_valid=false
 	if batch.exposure and batch.body_count>0:
 		if not _grid_valid: _prepare_grid_rd()
 		exchange_upload_bytes+=_exposure.upload(batch)
 		_exposure.dispatch(0,batch);_exposure.dispatch(1,batch)
-	if batch.body_count>0 and batch.projection: _exchange.dispatch(2,batch,ceili(count/128.0))
+	if batch.body_count>0 and batch.projection: _exchange.dispatch(2,batch,ceili(work_count/128.0))
 	if (batch.body_count>0 and batch.projection) or batch.emit_count>0: _grid_valid=false
 	if batch.inspect_count>0: _exchange.dispatch(3,batch,ceili(batch.inspect_count/128.0))
-	var size: int=(batch.body_count+batch.feed_count+batch.emit_count+batch.inspect_count*4+batch.get("query_count",0)*5)*16
+	var size: int=batch.chemistry_offset*16
 	if batch.chemistry:
 		_chemistry.receipt(batch)
 		batch["chemistry_tick"]=_chemistry.last_tick
@@ -267,13 +310,17 @@ func project_cached(cells: int) -> void:
 	# Queue projection without another readback after every contact was delivered.
 	if cells>0 and _initialized:
 		RenderingServer.call_on_render_thread(func():
-			_exchange.dispatch(2,{"body_count":cells,"ring_slot":0},ceili(count/128.0))
+			_exchange.dispatch(2,{"body_count":cells,"ring_slot":0},ceili(work_count/128.0))
 			_grid_valid=false)
 func _exchange_received(bytes: PackedByteArray,batch: Dictionary) -> void:
 	var receipt:=Exchange.decode(bytes,batch)
+	for emission in receipt.emissions:
+		if emission.accepted: _high_water=maxi(_high_water,emission.handle.x+1)
+	if batch.emit_count>0: _set_work_count(_high_water)
 	if perception_enabled:
 		var at: int=(batch.body_count+batch.feed_count+batch.emit_count+batch.inspect_count*4)*16
 		receipt["senses"]=Perception.decode(bytes,at,batch.query_count)
+		if batch.summaries: receipt["summaries"]=Perception.summaries(bytes,batch.summary_offset,batch.query_count)
 	if batch.chemistry:
 		receipt["chemistry"]=Chemistry.decode(bytes,batch.chemistry_offset)
 		receipt.chemistry["tick"]=batch.chemistry_tick
@@ -312,6 +359,7 @@ func initialize(values: PackedFloat32Array, velocity: PackedVector2Array, metada
 		_ready_main.call_deferred(false,"Requires Mobile/Forward+ and a real RenderingDevice display")
 		return
 	for k in range(0,values.size(),12):
+		if values[k+7]>=0: _high_water=k/12+1
 		for j in 12:
 			if not is_finite(values[k+j]):
 				_ready_main.call_deferred(false,"Nonfinite particle state");return
@@ -328,6 +376,7 @@ func initialize(values: PackedFloat32Array, velocity: PackedVector2Array, metada
 		_perception_initial=initial.bytes
 		_perception_source=FileAccess.get_file_as_string("res://shaders/compute/resident_perception.glsl.txt").replace("#[compute]","")
 	while padded_count<count: padded_count*=2
+	if transfer_enabled: _transfer_source=FileAccess.get_file_as_string("res://shaders/compute/resident_transfer.glsl.txt").replace("#[compute]","")
 	if exposure_enabled:
 		_exposure_source=FileAccess.get_file_as_string("res://shaders/compute/resident_exposure.glsl.txt").replace("#[compute]","")
 	if chemistry_enabled:
@@ -400,10 +449,15 @@ func _initialize_rd(bytes: PackedByteArray, velocities: PackedByteArray) -> void
 		_exposure=Exposure.new()
 		if not _exposure.initialize(rd,state,_exchange.buffers[4],_perception.buffers[0],_exchange.buffers[0],_exchange.buffers[1],contact_buffers[0],contact_buffers[1],_exchange.receipt_buffers,count,_exposure_source):
 			_ready_main.call_deferred(false,"Resident exposure creation failed");return
+	if transfer_enabled:
+		_transfer=Transfer.new()
+		if not _transfer.initialize(rd,state,_perception.buffers[0],_exchange.buffers[4],count,_transfer_source):
+			_ready_main.call_deferred(false,"Could not initialize bounded transfers");return
 	if chemistry_enabled:
 		_chemistry=Chemistry.new()
 		if not _chemistry.initialize(rd,state,contact_buffers[7],contact_buffers[0],contact_buffers[1],_exchange.receipt_buffers,contact_buffers[5],_exchange.buffers[4],contact_buffers[8],count,chemistry_seed,_chemistry_source):
 			_ready_main.call_deferred(false,"Resident chemistry creation failed");return
+	_set_work_count(_high_water)
 	upload_bytes += bytes.size()+velocities.size()
 	_ready_main.call_deferred(true,"")
 func _initialize_contacts() -> bool:
@@ -446,7 +500,7 @@ func interact_only() -> void:
 func _contact_pass(stage: int, groups: int, level: int = 0, stride: int = 0, commit: bool = false) -> void:
 	var params := PackedByteArray()
 	params.resize(32)
-	params.encode_u32(0,count);params.encode_u32(4,padded_count);params.encode_u32(8,stage)
+	params.encode_u32(0,work_count);params.encode_u32(4,work_padded);params.encode_u32(8,stage)
 	params.encode_u32(12,level);params.encode_u32(16,stride);params.encode_u32(20,interaction_mode)
 	params.encode_float(24,acidity);params.encode_u32(28,(1 if perception_enabled else 0) if stage==0 else reaction_tick)
 	var index := (2 if stage==5 else 1) if commit else 0
@@ -457,28 +511,28 @@ func _contact_pass(stage: int, groups: int, level: int = 0, stride: int = 0, com
 	rd.compute_list_dispatch(list,groups,1,1)
 	rd.compute_list_end()
 func _prepare_grid_rd() -> void:
-	_contact_pass(0,ceili(maxi(padded_count,40960)/128.0))
+	_contact_pass(0,ceili(maxi(work_padded,40960)/128.0))
 	grid_builds+=1;grid_dispatches+=2
 	if grid_backend=="radix":
 		_radix.sort();grid_dispatches+=12
 	else:
 		var level := 2
-		while level<=padded_count:
+		while level<=work_padded:
 			var stride := level/2
 			while stride>0:
-				_contact_pass(1,ceili(padded_count/128.0),level,stride)
+				_contact_pass(1,ceili(work_padded/128.0),level,stride)
 				grid_dispatches+=1;stride/=2
 			level*=2
-	_contact_pass(2,ceili(padded_count/128.0))
+	_contact_pass(2,ceili(work_padded/128.0))
 	_grid_valid=true
 func _contacts_rd() -> void:
 	if not _grid_valid: _prepare_grid_rd()
 	var zeros:=PackedByteArray();zeros.resize(64)
 	rd.buffer_update(contact_buffers[5],0,64,zeros)
-	_contact_pass(3,ceili(count/128.0))
+	_contact_pass(3,ceili(work_count/128.0))
 	if interaction_mode>=2:
-		_contact_pass(5,ceili(count/128.0),0,0,true)
-		_contact_pass(4,ceili(count/128.0),0,0,true)
+		_contact_pass(5,ceili(work_count/128.0),0,0,true)
+		_contact_pass(4,ceili(work_count/128.0),0,0,true)
 	reaction_tick+=1
 func contact_snapshot() -> void:
 	RenderingServer.call_on_render_thread(_contact_snapshot_rd)
@@ -506,14 +560,14 @@ func advance(dt: float, tick: int) -> void:
 func _advance_rd(dt: float, tick: int, now: float) -> void:
 	_grid_valid=false
 	var params := PackedByteArray()
-	params.resize(16);params.encode_u32(0,count);params.encode_float(4,dt);params.encode_u32(8,tick)
+	params.resize(16);params.encode_u32(0,work_count);params.encode_float(4,dt);params.encode_u32(8,tick)
 	var list := rd.compute_list_begin()
 	rd.compute_list_bind_compute_pipeline(list,pipeline)
 	rd.compute_list_bind_uniform_set(list,bindings,0)
 	rd.compute_list_set_push_constant(list,params,16)
-	rd.compute_list_dispatch(list,ceili(count/128.0),1,1)
+	rd.compute_list_dispatch(list,ceili(work_count/128.0),1,1)
 	rd.compute_list_end()
-	if perception_enabled: _perception.dispatch(1,{},now,ceili(count/64.0))
+	if perception_enabled: _perception.dispatch(1,{},now,ceili(work_count/64.0))
 	if chemistry_enabled:
 		_prepare_grid_rd()
 		_chemistry.advance(dt,tick,now)
@@ -552,6 +606,7 @@ func _finish_close() -> void:
 	RenderingServer.call_on_render_thread(_close_rd)
 func _close_rd() -> void:
 	if rd != null:
+		if _transfer!=null: _transfer.close()
 		if _exposure!=null: _exposure.close()
 		if _chemistry!=null: _chemistry.close()
 		if _perception!=null: _perception.close()

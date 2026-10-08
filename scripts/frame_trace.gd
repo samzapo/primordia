@@ -60,7 +60,9 @@ func _post() -> void:
 			"draw_calls":RenderingServer.viewport_get_render_info(viewport,RenderingServer.VIEWPORT_RENDER_INFO_TYPE_CANVAS,RenderingServer.VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME),
 			"counts":counts.duplicate(),"cells":sim.cells.size(),"active_cells":sim.active_cells,
 			"detailed_scope":"whole_habitat" if (sim.resident!=null and sim.resident.full_detail) or sim.integration_half==sim.WORLD*.5 else "near_view",
-			"particle_scope":"whole_habitat" if sim.resident!=null else "detailed_and_coarse",
+			"particle_scope":("nearby_gpu_cold_cpu" if sim.resident.streaming!=null else "whole_habitat") if sim.resident!=null else "detailed_and_coarse",
+			"cold_packets":sim.resident.stored_count() if sim.resident!=null else 0,
+			"gpu_work_slots":sim.resident.gpu.work_count if sim.resident!=null else 0,
 			"views":game.views.size(),"particles":sim.particle_count(),"active_particles":sim.active_particles,
 			"background_particles":sim.background_particles,"pheromones":sim.pheromone_count(),
 			"audio_skips":game.music.skips,"audio_ready":game.music.ready_bank})

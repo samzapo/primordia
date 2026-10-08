@@ -13,6 +13,7 @@ layout(set=0,binding=8,std430) buffer Latest { uvec4 latest[]; };
 layout(push_constant,std430) uniform Params {
  uint count;uint stage;uint query_count;uint source_count;
  uint emit_start;uint emit_count;uint result_start;float now;
+ uint summary_start;uint summaries;uint local_sources;uint pad1;
 } pc;
 const vec2 WORLD=vec2(4096,2560);
 ivec2 pixel(uint i){return ivec2(int(i%256u)*3,int(i/256u));}
@@ -54,7 +55,7 @@ void food_query(uint i,vec4 query,uvec4 self){
    uint at=food_bin(base,key,true);
    // The radius/4 bins intersect at most 100 distinct wrapped keys. Refuse
    // rather than silently lose food if that invariant is ever changed.
-   if(at==0xffffffffu){receipts[output_at+4u].z=3.;return;}
+   if(at==0xffffffffu){receipts[output_at+4u].z=3.;if(pc.summaries!=0u)receipts[pc.summary_start+i*385u].z=uintBitsToFloat(1u);return;}
    ivec2 native_bin=ivec2(floor(position/64.));
    ivec2 relative=ivec2(mod(vec2(native_bin-native_lo),vec2(64,40)));
    uint rank=uint(relative.x*40+relative.y)*pc.count+slot;
@@ -66,6 +67,15 @@ void food_query(uint i,vec4 query,uvec4 self){
    }
    latest[at+1u]=floatBitsToUint(value);
   }
+ }
+ if(pc.summaries!=0u){
+  uint summary_at=pc.summary_start+i*385u,n=0u;
+  for(uint b=0u;b<128u;b++){
+   uint at=base+b*4u;if(latest[at].z==0u)continue;
+   for(uint j=0u;j<3u;j++)receipts[summary_at+1u+n*3u+j]=uintBitsToFloat(latest[at+j]);
+   n++;
+  }
+  receipts[summary_at]=uintBitsToFloat(uvec4(n,2u,0u,0u));
  }
  float best=-1.;uint best_rank=0xffffffffu;
  for(uint b=0u;b<128u;b++){
@@ -119,6 +129,7 @@ void main(){
  // contact-list truncation or live-source lookup, and bounded source scratch.
  uint scratch=i*1024u,output_at=pc.result_start+i*5u;
  for(uint j=0u;j<5u;j++)receipts[output_at+j]=vec4(0);
+ if(pc.summaries!=0u)receipts[pc.summary_start+i*385u]=vec4(0);
  for(uint s=0u;s<pc.source_count;s++)latest[scratch+s]=uvec4(0);
  vec4 query=queries[i*4u];uvec4 self=floatBitsToUint(queries[i*4u+1u]);
  bool incumbent=floatBitsToUint(queries[i*4u+2u].x)!=0u;
@@ -167,7 +178,18 @@ void main(){
    if(floatBitsToUint(life.z)==0u||life.y<=pc.now||who.y==self.y)continue;
    float distance=length(offset(query.xy,imageLoad(state,pixel(slot)).xy));
    if(distance>query.z)continue;
-   uint source=floatBitsToUint(life.w);uvec4 held=latest[scratch+source];
+   uint source=floatBitsToUint(life.w);
+   if(pc.local_sources!=0u){
+    source=(who.x*2654435761u)&1023u;
+    uint probe=0u;
+    for(;probe<1024u;probe++){
+     uint held_slot=latest[scratch+source].x;
+     if(held_slot==0u||floatBitsToUint(reports[(held_slot-1u)*4u+1u].x)==who.x)break;
+     source=(source+1u)&1023u;
+    }
+    if(probe==1024u){receipts[output_at+4u].z=3.;if(pc.summaries!=0u)receipts[pc.summary_start+i*385u].z=uintBitsToFloat(1u);return;}
+   }
+   uvec4 held=latest[scratch+source];
    ivec2 native_bin=ivec2(floor(imageLoad(state,pixel(slot)).xy/64.));
    ivec2 relative=ivec2(mod(vec2(native_bin-native_lo),vec2(64,40)));
    uint rank=uint(relative.x*40+relative.y)*pc.count+slot;
@@ -180,6 +202,16 @@ void main(){
    }
    latest[scratch+source]=uvec4(slot+1u,first,floatBitsToUint(distance),rank);
   }
+ }
+ if(pc.summaries!=0u){
+  uint summary_at=pc.summary_start+i*385u,n=0u;
+  for(uint s=0u;s<pc.source_count;s++){
+   uvec4 held=latest[scratch+s];if(held.x==0u)continue;
+   if(n>=64u){receipts[summary_at].z=uintBitsToFloat(1u);break;}
+   for(uint j=0u;j<4u;j++)receipts[summary_at+1u+n*5u+j]=reports[(held.x-1u)*4u+j];
+   receipts[summary_at+5u+n*5u]=vec4(uintBitsToFloat(held.z),0,0,0);n++;
+  }
+  receipts[summary_at].x=uintBitsToFloat(n);
  }
  float best=-1.;uint best_slot=0u,best_order=0xffffffffu;float best_distance=0.;
  for(uint s=0u;s<pc.source_count;s++){

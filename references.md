@@ -394,3 +394,18 @@ This revision implements the existing [pheromone-plume abstraction](#pheromone-p
 ## Frame budgeting and native batching (Revision 40)
 
 [Godot Engine fixed-step/catch-up documentation](https://docs.godotengine.org/en/stable/classes/class_engine.html#class-engine-property-max-physics-steps-per-frame) explains the distinction between rendering rate and simulation speed when catch-up is bounded. Primordia reports both clocks and retains fixed numerical steps; the safeguard is not a biological acceleration. Native batching retains the existing finite-mass fluid impulse and radial membrane abstractions and their references above. This revision introduces no new biological mechanic.
+
+## Revision 41 — bounded execution regions
+
+The new GPU/CPU boundary changes where existing numerical models run; it adds
+no biological resource source. The [Lagrangian diffusion derivation](https://docs.oceanparcels.org/en/latest/user_guide/examples/tutorial_diffusion.html)
+above continues to motivate square-root-time independent Brownian displacement
+and elapsed-time advection. The [Gillespie finite-interval reference](https://doi.org/10.1063/1.1378322)
+above remains the numerical motivation for coarse paid event counts and encounter
+hazards, not for randomizing orientation-controlled pair chemistry.
+
+Sparse chunks, bounded ownership receipts, local source hashing and camera
+preparation are engineering mechanisms. Returning a chunk as a unit does not
+combine its particles into one reactant or average their orientations. Large
+steps approximate paths and encounters outside the display; they are not an
+exact substitute for a continuously resolved molecular trajectory.

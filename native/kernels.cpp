@@ -509,6 +509,8 @@ protected:
     ClassDB::bind_method(D_METHOD("pool_compact"), &PrimordiaKernels::pool_compact);
     ClassDB::bind_method(D_METHOD("pool_filter"), &PrimordiaKernels::pool_filter);
     ClassDB::bind_method(D_METHOD("pool_sense"), &PrimordiaKernels::pool_sense);
+    ClassDB::bind_method(D_METHOD("packet_sense"), &PrimordiaKernels::packet_sense);
+    ClassDB::bind_method(D_METHOD("packet_regions"), &PrimordiaKernels::packet_regions);
     ClassDB::bind_method(D_METHOD("pool_needed"), &PrimordiaKernels::pool_needed);
     ClassDB::bind_method(D_METHOD("pool_decoys"), &PrimordiaKernels::pool_decoys);
     ClassDB::bind_method(D_METHOD("pool_toxins"), &PrimordiaKernels::pool_toxins);
@@ -754,6 +756,54 @@ public:
         }
         Dictionary detected; detected["report"]=report; detected["distance"]=distance;
         detected["expires_at"]=s.d["expires_at"]; reports[id]=detected;
+      }
+    }
+    Dictionary out; out["food"]=food; out["reports"]=reports; return out;
+  }
+  Array packet_regions(Array particles,double now,Vector2i dimensions) {
+    Dictionary chunks;
+    for (int i=0;i<particles.size();++i) {
+      Dictionary p=particles[i]; if (!bool(p[keys.alive])) continue;
+      Vector2 at=p[keys.p]; Vector2i key(int(std::floor(at.x/256.)),int(std::floor(at.y/256.)));
+      if (dimensions.x>0 && dimensions.y>0) {key.x=mod(key.x,dimensions.x);key.y=mod(key.y,dimensions.y);}
+      if (!chunks.has(key)) {
+        Dictionary chunk;chunk["key"]=key;chunk["packets"]=Array();chunk["head"]=0;
+        chunk["transport_due"]=now+.5;chunk["chemical_due"]=std::numeric_limits<double>::infinity();
+        chunks[key]=chunk;
+      }
+      Dictionary chunk=chunks[key];Array packets=chunk["packets"];packets.push_back(p);
+      chunk["transport_due"]=std::min(double(chunk["transport_due"]),double(p.get(keys.transport_at,now))+.5);
+      if (int(p[keys.kind])!=3)
+        chunk["chemical_due"]=std::min(double(chunk["chemical_due"]),double(p.get(keys.chemical_at,now))+.5);
+    }
+    return chunks.values();
+  }
+  Dictionary packet_sense(Array particles,TypedArray<int64_t> ids,Vector2 receptor,double reach,Vector2 center,
+                        int owner,int lineage,double time,bool graze) {
+    ++pool_batches; Dictionary food,reports;
+    for (int k=0;k<ids.size();++k) {
+      auto p=access(particles,int64_t(ids[k]));
+      if (!p.alive() || int(p.get("owner",-1))==owner) continue;
+      double distance=perception_delta(receptor,p.position()).length(); if (distance>reach) continue;
+      if (graze && p.kind()==0 && p.amount()>0) {
+        Vector2 d=perception_delta(center,p.position()); Vector2 keyf=(d/std::max(80.,reach/4.)).floor();
+        Vector2i key(int(keyf.x),int(keyf.y));
+        if (!food.has(key)) {
+          Dictionary bin; bin["mass"]=0.; bin["moment"]=Vector2(); bin["nearest"]=d; bin["distance"]=distance; food[key]=bin;
+        }
+        Dictionary bin=food[key]; bin["mass"]=double(bin["mass"])+p.amount();
+        bin["moment"]=Vector2(bin["moment"])+d*p.amount();
+        if (distance<double(bin["distance"])) { bin["nearest"]=d; bin["distance"]=distance; }
+      } else if (!graze && p.kind()==3 && double(p.get("expires_at",0.))>time) {
+        Dictionary report=p.get("report",Dictionary());
+        if (report.is_empty() || int(report["lineage"])==lineage) continue;
+        Variant id=report["id"];
+        if (reports.has(id)) {
+          Dictionary seen=reports[id], old=seen["report"];
+          if (double(old["emitted_at"])>=double(report["emitted_at"])) continue;
+        }
+        Dictionary detected; detected["report"]=report; detected["distance"]=distance;
+        detected["expires_at"]=p["expires_at"]; reports[id]=detected;
       }
     }
     Dictionary out; out["food"]=food; out["reports"]=reports; return out;

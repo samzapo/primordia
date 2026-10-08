@@ -113,3 +113,28 @@ bounded catch-up is a responsiveness safeguard that can slow simulated time.
 Always report simulation/wall rate, count scope, real frame costs and native
 availability. Workstation results do not establish Threadripper/3090 performance
 or sustained 50k/mobile/large-world readiness.
+
+## Revision 41 — bounded particle ownership
+
+Read docs/REVISION_41.md. The explicit resident playtest now defaults to sparse
+cold CPU chunks and a bounded nearby GPU window. Ordinary CPU gameplay remains
+the default. Preserve fixed widest-view resolution, bounded admission/eviction,
+absolute clock catch-up, exactly-once receipts, transfer escrow during recovery,
+finite resource accounting and complete cross-owner sensory summaries. Never
+truncate source/food summaries silently or revive expired pheromone facts.
+
+Cold packets are authoritative, disjoint from GPU-owned poses. Serial CPU scopes
+may borrow them into temporary arrays; those arrays must be empty when a resident
+tick returns. Return unmoved chunks as units, batch native transport/query/rebin
+work and keep the scheduler to one indexed-heap entry per chunk. Do not substitute
+a full stored-world scan or snapshot. CPU fallback must include cold state,
+GPU state, paid emissions and unacknowledged transfer escrow exactly once.
+
+GPU work/drawing uses a stable slot watermark within bounded allocation. Do not
+break generation handles to reduce work. Camera travel waits for admission and
+eviction and keeps the whole rectangle inside prepared water, including reversals.
+Keep count scopes explicit: nearby GPU includes a halo; CPU stored can include
+unreclaimed dead/expired slots. Record whole frames and sim/wall rates, not only
+mean ticks. The current fixed habitat/fluid grid and all-cell scheduling still
+need further scaling; do not claim an unbounded whole game or sustained 50k/mobile
+performance. Whole-GPU reference: frame profiler --resident-streaming=off.

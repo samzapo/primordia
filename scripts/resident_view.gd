@@ -1,7 +1,9 @@
 extends Node2D
 const ParticleArt=preload("res://scripts/particle_art.gd")
 var batch: MultiMeshInstance2D
+var particles: WeakRef
 func initialize(gpu) -> void:
+	particles=weakref(gpu)
 	batch=MultiMeshInstance2D.new()
 	var mesh := QuadMesh.new()
 	mesh.size=Vector2.ONE
@@ -36,4 +38,5 @@ func initialize(gpu) -> void:
 	batch.scale=Vector2.ONE
 	add_child(batch)
 func camera(at: Vector2) -> void:
+	batch.multimesh.visible_instance_count=particles.get_ref().work_count
 	batch.material.set_shader_parameter("camera",at)

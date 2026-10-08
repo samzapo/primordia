@@ -20,6 +20,7 @@ var music_slider := HSlider.new()
 var world: Simulation = Simulation.new()
 var use_particle_pool := true
 var resident_starting:=false
+var resident_streaming:=true
 var resident_controller
 var resident_view: Node2D
 var particle_backend:="cpu"
@@ -345,13 +346,22 @@ func _update_world(alpha: float) -> void:
 	scale_bar.configure(size,zoom,preferences.hud_scale)
 	camera_screen = size*0.5
 	world.view_half = size/(2*zoom)
-	if world.resident!=null: world.resident.detail_half=size/(2*base_zoom*MIN_ZOOM)
+	if world.resident!=null:
+		world.resident.detail_half=size/(2*base_zoom*MIN_ZOOM)
+		if world.resident.streaming!=null:
+			zoom=maxf(zoom,world.resident.streaming.minimum_zoom(size))
+			world.view_half=size/(2*zoom)
+			scale_bar.configure(size,zoom,preferences.hud_scale)
 	_track_player_death()
 	render_camera = world.player.previous_position+Simulation.Medium.offset(world.player.previous_position,world.player.position)*alpha+camera_offset if camera_locked else free_camera
 	if death_focus_age < 1.8:
 		var blend: float = smoothstep(1.15,1.8,death_focus_age)
 		render_camera = Simulation.Medium.wrap_position(death_focus_at+Simulation.Medium.offset(death_focus_at,render_camera)*blend)
 	world.camera_follows_player = camera_locked and death_focus_age >= 1.8 and camera_offset.length_squared() < 0.001
+	if world.resident!=null and world.resident.streaming!=null:
+		var prepared: Vector2=world.resident.streaming.request_view(render_camera)
+		if Simulation.Medium.offset(render_camera,prepared).length_squared()>.01: world.camera_follows_player=false
+		render_camera=prepared
 	world.camera_position = render_camera
 	light_layer.material.set_shader_parameter("clock",world.time)
 	light_layer.material.set_shader_parameter("camera",render_camera)
@@ -711,7 +721,7 @@ func _update_hud() -> void:
 	var backend := "Resident GPU + native cells" if world.resident != null and world.kernels != null else "Resident GPU + SCRIPT cells" if world.resident != null else "GPU experiment" if world.gpu_transport != null else "Native CPU" if world.kernels != null else "GDScript"
 	debug_label.text = "%s · %d FPS · frame %.1f ms\n%d ticks/frame · simulation %.1f ms/frame · tick %.2f ms\nSimulation/wall %.2f× · view sync %.2f ms" % [backend,Engine.get_frames_per_second(),last_frame_ms,last_frame_ticks,last_frame_sim_ms,simulation_ms,simulation_rate,render_ms]
 	if world.resident != null:
-		debug_label.text += "\nDetailed region: %d cells · Coarse: %d cells\nGPU habitat particles: %d" % [world.active_cells,world.resident.coarse_cells,world.particle_count()]
+		debug_label.text += "\nDetailed region: %d cells · Coarse: %d cells\nGPU nearby particles: %d · CPU stored: %d" % [world.active_cells,world.resident.coarse_cells,world.particle_count(),world.resident.stored_count()]
 	else:
 		debug_label.text += "\nDetailed region: %d cells / %d particles\nHabitat total: %d living cells / %d particles" % [world.active_cells,world.active_particles,world.cells.filter(func(c): return not c.dead).size(),world.particle_count()]
 	if world.resident != null:
@@ -1059,6 +1069,7 @@ func _start_resident() -> void:
 	if resident_controller!=null: resident_controller.close()
 	resident_starting=true
 	resident_controller=load("res://scripts/resident_ecology.gd").new()
+	resident_controller.streaming_enabled=resident_streaming
 	resident_controller.initialized.connect(_resident_initialized.bind(resident_controller,world),CONNECT_ONE_SHOT)
 	resident_controller.returned_to_cpu.connect(_resident_returned.bind(resident_controller))
 	resident_controller.start(world)

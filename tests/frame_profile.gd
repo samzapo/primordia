@@ -180,6 +180,9 @@ func run() -> void:
 		finish_scene(scene,1)
 		return
 	if option("--particle-backend","cpu")=="resident":
+		var stream_option:=option("--resident-streaming","on")
+		if stream_option not in ["on","off"]: push_error("Resident streaming must be on/off");finish_scene(scene,1);return
+		scene.resident_streaming=stream_option=="on"
 		scene._start_resident()
 		while scene.resident_starting: await process_frame
 		if sim.resident==null: push_error("Resident gameplay initialization failed");finish_scene(scene,1);return
@@ -249,7 +252,7 @@ func run() -> void:
 	var result := {"rows":rows,"injected_tick_delay_ms":float(delay_text),"tick_audio":tick_audio,"vsync":sync_mode,"fluid":fluid_name,"fluid_settings":sim.experimental_fluid.metrics if sim.experimental_fluid != null else {},
 		"fluid_feedback":feedback,
 		"fluid_quality":preload("res://tests/fluid_compare_gpu.gd").summary(sim.experimental_fluid) if sim.experimental_fluid != null else {},
-		"backend":option("--particle-backend","cpu"),"full_habitat":option("--full-habitat","off"),"resident_readbacks":sim.resident.gpu.readbacks if sim.resident!=null else 0,"requested_chemicals":int(packet_text),"distribution":distribution,"particle_sizes":sizes,"frame_step":frame_step,"particle_collisions":sim.particle_collisions,
+		"backend":option("--particle-backend","cpu"),"resident_streaming":option("--resident-streaming","on"),"cold_packets":sim.resident.stored_count() if sim.resident!=null else 0,"transfer_bytes":sim.resident.gpu.transfer_readback_bytes if sim.resident!=null else 0,"full_habitat":option("--full-habitat","off"),"resident_readbacks":sim.resident.gpu.readbacks if sim.resident!=null else 0,"requested_chemicals":int(packet_text),"distribution":distribution,"particle_sizes":sizes,"frame_step":frame_step,"particle_collisions":sim.particle_collisions,
 		"pair_matching":matching,"threading":sim.kernels.thread_metrics() if sim.kernels != null else {}, "particle_engine":sim.kernels.particle_engine_metrics() if sim.kernels != null else {}, "parcels":sim.kernels.parcel_metrics() if sim.kernels != null else {}, "neighbors":neighbor_summary(sim),"chemistry_events":sim.chemistry_events.duplicate(),"material_remaining":Fixture.packet_material(sim),
 		"packed_particles":sim.native_particle_pipeline,"particle_pool":sim.particle_pool,"pool_metrics":sim.kernels.pool_metrics() if sim.kernels != null else {},"particle_render_cache":sim.native_particle_render_cache,
 		"simulation_seconds":sim.time-sim_started,"rng":str(sim.rng.state),"background_rng":str(sim.background_rng.state),"ecology_rng":str(sim.ecology_rng.state),

@@ -326,3 +326,26 @@ zoom-out or camera travel exceeds prepared coverage, prefetch first and ease the
 view within available coverage. Rate limits are presentation constraints, never
 extra simulated time, refreshed particle hazards, resource gains or visible
 freeze/pop-in. Do not slow ordinary zoom merely to hide unbounded transfer work.
+
+## Revision 41 — disjoint nearby and cold particle ownership
+
+The resident desktop option now uses a fixed widest-view GPU window plus a
+preparation buffer and sparse CPU chunks beyond it. Keep transfers bounded,
+acknowledged and generation-safe. Preserve actual packets and absolute clocks,
+including unacknowledged transfer/emission escrow during CPU recovery. Cold
+biology uses the established resource-limited feeding, damage and lysis rules.
+Merge complete food moments and newest immutable reports before target selection
+across execution owners. No camera change creates biomass, ATP or extra time.
+
+Cold chunks borrow/return as units; only moved chunks need particle regrouping.
+Do not add a full stored-world scan to tick, draw or sensing. Reuse bounded
+background scheduling and local queries, with explicit diagnostic snapshots only.
+Presentation waits for both admission and eviction backlogs before advancing the
+window. Reversals must remain inside the intersection of prepared/current water.
+Display zoom uses the fixed widest footprint and cannot improve feeding.
+
+See [Revision 41](REVISION_41.md) for measurements and remaining limits.
+Streaming costs CPU time on the current small world; do not describe it as a
+measured speedup over the all-GPU reference or as infinite-world/50k/mobile
+completion. Next scaling work includes tiled fields, cell scheduling and smoother
+cold preparation. The ordinary CPU game remains the owner's successful reference.

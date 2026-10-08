@@ -2,8 +2,10 @@ extends RefCounted
 ## Immutable emission reports; no reference to live source cells.
 const MAX_QUERIES:=256
 const MAX_SOURCES:=1024
+const SUMMARY_VECTORS:=385 # Header + 128 food bins or 64 complete reports.
 const Genes=preload("res://scripts/mutations.gd")
 var sources: Dictionary={}
+var local_sources:=false # Hash/probe sources per query, never retain world history.
 var rd: RenderingDevice
 var buffers: Array[RID]=[]
 var sets: Array[RID]=[]
@@ -34,14 +36,14 @@ func encode_metadata(item: Dictionary, kind: int, table: Dictionary) -> Dictiona
 	for value in [report.mass,report.radius,report.emitted_at,item.get("expires_at",-1)]:
 		if not (value is float or value is int) or not is_finite(value) or value<0 or value>1e30: return {"error":"Invalid report quantity or lifetime"}
 	if item.expires_at<=report.emitted_at: return {"error":"Invalid report lifetime"}
-	if not table.has(report.id):
+	if not local_sources and not table.has(report.id):
 		if table.size()>=MAX_SOURCES: return {"error":"Pheromone source capacity exceeded"}
 		table[report.id]=table.size()
 	for pair in [[0,report.at.x],[4,report.at.y],[8,report.mass],[12,report.radius],[32,report.emitted_at],[36,item.expires_at]]:
 		bytes.encode_float(pair[0],pair[1])
 	bytes.encode_s32(16,report.id);bytes.encode_s32(20,report.lineage)
 	bytes.encode_u32(24,1 if report.hostile else 0);bytes.encode_u32(28,1 if report.defended else 0)
-	bytes.encode_u32(40,1);bytes.encode_u32(44,table[report.id])
+	bytes.encode_u32(40,1);bytes.encode_u32(44,0 if local_sources else table[report.id])
 	return {"bytes":bytes}
 
 func prepare_initial(values: PackedFloat32Array, metadata: Array) -> Dictionary:
@@ -152,17 +154,56 @@ func upload(batch: Dictionary) -> int:
 	return bytes
 
 func dispatch(stage: int, batch: Dictionary, now: float, groups: int) -> void:
-	var params:=PackedByteArray();params.resize(32)
+	var params:=PackedByteArray();params.resize(48)
 	for pair in [[0,count],[4,stage],[8,batch.get("query_count",0)],[12,batch.get("source_count",0)],
 		[16,batch.get("body_count",0)+batch.get("feed_count",0)],[20,batch.get("emit_count",0)],
 		[24,batch.get("body_count",0)+batch.get("feed_count",0)+batch.get("emit_count",0)+batch.get("inspect_count",0)*4]]:
 		params.encode_u32(pair[0],pair[1])
 	params.encode_float(28,now)
+	params.encode_u32(32,batch.get("summary_offset",0))
+	params.encode_u32(36,1 if batch.get("summaries",false) else 0)
+	params.encode_u32(40,1 if local_sources else 0)
 	var list:=rd.compute_list_begin()
 	rd.compute_list_bind_compute_pipeline(list,pipeline)
 	rd.compute_list_bind_uniform_set(list,sets[batch.get("ring_slot",0)],0)
-	rd.compute_list_set_push_constant(list,params,32);rd.compute_list_dispatch(list,maxi(groups,1),1,1)
+	rd.compute_list_set_push_constant(list,params,48);rd.compute_list_dispatch(list,maxi(groups,1),1,1)
 	rd.compute_list_end()
+
+static func summaries(bytes: PackedByteArray, offset: int, queries: int) -> Array:
+	var result: Array=[]
+	for i in queries:
+		var at: int=(offset+i*SUMMARY_VECTORS)*16
+		var item: Dictionary={"food":{},"reports":{}}
+		var count: int=bytes.decode_u32(at)
+		var kind: int=bytes.decode_u32(at+4)
+		if bytes.decode_u32(at+8)!=0:
+			item["error"]="Resident sensory summary overflow"
+		elif kind==2:
+			for j in count:
+				var p:=at+16+j*48
+				var key:=Vector2i(bytes.decode_s32(p),bytes.decode_s32(p+4))
+				item.food[key]={"mass":bytes.decode_float(p+16),"moment":Vector2(bytes.decode_float(p+20),bytes.decode_float(p+24)),
+					"distance":bytes.decode_float(p+28),"nearest":Vector2(bytes.decode_float(p+32),bytes.decode_float(p+36))}
+		else:
+			for j in count:
+				var decoded: Dictionary=decode(bytes,at+16+j*80,1)[0]
+				if decoded.valid: item.reports[decoded.report.id]=decoded
+		result.append(item)
+	return result
+
+static func merge(local: Dictionary, remote: Dictionary) -> Dictionary:
+	var result: Dictionary=remote.duplicate(true)
+	for key in local.food:
+		var part: Dictionary=local.food[key]
+		if not result.food.has(key): result.food[key]=part.duplicate(true);continue
+		var held: Dictionary=result.food[key]
+		held.mass+=part.mass;held.moment+=part.moment
+		if part.distance<held.distance: held.distance=part.distance;held.nearest=part.nearest
+	for id in local.reports:
+		var part: Dictionary=local.reports[id]
+		if not result.reports.has(id) or part.report.emitted_at>result.reports[id].report.emitted_at:
+			result.reports[id]=part
+	return result
 
 static func decode(bytes: PackedByteArray, at: int, queries: int) -> Array:
 	var result: Array=[]

@@ -2,6 +2,9 @@ extends RefCounted
 ## Desktop resident-particle gameplay bridge. Cells retain all resource authority.
 const GPU=preload("res://scripts/resident_particles.gd")
 const Perception=preload("res://scripts/resident_perception.gd")
+const Streaming=preload("res://scripts/particle_streaming.gd")
+var streaming_enabled:=true # Whole-habitat reference is a diagnostic only.
+var streaming
 var gpu=GPU.new()
 var world: WeakRef
 var pending: Array=[]
@@ -32,6 +35,12 @@ func start(sim, slots: int=65536) -> void:
 	world=weakref(sim);capacity=slots;detail_half=sim.VIEW*.5/.8
 	sim.disable_particle_pool()
 	var packets: Array=sim.particles
+	if streaming_enabled:
+		streaming=Streaming.new();streaming.initialize(self,sim)
+		packets=[]
+		for packet in sim.particles:
+			if streaming.contains(packet.p): packets.append(packet)
+			else: streaming.cold.put(packet,sim.time)
 	if packets.size()>capacity:
 		initialized.emit(false,"Starting particle count exceeds resident capacity");return
 	var values:=PackedFloat32Array();values.resize(capacity*12)
@@ -46,6 +55,8 @@ func start(sim, slots: int=65536) -> void:
 		if packet.alive and packet.kind==3: signals+=1
 	gpu.configure_interactions("chemistry");gpu.configure_exchange()
 	gpu.configure_perception(sim.time);gpu.configure_chemistry(sim.acidity.values,sim.seed_value);gpu.configure_exposure()
+	if streaming_enabled:
+		gpu.configure_transfer()
 	gpu.ready.connect(func(ok: bool,message: String):
 		reason=message
 		if closing: initialized.emit(false,"Initialization cancelled");return
@@ -72,14 +83,21 @@ func enqueue(packet: Dictionary) -> void:
 	# representable packet; never create a minimum dose or silently discard it.
 	var key:=Vector2i(packet.owner,packet.kind)
 	if packet.amount>=1e-20 and not trace_emissions.has(key):
-		pending.append(packet);return
+		_queue(packet);return
 	if trace_emissions.has(key):
 		var held: Dictionary=trace_emissions[key]
 		held.amount+=packet.amount;held.capacity+=packet.capacity
 		held.p=packet.p;held.previous=packet.previous
 	else: trace_emissions[key]=packet
 	if trace_emissions[key].amount>=1e-20:
-		pending.append(trace_emissions[key]);trace_emissions.erase(key)
+		_queue(trace_emissions[key]);trace_emissions.erase(key)
+
+func _queue(packet: Dictionary) -> void:
+	if streaming!=null and not streaming.contains(packet.p): streaming.cold.put(packet,world.get_ref().time)
+	else: pending.append(packet)
+
+func stored_count() -> int:
+	return streaming.cold.count if streaming!=null else 0
 
 func _living(sim) -> Array:
 	return sim.cells.filter(func(c): return not c.dead)
@@ -104,7 +122,7 @@ func _receipt(cells: Array=[],queries: Array=[],options: Dictionary={}) -> Dicti
 	# Paid output remains escrowed until the device accepts it. Do not discard a
 	# death burst just because one emission batch has fewer slots.
 	while pending.size()>256:
-		var extra:=_receipt_batch([],[],{"feeding":false,"projection":false},256)
+		var extra:=_receipt_batch([],[],{"feeding":false,"projection":false,"chemistry":options.get("chemistry",true)},256)
 		if extra.has("error"): return extra
 		if extra.get("_capacity",false): return {"error":"Particle capacity reached; preserved paid emissions"}
 	return _receipt_batch(cells,queries,options,pending.size())
@@ -185,8 +203,16 @@ func step(dt: float) -> void:
 	if not ready or sim.evolution.terminal() or sim.build_original!=null or (sim.player.dead and not sim.evolution.enabled): return
 	var start:=Time.get_ticks_usec()
 	gpu.exchange_prepare_usec=0;gpu.exchange_wait_usec=0
+	if streaming!=null:
+		if not streaming.service(sim): fallback("Particle ownership transfer failed");return
+		# Admit already caught-up packets before this tick, so they receive its
+		# motion/chemistry exactly once and are available to every receptor.
+		if not pending.is_empty():
+			var admission:=_receipt([],[],{"feeding":false,"projection":false,"chemistry":false})
+			if admission.has("error") or admission.get("_capacity",false): fallback("Nearby particle capacity reached");return
 	sim.time+=dt;sim.transport_clock+=dt;sim.revision+=1
 	sim.profile_counts.clear();sim.profile_usec.clear()
+	sim.profile_usec["streaming"]=Time.get_ticks_usec()-start
 	for name in ["sensing","feeding","organ_geometry","traction","membrane","contacts","coarse_chemistry","coarse_feeding","coarse_motion","offscreen_biology"]:
 		sim.profile_usec[name]=0
 	var schedule:=_schedule(sim,dt)
@@ -207,25 +233,47 @@ func step(dt: float) -> void:
 		if not schedule.delayed.has(cell.id): sim._suction_cell(cell,dt)
 	sim.profile_usec["fluid"]=Time.get_ticks_usec()-mark
 	mark=Time.get_ticks_usec()
-	gpu.environment(sim.fluid.velocity,sim.acidity.values);gpu.advance(dt,sim.revision)
 	var queries: Array=[]
 	for cell in cells:
 		var h: float=schedule.times[cell.id]
 		cell.activity=1
 		cell.animate_resources(h);sim._clear_receptors(cell,h)
 		queries.append_array(_queries(sim,[cell],h))
-	var receipt:=_receipt(cells,queries,{"projection":false,"coarse":schedule.coarse,"scope":scope})
+	var local_senses: Array=[]
+	if streaming!=null:
+		var cold_started:=Time.get_ticks_usec()
+		streaming.begin(sim,cells,queries,true)
+		sim.profile_usec["cold_prepare"]=Time.get_ticks_usec()-cold_started
+		cold_started=Time.get_ticks_usec()
+		for query in queries: local_senses.append(streaming.sense(sim,query))
+		sim.profile_usec["cold_sense"]=Time.get_ticks_usec()-cold_started
+		# The private cold workset remains borrowed until intake is credited.
+		sim.resident=self
+	gpu.environment(sim.fluid.velocity,sim.acidity.values);gpu.advance(dt,sim.revision)
+	var receipt:=_receipt(cells,queries,{"projection":false,"coarse":schedule.coarse,"scope":scope,"summaries":streaming!=null})
 	sim.profile_usec["particles"]=Time.get_ticks_usec()-mark
 	if receipt.has("error"):
+		if streaming!=null: streaming.finish(sim)
 		fallback(receipt.error);return
+	var combined: Array=[]
+	if streaming!=null:
+		for i in queries.size():
+			if receipt.summaries[i].has("error"):
+				# Feeding has already committed on-device; credit before recovery.
+				var cursor:=0
+				for j in cells.size(): cursor=_credit(cells[j],receipt,j,cursor)
+				streaming.finish(sim);fallback(receipt.summaries[i].error);return
+			combined.append(Perception.merge(local_senses[i],receipt.summaries[i]))
 	mark=Time.get_ticks_usec()
 	needed.clear()
 	for i in queries.size():
-		if queries[i].mode in ["waste","toxin"]: needed[Vector2i(queries[i].id,queries[i].organ_id)]=receipt.senses[i].valid
+		if queries[i].mode in ["waste","toxin"]: needed[Vector2i(queries[i].id,queries[i].organ_id)]=receipt.senses[i].valid or (streaming!=null and local_senses[i].needed)
 	var pore:=0
 	var foreground_rng: RandomNumberGenerator=sim.rng
 	# Credit every paid receipt before an offscreen hunt can kill a batch peer.
 	for i in cells.size(): pore=_credit(cells[i],receipt,i,pore)
+	if streaming!=null:
+		sim.resident=null;streaming.feed(sim,cells,schedule);streaming.finish(sim)
 	for cell in cells:
 		var h: float=schedule.times[cell.id]
 		var delayed: bool=schedule.delayed.has(cell.id)
@@ -236,7 +284,13 @@ func step(dt: float) -> void:
 		cell.age+=h;cell.coarse_handling=maxf(0,cell.coarse_handling-h)
 		cell.hurt_flash=maxf(0,cell.hurt_flash-h*2);cell.reaction_flash=maxf(0,cell.reaction_flash-h*2)
 		var sense_start:=Time.get_ticks_usec()
-		sim._sense(cell,h,Perception.for_cell(queries,receipt.senses,cell))
+		var received: Dictionary=Perception.for_cell(queries,receipt.senses,cell)
+		if streaming!=null:
+			for i in queries.size():
+				if queries[i].id!=cell.id or queries[i].mode not in ["graze","hunt","flee"]: continue
+				combined[i]["patch"]=sim._food_patch(combined[i].food,queries[i].reach,cell)
+				received[queries[i].organ_id]=combined[i]
+		sim._sense(cell,h,received)
 		sim.profile_usec["sensing"]+=Time.get_ticks_usec()-sense_start
 		if delayed:
 			sim.offscreen_ecology.advance_body(sim,cell,h)
@@ -268,6 +322,10 @@ func step(dt: float) -> void:
 			# not additional chances for every receipt-capacity drain.
 			receipt=_receipt(cells,[],options)
 			if receipt.has("error"): fallback(receipt.error);break
+	if streaming!=null and sim.resident!=null:
+		streaming.begin(sim,cells)
+		streaming.expose(sim,cells,schedule)
+		streaming.finish(sim)
 	for cell in cells: cell.activity=0.0 if schedule.coarse.has(cell.id) else 1.0
 	sim.rng=sim.ecology_rng;sim.coarse_mode=true;sim.coarse_event_at=sim.time
 	for cell in cells:
@@ -283,6 +341,11 @@ func step(dt: float) -> void:
 		sim.lineage.recover(sim,dt)
 	sim.evolution.advance(dt,sim);sim.won=sim.evolution.status=="won"
 	sim.profile_usec["ecology"]=Time.get_ticks_usec()-mark
+	sim.profile_counts["cold_particles"]=stored_count()
+	if streaming!=null:
+		sim.profile_counts["particle_promotions"]=streaming.entered
+		sim.profile_counts["cold_transport_updates"]=streaming.transported
+		sim.profile_counts["stream_queue"]=streaming.queue_depth
 	sim.profile_counts["coarse_cells"]=coarse_cells
 	sim.profile_counts["coarse_updates"]=sim.offscreen_ecology.visits
 	sim.profile_usec["gpu_receipt_prepare"]=gpu.exchange_prepare_usec
@@ -326,7 +389,7 @@ func snapshots() -> Array:
 		var packet:=decode(data.state.slice(i*12,i*12+12),-1,sim)
 		metadata(packet,data.metadata,i*64)
 		result.append(packet)
-	return result+pending.duplicate(true)+trace_emissions.values().duplicate(true)
+	return result+pending.duplicate(true)+trace_emissions.values().duplicate(true)+(streaming.snapshots(sim) if streaming!=null else [])
 
 func fallback(message: String) -> void:
 	var sim=world.get_ref()
