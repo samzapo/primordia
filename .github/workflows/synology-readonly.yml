@@ -1,0 +1,62 @@
+name: Primordia Synology IPv6 inspection
+"on":
+  push:
+    branches: [samzapo/remote-ipv6]
+    paths: [.github/workflows/synology-readonly.yml, tools/synology_ipv6.py, tests/test_synology_ipv6.py]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: primordia-synology-router
+  cancel-in-progress: false
+jobs:
+  inspect:
+    if: github.repository == 'samzapo/primordia'
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 5
+    steps:
+      - name: Verify target and wired source checkout
+        shell: bash
+        run: |
+          test "$RUNNER_NAME" = samzapo-desktop
+          hostname
+          python3 - <<'PYCODE'
+          import json,pathlib,socket,subprocess
+          for host in ['github.com','api.github.com','codeload.github.com']:
+              found=False
+              for item in socket.getaddrinfo(host,443,type=socket.SOCK_STREAM):
+                  query=subprocess.run(['ip','-j','route','get',item[4][0]],capture_output=True,text=True)
+                  if query.returncode:continue
+                  for route in json.loads(query.stdout):
+                      device=pathlib.Path('/sys/class/net')/route['dev']
+                      assert (device/'device').exists() and not (device/'wireless').exists() and not (device/'phy80211').exists() and (device/'operstate').read_text().strip()=='up'
+                      found=True
+              assert found
+          PYCODE
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: samzapo--remote-ipv6--${{ github.run_id }}-${{ github.run_attempt }}
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Check pinned router client with isolated fixtures
+        shell: bash
+        run: |
+          task_dir="$GITHUB_WORKSPACE/samzapo--remote-ipv6--$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          cd "$task_dir"
+          pwd
+          python3 tests/test_synology_ipv6.py
+      - name: Read IPv6 settings through a certificate-pinned session
+        shell: bash
+        env:
+          PRIMORDIA_ROUTER_USERNAME: ${{ secrets.PRIMORDIA_ROUTER_USERNAME }}
+          PRIMORDIA_ROUTER_PASSWORD: ${{ secrets.PRIMORDIA_ROUTER_PASSWORD }}
+          PRIMORDIA_ROUTER_CERT_SHA256: c7197b8899f0ce05a0fa163bc3161613688ef27e1f6663e97ae9b2b9939de3f5
+        run: |
+          if [[ -z "$PRIMORDIA_ROUTER_USERNAME" || -z "$PRIMORDIA_ROUTER_PASSWORD" ]]; then
+            echo 'Router credentials are not configured. No login attempted and no settings changed.'
+            echo 'Add PRIMORDIA_ROUTER_USERNAME and PRIMORDIA_ROUTER_PASSWORD as repository Actions secrets to permit read-only inspection.' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          task_dir="$GITHUB_WORKSPACE/samzapo--remote-ipv6--$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          cd "$task_dir"
+          python3 tools/synology_ipv6.py
