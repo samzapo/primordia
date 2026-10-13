@@ -22,3 +22,5 @@ if [[ "${1:-}" == gpu ]]; then
     ! grep -Eiq 'llvmpipe|lavapipe|swiftshader' "$report_file"
   done
 fi
+
+python3 "$project_dir/tests/test_web_gateway.py"

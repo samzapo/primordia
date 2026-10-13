@@ -25,7 +25,8 @@ def main():
     lock = (state / "world.lock").open("a+")
     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     (state / "stop.request").unlink(missing_ok=True)
-    gateway = create(source / "build/web", state, args.port, args.world_port)
+    gateway = create(source / "build/web", state, args.port, args.world_port,
+                     tls_directory=state.parent / "tls")
     worker = threading.Thread(target=gateway.serve_forever, daemon=True)
     worker.start()
     command = [str(args.godot), "--path", str(source)]
@@ -43,12 +44,22 @@ def main():
     environment.pop("RUNNER_TRACKING_ID", None)
     child = subprocess.Popen(command, cwd=source, env=environment, start_new_session=True)
     stopping = threading.Event()
+    def renew_certificates():
+        from lan_tls import provision
+        while not stopping.wait(3600):
+            try:
+                gateway.tls_context = provision(gateway.tls_directory)
+            except (OSError, ValueError, subprocess.CalledProcessError, RuntimeError):
+                # Retain the working pair and report renewal failure without private material.
+                print("Primordia LAN TLS renewal failed; existing certificate retained", flush=True)
+    threading.Thread(target=renew_certificates, daemon=True).start()
     for sig in (signal.SIGTERM, signal.SIGINT):
         signal.signal(sig, lambda *_: stopping.set())
     try:
         while child.poll() is None and not stopping.wait(.25):
             pass
     finally:
+        stopping.set()
         if child.poll() is None:
             (state / "stop.request").write_text("graceful checkpoint and stop\n")
             try:

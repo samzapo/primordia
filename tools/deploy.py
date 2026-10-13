@@ -8,8 +8,9 @@ from pathlib import Path
 import secrets
 import subprocess
 import signal
+import ssl
 import time
-from urllib.request import build_opener, ProxyHandler
+from urllib.request import build_opener, ProxyHandler, HTTPSHandler
 
 from check_capacity import inspect
 from check_wired_route import verify
@@ -42,13 +43,14 @@ def switch(link, destination):
     temporary.symlink_to(destination)
     temporary.replace(link)
 
-def health(build, previous=None):
-    opener = build_opener(ProxyHandler({}))
+def health(build, previous=None, ca_file=None):
+    context = ssl.create_default_context(cafile=str(ca_file))
+    opener = build_opener(ProxyHandler({}), HTTPSHandler(context=context))
     deadline = time.monotonic() + 120
     first = None
     while time.monotonic() < deadline:
         try:
-            with opener.open("http://127.0.0.1:8766/health", timeout=3) as response:
+            with opener.open("https://127.0.0.1:8766/health", timeout=3) as response:
                 value = json.load(response)
             if value.get("build") != build or value.get("backend") != "gpu" or value.get("backend_error") or value.get("checkpoint_error"):
                 raise ValueError("Unhealthy build or GPU backend")
@@ -117,6 +119,8 @@ def main():
         with os.fdopen(descriptor, "w") as output:
             output.write("PRIMORDIA_INVITE=" + secrets.token_hex(24) + "\n")
     credential.chmod(0o600)
+    from lan_tls import provision
+    provision(root / "tls")  # Validate retained CA and candidate TLS before stopping the world.
     current = root / "current"
     old = current.resolve() if current.is_symlink() else None
     previous = None
@@ -147,7 +151,7 @@ def main():
     try:
         run("systemctl", "--user", "daemon-reload")
         run("systemctl", "--user", "enable", "--now", UNIT)
-        report = health(sha, previous)
+        report = health(sha, previous, root / "tls/authority/ca.pem")
         (root / "last-deploy.json").write_text(json.dumps(report, indent=2))
     except BaseException:
         subprocess.run(["systemctl", "--user", "stop", UNIT], check=False)
@@ -158,6 +162,6 @@ def main():
             run("systemctl", "--user", "start", UNIT)
             print("Previous service restored; world saves retained", flush=True)
         raise
-    print("Private browser endpoint is port 8766; invitation remains in " + str(credential), flush=True)
+    print("Private HTTPS browser endpoint is port 8766; HTTP on that port provides certificate setup. Invitation remains in " + str(credential), flush=True)
 
 if __name__ == "__main__": main()

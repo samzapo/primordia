@@ -1,8 +1,16 @@
 # Primordia private deployment
 
-Primordia follows the existing GSOC user-service pattern on `samzapo-desktop`, with an independent port and state directory. Open **http://192.168.1.25:8766** on the home network. `/api/network` lists current physical-interface home URLs if the address changes.
+Primordia follows the existing GSOC user-service pattern on `samzapo-desktop`, with an independent port and state directory. Open **http://192.168.1.25:8766** once for certificate setup, then use **https://192.168.1.25:8766** to play on the home network. `/api/network` lists current physical-interface home URLs if the address changes.
 
 The first connection needs the invitation from `~/.local/share/primordia-deploy/credentials.env` on the target. Keep that file private. The browser stores its account identity locally and resumes it on reconnect; clearing site data loses that identity. This revision does not expose administrative world resets or client-selected resource balances.
+
+## One-time phone HTTPS setup
+
+The same port handles the plain HTTP setup page and the HTTPS game. Download `primordia-lan-ca.crt` from the setup page. On Android, search Settings for **Install a certificate**, select **CA certificate**, and choose the downloaded file. Depending on the phone, this is under Security & privacy, More security settings, or Encryption & credentials. Open the HTTPS game address after installation. Installing the CA establishes trust; accepting a browser warning is not the setup procedure.
+
+The CA signing key stays private in `~/.local/share/primordia-deploy/tls/authority/`. Retain that directory with the world state: replacing the CA requires every device to install a new certificate. Its name constraints permit private IP ranges and localhost, excluding public hostnames. The server certificate includes current physical-interface LAN addresses and loopback; it renews automatically without replacing the CA. `/api/network` lists HTTPS addresses. Other devices can import the same CA into their browser/system trust store. Remove **Primordia Private LAN CA** from user-installed trusted credentials to revoke local trust.
+
+Godot 4.7.2's launcher requires a secure context even for the single-threaded build, and its audio initialization uses AudioWorklet. A plain HTTP LAN IP fails this requirement; localhost testing alone does not cover LAN access. Production assets and WebSockets require TLS. The public CA certificate and read-only health remain available over HTTP on the same port for bootstrap and local supervision.
 
 ## Continuous deployment
 
@@ -21,7 +29,7 @@ export XDG_RUNTIME_DIR=/run/user/$(id -u)
 systemctl --user status primordia.service
 systemctl --user restart primordia.service
 systemctl --user stop primordia.service
-curl --fail http://127.0.0.1:8766/health
+curl --fail --cacert "$HOME/.local/share/primordia-deploy/tls/authority/ca.pem" https://127.0.0.1:8766/health
 ```
 
 The gateway exposes read-only bounded telemetry: build revision, world ID/epoch/tick, simulation time/wall ratio, camera and packet counts, GPU/backend status, checkpoint age, full reconciliation cost and file-write cost and tick-cost percentiles. The host-telemetry workflow also records hardware/load samples. Logs never contain invitations, bearer tokens or request bodies. Source, saves and installation media are retained; generated artifacts are rebuilt and not published in Git.
@@ -30,6 +38,6 @@ A failed candidate restores the previous service/release without deleting saves.
 
 ## Validation
 
-`tools/test_network.sh` checks exact state identity/particles/RNG and real two-client CPU authority behavior. `tools/test_network.sh gpu` adds a hardware Vulkan test under a private Xvfb display and rejects software rendering or CPU fallback. `tools/build_web.sh` exports the browser client from an automatically prepared source-only project. `tools/test.sh` retains the broader native physical suite and invokes networking checks after it.
+`tools/test_network.sh` checks exact state identity/particles/RNG and real two-client CPU authority behavior. `tools/test_network.sh gpu` adds a hardware Vulkan test under a private Xvfb display and rejects software rendering or CPU fallback. `tests/test_web_gateway.py` verifies trusted HTTPS, certificate rejection, private key permissions, HTTP bootstrap and encrypted duplex snapshots. Deployment readiness and post-job restart checks use verified HTTPS with the retained CA. `tools/build_web.sh` exports the browser client from an automatically prepared source-only project. `tools/test.sh` retains the broader native physical suite and invokes networking checks after it.
 
 Gameplay objective and balance groups stay disabled through `tests/test_policy.gd` until the owner requests restoration. Test harnesses use finite authored fixtures; they do not spawn free material in the product.
