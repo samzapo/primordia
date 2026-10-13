@@ -1,0 +1,110 @@
+name: Primordia host telemetry
+
+"on":
+  push:
+    branches: [samzapo/multiplayer-proposal-20261013]
+    paths: [.github/workflows/host-telemetry.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: primordia-host-telemetry
+  cancel-in-progress: false
+
+jobs:
+  capabilities:
+    if: github.repository == 'samzapo/primordia'
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 5
+    steps:
+      - name: Collect bounded host capabilities and load
+        shell: bash
+        run: |
+          test "$RUNNER_NAME" = "samzapo-desktop"
+          task_dir="$RUNNER_TEMP/samzapo--multiplayer-proposal-20261013--$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir "$task_dir"
+          cd "$task_dir"
+          hostname
+          pwd
+          python3 - <<'PY'
+          import csv
+          import glob
+          import io
+          import json
+          import os
+          import pathlib
+          import platform
+          import shutil
+          import subprocess
+          import time
+
+          def command(args):
+              try:
+                  result = subprocess.run(args, capture_output=True, text=True, timeout=10)
+                  return {"status": result.returncode, "output": result.stdout.strip()}
+              except (OSError, subprocess.TimeoutExpired) as error:
+                  return {"status": "unavailable", "reason": type(error).__name__}
+
+          def memory():
+              fields = {}
+              for line in pathlib.Path("/proc/meminfo").read_text().splitlines():
+                  key, value = line.split(":", 1)
+                  if key in {"MemTotal", "MemAvailable", "SwapTotal", "SwapFree"}:
+                      fields[key + "_KiB"] = int(value.split()[0])
+              return fields
+
+          def sample():
+              value = {"time_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                       "load_1_5_15": os.getloadavg(), "memory": memory()}
+              pressure = pathlib.Path("/proc/pressure/memory")
+              if pressure.exists():
+                  value["memory_pressure"] = pressure.read_text().strip()
+              if shutil.which("nvidia-smi"):
+                  fields = ["name", "driver_version", "memory.total", "memory.used",
+                            "utilization.gpu", "temperature.gpu", "power.draw", "power.limit"]
+                  result = command(["nvidia-smi", "--query-gpu=" + ",".join(fields),
+                                    "--format=csv,noheader,nounits"])
+                  value["gpu_query_status"] = result["status"]
+                  if result["status"] == 0:
+                      value["gpus"] = [dict(zip(fields, row)) for row in csv.reader(io.StringIO(result["output"]), skipinitialspace=True)]
+              return value
+
+          cpu_models = sorted({line.split(":", 1)[1].strip()
+                               for line in pathlib.Path("/proc/cpuinfo").read_text().splitlines()
+                               if line.startswith("model name")})
+          builds = {}
+          for item in glob.glob("/proc/[0-9]*/comm"):
+              try:
+                  name = pathlib.Path(item).read_text().strip()
+              except (OSError, UnicodeError):
+                  continue
+              if name in {"cc1", "cc1plus", "gcc", "g++", "clang", "clang++", "cmake", "ninja", "make", "bazel", "ld", "rustc"}:
+                  builds[name] = builds.get(name, 0) + 1
+          space = shutil.disk_usage(".")
+          report = {
+              "host": platform.node(), "os": platform.system(), "architecture": platform.machine(),
+              "kernel": platform.release(), "cpu_models": cpu_models,
+              "logical_cpus": os.cpu_count(),
+              "tools_present": {name: bool(shutil.which(name)) for name in
+                                ["godot", "godot4", "vulkaninfo", "nvidia-smi", "cmake", "ninja", "systemctl"]},
+              "gpu_render_node_count": len(glob.glob("/dev/dri/renderD*")),
+              "display_environment_present": {name: bool(os.environ.get(name)) for name in
+                                              ["DISPLAY", "WAYLAND_DISPLAY", "XDG_RUNTIME_DIR"]},
+              "build_process_counts": builds,
+              "workspace_disk_total_bytes": space.total,
+              "workspace_disk_free_bytes": space.free,
+              "samples": [],
+          }
+          for index in range(3):
+              report["samples"].append(sample())
+              if index < 2:
+                  time.sleep(5)
+          payload = json.dumps(report, indent=2)
+          print(payload)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write("# Primordia host telemetry\n\nRead-only capabilities and three bounded idle/load samples. No game benchmark or service deployment.\n\n```json\n" + payload + "\n```\n")
+          PY
+          cd "$RUNNER_TEMP"
+          rmdir "$task_dir"
