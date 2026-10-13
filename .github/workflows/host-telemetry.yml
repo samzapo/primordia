@@ -112,10 +112,15 @@ jobs:
                   try:
                       report["owned_service_processes"].append({"pid":int(pid),"name":(proc/"comm").read_text().strip(),"wait":(proc/"wchan").read_text().strip(),"cwd":str((proc/"cwd").resolve()),"runner_tracking_present":b"RUNNER_TRACKING_ID=" in (proc/"environ").read_bytes()})
                   except OSError:pass
+          report["service_journal"] = command(["journalctl","--user","-u","primordia.service","--since","-3 minutes","--no-pager","-n","80"])
+          from urllib.error import HTTPError
           from urllib.request import build_opener, ProxyHandler
           try:
               with build_opener(ProxyHandler({})).open("http://127.0.0.1:8766/metrics",timeout=5) as response:
                   report["primordia_service"] = json.load(response)
+          except HTTPError as error:
+              try: report["primordia_service"] = {"http_status":error.code,"metrics":json.load(error)}
+              except ValueError: report["primordia_service"] = {"http_status":error.code}
           except OSError:
               report["primordia_service"] = {"status":"unavailable"}
           payload = json.dumps(report, indent=2)
