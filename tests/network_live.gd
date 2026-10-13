@@ -47,6 +47,14 @@ func run() -> void:
 		sim.spawn_particle(0,other.position+Vector2(100,0),Vector2.ZERO,.3)
 		sim.grid.rebuild(sim.particles)
 	host.world=sim
+	var personal_keys:="--personal-keys" in OS.get_cmdline_user_args()
+	var fixture_keys:=["personal-key-fixture-one-256", "personal-key-fixture-two-256"]
+	var key_file: String=host.store.directory+"-keys.json"
+	if personal_keys:
+		DirAccess.make_dir_recursive_absolute(host.store.directory)
+		var registry:=FileAccess.open(key_file,FileAccess.WRITE)
+		registry.store_string(JSON.stringify({"hashes":[fixture_keys[0].sha256_text(),fixture_keys[1].sha256_text()]}));registry.close()
+		OS.set_environment("PRIMORDIA_ACCESS_KEYS_FILE",key_file)
 	root.add_child(host)
 	check(await until(func():return host.running),"world authority starts")
 	if not host.running: quit(1);return
@@ -54,7 +62,7 @@ func run() -> void:
 		var socket:=WebSocketPeer.new();socket.inbound_buffer_size=Protocol.MAX_FRAME;socket.outbound_buffer_size=65536
 		sockets.append(socket);socket.connect_to_url("ws://127.0.0.1:"+str(host.port))
 	check(await until(func():return sockets.all(func(s):return s.get_ready_state()==WebSocketPeer.STATE_OPEN)),"two real WebSocket connections")
-	for socket in sockets:socket.send_text(JSON.stringify({"op":"hello","invite":OS.get_environment("PRIMORDIA_INVITE")}))
+	for i in sockets.size():sockets[i].send_text(JSON.stringify({"op":"hello","invite":fixture_keys[i] if personal_keys else OS.get_environment("PRIMORDIA_INVITE")}))
 	check(await until(func():return not find_message(0,"welcome").is_empty() and not find_message(1,"welcome").is_empty()),"distinct lineage accounts authenticated")
 	var welcome0:=find_message(0,"welcome")
 	var welcome1:=find_message(1,"welcome")
@@ -84,6 +92,28 @@ func run() -> void:
 	var restored=preload("res://scripts/network/state_codec.gd").new().restore(saved.graph)
 	check(restored.accounts[welcome0.token.sha256_text()].sequence==1,"idempotency sequence survives restart")
 	check(restored.accounts[welcome0.token.sha256_text()].lineage==restored.world.family_ledgers[0],"ownership ledger references survive checkpoint")
+	if personal_keys:
+		var rejected:=WebSocketPeer.new();rejected.connect_to_url("ws://127.0.0.1:"+str(host.port))
+		sockets.append(rejected);messages.append([])
+		check(await until(func():return rejected.get_ready_state()==WebSocketPeer.STATE_OPEN),"access-key rejection socket opens")
+		rejected.send_text(JSON.stringify({"op":"hello","invite":"wrong-personal-key"}))
+		check(await until(func():return rejected.get_ready_state()==WebSocketPeer.STATE_CLOSED),"invalid key is rejected")
+		check(rejected.get_close_code()==1008 and rejected.get_close_reason()=="Invalid access key","invalid key has an actionable policy close")
+		var count_before: int=host.accounts.size()
+		var selected_before: int=account.selected
+		var resume:=WebSocketPeer.new();resume.inbound_buffer_size=Protocol.MAX_FRAME;resume.connect_to_url("ws://127.0.0.1:"+str(host.port))
+		sockets.append(resume);messages.append([])
+		check(await until(func():return resume.get_ready_state()==WebSocketPeer.STATE_OPEN),"key resumes from another browser")
+		resume.send_text(JSON.stringify({"op":"hello","invite":fixture_keys[0]}))
+		check(await until(func():return not find_message(3,"welcome").is_empty()),"personal key resumes without the old browser token")
+		var resumed:=find_message(3,"welcome")
+		check(host.accounts.size()==count_before and resumed.cell==selected_before,"a reused key does not claim a second lineage")
+		check(resumed.token!=welcome0.token and host.accounts[resumed.token.sha256_text()]==account,"resume rotates the bearer and preserves the account")
+		check(account.sequence==1 and account.evolution.points==before_points-1,"resume preserves paid edit receipts and costs")
+		var durable=preload("res://scripts/network/state_codec.gd").new().restore(host.store.load_latest().graph)
+		check(durable.accounts.has(resumed.token.sha256_text()) and not durable.accounts.has(welcome0.token.sha256_text()) and durable.accounts[resumed.token.sha256_text()].sequence==1,"rotated account and receipts are durable before welcome")
+		check(await until(func():return sockets[0].get_ready_state()==WebSocketPeer.STATE_CLOSED),"previous browser is disconnected on key resume")
+		check(sockets[0].get_close_reason()=="Session resumed elsewhere","resume tells the old browser why it disconnected")
 	for socket in sockets:socket.close(-1)
 	check(await until(func():return host.world.camera_views.is_empty()),"disconnect removes every detailed camera")
 	before=host.world.time
@@ -98,6 +128,9 @@ func run() -> void:
 	for path in ["world-0.pworld","world-1.pworld","health.json"]:
 		DirAccess.remove_absolute(saved_directory().path_join(path))
 	DirAccess.remove_absolute(saved_directory())
+	if personal_keys:
+		DirAccess.remove_absolute(key_file)
+		OS.unset_environment("PRIMORDIA_ACCESS_KEYS_FILE")
 	print("NETWORK LIVE: %d assertions, %d failures" % [assertions,failures])
 	quit(0 if failures==0 else 1)
 func saved_directory() -> String:

@@ -40,6 +40,8 @@ jobs:
           fetch-depth: 1
       - name: Build, check GPU networking and deploy the independent service
         shell: bash
+        env:
+          PRIMORDIA_ACCESS_KEY_HASHES: ${{ secrets.PRIMORDIA_ACCESS_KEY_HASHES }}
         run: |
           task_dir="$GITHUB_WORKSPACE/samzapo--persistent-multiplayer--$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           cd "$task_dir"

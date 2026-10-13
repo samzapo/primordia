@@ -15,6 +15,7 @@ var store = Store.new()
 var world_id := ""
 var epoch := 0
 var invite := ""
+var access_hashes: Dictionary = {}
 var cpu := false
 var running := false
 var port := 9001
@@ -48,7 +49,18 @@ func _ready() -> void:
 		elif arg == "--cpu": cpu = true
 		elif arg.begins_with("--shutdown-after="): shutdown_after = float(arg.trim_prefix("--shutdown-after="))
 	invite = OS.get_environment("PRIMORDIA_INVITE")
-	if invite.length()<16: _fatal("PRIMORDIA_INVITE must contain at least 16 characters"); return
+	var key_path:=OS.get_environment("PRIMORDIA_ACCESS_KEYS_FILE")
+	if key_path!="":
+		var key_file:=FileAccess.open(key_path,FileAccess.READ)
+		if key_file==null or key_file.get_length()>131072: _fatal("Access key registry is unavailable"); return
+		var registry=JSON.parse_string(key_file.get_as_text())
+		if not registry is Dictionary or not registry.get("hashes") is Array: _fatal("Invalid access key registry"); return
+		var pattern:=RegEx.new();pattern.compile("^[a-f0-9]{64}$")
+		for value in registry.hashes:
+			if not value is String or pattern.search(value)==null: _fatal("Invalid access key hash"); return
+			access_hashes[value]=true
+		if access_hashes.is_empty() or access_hashes.size()>1024: _fatal("Unsupported access key count"); return
+	elif invite.length()<16: _fatal("PRIMORDIA_INVITE must contain at least 16 characters"); return
 	var saved: Dictionary = store.load_latest()
 	if not store.last_error.is_empty(): _fatal(store.last_error); return
 	if saved.is_empty():
@@ -172,17 +184,46 @@ func _poll() -> void:
 				if valid: queued.append({"peer":id,"message":message})
 				else: socket.close(1008,"Invalid command")
 
+
+func _close_sessions(key: String,except_id: int) -> void:
+	for other_id in peers:
+		if other_id!=except_id and peers[other_id].account==key:
+			peers[other_id].socket.close(1000,"Session resumed elsewhere")
+			peers[other_id].account="";peers[other_id].view=null
+
 func _hello(id: int,message: Dictionary) -> void:
 	var peer: Dictionary=peers[id]
 	if peer.account!="": return
+	var token: String=str(message.get("token",""))
+	var key:=token.sha256_text() if token.length()==64 else ""
+	var supplied:=str(message.get("invite","")).strip_edges()
+	var grant:=supplied.sha256_text()
+	var dirty:=false
+	if not access_hashes.is_empty():
+		if supplied!="" and not access_hashes.has(grant): peer.socket.close(1008,"Invalid access key");return
+		if access_hashes.has(grant):
+			var prior:=""
+			for candidate in accounts:
+				if accounts[candidate].get("access_hash","")==grant: prior=candidate;break
+			if prior!="" and prior!=key:
+				# A key resumes its existing account on a new browser, never a second lineage.
+				_close_sessions(prior,id)
+				var existing: Dictionary=accounts[prior];accounts.erase(prior)
+				token=Crypto.new().generate_random_bytes(32).hex_encode();key=token.sha256_text()
+				accounts[key]=existing;dirty=true
+			elif prior=="" and accounts.has(key) and not accounts[key].has("access_hash"):
+				accounts[key].access_hash=grant;dirty=true
+			elif prior=="" and accounts.has(key): key="";token=""
+		elif not accounts.has(key) or not access_hashes.has(accounts[key].get("access_hash","")):
+			peer.socket.close(1008,"Access key required");return
+	elif not accounts.has(key) and supplied!=invite:
+		peer.socket.close(1008,"Invalid invitation");return
 	var connected_accounts: Dictionary={}
 	for other in peers.values():
 		if other.account!="": connected_accounts[other.account]=true
-	var token: String=str(message.get("token",""))
-	var key:=token.sha256_text() if token.length()==64 else ""
-	if not connected_accounts.has(key) and connected_accounts.size()>=MAX_PLAYERS: peer.socket.close(1008,"Pond connection limit");return
+	if not connected_accounts.has(key) and connected_accounts.size()>=MAX_PLAYERS:
+		peer.socket.close(1008,"Pond connection limit");return
 	if not accounts.has(key):
-		if str(message.get("invite",""))!=invite: peer.socket.close(1008,"Invalid invitation");return
 		var owned: Dictionary={}
 		for account in accounts.values(): owned[account.root]=true
 		var founder
@@ -198,9 +239,10 @@ func _hello(id: int,message: Dictionary) -> void:
 		accounts[key]={"root":founder.lineage_id(),"selected":founder.id,"lineage":ledger,"evolution":evolution,"edit":0,"sequence":0,"receipts":{},"current":founder}
 		world.family_ledgers.append(ledger)
 		founder.role="player"
-		if not checkpoint(): peer.socket.close(1011,"Cannot retain account");return
-	for other_id in peers:
-		if other_id!=id and peers[other_id].account==key: peers[other_id].socket.close(1000,"Session resumed elsewhere");peers[other_id].view=null
+		if not access_hashes.is_empty(): accounts[key].access_hash=grant
+		dirty=true
+	if dirty and not checkpoint(): peer.socket.close(1011,"Cannot retain account");_fatal("Cannot retain account");return
+	_close_sessions(key,id)
 	peer.account=key
 	var account: Dictionary=accounts[key]
 	var cell=_selected(account)
@@ -367,7 +409,13 @@ func _write_metrics() -> void:
 	last_metrics_usec=Time.get_ticks_usec()
 	var samples:=tick_samples.duplicate();samples.sort()
 	var wall: float=(Time.get_ticks_usec()-started_usec)/1000000.0
-	var metrics={"world_id":world_id,"epoch":epoch,"tick":world.revision,"simulation_seconds":world.time,"uptime_seconds":wall,"simulation_wall_ratio":(world.time-start_simulation_seconds)/maxf(wall,.000001),"checkpoint_age_seconds":(Time.get_ticks_usec()-last_checkpoint_usec)/1000000.0,"updated_unix":Time.get_unix_time_from_system(),
+	var claimed: Dictionary={};var joinable: Dictionary={};var living:=0
+	for account in accounts.values(): claimed[account.root]=true
+	for cell in world.cells:
+		if not cell.dead:
+			living+=1
+			if not claimed.has(cell.lineage_id()): joinable[cell.lineage_id()]=true
+	var metrics={"living_cells":living,"joinable_lineages":joinable.size(),"access_keys":access_hashes.size(),"world_id":world_id,"epoch":epoch,"tick":world.revision,"simulation_seconds":world.time,"uptime_seconds":wall,"simulation_wall_ratio":(world.time-start_simulation_seconds)/maxf(wall,.000001),"checkpoint_age_seconds":(Time.get_ticks_usec()-last_checkpoint_usec)/1000000.0,"updated_unix":Time.get_unix_time_from_system(),
 		"backend":"gpu" if world.resident!=null else "cpu","gpu":RenderingServer.get_video_adapter_name(),"build":OS.get_environment("PRIMORDIA_BUILD_SHA"),
 		"views":world.camera_views.size(),"peers":peers.size(),"packets":world.particle_count(),"cold_packets":world.resident.stored_count() if world.resident!=null else 0,"accounts":accounts.size(),"stored_packets":world.particle_count()+world.resident.stored_count() if world.resident!=null else world.particle_count(),
 		"sent_bytes":sent_bytes,"skipped_frames":skipped_frames,"publication_readback_bytes":world.resident.gpu._publication.bytes_read if world.resident!=null and world.resident.gpu._publication!=null else 0,"checkpoint_tick":store.last_saved_tick,"checkpoint_ms":checkpoint_total_ms,"checkpoint_write_ms":store.latency_ms,"checkpoint_error":store.last_error,"backend_error":startup_error}

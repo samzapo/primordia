@@ -3,6 +3,7 @@
 import argparse
 import fcntl
 import json
+import re
 import os
 from pathlib import Path
 import secrets
@@ -119,6 +120,24 @@ def main():
         with os.fdopen(descriptor, "w") as output:
             output.write("PRIMORDIA_INVITE=" + secrets.token_hex(24) + "\n")
     credential.chmod(0o600)
+    registry = root / "access-keys.json"
+    configured = os.environ.get("PRIMORDIA_ACCESS_KEY_HASHES", "")
+    if configured:
+        incoming = json.loads(configured)
+        hashes = incoming.get("hashes", []) if isinstance(incoming, dict) else []
+        if not hashes or any(not isinstance(value,str) or not re.fullmatch(r"[a-f0-9]{64}",value) for value in hashes):
+            raise RuntimeError("Invalid personal access key hashes")
+        existing = json.loads(registry.read_text()).get("hashes",[]) if registry.exists() else []
+        hashes = sorted(set(existing + hashes))
+        if len(hashes)>1024: raise RuntimeError("Access key registry capacity exceeded")
+        pending = registry.with_suffix(".json.next")
+        descriptor = os.open(pending, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(descriptor,"w") as output:
+            output.write(json.dumps({"hashes":hashes})+"\n");output.flush();os.fsync(output.fileno())
+        pending.replace(registry);registry.chmod(0o600)
+        descriptor=os.open(root,os.O_RDONLY)
+        try:os.fsync(descriptor)
+        finally:os.close(descriptor)
     from lan_tls import provision
     provision(root / "tls")  # Validate retained CA and candidate TLS before stopping the world.
     current = root / "current"
@@ -136,6 +155,8 @@ def main():
     unit = unit_dir / UNIT
     old_unit = unit.read_text() if unit.exists() else None
     unit_text = "[Unit]\nDescription=Primordia persistent GPU world and browser gateway\nAfter=network-online.target\n\n[Service]\nType=simple\nUMask=0077\nWorkingDirectory=" + str(current).replace("%", "%%") + "\nEnvironmentFile=" + str(credential).replace("%", "%%") + "\nEnvironment=PRIMORDIA_BUILD_SHA=" + sha + "\nExecStart=/usr/bin/python3 " + quote(current / "tools/run_service.py") + " --godot " + quote(godot) + " --state " + quote(state) + " --port 8766 --world-port 8767\nRestart=on-failure\nRestartSec=5\nTimeoutStopSec=60\nKillMode=mixed\n\n[Install]\nWantedBy=default.target\n"
+    if registry.exists():
+        unit_text = unit_text.replace("Environment=PRIMORDIA_BUILD_SHA=", "Environment=" + quote("PRIMORDIA_ACCESS_KEYS_FILE="+str(registry)) + "\nEnvironment=PRIMORDIA_BUILD_SHA=")
     validation_dir = root / "unit-candidate"
     validation_dir.mkdir(exist_ok=True)
     validation_unit = validation_dir / UNIT
