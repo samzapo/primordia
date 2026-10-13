@@ -68,7 +68,7 @@ jobs:
       - name: Read vendor UI request definitions through the pinned session
         shell: bash
         env:
-          PRIMORDIA_UI_PATHS: ${{ inputs.ui_paths || '/webman/modules/nsm-Home/NSMHome.js' }}
+          PRIMORDIA_UI_PATHS: ${{ inputs.ui_paths || '/webman/initdata.cgi /webman/modules/nsm-Home/NSMHome.js' }}
           PRIMORDIA_ROUTER_USERNAME: ${{ secrets.PRIMORDIA_ROUTER_USERNAME }}
           PRIMORDIA_ROUTER_PASSWORD: ${{ secrets.PRIMORDIA_ROUTER_PASSWORD }}
           PRIMORDIA_ROUTER_CERT_SHA256: c7197b8899f0ce05a0fa163bc3161613688ef27e1f6663e97ae9b2b9939de3f5

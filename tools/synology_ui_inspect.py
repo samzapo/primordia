@@ -52,6 +52,6 @@ def inspect(paths,sid,synotoken=""):
             for pattern in [r"SYNO\.Core\.Network\.IPv6",r"SYNO\.Core\.Security\.Firewall",r"jsBaseURL|JSConfig|SynoToken|synotoken|/webman/modules/",r"SYNO\.Core\.Network\.LocalNetwork|dhcpv6|ipv6_enable|loadRulesFromRemote|FwLoadApiMaxVer"]:
                 for match in list(re.finditer(pattern,source))[:12]:
                     matches.append(source[max(0,match.start()-120):match.end()+400])
-            print(json.dumps({"path":path,"bytes":len(source),"static_references":refs[:80],"style_modules":sorted(set(re.findall(r"@import url\(\"([^\"]+)",source)))[:100],"request_definitions":matches}))
+            print(json.dumps({"path":path,"bytes":len(source),"static_references":refs[:80],"network_modules":sorted(set(re.findall(r"\"(modules/[^\"]+\.js)\"\s*:\s*\{",source))),"style_modules":sorted(set(re.findall(r"@import url\(\"([^\"]+)",source)))[:100],"request_definitions":matches}))
         except (OSError,ValueError) as error:print(json.dumps({"path":path,"error":type(error).__name__}))
 if __name__=="__main__":main()

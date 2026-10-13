@@ -77,7 +77,6 @@ class Router:
         entry=self.apis.get(api)
         if not entry:raise RouterError("Required router API unavailable")
         fields={'api':api,'version':entry['minVersion'],'method':'info' if api=='SYNO.Core.System' else 'list' if api in {'SYNO.Core.Network.IPv6.Router.Prefix','SYNO.Core.Network.Ethernet','SYNO.Core.Network.LocalNetwork'} else 'get'}
-        if api=='SYNO.Core.Network.LocalNetwork':fields['version']=entry['maxVersion']
         if api=='SYNO.Core.Network.LocalBridge':fields['ifname']='lbr0'
         if interface is not None:
             if api not in {'SYNO.Core.Network.IPv6','SYNO.Core.Network.IPv6.Router'} or interface not in {'wan','lan','lan1','br0','lbr0','lbr1','eth0'}:
