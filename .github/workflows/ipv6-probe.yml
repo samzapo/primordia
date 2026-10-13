@@ -25,7 +25,7 @@ jobs:
           hostname
           pwd
           python3 - <<'PYCODE'
-          import ipaddress, json, os, pathlib, platform, shutil, subprocess
+          import ipaddress, json, os, pathlib, platform, shutil, subprocess, socket, ssl, hashlib, http.client, re
           from urllib.request import build_opener, ProxyHandler
           def command(args):
               try:
@@ -63,6 +63,39 @@ jobs:
                   health=json.load(response)
                   report['world']={key:health.get(key) for key in ['build','world_id','epoch','tick','backend','gpu','backend_error','checkpoint_error']}
           except OSError:report['world']={'status':'unavailable'}
+          # Authorized Synology LAN endpoint only. No login or credential transmission.
+          # Initial untrusted TLS is used exclusively to inspect its public certificate.
+          router=[]
+          for port,secure in [(8001,True),(443,True),(8000,False),(80,False)]:
+              item={'address':'192.168.1.1','port':port,'tls':secure}
+              connection=None
+              try:
+                  context=None
+                  if secure:
+                      context=ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+                      context.check_hostname=False;context.verify_mode=ssl.CERT_NONE
+                      with socket.create_connection(('192.168.1.1',port),timeout=3) as raw:
+                          with context.wrap_socket(raw,server_hostname='192.168.1.1') as encrypted:
+                              item['certificate_sha256']=hashlib.sha256(encrypted.getpeercert(binary_form=True)).hexdigest()
+                      connection=http.client.HTTPSConnection('192.168.1.1',port,timeout=4,context=context)
+                  else:connection=http.client.HTTPConnection('192.168.1.1',port,timeout=4)
+                  connection.request('GET','/webapi/query.cgi?api=SYNO.API.Info&version=1&method=query&query=all')
+                  response=connection.getresponse();body=response.read(131073)
+                  item['http_status']=response.status
+                  if len(body)>131072:raise ValueError('Discovery response exceeded bound')
+                  try:
+                      value=json.loads(body)
+                      item['api_success']=value.get('success');item['api_error']=value.get('error',{}).get('code')
+                      item['network_capabilities']={name:entry for name,entry in value.get('data',{}).items() if re.search(r'IPv6|Firewall|Network|SYNO.API.Auth|SYNO.Core.System$',name)}
+                  except ValueError:
+                      titles=re.findall(r'<title[^>]*>(.*?)</title>',body.decode(errors='replace'),flags=re.I|re.S)
+                      item['title']=titles[:1]
+              except (OSError,ValueError,http.client.HTTPException) as error:
+                  item['error']=type(error).__name__
+              finally:
+                  if connection:connection.close()
+              router.append(item)
+          report['synology_unauthenticated_discovery']=router
           payload=json.dumps(report,indent=2)
           print(payload)
           with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as output:
