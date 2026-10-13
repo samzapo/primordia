@@ -41,7 +41,7 @@ class RouterFixture(unittest.TestCase):
                         data={'sid':'private-fixture-session','synotoken':'private-fixture-csrf'}
                     elif api=='SYNO.API.Auth' and method=='logout':data={}
                     else:
-                        if method!='get' or fields.get('_sid')!='private-fixture-session':raise AssertionError('Non-read router operation')
+                        if method not in {'get','info','list'} or fields.get('_sid')!='private-fixture-session':raise AssertionError('Non-read router operation')
                         data={'model':'RT6600ax','enabled':False,'password':'must-never-be-printed','ssid':'must-never-be-printed'}
                     body=json.dumps({'success':True,'data':data}).encode()
                     self.send_response(200);self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
@@ -62,11 +62,14 @@ class RouterFixture(unittest.TestCase):
                     router=Router('192.168.1.1',pin);router.discover();router.login('fixture-owner','fixture-password')
                     with self.assertRaisesRegex(RouterError,'read-only allowlist'):
                         router.read('SYNO.Core.Network.Wifi.Hotspot')
-                    value=router.read('SYNO.Core.System');router.logout()
+                    value=router.read('SYNO.Core.System');router.read('SYNO.Core.Network.IPv6',interface='wan')
+                    with self.assertRaisesRegex(RouterError,'Interface is outside'):
+                        router.read('SYNO.Core.Network.IPv6',interface='unrelated')
+                    router.logout()
                     self.assertEqual(summarize(value),{'model':'RT6600ax','enabled':False})
                     self.assertNotIn('must-never-be-printed',json.dumps(summarize(value)))
                     self.assertNotIn('private-fixture-session',json.dumps(summarize(value)))
-                    self.assertEqual([x[1]['method'] for x in requests],['query','login','get','logout'])
+                    self.assertEqual([x[1]['method'] for x in requests],['query','login','info','get','logout'])
                     self.assertTrue(all('passwd' not in path and '_sid' not in path for path,_ in requests))
                     self.assertEqual(router.sid,'')
                     with self.assertRaisesRegex(RouterError,'Invalid API path'):

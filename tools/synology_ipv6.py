@@ -68,11 +68,16 @@ class Router:
         self.sid=data.get('sid','');self.synotoken=data.get('synotoken','')
         if not self.sid:raise RouterError("Router login returned no session")
 
-    def read(self, api):
+    def read(self, api, *, interface=None):
         if api not in ALLOWED:raise RouterError("Router operation is outside the read-only allowlist")
         entry=self.apis.get(api)
         if not entry:raise RouterError("Required router API unavailable")
-        return self.call(entry['path'],{'api':api,'version':entry['minVersion'],'method':'get'})
+        fields={'api':api,'version':entry['minVersion'],'method':'info' if api=='SYNO.Core.System' else 'list' if api=='SYNO.Core.Network.IPv6.Router.Prefix' else 'get'}
+        if interface is not None:
+            if api not in {'SYNO.Core.Network.IPv6','SYNO.Core.Network.IPv6.Router'} or interface not in {'wan','lan','lan1','br0'}:
+                raise RouterError("Interface is outside the read-only allowlist")
+            fields['ifname']=interface
+        return self.call(entry['path'],fields)
 
     def logout(self):
         if self.sid:
@@ -85,7 +90,8 @@ DISPLAY_KEYS={'model','version','major','minor','build','buildnumber','productve
               'enable','enabled','mode','type','prefix','prefix_len','prefix_length',
               'ipv6','ipv6addr','ipv6_addr','ipv6_prefix','ipv6_enable','gateway','default_gateway',
               'wan_ipv6','wan_ipv6_forward','default_action','default_policy','policy',
-              'allow_srm_from_wan','allow_external_access','ifname','interface'}
+              'allow_srm_from_wan','allow_external_access','ifname','interface',
+              'config_type','dhcp_mode','auto_dns','prefix_delegation','pd_enable','addr','address','ip6_addr','ip6_prefix','ip6_mode','ipv6_type','enable_port_check','pf_auto_fw_rules','upnp_auto_fw_rules','dmz_auto_fw_rules'}
 def summarize(value):
     if isinstance(value,dict):
         result={}
@@ -106,7 +112,7 @@ def main():
         router.login(os.environ.get('PRIMORDIA_ROUTER_USERNAME',''),os.environ.get('PRIMORDIA_ROUTER_PASSWORD',''))
         for api in sorted(ALLOWED):
             try:
-                data=router.read(api);report['apis'][api]={'status':'read','summary':summarize(data),'field_names':sorted(data) if isinstance(data,dict) else []}
+                data=router.read(api,interface='wan' if api=='SYNO.Core.Network.IPv6' else 'lan' if api=='SYNO.Core.Network.IPv6.Router' else None);report['apis'][api]={'status':'read','summary':summarize(data),'field_names':sorted(data) if isinstance(data,dict) else []}
             except RouterError as error:report['apis'][api]={'status':'unavailable','reason':str(error)}
     except (OSError,RouterError) as error:
         report['status']='failed';report['reason']=str(error) if isinstance(error,RouterError) else type(error).__name__
