@@ -73,6 +73,7 @@ func run() -> void:
 	check(await until(func():return host.world.time>before+.05),"clock advances during editor use")
 	check(host.checkpoint(),"account and world checkpoint completes")
 	var saved: Dictionary=host.store.load_latest()
+	if not host.cpu: check(saved.stream_rng==PackedInt64Array([host.world.resident.streaming.random.seed,host.world.resident.streaming.random.state]),"cold transport random stream is checkpointed")
 	var restored=preload("res://scripts/network/state_codec.gd").new().restore(saved.graph)
 	check(restored.accounts[welcome0.token.sha256_text()].sequence==1,"idempotency sequence survives restart")
 	check(restored.accounts[welcome0.token.sha256_text()].lineage==restored.world.family_ledgers[0],"ownership ledger references survive checkpoint")

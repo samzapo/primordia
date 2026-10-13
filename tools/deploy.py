@@ -132,7 +132,8 @@ def main():
     unit_dir.mkdir(parents=True, exist_ok=True)
     unit = unit_dir / UNIT
     old_unit = unit.read_text() if unit.exists() else None
-    unit.write_text("[Unit]\nDescription=Primordia persistent GPU world and browser gateway\nAfter=network-online.target\n\n[Service]\nType=simple\nUMask=0077\nWorkingDirectory=" + quote(current) + "\nEnvironmentFile=" + quote(credential) + "\nEnvironment=PRIMORDIA_BUILD_SHA=" + sha + "\nExecStart=/usr/bin/python3 " + quote(current / "tools/run_service.py") + " --godot " + quote(godot) + " --state " + quote(state) + " --port 8766 --world-port 8767\nRestart=on-failure\nRestartSec=5\nTimeoutStopSec=60\nKillMode=control-group\n\n[Install]\nWantedBy=default.target\n")
+    unit.write_text("[Unit]\nDescription=Primordia persistent GPU world and browser gateway\nAfter=network-online.target\n\n[Service]\nType=simple\nUMask=0077\nWorkingDirectory=" + str(current).replace("%", "%%") + "\nEnvironmentFile=" + quote(credential) + "\nEnvironment=PRIMORDIA_BUILD_SHA=" + sha + "\nExecStart=/usr/bin/python3 " + quote(current / "tools/run_service.py") + " --godot " + quote(godot) + " --state " + quote(state) + " --port 8766 --world-port 8767\nRestart=on-failure\nRestartSec=5\nTimeoutStopSec=60\nKillMode=mixed\n\n[Install]\nWantedBy=default.target\n")
+    run("systemd-analyze", "--user", "verify", str(unit))
     switch(current, candidate)
     try:
         run("systemctl", "--user", "daemon-reload")

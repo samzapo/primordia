@@ -71,8 +71,19 @@ jobs:
               samples.append(value)
               if index<2: time.sleep(6)
           assert samples[-1]['tick']>samples[0]['tick']
+          before=samples[-1]
+          subprocess.run(['systemctl','--user','restart','primordia.service'],check=True)
+          resumed=None
+          for _ in range(60):
+              try:
+                  with opener.open('http://127.0.0.1:8766/health',timeout=5) as response: candidate=json.load(response)
+                  if candidate['epoch']>before['epoch'] and candidate['tick']>=before['tick'] and candidate['world_id']==before['world_id']:
+                      resumed=candidate;break
+              except OSError:pass
+              time.sleep(2)
+          assert resumed is not None and resumed['backend']=='gpu' and not resumed['backend_error'] and not resumed['checkpoint_error'], 'Saved world did not resume after a service restart'
           with opener.open('http://127.0.0.1:8766/api/network',timeout=5) as response: urls=json.load(response)
-          report={'home_urls':urls['home_urls'],'samples':samples}
+          report={'home_urls':urls['home_urls'],'samples':samples,'resumed_after_restart':resumed}
           print(json.dumps(report,indent=2))
           with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as output: output.write('Primordia remains on its hardware GPU after the deploy job ends.\n\n```json\n'+json.dumps(report,indent=2)+'\n```\n')
           PY

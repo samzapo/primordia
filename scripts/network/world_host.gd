@@ -28,12 +28,14 @@ var tick_samples: Array = []
 var skipped_frames := 0
 var sent_bytes := 0
 var restored_gpu_tick := 0
+var restored_stream_rng := PackedInt64Array()
 var shutdown_after := 0.0
 var controller
 var startup_error := ""
 var save_interval := 30.0
 var last_checkpoint_usec := 0
 var start_simulation_seconds := 0.0
+var checkpoint_total_ms := 0.0
 
 func _ready() -> void:
 	get_tree().auto_accept_quit = false
@@ -58,6 +60,7 @@ func _ready() -> void:
 		world = graph.world; accounts = graph.accounts
 		world_id = saved.world_id; epoch = int(saved.epoch)
 		restored_gpu_tick = saved.get("gpu_tick",0)
+		restored_stream_rng = saved.get("stream_rng",PackedInt64Array())
 	epoch += 1
 	world.server_mode = true; world.camera_views.clear()
 	world.evolution.sandbox = true
@@ -81,6 +84,8 @@ func _ready() -> void:
 func _gpu_started(ok: bool,reason: String) -> void:
 	if not ok: _fatal(reason); return
 	controller.gpu.reaction_tick = restored_gpu_tick
+	if controller.streaming!=null and restored_stream_rng.size()==2:
+		controller.streaming.random.seed=restored_stream_rng[0];controller.streaming.random.state=restored_stream_rng[1]
 	if controller.gpu._chemistry != null: controller.gpu._chemistry.last_tick = world.revision
 	controller.gpu.publication_ready.connect(_publication_done)
 	_started()
@@ -278,15 +283,19 @@ func _recover_families(dt: float) -> void:
 
 func checkpoint() -> bool:
 	if world==null: return false
+	var checkpoint_start:=Time.get_ticks_usec()
 	var gpu_tick:=0
+	var stream_rng:=PackedInt64Array()
 	if world.resident!=null:
+		if world.resident.streaming!=null: stream_rng=PackedInt64Array([world.resident.streaming.random.seed,world.resident.streaming.random.state])
 		var completion: Dictionary=world.resident.gpu.exchange_sync([],[],[],[],{"feeding":false,"projection":false,"chemistry":false})
 		if completion.has("error"): store.last_error=completion.error;return false
 		if completion.has("chemistry"): world.resident._account_chemistry(completion.chemistry)
 		gpu_tick=world.resident.gpu.reaction_tick
 	var overrides: Dictionary={world.get_instance_id():{"particles":world.particle_snapshots(),"pheromones":[],"particle_pool":false}}
 	var graph:=Codec.new().capture({"world":world,"accounts":accounts},overrides)
-	var result: bool=store.save({"world_id":world_id,"epoch":epoch,"tick":world.revision,"gpu_tick":gpu_tick,"build":OS.get_environment("PRIMORDIA_BUILD_SHA"),"graph":graph})
+	var result: bool=store.save({"world_id":world_id,"epoch":epoch,"tick":world.revision,"gpu_tick":gpu_tick,"stream_rng":stream_rng,"build":OS.get_environment("PRIMORDIA_BUILD_SHA"),"graph":graph})
+	checkpoint_total_ms=(Time.get_ticks_usec()-checkpoint_start)/1000.0
 	if result: last_checkpoint_usec=Time.get_ticks_usec()
 	return result
 
@@ -358,8 +367,8 @@ func _write_metrics() -> void:
 	var wall: float=(Time.get_ticks_usec()-started_usec)/1000000.0
 	var metrics={"world_id":world_id,"epoch":epoch,"tick":world.revision,"simulation_seconds":world.time,"uptime_seconds":wall,"simulation_wall_ratio":(world.time-start_simulation_seconds)/maxf(wall,.000001),"checkpoint_age_seconds":(Time.get_ticks_usec()-last_checkpoint_usec)/1000000.0,"updated_unix":Time.get_unix_time_from_system(),
 		"backend":"gpu" if world.resident!=null else "cpu","gpu":RenderingServer.get_video_adapter_name(),"build":OS.get_environment("PRIMORDIA_BUILD_SHA"),
-		"views":world.camera_views.size(),"peers":peers.size(),"packets":world.particle_count(),"cold_packets":world.resident.stored_count() if world.resident!=null else 0,
-		"sent_bytes":sent_bytes,"skipped_frames":skipped_frames,"publication_readback_bytes":world.resident.gpu._publication.bytes_read if world.resident!=null and world.resident.gpu._publication!=null else 0,"checkpoint_tick":store.last_saved_tick,"checkpoint_ms":store.latency_ms,"checkpoint_error":store.last_error,"backend_error":startup_error}
+		"views":world.camera_views.size(),"peers":peers.size(),"packets":world.particle_count(),"cold_packets":world.resident.stored_count() if world.resident!=null else 0,"accounts":accounts.size(),"stored_packets":world.particle_count()+world.resident.stored_count() if world.resident!=null else world.particle_count(),
+		"sent_bytes":sent_bytes,"skipped_frames":skipped_frames,"publication_readback_bytes":world.resident.gpu._publication.bytes_read if world.resident!=null and world.resident.gpu._publication!=null else 0,"checkpoint_tick":store.last_saved_tick,"checkpoint_ms":checkpoint_total_ms,"checkpoint_write_ms":store.latency_ms,"checkpoint_error":store.last_error,"backend_error":startup_error}
 	if not samples.is_empty():
 		for pair in [["p50",.5],["p95",.95],["p99",.99]]: metrics["tick_ms_"+pair[0]]=samples[mini(samples.size()-1,int(samples.size()*pair[1]))]
 	var file:=FileAccess.open(store.directory.path_join("health.json.tmp"),FileAccess.WRITE)

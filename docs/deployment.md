@@ -10,7 +10,7 @@ Pushes to `samzapo/persistent-multiplayer` run `.github/workflows/deploy.yml`. T
 
 Godot and templates are checksum-pinned in `tools/toolchain.json`. Large dependencies download only over verified wired routes. The target needs Python 3.10+, curl, Git, CMake, a C++ compiler, Xvfb/xauth, a user systemd manager and Vulkan hardware. The deployer enables lingering for its own user and verifies it. It does not change GSOC configuration or use sudo.
 
-State and credentials remain under `~/.local/share/primordia-deploy/`, outside release/checkouts. The service holds an exclusive world lock. Do not start another authority on those saves. A graceful service stop writes a final checkpoint. Restart resumes saved simulation time and increments the connection epoch. A forced crash can lose uncheckpointed ordinary simulation since the last 30-second save; acknowledged successful edits are saved before acknowledgement.
+State and credentials remain under `~/.local/share/primordia-deploy/`, outside release/checkouts. The service holds an exclusive world lock. Do not start another authority on those saves. Systemd sends termination to the supervisor first, allowing the world to write its final checkpoint before stopping its private display. Restart resumes saved simulation time and increments the connection epoch. A forced crash can lose uncheckpointed ordinary simulation since the last 30-second save; acknowledged successful edits are saved before acknowledgement.
 
 ## Operator commands
 
@@ -24,7 +24,7 @@ systemctl --user stop primordia.service
 curl --fail http://127.0.0.1:8766/health
 ```
 
-The gateway exposes read-only bounded telemetry: build revision, world ID/epoch/tick, simulation time/wall ratio, camera and packet counts, GPU/backend status, checkpoint age/cost and tick-cost percentiles. The host-telemetry workflow also records hardware/load samples. Logs never contain invitations, bearer tokens or request bodies. Source, saves and installation media are retained; generated artifacts are rebuilt and not published in Git.
+The gateway exposes read-only bounded telemetry: build revision, world ID/epoch/tick, simulation time/wall ratio, camera and packet counts, GPU/backend status, checkpoint age, full reconciliation cost and file-write cost and tick-cost percentiles. The host-telemetry workflow also records hardware/load samples. Logs never contain invitations, bearer tokens or request bodies. Source, saves and installation media are retained; generated artifacts are rebuilt and not published in Git.
 
 A failed candidate restores the previous service/release without deleting saves. Current schema-compatible releases can read both checkpoint generations. For a future incompatible state format, prepare a migration and an independently retained compatible checkpoint before deploying. If both generations are invalid, startup refuses to reseed; repair/restore storage deliberately.
 

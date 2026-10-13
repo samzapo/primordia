@@ -82,7 +82,7 @@ class Handler(SimpleHTTPRequestHandler):
         if path in {"/health", "/metrics"}:
             try:
                 value = json.loads((self.server.state / "health.json").read_text())
-                stale = time.time() - value.get("updated_unix", 0) > 20
+                stale = time.time() - value.get("updated_unix", 0) > 20 or bool(value.get("backend_error")) or bool(value.get("checkpoint_error"))
                 self.json_response(value, 503 if stale else 200)
             except (OSError, ValueError):
                 self.json_response({"status": "starting"}, 503)
