@@ -68,7 +68,7 @@ jobs:
       - name: Read vendor UI request definitions through the pinned session
         shell: bash
         env:
-          PRIMORDIA_UI_PATHS: ${{ inputs.ui_paths || '/webman/index.cgi /webman/initdata.cgi /synoSDSjslib/sds.js' }}
+          PRIMORDIA_UI_PATHS: ${{ inputs.ui_paths || '/webman/modules/nsm-Home/NSMHome.js' }}
           PRIMORDIA_ROUTER_USERNAME: ${{ secrets.PRIMORDIA_ROUTER_USERNAME }}
           PRIMORDIA_ROUTER_PASSWORD: ${{ secrets.PRIMORDIA_ROUTER_PASSWORD }}
           PRIMORDIA_ROUTER_CERT_SHA256: c7197b8899f0ce05a0fa163bc3161613688ef27e1f6663e97ae9b2b9939de3f5
@@ -95,5 +95,11 @@ jobs:
               health=json.loads((root/'state/health.json').read_text())
               report['game']={key:health.get(key) for key in ['world_id','epoch','tick','backend','gpu','backend_error','checkpoint_error','access_keys','accounts']}
           except (OSError,ValueError):report['game']={'status':'unavailable'}
+          permissions=subprocess.run(['nmcli','general','permissions'],capture_output=True,text=True,timeout=5)
+          report['network_manager_permissions']=permissions.stdout.strip()
+          connection=subprocess.run(['nmcli','-g','GENERAL.CONNECTION','device','show','enp4s0'],capture_output=True,text=True,timeout=5)
+          if connection.returncode==0:
+              method=subprocess.run(['nmcli','-g','ipv6.method','connection','show',connection.stdout.strip()],capture_output=True,text=True,timeout=5)
+              report['network_manager_ipv6_method']=method.stdout.strip()
           print(json.dumps(report))
           PYCODE
