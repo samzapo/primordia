@@ -127,13 +127,22 @@ def main():
     if linger != "yes": run("loginctl", "enable-linger", str(os.getuid()))
     if subprocess.check_output(["loginctl", "show-user", str(os.getuid()), "-p", "Linger", "--value"], text=True).strip() != "yes":
         raise RuntimeError("User service boot persistence is unavailable")
-    subprocess.run(["systemctl", "--user", "stop", UNIT], check=False)
     unit_dir = Path.home() / ".config/systemd/user"
     unit_dir.mkdir(parents=True, exist_ok=True)
     unit = unit_dir / UNIT
     old_unit = unit.read_text() if unit.exists() else None
-    unit.write_text("[Unit]\nDescription=Primordia persistent GPU world and browser gateway\nAfter=network-online.target\n\n[Service]\nType=simple\nUMask=0077\nWorkingDirectory=" + str(current).replace("%", "%%") + "\nEnvironmentFile=" + quote(credential) + "\nEnvironment=PRIMORDIA_BUILD_SHA=" + sha + "\nExecStart=/usr/bin/python3 " + quote(current / "tools/run_service.py") + " --godot " + quote(godot) + " --state " + quote(state) + " --port 8766 --world-port 8767\nRestart=on-failure\nRestartSec=5\nTimeoutStopSec=60\nKillMode=mixed\n\n[Install]\nWantedBy=default.target\n")
-    run("systemd-analyze", "--user", "verify", str(unit))
+    unit_text = "[Unit]\nDescription=Primordia persistent GPU world and browser gateway\nAfter=network-online.target\n\n[Service]\nType=simple\nUMask=0077\nWorkingDirectory=" + str(current).replace("%", "%%") + "\nEnvironmentFile=" + str(credential).replace("%", "%%") + "\nEnvironment=PRIMORDIA_BUILD_SHA=" + sha + "\nExecStart=/usr/bin/python3 " + quote(current / "tools/run_service.py") + " --godot " + quote(godot) + " --state " + quote(state) + " --port 8766 --world-port 8767\nRestart=on-failure\nRestartSec=5\nTimeoutStopSec=60\nKillMode=mixed\n\n[Install]\nWantedBy=default.target\n"
+    validation_dir = root / "unit-candidate"
+    validation_dir.mkdir(exist_ok=True)
+    validation_unit = validation_dir / UNIT
+    validation_unit.write_text(unit_text)
+    validation = subprocess.run(["systemd-analyze", "--user", "verify", str(validation_unit)], capture_output=True, text=True)
+    if validation.returncode or str(validation_unit) in validation.stderr:
+        raise RuntimeError("Candidate systemd unit did not validate: " + validation.stderr)
+    subprocess.run(["systemctl", "--user", "stop", UNIT], check=False)
+    staged_unit = unit.with_suffix(".service.new")
+    staged_unit.write_text(unit_text)
+    staged_unit.replace(unit)
     switch(current, candidate)
     try:
         run("systemctl", "--user", "daemon-reload")
