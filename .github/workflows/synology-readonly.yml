@@ -2,7 +2,7 @@ name: Primordia Synology IPv6 inspection
 "on":
   push:
     branches: [samzapo/remote-ipv6]
-    paths: [.github/workflows/synology-readonly.yml, tools/synology_ipv6.py, tests/test_synology_ipv6.py]
+    paths: [.github/workflows/synology-readonly.yml, tools/synology_ipv6.py, tests/test_synology_ipv6.py, tools/synology_ui_inspect.py]
   workflow_dispatch:
 permissions:
   contents: read
@@ -60,3 +60,10 @@ jobs:
           task_dir="$GITHUB_WORKSPACE/samzapo--remote-ipv6--$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           cd "$task_dir"
           python3 tools/synology_ipv6.py
+      - name: Read vendor UI request definitions without credentials
+        shell: bash
+        env:
+          PRIMORDIA_ROUTER_CERT_SHA256: c7197b8899f0ce05a0fa163bc3161613688ef27e1f6663e97ae9b2b9939de3f5
+        run: |
+          cd "$GITHUB_WORKSPACE/samzapo--remote-ipv6--$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          python3 tools/synology_ui_inspect.py
