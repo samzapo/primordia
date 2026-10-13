@@ -23,9 +23,9 @@ def inspect():
         for private in [router.sid,router.synotoken,os.environ['PRIMORDIA_ROUTER_USERNAME'],os.environ['PRIMORDIA_ROUTER_PASSWORD']]:
             if private:source=source.replace(private,'[redacted]')
         source=source[source.index('Ext.define("SYNO.SDS.NSMHome.Security.Firewall'):]
-        for term in ['created_by:"user"','inputValue:"wan"','inputValue:"custom"','in_interface_type:"wan"','inInterfaceWan','dst_port_type:"custom"','profile:']:
+        for term in ['"wan"','fillInInterfaceFieldsBy:function','fillOutInterfaceFieldsBy:function','in_interface_type','out_interface_type']:
             excerpts=[]
-            for match in list(re.finditer(re.escape(term),source))[:2]:
+            for match in list(re.finditer(re.escape(term),source))[:5]:
                 excerpts.append(source[max(0,match.start()-1300):match.end()+400])
             if excerpts:print(json.dumps({'vendor_term':term,'definitions':excerpts}))
     finally:router.logout()
