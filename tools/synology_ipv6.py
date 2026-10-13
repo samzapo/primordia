@@ -75,7 +75,7 @@ class Router:
         if not entry:raise RouterError("Required router API unavailable")
         fields={'api':api,'version':entry['minVersion'],'method':'info' if api=='SYNO.Core.System' else 'list' if api in {'SYNO.Core.Network.IPv6.Router.Prefix','SYNO.Core.Network.Ethernet','SYNO.Core.Network.LocalBridge','SYNO.Core.Security.Firewall.Rules'} else 'get'}
         if interface is not None:
-            if api not in {'SYNO.Core.Network.IPv6','SYNO.Core.Network.IPv6.Router'} or interface not in {'wan','lan','lan1','br0','lbr0','lbr1'}:
+            if api not in {'SYNO.Core.Network.IPv6','SYNO.Core.Network.IPv6.Router'} or interface not in {'wan','lan','lan1','br0','lbr0','lbr1','eth0'}:
                 raise RouterError("Interface is outside the read-only allowlist")
             fields['ifname']=interface
         return self.call(entry['path'],fields)
@@ -115,7 +115,7 @@ def main():
             try:
                 data=router.read(api,interface='wan' if api=='SYNO.Core.Network.IPv6' else 'lan' if api=='SYNO.Core.Network.IPv6.Router' else None);report['apis'][api]={'status':'read','summary':summarize(data),'field_names':sorted(data) if isinstance(data,dict) else []}
             except RouterError as error:report['apis'][api]={'status':'unavailable','reason':str(error)}
-        for api,interfaces in [('SYNO.Core.Network.IPv6',['lan1']),('SYNO.Core.Network.IPv6.Router',['lbr0','lbr1','br0'])]:
+        for api,interfaces in [('SYNO.Core.Network.IPv6',['eth0']),('SYNO.Core.Network.IPv6.Router',['lbr0','lbr1','br0'])]:
             for interface in interfaces:
                 key=api+':'+interface
                 try:

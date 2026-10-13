@@ -68,4 +68,4 @@ jobs:
           PRIMORDIA_ROUTER_CERT_SHA256: c7197b8899f0ce05a0fa163bc3161613688ef27e1f6663e97ae9b2b9939de3f5
         run: |
           cd "$GITHUB_WORKSPACE/samzapo--remote-ipv6--$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          python3 tools/synology_ui_inspect.py /webman/index.cgi /webman/synodefs.cgi /webman/desktop.js
+          python3 tools/synology_ui_inspect.py /webman/index.cgi /synoSDSjslib/sds.js
