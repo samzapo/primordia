@@ -49,7 +49,7 @@ def inspect(paths,sid,synotoken=""):
             # Only static references and bounded vendor request definitions are shown.
             refs=sorted(set(re.findall(r"(?:src|href)=[\"']([^\"']+)",source)))
             matches=[]
-            for pattern in [r"SYNO\.Core\.Network\.IPv6",r"SYNO\.Core\.Security\.Firewall",r"jsBaseURL|JSConfig|SynoToken|synotoken|/webman/modules/",r"ipv6_router|lan_ipv6|LocalBridge|loadRulesFromRemote|FwLoadApiMaxVer"]:
+            for pattern in [r"SYNO\.Core\.Network\.IPv6",r"SYNO\.Core\.Security\.Firewall",r"jsBaseURL|JSConfig|SynoToken|synotoken|/webman/modules/",r"SYNO\.Core\.Network\.LocalNetwork|dhcpv6|ipv6_enable|loadRulesFromRemote|FwLoadApiMaxVer"]:
                 for match in list(re.finditer(pattern,source))[:12]:
                     matches.append(source[max(0,match.start()-120):match.end()+400])
             print(json.dumps({"path":path,"bytes":len(source),"static_references":refs[:80],"style_modules":sorted(set(re.findall(r"@import url\(\"([^\"]+)",source)))[:100],"request_definitions":matches}))

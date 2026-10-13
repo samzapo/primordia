@@ -13,7 +13,7 @@ from urllib.parse import urlencode
 ALLOWED = {"SYNO.Core.System", "SYNO.Core.Network.IPv6", "SYNO.Core.Network.IPv6.Router",
            "SYNO.Core.Network.IPv6.Router.Prefix", "SYNO.Core.Security.Firewall.Forward.Conf",
            "SYNO.Core.Security.Firewall.Conf", "SYNO.Core.Security.Firewall.AllowSrmFromWan",
-           "SYNO.Core.Network.Ethernet", "SYNO.Core.Network.LocalBridge", "SYNO.Core.Security.Firewall.Rules"}
+           "SYNO.Core.Network.Ethernet", "SYNO.Core.Network.LocalBridge", "SYNO.Core.Network.LocalNetwork", "SYNO.Core.Security.Firewall.Rules", "SYNO.Core.Security.Firewall.Forward.Rules"}
 
 class RouterError(Exception):
     pass
@@ -76,7 +76,8 @@ class Router:
         if api not in ALLOWED:raise RouterError("Router operation is outside the read-only allowlist")
         entry=self.apis.get(api)
         if not entry:raise RouterError("Required router API unavailable")
-        fields={'api':api,'version':entry['minVersion'],'method':'info' if api=='SYNO.Core.System' else 'list' if api in {'SYNO.Core.Network.IPv6.Router.Prefix','SYNO.Core.Network.Ethernet'} else 'get'}
+        fields={'api':api,'version':entry['minVersion'],'method':'info' if api=='SYNO.Core.System' else 'list' if api in {'SYNO.Core.Network.IPv6.Router.Prefix','SYNO.Core.Network.Ethernet','SYNO.Core.Network.LocalNetwork'} else 'get'}
+        if api=='SYNO.Core.Network.LocalNetwork':fields['version']=entry['maxVersion']
         if api=='SYNO.Core.Network.LocalBridge':fields['ifname']='lbr0'
         if interface is not None:
             if api not in {'SYNO.Core.Network.IPv6','SYNO.Core.Network.IPv6.Router'} or interface not in {'wan','lan','lan1','br0','lbr0','lbr1','eth0'}:
@@ -96,7 +97,7 @@ DISPLAY_KEYS={'model','version','major','minor','build','buildnumber','productve
               'ipv6','ipv6addr','ipv6_addr','ipv6_prefix','ipv6_enable','gateway','default_gateway',
               'wan_ipv6','wan_ipv6_forward','default_action','default_policy','policy',
               'allow_srm_from_wan','allow_external_access','ifname','interface',
-              'firmware_ver','ip','router','is_default_gateway','is_persisted_link_local','is_enabled','enable_ipv6','link','status','name','interface_type','is_primary','netmask','ipv6_router','mode_type','id','action','direction','proto','protocol','dst_port','dst_ports','src_port','dst_ip','src_ip','sync_lan','wan','is_lan','ipv6_enabled','ipv6_type','router_enable','autoconf','dhcpv6_enable','prefix_id','prefixlen','valid_lifetime','preferred_lifetime','port_list','default_policy','config_type','dhcp_mode','auto_dns','prefix_delegation','pd_enable','addr','address','ip6_addr','ip6_prefix','ip6_mode','ipv6_type','enable_port_check','pf_auto_fw_rules','upnp_auto_fw_rules','dmz_auto_fw_rules'}
+              'firmware_ver','ip','router','is_default_gateway','is_persisted_link_local','is_enabled','enable_ipv6','link','status','name','interface_type','is_primary','netmask','ipv6_router','mode_type','id','action','direction','proto','protocol','dst_port','dst_ports','src_port','dst_ip','src_ip','started','is_auto_mode','net_id','network_id','netid','chain','jump','sync_lan','wan','is_lan','ipv6_enabled','ipv6_type','router_enable','autoconf','dhcpv6_enable','prefix_id','prefixlen','valid_lifetime','preferred_lifetime','port_list','default_policy','config_type','dhcp_mode','auto_dns','prefix_delegation','pd_enable','addr','address','ip6_addr','ip6_prefix','ip6_mode','ipv6_type','enable_port_check','pf_auto_fw_rules','upnp_auto_fw_rules','dmz_auto_fw_rules'}
 def summarize(value):
     if isinstance(value,dict):
         result={}
@@ -118,6 +119,7 @@ def main():
         for api in sorted(ALLOWED):
             try:
                 data=router.read(api,interface='wan' if api=='SYNO.Core.Network.IPv6' else 'eth0' if api=='SYNO.Core.Network.IPv6.Router' else None);report['apis'][api]={'status':'read','summary':summarize(data),'field_names':sorted(data) if isinstance(data,dict) else []}
+                if api=='SYNO.Core.Security.Firewall.Rules':report['apis'][api].update(default_policy=data.get('default_policy'),rule_count=len(data.get('rules',[])),rule_schema=sorted({key for row in data.get('rules',[]) for key in row}))
             except RouterError as error:report['apis'][api]={'status':'unavailable','reason':str(error)}
         for api,interfaces in [('SYNO.Core.Network.IPv6',['eth0']),('SYNO.Core.Network.IPv6.Router',[])]:
             for interface in interfaces:
