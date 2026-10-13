@@ -1,0 +1,54 @@
+name: Primordia IPv6 firewall
+"on":
+  push:
+    branches: [samzapo/remote-ipv6]
+    paths: [.github/workflows/synology-firewall.yml, tools/synology_firewall.py, tests/test_synology_firewall.py]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: primordia-synology-router
+  cancel-in-progress: false
+jobs:
+  firewall:
+    if: github.repository == 'samzapo/primordia'
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 5
+    steps:
+      - name: Verify target and wired source route
+        shell: bash
+        run: |
+          test "$RUNNER_NAME" = samzapo-desktop
+          test "$(hostname)" = samzapo-desktop
+          python3 - <<'PYCODE'
+          import pathlib,json,socket,subprocess
+          for host in ['github.com','api.github.com','codeload.github.com']:
+              found=False
+              for item in socket.getaddrinfo(host,443,type=socket.SOCK_STREAM):
+                  query=subprocess.run(['ip','-j','route','get',item[4][0]],capture_output=True,text=True)
+                  if query.returncode:continue
+                  for route in json.loads(query.stdout):
+                      device=pathlib.Path('/sys/class/net')/route['dev']
+                      assert (device/'device').exists() and not (device/'wireless').exists() and not (device/'phy80211').exists() and (device/'operstate').read_text().strip()=='up'
+                      found=True
+              assert found
+          PYCODE
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: samzapo--remote-ipv6--firewall-${{ github.run_id }}-${{ github.run_attempt }}
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Verify pinned client with isolated fixtures
+        shell: bash
+        run: |
+          cd "$GITHUB_WORKSPACE/samzapo--remote-ipv6--firewall-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          python3 tests/test_synology_ipv6.py
+      - name: Inspect exact destination and firewall schema
+        shell: bash
+        env:
+          PRIMORDIA_ROUTER_USERNAME: ${{ secrets.PRIMORDIA_ROUTER_USERNAME }}
+          PRIMORDIA_ROUTER_PASSWORD: ${{ secrets.PRIMORDIA_ROUTER_PASSWORD }}
+          PRIMORDIA_ROUTER_CERT_SHA256: c7197b8899f0ce05a0fa163bc3161613688ef27e1f6663e97ae9b2b9939de3f5
+        run: |
+          cd "$GITHUB_WORKSPACE/samzapo--remote-ipv6--firewall-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          python3 tools/synology_firewall.py
