@@ -165,7 +165,7 @@ func open_context(target: Dictionary) -> void:
 				_choice("Steering "+label,details,func():
 					var steps: Array = sim.Cell.STEERING_STEPS
 					var index: int = steps.find(strength)
-					cell.set_steering_strength(organ.id,steps[(index+1)%steps.size()])
+					sim.edit("steering",{"id":organ.id,"value":steps[(index+1)%steps.size()]})
 					open_context(target),"",label)
 			if not cell.inherent(organ) and organ.get("mutation","") == "":
 				for gene in run.learned:
@@ -182,20 +182,20 @@ func open_context(target: Dictionary) -> void:
 			for scar in cell.lost_organs:
 				if scar.id != target.id: continue
 				_choice("Restore "+game.TITLES[sim.KINDS.find(scar.kind)],"%.0f tissue · 0 AP\nRestore the lost organ in its original form." % scar.max_material,func():
-					game._message("Organelle restored." if cell.restore_organ(target.id) else "Needs usable tissue and membrane room.")
+					game._message("Organelle restored." if sim.edit("restore",{"id":target.id}) else "Needs usable tissue and membrane room.")
 					close_context(),scar.kind,"",cell.biomass >= scar.max_material,scar.max_material,0,scar)
 		"nucleus":
-			if not run.chosen:
+			if not run.sandbox and not run.chosen:
 				for gene in run.offers:
 					var data: Dictionary = sim.Genes.DATA[gene]
 					_choice("Keep "+data.title,data.text+"\nThen select a matching membrane organ to specialize it.",func():
 						run.choose(gene)
 						game._message("Blueprint kept: "+data.title)
 						open_context(target),data.kind)
-			if run.challenge == "" and run.tide < 6 and run.clock-run.tide*run.TIDE_SECONDS < 90:
+			if not run.sandbox and run.challenge == "" and run.tide < 6 and run.clock-run.tide*run.TIDE_SECONDS < 90:
 				_choice("Growth risk","+2 AP next tide: ingest and retain 18 new external tissue; finish at ≥60% health.",_challenge.bind("growth"),"","Grow")
 				_choice("Stability risk","+2 AP next tide: finish with 30 steady seconds at ≥60% health and ≥25 ATP.",_challenge.bind("stability"),"","Steady")
-			if run.challenge == "" and run.tide < 6 and run.clock-run.tide*run.TIDE_SECONDS < 90:
+			if not run.sandbox and run.challenge == "" and run.tide < 6 and run.clock-run.tide*run.TIDE_SECONDS < 90:
 				_choice("Feeding risk","+2 AP next tide: collect 12 external food or fix 12 carbon (or a mixture); finish healthy.",_challenge.bind("metabolism"),"","Feed")
 			_choice("Family & goals",sim.lineage.summary(sim),open_context.bind({"kind":"lineage"}),"","Family")
 			_choice("Behavior","Tune wandering versus signals and the response cycle.",open_context.bind({"kind":"behavior"}),"","Explore")
@@ -204,19 +204,19 @@ func open_context(target: Dictionary) -> void:
 			_choice("Exploration "+label,"Relative wandering weight. Signal weight / (signal + exploration) determines following time. Flight bypasses this cycle. No resource cost.",func():
 				var steps: Array = sim.Cell.STEERING_STEPS
 				var index: int = steps.find(cell.exploration)
-				cell.set_exploration(steps[(index+1)%steps.size()])
+				sim.edit("exploration",{"value":steps[(index+1)%steps.size()]})
 				open_context(target),"",label)
 			_choice("Cycle %.0fs" % cell.response_cycle,"Cycle between following a sensed goal and a seeded exploration heading. Click: 2 / 4 / 8 seconds. Memory and senses keep working throughout.",func():
 				var cycles: Array = sim.Cell.RESPONSE_CYCLES
-				cell.set_response_cycle(cycles[(cycles.find(cell.response_cycle)+1)%cycles.size()])
+				sim.edit("cycle",{"value":cycles[(cycles.find(cell.response_cycle)+1)%cycles.size()]})
 				open_context(target),"","%.0fs" % cell.response_cycle)
 			_choice("Nucleus","Return to goals and blueprints.",open_context.bind({"kind":"nucleus"}),"","Back")
 		"bud":
 			_choice("Fund offspring","Transfer up to 10 usable tissue and 10 ATP to the reserve.",func():
-				cell.reserve(10,sim.offspring_quote().material)
+				sim.edit("reserve",{"value":10})
 				game._message(run.objective(sim)),"","+10")
 			_choice("Reclaim reserves","Withdraw up to 10 tissue and 10 ATP.",func():
-				cell.reserve(-10)
+				sim.edit("reserve",{"value":-10})
 				game._message(run.objective(sim)),"","−10")
 			var funded: bool = cell.brood_mass >= sim.offspring_quote().material and cell.brood_energy >= 60
 			_choice("Release successor","A paid juvenile lives autonomously nearby. You keep this body until choosing family or dying.",_reproduce.bind(false),"","Divide",funded and sim.lineage.active_family(sim).size() < sim.Lineage.MAX_ACTIVE)
@@ -234,7 +234,7 @@ func open_context(target: Dictionary) -> void:
 				_choice("Cell %d · %s" % [record.id,record.state],sim.lineage.biography(record)+("\nClick to follow this living relative." if can_follow else ""),_follow.bind(record.id) if can_follow else game._message.bind(sim.lineage.biography(record)),"","You" if record.state == "active" else "Zz%d" % record.generation if record.state == "dormant" else "†G%d" % record.generation if record.state == "dead" else "G%d" % record.generation)
 				choices[-1].set_meta("family_id",record.id)
 				choices[-1].set_meta("parent_id",record.parent)
-			_choice("Known blueprints","Recall a discovered blueprint as this tide's one draft choice; installation costs remain.",open_context.bind({"kind":"archive","page":0}),"","Genes")
+			if not run.sandbox: _choice("Known blueprints","Recall a discovered blueprint as this tide's one draft choice; installation costs remain.",open_context.bind({"kind":"archive","page":0}),"","Genes")
 			_choice("Earlier history","Cycle this family tree, then previous expeditions.",open_context.bind({"kind":"lineage","page":page+1} if last > 4 else {"kind":"past","page":0}),"","History")
 		"archive":
 			var known: Array = game.archive.discovered.filter(func(gene): return gene not in run.learned and sim.Genes.DATA[gene].kind != "feeding")

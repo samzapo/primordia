@@ -6,6 +6,11 @@ const Lineage = preload("res://scripts/lineage.gd")
 var lineage = Lineage.new()
 const Genes = preload("res://scripts/mutations.gd")
 var evolution
+var server_mode := false
+var remote_client := false
+var command_sink: Callable
+var camera_views: Array = []
+var family_ledgers: Array = []
 var build_original = null
 var build_state: Dictionary = {}
 var build_waste := 0.0
@@ -202,12 +207,13 @@ func particle_snapshot(index: int) -> Dictionary:
 func _commit_spawn_metadata() -> void:
 	if particle_pool: kernels.pool_patch(particle_count()-1,last_spawn)
 
-func _init(seed_number: int = 20261004, profile: int = 0) -> void:
+func _init(seed_number: int = 20261004, profile: int = 0, populate: bool = true) -> void:
 	seed_value = seed_number
 	rng.seed = seed_number
 	background_rng.seed = seed_number ^ 0x51a7
 	ecology_rng.seed = seed_number ^ 0x719ab
 	evolution = Evolution.new(seed_number)
+	if not populate: return
 	habitat = clampi(profile,0,2)
 	player.role = "player"
 	player.biomass = 36
@@ -264,12 +270,20 @@ func screen_position(p: Vector2) -> Vector2:
 
 func activity_at(p: Vector2) -> float:
 	if resident != null and resident.full_detail: return 1.0
+	if server_mode and not remote_client:
+		var detail := 0.0
+		for view in camera_views: detail = maxf(detail,Medium.visibility(p,Vector2(view.x,view.y),Vector2(view.z,view.w)))
+		return detail
 	return Medium.visibility(p,player.position if camera_follows_player else camera_position,view_half)
 
 func activity_for_cell(cell) -> float:
 	if resident != null and resident.full_detail: return 1.0
 	# A visible membrane or appendage must not freeze when its center is outside.
 	var half: Vector2 = view_half+Vector2.ONE*(cell.extent()+80)
+	if server_mode and not remote_client:
+		var detail := 0.0
+		for view in camera_views: detail = maxf(detail,Medium.visibility(cell.position,Vector2(view.x,view.y),Vector2(view.z,view.w)+Vector2.ONE*(cell.extent()+80)))
+		return detail
 	return Medium.visibility(cell.position,player.position if camera_follows_player else camera_position,half)
 
 func local_particle_ids(margin: float = 0.0) -> Array[int]:
@@ -278,6 +292,14 @@ func local_particle_ids(margin: float = 0.0) -> Array[int]:
 func visible_particle_ids(margin: float = 0.0) -> Array[int]:
 	if resident != null: return [] # Rendering reads the resident texture directly.
 	if grid.source_size != particle_count(): grid.rebuild(particles)
+	if server_mode and not remote_client:
+		var union: Dictionary = {}
+		for view in camera_views:
+			for index in grid.query_rect(Vector2(view.x,view.y),Vector2(view.z,view.w)+Vector2.ONE*margin): union[index] = true
+		var result: Array[int] = []
+		for index in union: result.append(index)
+		result.sort()
+		return result
 	return grid.query_rect(player.position if camera_follows_player else camera_position,view_half+Vector2.ONE*margin)
 
 func visible_particle_census() -> Dictionary:
@@ -301,6 +323,7 @@ func local_particle_kind(kind: int) -> Array[int]:
 	return grid.query_kind_rect(particles,player.position if camera_follows_player else camera_position,view_half+Vector2.ONE*(Medium.ACTIVE_PAD+Medium.ACTIVE_FADE),kind)
 
 func install(kind: String, local_angle: float, mode: String = "graze", size: float = 1.0) -> bool:
+	if remote_client: return edit("install",{"kind":kind,"angle":local_angle})
 	var cost := Evolution.install_price(size)
 	if evolution.terminal() or (evolution.enabled and evolution.points < cost): return false
 	if not player.add_organ(kind,local_angle,mode,true,size): return false
@@ -308,6 +331,7 @@ func install(kind: String, local_angle: float, mode: String = "graze", size: flo
 	return true
 
 func remove(index: int) -> bool:
+	if remote_client: return edit("remove",{"id":player.organs[index].id}) if index>=0 and index<player.organs.size() else false
 	var debris: float = player.recycle(index)
 	if debris < 0: return false
 	_build_debris(debris)
@@ -412,6 +436,7 @@ func _emit_material(kind: int, at: Vector2, amount: float, motion: Vector2 = Vec
 	for i in count: spawn_particle(kind,at,motion,amount/count,owner)
 
 func step(dt: float) -> void:
+	if remote_client: return
 	if resident != null:
 		var shown_half:=view_half
 		var shown_camera:=camera_position
@@ -434,8 +459,8 @@ func step(dt: float) -> void:
 	camera_follows_player = display_follow
 
 func _step_simulation(dt: float) -> void:
-	if evolution.terminal() or build_original != null: return
-	if player.dead and not evolution.enabled: return
+	if not server_mode and (evolution.terminal() or build_original != null): return
+	if not server_mode and player.dead and not evolution.enabled: return
 	if profiling:
 		profile_counts.clear()
 		profile_usec["sensing"] = 0
@@ -451,7 +476,8 @@ func _step_simulation(dt: float) -> void:
 	if particle_pool and not _pool_supported(): disable_particle_pool()
 	if grid.source_size != particle_count(): grid.rebuild(particles)
 	var mark := Time.get_ticks_usec()
-	fluid.set_camera(player.position if camera_follows_player else camera_position,view_half)
+	if server_mode: fluid.set_views(camera_views)
+	else: fluid.set_camera(player.position if camera_follows_player else camera_position,view_half)
 	if experimental_fluid != null:
 		fluid.velocity = experimental_fluid.step(fluid.velocity,cells,habitat_geometry,dt)
 		if profiling:
@@ -539,7 +565,7 @@ func _step_simulation(dt: float) -> void:
 		_replace_population()
 	profile_usec["ecology"] = Time.get_ticks_usec()-mark
 	mark = Time.get_ticks_usec()
-	if evolution.enabled and (player.dead or player.health <= 0):
+	if not server_mode and evolution.enabled and (player.dead or player.health <= 0):
 		if not player.dead: _die(player)
 		lineage.recover(self,dt)
 	evolution.advance(dt,self)
@@ -1434,7 +1460,9 @@ func _toxin_contacts() -> void:
 
 func _die(cell, transferred: float = 0.0) -> void:
 	if cell.dead: return
-	if evolution.enabled: lineage.died(cell,self)
+	if server_mode and not remote_client:
+		for ledger in family_ledgers: ledger.died(cell,self)
+	elif evolution.enabled: lineage.died(cell,self)
 	death_serial += 1
 	death_bursts.append({"serial":death_serial,"time":time,"at":cell.position,"radius":cell.radius,
 		"angle":cell.angle,"outline":cell.membrane.outline(),"lineage":cell.lineage_id(),"player":cell == player})
@@ -1487,6 +1515,7 @@ func _die(cell, transferred: float = 0.0) -> void:
 	_replace_population()
 
 func _replace_population() -> void:
+	if server_mode: return # Gameplay introductions/objectives are deferred.
 	# At wide microscope zoom there may be no hidden space. Defer the explicit
 	# replacement trigger until a full organism can fit outside the view.
 	for pending in pending_replacements.duplicate():
@@ -1519,6 +1548,7 @@ func _build_debris(amount: float) -> void:
 	else: spawn_particle(WASTE,player.position,Vector2.ZERO,amount,player.id)
 
 func begin_build() -> void:
+	if server_mode: return # Live edits commit through WorldHost, never clone/freeze biology.
 	if build_original != null or player.dead or evolution.terminal(): return
 	build_original = player
 	build_state = {"points":evolution.points,"offers":evolution.offers.duplicate(),"learned":evolution.learned.duplicate(),"chosen":evolution.chosen,"spending":evolution.spending.duplicate(true),"challenge":evolution.challenge,"challenge_mass":evolution.challenge_mass,"challenge_intake":evolution.challenge_intake,"challenge_fixed":evolution.challenge_fixed,"challenge_cell":evolution.challenge_cell,"stable_seconds":evolution.stable_seconds}
@@ -1557,6 +1587,7 @@ func resize_organ(identity: int, size: float) -> bool:
 	return true
 
 func mutate_organ(identity: int, gene: String) -> bool:
+	if remote_client: return edit("mutate",{"id":identity,"gene":gene})
 	var organ: Dictionary = player.organ_by_id(identity)
 	if gene not in evolution.learned or organ.is_empty(): return false
 	var cost := Genes.adaptation_price(organ)
@@ -1620,6 +1651,7 @@ func make_offspring(parent, quote: Dictionary):
 	return child
 
 func divide_lineage(dormant: bool = false, follow: bool = true) -> bool:
+	if remote_client: return edit("divide",{"dormant":dormant})
 	if player.dead or evolution.terminal() or build_original != null: return false
 	if dormant and lineage.dormant.size() >= Lineage.MAX_DORMANT: return false
 	if not dormant and lineage.active_family(self).size() >= Lineage.MAX_ACTIVE: return false
@@ -1668,9 +1700,18 @@ func divide_lineage(dormant: bool = false, follow: bool = true) -> bool:
 	return true
 
 func follow_family(identity: int) -> bool:
+	if remote_client: return edit("follow",{"id":identity})
 	if build_original != null or evolution.terminal(): return false
 	for cell in lineage.active_family(self):
 		if cell.id == identity and cell != player:
 			lineage.adopted(cell,self,false)
 			return true
 	return false
+
+func edit(action: String,args: Dictionary = {}):
+	if remote_client:
+		if command_sink.is_valid(): command_sink.call(action,args)
+		if action in ["module_add","link_add"]: return 0
+		if action in ["route_add","configuration"]: return ""
+		return true
+	return preload("res://scripts/network/editor_commands.gd").execute(self,action,args)

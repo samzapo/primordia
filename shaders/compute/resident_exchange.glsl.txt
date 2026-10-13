@@ -13,6 +13,7 @@ layout(set=0,binding=8,std430) readonly buffer Order { uvec2 order[]; };
 layout(set=0,binding=9,std430) readonly buffer Ranges { uvec2 ranges[]; };
 layout(set=0,binding=10,std430) buffer Budgets { vec4 budgets[]; };
 layout(set=0,binding=11,std430) buffer OxygenMask { uvec2 oxygen_mask[]; };
+layout(set=0,binding=12,std430) readonly buffer CameraRegions {uvec4 camera_mode;vec4 cameras[];};
 layout(push_constant,std430) uniform Params {uint count;uint body_count;uint feed_count;uint emit_count;uint inspect_count;uint stage;uint accounts;uint parallel_oxygen;vec4 scope;} pc;
 const vec2 WORLD=vec2(4096,2560);
 ivec2 pixel(uint i){return ivec2(int(i%256u)*3,int(i/256u));}
@@ -36,7 +37,11 @@ float support(uint body,float angle,bool visible){
  return bodies[body*4u].w/1.05;
 }
 uint hash32(uint x){x=((x^(x>>16))*0x7feb352du);x=((x^(x>>15))*0x846ca68bu);return x^(x>>16);}
-bool hidden(vec2 p){return pc.scope.z<0.||any(greaterThanEqual(abs(offset(pc.scope.xy,p)),pc.scope.zw+vec2(128)));}
+bool hidden(vec2 p){
+ if(camera_mode.y==0u)return pc.scope.z<0.||any(greaterThanEqual(abs(offset(pc.scope.xy,p)),pc.scope.zw+vec2(128)));
+ for(uint c=0u;c<camera_mode.x;c++)if(all(lessThan(abs(offset(cameras[c].xy,p)),cameras[c].zw+vec2(128))))return false;
+ return true;
+}
 bool encounter(uint slot,uint body,uint channel,float rate,float dt){
  uint key=slot^hash32(identity[slot].x)^hash32(uint(bodies[body*4u+2u].w))^hash32(uint(bodies[body*4u+3u].z))^hash32(channel+3901u);
  float roll=(float(hash32(key)>>8)+.5)/16777216.;

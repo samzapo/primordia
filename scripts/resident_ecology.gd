@@ -211,7 +211,7 @@ func _credit(cell, receipt: Dictionary, index: int, pore: int) -> int:
 
 func step(dt: float) -> void:
 	var sim=world.get_ref()
-	if not ready or sim.evolution.terminal() or sim.build_original!=null or (sim.player.dead and not sim.evolution.enabled): return
+	if not ready or (not sim.server_mode and (sim.evolution.terminal() or sim.build_original!=null or (sim.player.dead and not sim.evolution.enabled))): return
 	var start:=Time.get_ticks_usec()
 	gpu.exchange_prepare_usec=0;gpu.exchange_wait_usec=0
 	if streaming!=null:
@@ -233,12 +233,14 @@ func step(dt: float) -> void:
 	var mark:=Time.get_ticks_usec()
 	# Cheap habitat field and GPU transport remain continuous. Only cell
 	# detail is tiered; no full particle download or frozen offscreen clouds.
+	if sim.server_mode: sim.fluid.set_views(sim.camera_views)
 	if sim.native_fluid:
 		sim.fluid.velocity=sim.kernels.fluid_step(sim.fluid.velocity,sim.fluid.activity,sim.fluid.tide,dt,sim.fluid.driven)
 		if sim.revision%6==0: sim.acidity.values=sim.kernels.acid_step(sim.acidity.values,sim.fluid.velocity,sim.fluid.activity,dt*6)
 	else:
 		sim.fluid.step(dt)
 		if sim.revision%6==0: sim.acidity.step(dt*6,sim.fluid)
+	if sim.server_mode: sim._step_background_fluid(dt)
 	# Coarse bodies pay their own elapsed suction inside advance_body.
 	for cell in cells:
 		if not schedule.delayed.has(cell.id): sim._suction_cell(cell,dt)
@@ -347,7 +349,7 @@ func step(dt: float) -> void:
 	sim.spawn_clock+=dt
 	if sim.spawn_clock>=.5:
 		sim.spawn_clock-=.5;sim._replace_population()
-	if sim.evolution.enabled and (sim.player.dead or sim.player.health<=0):
+	if not sim.server_mode and sim.evolution.enabled and (sim.player.dead or sim.player.health<=0):
 		if not sim.player.dead: sim._die(sim.player)
 		sim.lineage.recover(sim,dt)
 	sim.evolution.advance(dt,sim);sim.won=sim.evolution.status=="won"

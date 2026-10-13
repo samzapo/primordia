@@ -12,6 +12,7 @@ var pipeline:=RID()
 var bindings: Array[RID]=[]
 var receipt_buffers: Array[RID]=[]
 var buffers: Array[RID]=[]
+var camera_regions:=RID()
 var rd: RenderingDevice
 var count:=0
 static func prepare(cells: Array, emissions: Array, handles: Array, feeding: bool=true, coarse: Dictionary={}) -> Dictionary:
@@ -88,6 +89,8 @@ static func prepare(cells: Array, emissions: Array, handles: Array, feeding: boo
 		"body_count":cells.size(),"feed_count":feeds.size()/8,"emit_count":emissions.size(),"inspect_count":handles.size()}
 func initialize(device: RenderingDevice, texture: RID, slots: int, order: RID, ranges: RID, source: String, queue_depth: int=1) -> bool:
 	rd=device;count=slots
+	var zero:=PackedByteArray();zero.resize(144)
+	camera_regions=rd.storage_buffer_create(144,zero)
 	for size in [MAX_BODIES*64,MAX_POINTS*8,MAX_FEEDS*32,MAX_EMISSIONS*64,count*8,MAX_RECEIPTS*16,MAX_INSPECTIONS*8,MAX_BODIES*16,count*8]:
 		var buffer:=rd.storage_buffer_create(size);buffers.append(buffer)
 		if not buffer.is_valid(): return false
@@ -100,7 +103,7 @@ func initialize(device: RenderingDevice, texture: RID, slots: int, order: RID, r
 		receipt_buffers.append(receipt)
 		if not receipt.is_valid(): return false
 		var uniforms: Array[RDUniform]=[]
-		var resources: Array=[texture]+buffers.slice(0,7)+[order,ranges,buffers[7],buffers[8]]
+		var resources: Array=[texture]+buffers.slice(0,7)+[order,ranges,buffers[7],buffers[8],camera_regions]
 		resources[6]=receipt
 		for i in resources.size():
 			var u:=RDUniform.new();u.binding=i
@@ -147,6 +150,13 @@ static func decode(bytes: PackedByteArray,batch: Dictionary) -> Dictionary:
 			"owner":bytes.decode_s32(at+60) if valid else -1});at+=64
 	return result
 func close() -> void:
-	for resource in bindings+[pipeline,shader]+buffers+receipt_buffers.slice(1):
+	for resource in bindings+[pipeline,shader]+buffers+receipt_buffers.slice(1)+[camera_regions]:
 		if resource.is_valid(): rd.free_rid(resource)
 	buffers.clear()
+
+func set_views(views: Array,enabled: bool) -> void:
+	var data:=PackedByteArray();data.resize(144)
+	data.encode_u32(0,views.size());data.encode_u32(4,1 if enabled else 0)
+	for i in views.size():
+		for j in 4: data.encode_float(16+i*16+j*4,views[i][j])
+	rd.buffer_update(camera_regions,0,144,data)

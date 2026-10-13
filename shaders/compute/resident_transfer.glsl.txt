@@ -5,6 +5,7 @@ layout(rgba32f,set=0,binding=0) uniform image2D state;
 layout(set=0,binding=1,std430) readonly buffer Metadata {vec4 metadata[];};
 layout(set=0,binding=2,std430) readonly buffer Identity {uvec2 identity[];};
 layout(set=0,binding=3,std430) buffer Transfer {uvec4 header;vec4 records[];};
+layout(set=0,binding=4,std430) readonly buffer Regions {vec4 regions[];};
 layout(push_constant,std430) uniform Params {uint count;uint limit;uint pad0;uint pad1;vec4 region;} pc;
 const vec2 WORLD=vec2(4096,2560);
 ivec2 pixel(uint i){return ivec2(int(i%256u)*3,int(i/256u));}
@@ -13,7 +14,8 @@ void main(){
  vec4 motion=imageLoad(state,pixel(i)+ivec2(1,0));if(motion.w<0.)return;
  vec4 pose=imageLoad(state,pixel(i));
  vec2 delta=mod(pose.xy-pc.region.xy+WORLD*.5,WORLD)-WORLD*.5;
- if(all(lessThan(abs(delta),pc.region.zw)))return;
+ if(pc.pad1==0u){if(all(lessThan(abs(delta),pc.region.zw)))return;}
+ else for(uint v=0u;v<pc.pad0;v++){vec2 d=mod(pose.xy-regions[v].xy+WORLD*.5,WORLD)-WORLD*.5;if(all(lessThan(abs(d),regions[v].zw)))return;}
  uint out_id=atomicAdd(header.x,1u);if(out_id>=pc.limit)return;
  uint out_at=out_id*8u;
  for(uint j=0u;j<3u;j++)records[out_at+j]=imageLoad(state,pixel(i)+ivec2(int(j),0));

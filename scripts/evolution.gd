@@ -17,6 +17,7 @@ const TIDES := [
 	{"title":"Final dusk","light":0.25,"forecast":"Establish your descendant by 13:30. Inspect the nucleus for exact progress."}
 ]
 var enabled := true
+var sandbox := false
 var clock := 0.0
 var tide := 0
 var points := 3
@@ -59,6 +60,7 @@ func _init(seed_number: int = 0) -> void:
 	_draft()
 
 func terminal() -> bool:
+	if sandbox: return false
 	return status in ["won","lost"]
 
 func _draft() -> void:
@@ -151,6 +153,9 @@ func is_viable(cell) -> bool:
 	return not cell.dead and cell.activity > 0.5 and cell.health >= 50 and cell.energy >= 10 and metabolism_age <= 15
 
 func advance(dt: float, sim) -> void:
+	if sandbox:
+		clock += dt
+		return
 	if not enabled or terminal(): return
 	clock += dt
 	light_factor = move_toward(light_factor,float(TIDES[tide].light),dt/24.0)
@@ -203,6 +208,7 @@ func advance(dt: float, sim) -> void:
 			fail("EXPEDITION ENDED · "+", ".join(reasons)+".\nFamily history and discovered blueprints are retained.")
 
 func objective(sim) -> String:
+	if sandbox: return "Persistent pond · anatomy and chemistry remain live."
 	if terminal(): return ending
 	if sim.player.dead: return "A funded reserve is waiting for open water to hatch."
 	if food_seconds < 15: return "Establish feeding · %.0f / 15 healthy, metabolically active seconds" % food_seconds
@@ -215,6 +221,7 @@ func objective(sim) -> String:
 	return "%s · %.0f / 60 viable seconds · %d / 3 crises secured" % [CRISES[stage],minf(60,crisis_seconds[stage]),completed.count(true)]
 
 func goal_key(sim) -> String:
+	if sandbox: return "persistent"
 	return "%d:%d:%d:%d:%d" % [int(food_seconds >= 15),int(sim.lineage.births > 0),int(sim.player.generation > 0),crisis(),completed.count(true)]
 
 func newcomer(cell, sim) -> void:

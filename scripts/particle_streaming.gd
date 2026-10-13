@@ -25,6 +25,8 @@ var owner:
 var requested_center:=Vector2.ZERO
 var request_pending:=false
 var region_due:=0.0
+var regions: Array=[]
+var multiview:=false
 var random:=RandomNumberGenerator.new()
 
 func initialize(bridge,sim) -> void:
@@ -47,6 +49,14 @@ func minimum_zoom(size: Vector2) -> float:
 	return maxf(size.x/(2*maxf(1,available.x)),size.y/(2*maxf(1,available.y)))
 
 func update_region(sim) -> void:
+	multiview=sim.server_mode
+	if multiview:
+		regions.clear()
+		for view in sim.camera_views:
+			var c:=Medium.wrap_position((Vector2(view.x,view.y)/Regions.SIZE).floor()*Regions.SIZE+Vector2.ONE*Regions.SIZE*.5)
+			var h:=((Vector2(view.z,view.w)+Vector2.ONE*HALO)/Regions.SIZE).ceil()*Regions.SIZE+Vector2.ONE*Regions.SIZE*.5
+			regions.append(Vector4(c.x,c.y,h.x,h.y))
+		return
 	var at: Vector2=requested_center if request_pending else sim.player.position if sim.camera_follows_player else sim.camera_position
 	var target:=Medium.wrap_position((at/Regions.SIZE).floor()*Regions.SIZE+Vector2.ONE*Regions.SIZE*.5)
 	if half==Vector2.ZERO: center=target
@@ -58,6 +68,11 @@ func update_region(sim) -> void:
 	half=((owner.detail_half+Vector2.ONE*HALO)/Regions.SIZE).ceil()*Regions.SIZE+Vector2.ONE*Regions.SIZE*.5
 
 func contains(at: Vector2) -> bool:
+	if multiview:
+		for region in regions:
+			var d:=Medium.offset(Vector2(region.x,region.y),at).abs()
+			if d.x<region.z and d.y<region.w: return true
+		return false
 	var delta:=Medium.offset(center,at).abs()
 	return delta.x<half.x and delta.y<half.y
 
@@ -105,13 +120,20 @@ func advance(sim,packets: Array,force: bool=false) -> void:
 		sim.kernels.transport(packets,ids,sim.fluid.velocity,Vector2.ZERO,-Vector2.ONE*256,0,sim.revision,random,sim.transport_clock,true)
 	transported+=ids.size()
 
+func _region_keys() -> Array:
+	if not multiview: return cold.keys_in(center,half)
+	var keys: Dictionary={}
+	for region in regions:
+		for key in cold.keys_in(Vector2(region.x,region.y),Vector2(region.z,region.w)): keys[key]=true
+	return keys.keys()
+
 func service(sim) -> bool:
 	entered=0;transported=0
 	update_region(sim)
 	# Eviction and admission have fixed byte/packet ceilings, independent of the
 	# number of stored chunks. Overflow remains owned, never silently dropped.
 	if sim.revision%6==0:
-		var receipt: Dictionary=owner.gpu.take_outside(Vector4(center.x,center.y,half.x,half.y))
+		var receipt: Dictionary=owner.gpu.take_outside(Vector4.ZERO,regions,true) if multiview else owner.gpu.take_outside(Vector4(center.x,center.y,half.x,half.y))
 		if not receive(sim,receipt): return false
 		owner.gpu.acknowledge_transfer(receipt.ticket)
 		eviction_deferred=receipt.deferred
@@ -119,7 +141,7 @@ func service(sim) -> bool:
 	advance(sim,moving)
 	cold.put_all(moving,sim.time)
 	var admission: Array=[]
-	for key in cold.keys_in(center,half):
+	for key in _region_keys():
 		if not contains((Vector2(key)+Vector2.ONE*.5)*Regions.SIZE): continue
 		admission.append_array(cold.take(key,ADMISSIONS-admission.size()))
 		if admission.size()>=ADMISSIONS: break
@@ -130,7 +152,7 @@ func service(sim) -> bool:
 		if contains(packet.p): owner.pending.append(packet);entered+=1
 		else: cold.put(packet,sim.time)
 	queue_depth=0
-	for key in cold.keys_in(center,half):
+	for key in _region_keys():
 		if contains((Vector2(key)+Vector2.ONE*.5)*Regions.SIZE):
 			queue_depth+=cold.chunks[key].packets.size()-cold.chunks[key].head
 	if queue_depth==0: prepared_center=center;prepared_half=half

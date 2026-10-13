@@ -73,7 +73,7 @@ func _process(_dt: float) -> void:
 	if not visible: return
 	if not _valid(): hide(); return
 	var chemistry = game.world.player.chemistry
-	inspected.text = "Particles %d · glucose %.2f · pyruvate %.2f · ATP %.1f · water %.2f\nPaused: molecule stocks, reaction clocks, and physiology are frozen." % [chemistry.particles.size(),chemistry.amount("glucose"),chemistry.amount("pyruvate"),chemistry.amount("atp"),chemistry.amount("water")]
+	inspected.text = "Particles %d · glucose %.2f · pyruvate %.2f · ATP %.1f · water %.2f\n%s" % [chemistry.particles.size(),chemistry.amount("glucose"),chemistry.amount("pyruvate"),chemistry.amount("atp"),chemistry.amount("water"),"Live: particles and physiology keep advancing." if game.world.server_mode else "Paused: particles and physiology are frozen."]
 
 func _rebuild() -> void:
 	graph.clear_connections()
@@ -123,8 +123,8 @@ func _rebuild() -> void:
 		allocation.suffix = "%"
 		controls.add_child(allocation)
 		node.add_child(controls)
-		active.toggled.connect(func(value): chemistry.configure(model.id,allocation.value/100,value))
-		allocation.value_changed.connect(func(value): chemistry.configure(model.id,value/100,active.button_pressed))
+		active.toggled.connect(func(value): game.world.edit("module_config",{"id":model.id,"value":allocation.value/100,"active":value}))
+		allocation.value_changed.connect(func(value): game.world.edit("module_config",{"id":model.id,"value":value/100,"active":active.button_pressed}))
 		var description := Label.new()
 		description.text = "%s · %.2f/s\n%s" % [model.compartment,chemistry.flux.get(model.id,0),chemistry.limiting.get(model.id,"Waiting for local particles")]
 		node.add_child(description)
@@ -132,7 +132,7 @@ func _rebuild() -> void:
 			var recycle := Button.new()
 			recycle.text = "Recycle · no AP refund"
 			recycle.pressed.connect(func():
-				chemistry.remove_module(model.id,game.world.player)
+				game.world.edit("module_remove",{"id":model.id})
 				_rebuild())
 			node.add_child(recycle)
 		node.position_offset_changed.connect(func(): model.position = node.position_offset)
@@ -152,13 +152,13 @@ func _connect(from_name: StringName, from_port: int, to_name: StringName, to_por
 	var source: String = port_outputs[from_name][from_port]
 	var destination: String = port_inputs[to_name][to_port]
 	if source != destination: status.text = "These ports carry different metabolites."; return
-	var error: String = game.world.player.chemistry.connect_route(_identity(from_name),_identity(to_name),source)
+	var error: String = game.world.edit("route_add",{"id":_identity(from_name),"to":_identity(to_name),"species":source})
 	status.text = error if error != "" else "Binding compatibility connected. No molecules moved."
 	if error == "": graph.connect_node(from_name,from_port,to_name,to_port)
 
 func _disconnect(from_name: StringName, from_port: int, to_name: StringName, to_port: int) -> void:
 	if not _valid(): return
-	game.world.player.chemistry.disconnect_route(_identity(from_name),_identity(to_name),port_outputs[from_name][from_port])
+	game.world.edit("route_remove",{"id":_identity(from_name),"to":_identity(to_name),"species":port_outputs[from_name][from_port]})
 	graph.disconnect_node(from_name,from_port,to_name,to_port)
 
 func _add(index: int) -> void:
@@ -170,9 +170,8 @@ func _add(index: int) -> void:
 	if game.world.evolution.points < 1 or cell.biomass < 10:
 		status.text = "Needs 10 usable tissue and 1 AP."
 		return
-	var identity: int = cell.chemistry.add_module(templates[index],cell)
+	var identity: int = game.world.edit("module_add",{"module":templates[index]})
 	if identity < 0: status.text = "Capacity unavailable. Food, water and light domains are inherent; configure them in place."; return
-	game.world.evolution.points -= 1
 	status.text = "Catalyst installed. Operation needs local substrate and ATP particles."
 	_rebuild()
 
@@ -201,6 +200,6 @@ func _save() -> void:
 
 func _load(index: int) -> void:
 	if not _valid() or index < 0 or index >= designs.size(): return
-	var error: String = game.world.player.chemistry.load_configuration(designs[index].configuration)
+	var error: String = game.world.edit("configuration",{"configuration":designs[index].configuration})
 	status.text = error if error != "" else "Configuration loaded; particles and resources retained."
 	if error == "": _rebuild()

@@ -48,7 +48,8 @@ static func texture(kind: int, simplified: bool = false) -> Texture2D:
 			var definition: Dictionary = Catalog.data().external_species[i]
 			var glyph := {"color":definition.color,"shade":Color(definition.color).darkened(0.45).to_html(false),"path":"M -24 0 H 14 Q 28 0 28 -15 M 5 0 V 20","tips":"M 24 -15 H 29"}
 			var image := Image.new()
-			assert(image.load_svg_from_string(_svg(glyph,simplified)) == OK)
+			var error := image.load_svg_from_string(_svg(glyph,simplified))
+			assert(error == OK, "Particle vector artwork failed to load")
 			image.generate_mipmaps()
 			textures.append(ImageTexture.create_from_image(image))
 	return textures[kind]

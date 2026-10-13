@@ -15,6 +15,21 @@ static func seed_packets(sim, count: int, distribution: String, sizes: String = 
 	var source: Array = []
 	for packet in sim.particles:
 		if packet.alive and packet.kind != sim.PHEROMONE: source.append(packet)
+	# Authored benchmark resolution may be lower than the live seed resolution.
+	# Coalesce only identical species/provenance/chemical metadata; benchmark
+	# pose, velocity and orientation are representative placement data. Sum all
+	# extensive fields, then split to the requested count with the existing path.
+	if count < source.size():
+		var groups: Dictionary = {}
+		for packet in source:
+			var signature: Dictionary = packet.duplicate(true)
+			for key in ["p","previous","v","angle","previous_angle","spin","direction","amount","capacity","product"]: signature.erase(key)
+			var key := var_to_bytes(signature).hex_encode()
+			if not groups.has(key): groups[key] = packet.duplicate(true)
+			else:
+				for field in ["amount","capacity","product"]:
+					if packet.has(field): groups[key][field] += packet[field]
+		source = groups.values()
 	if count < source.size() or source.is_empty() or distribution not in ["uniform","clustered","habitat"] or count > 100000 or sizes not in ["equal","mixed"]:
 		return false
 	var rng := RandomNumberGenerator.new()

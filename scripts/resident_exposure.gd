@@ -3,6 +3,7 @@ extends RefCounted
 const HITS_PER_BODY:=128
 const MAX_DECOYS:=256
 const MAX_RECEIPT_VECTORS:=64*(HITS_PER_BODY+1)+MAX_DECOYS
+var camera_regions:=RID()
 var rd: RenderingDevice
 var buffers: Array[RID]=[]
 var sets: Array[RID]=[]
@@ -31,6 +32,8 @@ static func prepare(cells: Array) -> Dictionary:
 		"decoy_organs":organ_ids,"decoy_bodies":organ_bodies}
 func initialize(device: RenderingDevice, state: RID, identity: RID, reports: RID, bodies: RID, points: RID, order: RID, ranges: RID, receipts: Array[RID], slots: int, source: String) -> bool:
 	rd=device;count=slots
+	var zero:=PackedByteArray();zero.resize(144)
+	camera_regions=rd.storage_buffer_create(144,zero)
 	for size in [64*16,MAX_DECOYS*32,count*8]:
 		var buffer:=rd.storage_buffer_create(size);buffers.append(buffer)
 		if not buffer.is_valid(): return false
@@ -39,7 +42,7 @@ func initialize(device: RenderingDevice, state: RID, identity: RID, reports: RID
 	if spirv.compile_error_compute!="": push_error(spirv.compile_error_compute);return false
 	shader=rd.shader_create_from_spirv(spirv);pipeline=rd.compute_pipeline_create(shader)
 	for receipt in receipts:
-		var resources: Array=[state,identity,reports,bodies,points,buffers[0],buffers[1],buffers[2],order,ranges,receipt]
+		var resources: Array=[state,identity,reports,bodies,points,buffers[0],buffers[1],buffers[2],order,ranges,receipt,camera_regions]
 		var uniforms: Array[RDUniform]=[]
 		for i in resources.size():
 			var uniform:=RDUniform.new();uniform.binding=i
@@ -84,5 +87,12 @@ static func decode(bytes: PackedByteArray,batch: Dictionary) -> Dictionary:
 			"body":batch.decoy_bodies[i],"organ_id":batch.decoy_organs[i]})
 	return {"hits":hits,"decoys":decoys,"deferred":deferred}
 func close() -> void:
-	for resource in sets+[pipeline,shader]+buffers:
+	for resource in sets+[pipeline,shader]+buffers+[camera_regions]:
 		if resource.is_valid(): rd.free_rid(resource)
+
+func set_views(views: Array,enabled: bool) -> void:
+	var data:=PackedByteArray();data.resize(144)
+	data.encode_u32(0,views.size());data.encode_u32(4,1 if enabled else 0)
+	for i in views.size():
+		for j in 4: data.encode_float(16+i*16+j*4,views[i][j])
+	rd.buffer_update(camera_regions,0,144,data)

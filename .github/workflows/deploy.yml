@@ -1,0 +1,78 @@
+name: Primordia persistent server CD
+"on":
+  push:
+    branches: [samzapo/persistent-multiplayer]
+    paths-ignore: [docs/**, README.md, AGENTS.md, .github/workflows/target-probe.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: primordia-private-deployment
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.repository == 'samzapo/primordia'
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 50
+    steps:
+      - name: Verify target, ownership and wired checkout route
+        shell: bash
+        run: |
+          test "$RUNNER_NAME" = samzapo-desktop
+          hostname
+          python3 - <<'PY'
+          import json, pathlib, socket, subprocess
+          for host in ['github.com','api.github.com','release-assets.githubusercontent.com']:
+              found=False
+              for entry in socket.getaddrinfo(host,443,type=socket.SOCK_STREAM):
+                  result=subprocess.run(['ip','-j','route','get',entry[4][0]],capture_output=True,text=True)
+                  if result.returncode: continue
+                  for route in json.loads(result.stdout):
+                      path=pathlib.Path('/sys/class/net')/route['dev']
+                      assert (path/'device').exists() and not (path/'wireless').exists() and not (path/'phy80211').exists() and (path/'operstate').read_text().strip()=='up', 'No verified wired route'
+                      found=True
+              assert found
+          PY
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: samzapo--persistent-multiplayer--${{ github.run_id }}-${{ github.run_attempt }}
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Build, check GPU networking and deploy the independent service
+        shell: bash
+        run: |
+          task_dir="$GITHUB_WORKSPACE/samzapo--persistent-multiplayer--$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          cd "$task_dir"
+          pwd
+          python3 tools/deploy.py
+  verify:
+    needs: deploy
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 5
+    steps:
+      - name: Verify world after deployment job cleanup
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          test "$RUNNER_NAME" = samzapo-desktop
+          python3 - <<'PY'
+          import json, os, pathlib, subprocess, time
+          from urllib.request import build_opener, ProxyHandler
+          os.environ.setdefault('XDG_RUNTIME_DIR',f'/run/user/{os.getuid()}')
+          subprocess.run(['systemctl','--user','is-active','primordia.service'],check=True)
+          subprocess.run(['systemctl','--user','is-enabled','primordia.service'],check=True)
+          assert subprocess.check_output(['loginctl','show-user',str(os.getuid()),'-p','Linger','--value'],text=True).strip()=='yes'
+          opener=build_opener(ProxyHandler({}))
+          samples=[]
+          for index in range(3):
+              with opener.open('http://127.0.0.1:8766/health',timeout=5) as response: value=json.load(response)
+              assert value['build']==os.environ['EXPECTED_SHA'] and value['backend']=='gpu' and not value['backend_error'] and not value['checkpoint_error']
+              samples.append(value)
+              if index<2: time.sleep(6)
+          assert samples[-1]['tick']>samples[0]['tick']
+          with opener.open('http://127.0.0.1:8766/api/network',timeout=5) as response: urls=json.load(response)
+          report={'home_urls':urls['home_urls'],'samples':samples}
+          print(json.dumps(report,indent=2))
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as output: output.write('Primordia remains on its hardware GPU after the deploy job ends.\n\n```json\n'+json.dumps(report,indent=2)+'\n```\n')
+          PY

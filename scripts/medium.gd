@@ -180,3 +180,15 @@ func suction(body, mouth: Vector2, reach: float, power: float, dt: float, inflow
 		velocity[i] += momentum_change/NODE_MASS
 		body.velocity -= momentum_change/body.mass
 		body.angular_velocity -= arm.cross(momentum_change)/body.inertia
+
+# Union of observed rectangles; no camera means the existing coarse field path.
+func set_views(views: Array) -> void:
+	active_indices.clear()
+	for y in ROWS:
+		for x in COLS:
+			var i := index(x,y)
+			var at := Vector2(x+.5,y+.5)*SIZE
+			var detail := 0.0
+			for view in views: detail = maxf(detail,visibility(at,Vector2(view.x,view.y),Vector2(view.z,view.w)))
+			activity[i] = detail
+			if detail > 0: active_indices.append(i)

@@ -12,6 +12,9 @@ func total(sim) -> float:
 	return mass+sim.build_waste+sim.lineage.stored_material()
 
 func run(owner_suite) -> void:
+	if not preload("res://tests/test_policy.gd").GAMEPLAY_OBJECTIVES_ENABLED:
+		preload("res://tests/test_policy.gd").skip("gameplay objectives and progression")
+		return
 	suite = owner_suite
 	var sim = Sim.new(713)
 	sim.habitat_geometry.enabled = false

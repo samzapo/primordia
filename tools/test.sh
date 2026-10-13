@@ -19,3 +19,5 @@ if ! grep -Eq 'RESULT: [0-9]+ assertions, 0 failures' "$report_file"; then
   echo "The suite did not finish successfully." >&2
   exit 1
 fi
+
+"$project_dir/tools/test_network.sh"

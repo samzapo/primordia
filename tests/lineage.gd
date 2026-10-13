@@ -99,61 +99,63 @@ static func run(check: Callable) -> void:
 	check.call(not sim.lineage.recover(sim,1) and not sim.evolution.terminal() and sim.lineage.dormant.size() == 1,"A blocked hatch waits without discarding funded material")
 	sim.cells.erase(blocker)
 	check.call(sim.lineage.recover(sim,1),"A waiting reserve hatches when a real opening exists")
-	# Three crises, not three instants alive or a timer alone.
-	sim = world()
-	sim.player.generation = 1
-	run = sim.evolution
-	for stage in 3:
-		run.clock = run.CRISIS_STARTS[stage]
-		run.tide = mini(6,int(run.clock/run.TIDE_SECONDS))
-		for i in 62:
+	if preload("res://tests/test_policy.gd").GAMEPLAY_OBJECTIVES_ENABLED:
+		# Three crises, not three instants alive or a timer alone.
+		sim = world()
+		sim.player.generation = 1
+		run = sim.evolution
+		for stage in 3:
+			run.clock = run.CRISIS_STARTS[stage]
+			run.tide = mini(6,int(run.clock/run.TIDE_SECONDS))
+			for i in 62:
+				sim.player.processed += 0.1
+				run.advance(1,sim)
+			check.call(run.crisis_seconds[stage] >= 60,"Each crisis records sustained observed metabolism")
+			run.clock = run.CRISIS_ENDS[stage]-1
 			sim.player.processed += 0.1
 			run.advance(1,sim)
-		check.call(run.crisis_seconds[stage] >= 60,"Each crisis records sustained observed metabolism")
-		run.clock = run.CRISIS_ENDS[stage]-1
-		sim.player.processed += 0.1
-		run.advance(1,sim)
-	check.call(run.status == "won" and run.completed == [true,true,true],"A healthy descendant with three earned crisis records wins")
-	sim = world()
-	run = sim.evolution
-	run.clock = 600
-	sim.player.activity = 0
-	for i in 70:
-		sim.player.fixed_carbon += 1
-		run.advance(1,sim)
-	check.call(run.crisis_seconds[2] == 0,"Dormant or founder bodies cannot earn independent-descendant survival")
-	for condition in ["empty ATP","offscreen","stale metabolism"]:
+		check.call(run.status == "won" and run.completed == [true,true,true],"A healthy descendant with three earned crisis records wins")
 		sim = world()
 		run = sim.evolution
-		sim.player.generation = 1
-		run.observe_successor(sim.player)
-		run.clock = 809
-		run.tide = 6
-		run.crisis_seconds = [60.0,60.0,60.0]
-		run.viable_seconds = 60
-		run.metabolism_age = 0
-		if condition == "empty ATP": sim.player.energy = 0
-		elif condition == "offscreen": sim.player.activity = 0
-		else: run.metabolism_age = 16
-		run.advance(1,sim)
-		check.call(run.status == "lost","Final viability rejects "+condition+" despite earlier achievements")
-		var reason: String = {"empty ATP":"ATP below 10","offscreen":"outside the observed area","stale metabolism":"no recent feeding"}[condition]
-		check.call(reason in run.ending,"The ending explains the specific missing condition")
-	# Specific rivals pay ordinary costs on existing population introductions.
-	sim = world()
-	for stage in 3:
-		run = sim.evolution
-		run.clock = run.CRISIS_STARTS[stage]+31
-		run.tide = mini(6,int(run.clock/120))
-		run.resistance_clock = run.clock-1
-		var rival = Sim.Cell.new(200+stage)
-		rival.biomass = 100
-		var before := rival.organic_mass()
-		run.newcomer(rival,sim)
-		check.call(rival.rival_name != "" and rival.biomass < 100 and is_equal_approx(rival.organic_mass(),before),"Named rivals buy functional anatomy without extra mass or immunity")
-		var other = Sim.Cell.new(300+stage)
-		run.newcomer(other,sim)
-		check.call(other.rival_name == "","Each crisis names at most one rival without adding population")
+		run.clock = 600
+		sim.player.activity = 0
+		for i in 70:
+			sim.player.fixed_carbon += 1
+			run.advance(1,sim)
+		check.call(run.crisis_seconds[2] == 0,"Dormant or founder bodies cannot earn independent-descendant survival")
+		for condition in ["empty ATP","offscreen","stale metabolism"]:
+			sim = world()
+			run = sim.evolution
+			sim.player.generation = 1
+			run.observe_successor(sim.player)
+			run.clock = 809
+			run.tide = 6
+			run.crisis_seconds = [60.0,60.0,60.0]
+			run.viable_seconds = 60
+			run.metabolism_age = 0
+			if condition == "empty ATP": sim.player.energy = 0
+			elif condition == "offscreen": sim.player.activity = 0
+			else: run.metabolism_age = 16
+			run.advance(1,sim)
+			check.call(run.status == "lost","Final viability rejects "+condition+" despite earlier achievements")
+			var reason: String = {"empty ATP":"ATP below 10","offscreen":"outside the observed area","stale metabolism":"no recent feeding"}[condition]
+			check.call(reason in run.ending,"The ending explains the specific missing condition")
+		# Specific rivals pay ordinary costs on existing population introductions.
+		sim = world()
+		for stage in 3:
+			run = sim.evolution
+			run.clock = run.CRISIS_STARTS[stage]+31
+			run.tide = mini(6,int(run.clock/120))
+			run.resistance_clock = run.clock-1
+			var rival = Sim.Cell.new(200+stage)
+			rival.biomass = 100
+			var before := rival.organic_mass()
+			run.newcomer(rival,sim)
+			check.call(rival.rival_name != "" and rival.biomass < 100 and is_equal_approx(rival.organic_mass(),before),"Named rivals buy functional anatomy without extra mass or immunity")
+			var other = Sim.Cell.new(300+stage)
+			run.newcomer(other,sim)
+			check.call(other.rival_name == "","Each crisis names at most one rival without adding population")
+	else: print("SKIPPED gameplay objectives: lineage crisis and victory checks (owner hold)")
 	_archive(check,sim)
 
 static func _archive(check: Callable, sim) -> void:

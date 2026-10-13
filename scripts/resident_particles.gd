@@ -20,6 +20,9 @@ var dispatches := 0
 var readbacks := 0
 var width := 768
 var height := 1
+var _publication
+var publication_busy := false
+signal publication_ready(data: Dictionary)
 var _initialized:=false
 var _started:=false
 var _closing := false
@@ -81,14 +84,18 @@ func configure_transfer(local_sources: bool=true) -> bool:
 	if _started or not perception_enabled: return false
 	transfer_enabled=true;_perception.local_sources=local_sources
 	return true
-func take_outside(region: Vector4) -> Dictionary:
+func take_outside(region: Vector4,views: Array=[],use_union: bool=false) -> Dictionary:
 	if not _transfer_pending.is_empty(): return _transfer_pending
 	if not transfer_enabled or not _initialized or _closing:
 		return {"error":"Transfer unavailable or unacknowledged"}
 	if not Vector2(region.x,region.y).is_finite() or not Vector2(region.z,region.w).is_finite() or region.z<0 or region.w<0:
 		return {"error":"Invalid transfer bounds"}
+	if use_union:
+		if views.size()>8: return {"error":"At most eight camera regions"}
+		for view in views:
+			if not view is Vector4 or not Vector2(view.x,view.y).is_finite() or not Vector2(view.z,view.w).is_finite() or view.z<0 or view.w<0: return {"error":"Invalid camera bounds"}
 	RenderingServer.call_on_render_thread(func():
-		_transfer_pending=_transfer.take(region);_grid_valid=false;_sync_semaphore.post())
+		_transfer_pending=_transfer.take(region,views,use_union);_grid_valid=false;_sync_semaphore.post())
 	_sync_semaphore.wait()
 	transfer_calls+=1;transfer_readback_bytes+=_transfer_pending.readback_bytes
 	_transfer_pending["ticket"]=transfer_calls
@@ -399,7 +406,7 @@ func _initialize_rd(bytes: PackedByteArray, velocities: PackedByteArray) -> void
 	if rd == null:
 		_ready_main.call_deferred(false,"Main RenderingDevice unavailable")
 		return
-	var required_buffers:=11 if exchange_enabled else (9 if interaction_mode>0 else 1)
+	var required_buffers:=12 if exchange_enabled else (9 if interaction_mode>0 else 1)
 	if rd.limit_get(RenderingDevice.LIMIT_MAX_COMPUTE_WORKGROUP_INVOCATIONS)<128 or rd.limit_get(RenderingDevice.LIMIT_MAX_STORAGE_BUFFERS_PER_SHADER_STAGE)<required_buffers or rd.limit_get(RenderingDevice.LIMIT_MAX_STORAGE_BUFFERS_PER_UNIFORM_SET)<required_buffers:
 		_ready_main.call_deferred(false,"Device needs 128 compute invocations and %d storage buffers per stage/set" % required_buffers)
 		return
@@ -602,12 +609,14 @@ func close() -> void:
 	if exchange_inflight>0: return
 	_finish_close()
 func _finish_close() -> void:
+	if publication_busy: return
 	if _close_queued: return
 	_close_queued=true
 	texture.texture_rd_rid=RID()
 	RenderingServer.call_on_render_thread(_close_rd)
 func _close_rd() -> void:
 	if rd != null:
+		if _publication!=null: _publication.close()
 		if _transfer!=null: _transfer.close()
 		if _exposure!=null: _exposure.close()
 		if _chemistry!=null: _chemistry.close()
@@ -619,3 +628,28 @@ func _close_rd() -> void:
 	rd=null # Main RenderingDevice belongs to Godot; never free it.
 	_closed_main.call_deferred()
 func _closed_main() -> void: closed.emit()
+
+func publish_views(views: Array) -> bool:
+	if not _initialized or _closing or publication_busy or views.size()>8: return false
+	publication_busy=true
+	RenderingServer.call_on_render_thread(func():
+		if _publication==null:
+			_publication=preload("res://scripts/network/gpu_publication.gd").new()
+			if not _publication.initialize(rd,state,_exchange.buffers[4]):
+				_publication.close();_publication=null
+				_publication_done.call_deferred({"error":"GPU publication initialization failed"})
+				return
+		if not _publication.request(views,work_count,_publication_done):
+			_publication_done.call_deferred({"error":"GPU publication request failed"}))
+	return true
+
+func _publication_done(data: Dictionary) -> void:
+	publication_busy=false
+	publication_ready.emit(data)
+	if _closing: _finish_close()
+
+func set_activity_views(views: Array,enabled: bool) -> void:
+	if not _initialized or _closing or views.size()>8: return
+	RenderingServer.call_on_render_thread(func():
+		_exchange.set_views(views,enabled)
+		if _exposure!=null: _exposure.set_views(views,enabled))

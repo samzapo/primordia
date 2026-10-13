@@ -17,6 +17,7 @@
 #include <godot_cpp/variant/packed_float32_array.hpp>
 #include <godot_cpp/variant/packed_color_array.hpp>
 #include <godot_cpp/variant/packed_vector2_array.hpp>
+#include <godot_cpp/variant/vector4.hpp>
 #include <godot_cpp/variant/typed_array.hpp>
 #include <godot_cpp/variant/callable.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
@@ -352,6 +353,14 @@ class PrimordiaKernels : public RefCounted {
   std::array<std::vector<std::array<float,12>>,primordia_chemistry::species_count> render_instances;
 
   // The pool owns hot state. Metadata is sparse and never a second mutable pose.
+  bool view_union_enabled=false;
+  std::vector<std::pair<Vector2,Vector2>> activity_views;
+  double activity(Vector2 p,Vector2 camera,Vector2 half) const {
+    if (!view_union_enabled || half.x<0 || half.y<0) return ::activity(p,camera,half);
+    double value=0;
+    for (const auto &view:activity_views) value=std::max(value,::activity(p,view.first,view.second));
+    return value;
+  }
   bool pool_enabled=false;
   uint64_t next_handle=1, pool_imports=0, pool_exports=0, pool_batches=0;
   std::unordered_map<uint64_t,int> handles;
@@ -510,6 +519,7 @@ protected:
     ClassDB::bind_method(D_METHOD("pool_metrics"), &PrimordiaKernels::pool_metrics);
     ClassDB::bind_method(D_METHOD("pool_expire"), &PrimordiaKernels::pool_expire);
     ClassDB::bind_method(D_METHOD("pool_compact"), &PrimordiaKernels::pool_compact);
+    ClassDB::bind_method(D_METHOD("set_activity_views"), &PrimordiaKernels::set_activity_views);
     ClassDB::bind_method(D_METHOD("pool_filter"), &PrimordiaKernels::pool_filter);
     ClassDB::bind_method(D_METHOD("pool_sense"), &PrimordiaKernels::pool_sense);
     ClassDB::bind_method(D_METHOD("packet_sense"), &PrimordiaKernels::packet_sense);
@@ -729,6 +739,12 @@ public:
     packet_slots.resize(kept); packet_positions.resize(kept);
     for (int i=0;i<kept;++i) packet_positions.set(i,packet_slots[i].value.p);
     return kept ? before%kept : 0;
+  }
+  void set_activity_views(Array views,bool enabled) {
+    view_union_enabled=enabled; activity_views.clear();
+    for (int i=0;i<views.size();++i) {
+      Vector4 view=views[i]; activity_views.emplace_back(Vector2(view.x,view.y),Vector2(view.z,view.w));
+    }
   }
   TypedArray<int64_t> pool_filter(TypedArray<int64_t> ids,int kind,bool hidden,Vector2 camera,Vector2 half) {
     ++pool_batches; TypedArray<int64_t> out;

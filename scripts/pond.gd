@@ -244,6 +244,7 @@ func _physics_process(dt: float) -> void:
 	if not flow_streamers and world.revision%4 == 0: currents.queue_redraw()
 
 func is_paused() -> bool:
+	if world.server_mode: return resident_starting
 	return resident_starting or build_open or settings_panel.visible or cell_ui.context.get("kind","") in ["lineage","archive","past"] or world.evolution.terminal()
 
 func _can_edit_tubules() -> bool:
@@ -779,7 +780,7 @@ func _finish_build() -> void:
 		camera_offset = observation_view.offset
 		focus_animating = true
 		observation_view.clear()
-	_message("Anatomy kept · the ecological clock resumes.")
+	_message("Anatomy kept · the world continues." if world.server_mode else "Anatomy kept · the ecological clock resumes.")
 	_layout()
 
 func placement_status() -> String:
@@ -791,7 +792,7 @@ func placement_status() -> String:
 
 func _place_at(angle: float) -> bool:
 	if moving_id >= 0:
-		var moved: bool = world.player.move_organ(moving_id,angle)
+		var moved: bool = world.edit("move",{"id":moving_id,"angle":angle})
 		moving_id = -1
 		_message("Organelle moved." if moved else "That organ is no longer available.")
 		return moved
@@ -928,7 +929,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.button_index == MOUSE_BUTTON_LEFT and not tube_start.is_empty():
 			var endpoint := _tubule_anchor(local)
 			if not endpoint.is_empty():
-				tube_group = world.player.membrane.skeleton.connect_points(tube_start,endpoint,tube_tension,world.player.membrane,world.player.radius)
+				tube_group = world.edit("link_add",{"start":tube_start,"end":endpoint,"value":tube_tension})
 				if tube_group >= 0:
 					shape_preview_ticks = 60
 					_message("Microtubule placed · hover and scroll to set tension.")
@@ -945,7 +946,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			var link: Dictionary = world.player.membrane.skeleton.link_by_id(hit.id)
 			tube_group = link.group
 			tube_tension = clampf(link.tension+(0.05 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -0.05),0,1)
-			world.player.membrane.skeleton.set_tension(tube_group,tube_tension)
+			world.edit("tension",{"id":tube_group,"value":tube_tension})
 			shape_preview_ticks = 60
 			_message("Microtubule tension %d%%" % roundi(tube_tension*100))
 			return
@@ -961,7 +962,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if _can_edit_tubules() and cell_ui.hit(event.position).is_empty():
 			var hit := _nearest_tubule(local)
 			if not hit.is_empty():
-				world.player.membrane.skeleton.remove_group(world.player.membrane.skeleton.link_by_id(hit.id).group)
+				world.edit("link_remove",{"id":world.player.membrane.skeleton.link_by_id(hit.id).group})
 				tube_group = -1
 				shape_preview_ticks = 60
 		return
@@ -1009,7 +1010,7 @@ func _tubule_anchor(local: Vector2) -> Dictionary:
 func _set_tubule_tension(value: float) -> void:
 	if not _can_edit_tubules(): return
 	tube_tension = clampf(value,0,1)
-	if tube_group >= 0: world.player.membrane.skeleton.set_tension(tube_group,tube_tension)
+	if tube_group >= 0: world.edit("tension",{"id":tube_group,"value":tube_tension})
 	shape_preview_ticks = 60
 
 func _draw_tubule_preview() -> void:

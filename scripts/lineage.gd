@@ -2,6 +2,7 @@ extends RefCounted
 ## A bounded family ledger and actual prepaid dormant bodies, never respawn credit.
 const MAX_DORMANT := 3
 const MAX_ACTIVE := 4
+var root_id := 0
 var dormant: Array = []
 var records: Array = []
 var notices: Array[String] = []
@@ -34,7 +35,7 @@ func stored_material() -> float:
 func active_family(sim) -> Array:
 	var family: Array = []
 	for cell in sim.cells:
-		if not cell.dead and cell.health > 0 and cell.lineage_id() == 0: family.append(cell)
+		if not cell.dead and cell.health > 0 and cell.lineage_id() == root_id: family.append(cell)
 	return family
 
 func register(cell, parent: int, generation: int, state: String, now: float) -> void:
@@ -54,7 +55,7 @@ func notify(value: String) -> void:
 	if notices.size() > 8: notices.pop_front()
 
 func died(cell, sim) -> void:
-	if cell.lineage_id() != 0: return
+	if cell.lineage_id() != root_id: return
 	var record := record_for(cell.id)
 	if record.is_empty() or record.state == "dead": return
 	record.state = "dead"
