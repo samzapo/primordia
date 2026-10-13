@@ -22,10 +22,11 @@ def inspect():
         source=fetch('/webman/modules/nsm-Home/NSMHome.js',router.sid)
         for private in [router.sid,router.synotoken,os.environ['PRIMORDIA_ROUTER_USERNAME'],os.environ['PRIMORDIA_ROUTER_PASSWORD']]:
             if private:source=source.replace(private,'[redacted]')
-        for term in ['parseChainFromRecord:function','parseProtocolFromRecord:function','parseInInterfaceTypeFromRecord:function','parseInInterfaceValueFromRecord:function','parseOutInterfaceTypeFromRecord:function','parseOutInterfaceValueFromRecord:function','parseSrcIpTypeFromRecord:function','parseSrcIpValueFromRecord:function','parseDstIpTypeFromRecord:function','parseDstIpValueFromRecord:function','parseSrcPortTypeFromRecord:function','parseSrcPortValueFromRecord:function','parseDstPortTypeFromRecord:function','parseDstPortValueFromRecord:function','parseIpVersionFromRecord:function','parseActionFromRecord:function','created_by:', 'createNewRuleRecord']:
+        source=source[source.index('Ext.define("SYNO.SDS.NSMHome.Security.Firewall'):]
+        for term in ['created_by:"user"','inputValue:"wan"','inputValue:"custom"','in_interface_type:"wan"','inInterfaceWan','dst_port_type:"custom"','profile:']:
             excerpts=[]
             for match in list(re.finditer(re.escape(term),source))[:2]:
-                excerpts.append(source[max(0,match.start()-150):match.end()+1100])
+                excerpts.append(source[max(0,match.start()-1300):match.end()+400])
             if excerpts:print(json.dumps({'vendor_term':term,'definitions':excerpts}))
     finally:router.logout()
 
