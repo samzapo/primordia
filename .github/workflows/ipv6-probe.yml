@@ -1,0 +1,72 @@
+name: Primordia remote IPv6 readiness
+"on":
+  push:
+    branches: [samzapo/remote-ipv6]
+    paths: [.github/workflows/ipv6-probe.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: primordia-ipv6-readiness
+  cancel-in-progress: false
+jobs:
+  probe:
+    if: github.repository == 'samzapo/primordia'
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 5
+    steps:
+      - name: Inspect only Primordia target connectivity
+        shell: bash
+        run: |
+          test "$RUNNER_NAME" = samzapo-desktop
+          task_dir="$RUNNER_TEMP/samzapo--remote-ipv6--probe-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir "$task_dir"
+          cd "$task_dir"
+          hostname
+          pwd
+          python3 - <<'PYCODE'
+          import ipaddress, json, os, pathlib, platform, shutil, subprocess
+          from urllib.request import build_opener, ProxyHandler
+          def command(args):
+              try:
+                  value=subprocess.run(args,capture_output=True,text=True,timeout=10)
+                  return {'status':value.returncode,'output':value.stdout.strip(),'error':value.stderr.strip()[:600]}
+              except (OSError,subprocess.TimeoutExpired) as error:
+                  return {'status':'unavailable','reason':type(error).__name__}
+          interfaces=[]
+          for interface in json.loads(subprocess.check_output(['ip','-j','addr'],text=True)):
+              device=pathlib.Path('/sys/class/net')/interface['ifname']
+              if not (device/'device').exists():continue
+              addresses=[]
+              for address in interface.get('addr_info',[]):
+                  value=ipaddress.ip_address(address['local'])
+                  addresses.append({'address':str(value),'family':address['family'],'scope':address['scope'],
+                                    'global':value.is_global,'prefixlen':address['prefixlen'],
+                                    'temporary':bool(address.get('temporary')),'deprecated':bool(address.get('deprecated')),
+                                    'tentative':bool(address.get('tentative')),'preferred_lifetime':address.get('preferred_life_time')})
+              interfaces.append({'interface':interface['ifname'],'state':interface.get('operstate'),
+                                 'wired':not (device/'wireless').exists() and not (device/'phy80211').exists(),
+                                 'addresses':addresses})
+          report={'host':platform.node(),'interfaces':interfaces,
+                  'ipv6_routes':command(['ip','-6','-j','route','show','default']),
+                  'ipv6_route_probe':command(['ip','-6','-j','route','get','2606:4700:4700::1111']),
+                  'outbound_ipv6':command(['curl','--noproxy','*','-6','--connect-timeout','3','--max-time','6','--fail','--silent','--show-error','https://api64.ipify.org']),
+                  'primordia_listeners':command(['ss','-ltn','sport = :8766 or sport = :8767']),
+                  'available_tools':{name:bool(shutil.which(name)) for name in ['openssl','certbot','nft','ufw','tailscale','tailscaled','curl']},
+                  'firewall_visibility':{name:command(args) for name,args in {'ufw':['ufw','status'], 'nft':['nft','list','ruleset']}.items()}}
+          report['public_ipv6_candidates']=[a['address'] for i in interfaces if i['state']=='UP' for a in i['addresses'] if a['family']=='inet6' and a['global'] and not a['temporary'] and not a['deprecated'] and not a['tentative']]
+          for filename in ['all/disable_ipv6','default/disable_ipv6']:
+              path=pathlib.Path('/proc/sys/net/ipv6/conf')/filename
+              report[filename]=path.read_text().strip() if path.exists() else None
+          try:
+              with build_opener(ProxyHandler({})).open('http://127.0.0.1:8766/health',timeout=5) as response:
+                  health=json.load(response)
+                  report['world']={key:health.get(key) for key in ['build','world_id','epoch','tick','backend','gpu','backend_error','checkpoint_error']}
+          except OSError:report['world']={'status':'unavailable'}
+          payload=json.dumps(report,indent=2)
+          print(payload)
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as output:
+              output.write('Read-only Primordia IPv6 readiness; no interface, firewall, router or service changes.\n\n```json\n'+payload+'\n```\n')
+          PYCODE
+          cd "$RUNNER_TEMP"
+          rmdir "$task_dir"
