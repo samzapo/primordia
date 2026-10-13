@@ -6,7 +6,7 @@ uniform vec2 camera = vec2(2048.0,1280.0);
 varying flat float species;
 void vertex() {
  if (cpu_instances) {
-  species=round(COLOR.r*10.0);
+  species=round(COLOR.r*25.0);
  } else {
   ivec2 pixel=ivec2((INSTANCE_ID%256)*3,INSTANCE_ID/256);
   vec4 pose=texelFetch(state_texture,pixel,0);
@@ -21,7 +21,7 @@ void vertex() {
 }
 void fragment() {
  if(species<0.0)discard;
- vec2 uv=vec2((UV.x+species)/11.0,UV.y);
+ vec2 uv=vec2((UV.x+species)/26.0,UV.y);
  COLOR=texture(TEXTURE,uv);
  COLOR.a*= (species==1.0 || species==3.0) ? 0.6 : 1.0;
 }

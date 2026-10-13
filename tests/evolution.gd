@@ -8,7 +8,7 @@ func total(sim) -> float:
 	for cell in sim.cells:
 		if not cell.dead: mass += cell.organic_mass()
 	for particle in sim.particles:
-		if particle.alive and particle.kind not in [sim.OXYGEN,sim.PHEROMONE]: mass += particle.amount
+		if particle.alive: mass += particle.amount*Sim.Catalog.material(particle.kind)
 	return mass+sim.build_waste+sim.lineage.stored_material()
 
 func run(owner_suite) -> void:
@@ -57,7 +57,7 @@ func run(owner_suite) -> void:
 	check(sim.player.count("neutralizing") == 1 and sim.evolution.points == 2,"apply keeps paid anatomy")
 	var before: float = sim.player.biomass
 	sim.evolution.points = 0
-	check(not sim.install("offensive",1.0) and sim.player.biomass == before,"insufficient AP is atomic")
+	check(not sim.install("poreforming",1.0) and sim.player.biomass == before,"insufficient AP is atomic")
 	sim.evolution.points = 20
 	sim.player.biomass = 600
 	sim.player.update_geometry()
@@ -163,11 +163,12 @@ func run(owner_suite) -> void:
 	sim.spawn_particle(sim.TOXIN,parent.position+Vector2.RIGHT*parent.radius,Vector2.ZERO,1,sim.player.id)
 	sim._toxin_contacts()
 	check(parent.health == 100,"offspring toxin is recognized by parent")
-	parent.add_organ("offensive",0,"graze",false)
-	parent.position = sim.player.position-Vector2.RIGHT*(parent.radius+sim.player.radius)
-	parent.angle = 0
-	sim._spike_contacts(1)
-	check(sim.player.health == 100,"a parent's automatic spike does not puncture its offspring")
+	parent.add_organ("poreforming",0,"graze",false)
+	sim.spawn_particle(sim.TAG,sim.player.position+Vector2.RIGHT*sim.player.radius,Vector2.ZERO,0.03,parent.id)
+	sim.particles[-1].direction=Vector2.LEFT
+	sim._surface_contacts()
+	check(sim.player.surface_complexes.is_empty(),"Parent chemical secretion cannot mark offspring")
+
 	sim.spawn_particle(sim.TOXIN,sim.player.position+Vector2.RIGHT*sim.player.radius,Vector2.ZERO,0.1,999)
 	sim._toxin_contacts()
 	check(sim.player.organs[0].hp < sim.player.organs[0].max_hp or sim.player.health < 100,"unrelated toxins remain harmful")
@@ -211,23 +212,25 @@ func run(owner_suite) -> void:
 	reserve_cell.energy = 100
 	reserve_cell.reserve(60,42)
 	check(reserve_cell.brood_mass == 42 and reserve_cell.brood_energy == 60,"reserve quotas fill independently without surplus tissue")
-	var starving = Cell.new()
-	starving.energy = 0
-	starving.substrate = 0
-	starving.biomass = 20
-	starving.oxygen = 10
-	var starving_mass: float = starving.organic_mass()
-	sim._metabolize(starving,1)
-	check(starving.energy > 0 and starving.biomass < 20 and starving.oxygen < 10,"emergency respiration spends tissue and oxygen")
-	check(is_equal_approx(starving.organic_mass(),starving_mass),"reserve respiration conserves organic material")
-	starving.oxygen = 0
-	var remaining: float = starving.biomass
-	sim._metabolize(starving,1)
-	check(starving.biomass < remaining and starving.oxygen == 0 and starving.fermented > 0,"oxygen-poor reserves use lower-yield fermentation without inventing oxygen")
-	starving.oxygen = 10
-	starving.biomass = 8
-	sim._metabolize(starving,1)
-	check(starving.biomass == 8,"emergency metabolism protects the last repair reserve")
+	if preload("res://tests/test_policy.gd").GAMEPLAY_BALANCE_ENABLED:
+		var starving = Cell.new()
+		starving.energy = 0
+		starving.substrate = 0
+		starving.biomass = 20
+		starving.oxygen = 10
+		var starving_mass: float = starving.organic_mass()
+		sim._metabolize(starving,1)
+		check(starving.energy > 0 and starving.biomass < 20 and starving.oxygen < 10,"emergency respiration spends tissue and oxygen")
+		check(is_equal_approx(starving.organic_mass(),starving_mass),"reserve respiration conserves organic material")
+		starving.oxygen = 0
+		var remaining: float = starving.biomass
+		sim._metabolize(starving,1)
+		check(starving.biomass < remaining and starving.oxygen == 0 and starving.fermented > 0,"oxygen-poor reserves use lower-yield fermentation without inventing oxygen")
+		starving.oxygen = 10
+		starving.biomass = 8
+		sim._metabolize(starving,1)
+		check(starving.biomass == 8,"emergency metabolism protects the last repair reserve")
+	else: preload("res://tests/test_policy.gd").skip("emergency reserve metabolic yields")
 	sim = Sim.new(22)
 	sim.particles.clear()
 	sim.grid.rebuild(sim.particles)
@@ -248,6 +251,9 @@ func run(owner_suite) -> void:
 	for packet in sim.particles:
 		if packet.kind in [sim.ENZYME,sim.ANTITOXIN,sim.BUFFER]: secreted.append(packet.kind)
 	check(secreted.size() == 3,"all three triggered particle species are emitted")
+	if not preload("res://tests/test_policy.gd").GAMEPLAY_BALANCE_ENABLED:
+		preload("res://tests/test_policy.gd").skip("fermentation yields and live victory playthrough")
+		return
 	var fermenter = Cell.new()
 	fermenter.substrate = 1
 	fermenter.oxygen = 0

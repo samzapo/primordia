@@ -1,7 +1,14 @@
 extends RefCounted
+const Chemistry = preload("res://scripts/cell_chemistry.gd")
+const Surface = preload("res://scripts/surface_chemistry.gd")
+var chemistry = Chemistry.new()
+var raw_fuel: float:
+	get: return chemistry.raw_fuel()
+	set(value): chemistry.set_raw_fuel(value)
+var surface_complexes: Array = []
 const Genes = preload("res://scripts/mutations.gd")
 const Membrane = preload("res://scripts/membrane.gd")
-const KINDS := ["propulsion", "protection", "offensive", "regenerative", "feeding", "sensing", "photosynthesis", "toxin", "neutralizing", "acidifying", "hunting", "cilia"]
+const KINDS := ["propulsion", "protection", "poreforming", "regenerative", "feeding", "sensing", "photosynthesis", "toxin", "neutralizing", "acidifying", "hunting", "cilia"]
 const COST := [8.0, 10.0, 12.0, 10.0, 8.0, 6.0, 12.0, 12.0, 10.0, 12.0, 6.0, 8.0]
 const WIDTH := [19.0, 34.0, 26.0, 27.0, 36.0, 20.0, 30.0, 26.0, 26.0, 26.0, 20.0, 24.0]
 const SENSE_MODES := ["flee"]
@@ -60,10 +67,18 @@ var angle := 0.0
 var angular_velocity := 0.0
 var body := 60.0
 var biomass := 18.0
-var substrate := 4.0
-var oxygen := 16.0
-var carbon := 8.0
-var energy := 72.0
+var substrate: float:
+	get: return chemistry.amount("food")
+	set(value): chemistry.assign("food",value)
+var oxygen: float:
+	get: return chemistry.amount("oxygen")
+	set(value): chemistry.assign("oxygen",value)
+var carbon: float:
+	get: return chemistry.amount("carbon")
+	set(value): chemistry.assign("carbon",value)
+var energy: float:
+	get: return chemistry.amount("atp")
+	set(value): chemistry.assign("atp",value)
 var health := 100.0
 var radius := 47.0
 var mass := 100.0
@@ -73,7 +88,9 @@ var membrane = Membrane.new()
 var organs: Array = []
 var lost_organs: Array = []
 var brood_mass := 0.0
-var brood_energy := 0.0
+var brood_energy: float:
+	get: return chemistry.amount("reserved_atp")
+	set(value): chemistry.assign("reserved_atp",value)
 var holes: Array = []
 var leaks: Array = []
 var signals: Array = []
@@ -86,7 +103,9 @@ var reaction_flash := 0.0
 var attack_clock := 0.0
 var sense_clock := 0.0
 var emission_clock := 0.0
-var waste := 0.0
+var waste: float:
+	get: return chemistry.amount("waste")
+	set(value): chemistry.assign("waste",value)
 var processed := 0.0
 var eaten := 0.0
 var foreign_intake := 0.0
@@ -111,6 +130,7 @@ func _init(identity: int = 0, at: Vector2 = Vector2.ZERO) -> void:
 	membrane = Membrane.new(radius,maxi(0,identity))
 	position = at
 	previous_position = at
+	chemistry.setup(self)
 
 func count(kind: String) -> int:
 	var n = 0
@@ -129,11 +149,19 @@ func organ_mass() -> float:
 	return result
 
 func organic_mass() -> float:
-	return body + biomass + organ_mass() + substrate + waste + carbon + brood_mass
+	return body + biomass + organ_mass() + brood_mass + chemistry.material() + surface_material()
+
+func surface_material() -> float:
+	var amount := 0.0
+	for complex in surface_complexes: amount += complex.material
+	return amount
+
+func accept_surface(kind: int, amount: float, world_angle: float, source: int = -1) -> bool:
+	return Surface.bind(self,kind,amount,world_angle,source)
 
 func update_geometry() -> void:
 	# One retained tissue unit adds exactly TISSUE_AREA of represented volume.
-	radius = tissue_radius(maxf(8,body+biomass+brood_mass))
+	radius = tissue_radius(maxf(8,body+biomass+brood_mass+chemistry.reactor_mass+chemistry.amount("catalyst")))
 	membrane.oral_angle = NAN
 	for organ in organs:
 		if inherent(organ): membrane.oral_angle = organ.a
@@ -235,7 +263,7 @@ func growth_scale() -> float:
 	return pow(maxf(1.0,(body+biomass+brood_mass)/78.0),2.0/3.0)
 
 func gut_capacity() -> float:
-	return 24.0*growth_scale()
+	return maxf(0,24.0*growth_scale()-chemistry.storage_used())
 
 func oxygen_capacity() -> float:
 	return 30.0*growth_scale()
@@ -254,9 +282,8 @@ func atp_decay_rate() -> float:
 	return ATP_TURNOVER*energy*energy/energy_reference()
 
 func decay_energy(dt: float) -> void:
-	# Exact positive integration of dE/dt = -k E² / reference. Coarse-safe.
-	if dt <= 0 or energy <= 0: return
-	spend_energy(energy-energy/(1+ATP_TURNOVER*energy/energy_reference()*dt),{},"turnover")
+	var spent := chemistry.decay_atp(self,dt)
+	energy_budget.record(age,0,0,spent,-1,"turnover")
 
 static func organ_cost(kind: String, size: float = 1.0) -> float:
 	var k := KINDS.find(kind)
@@ -364,6 +391,7 @@ func add_organ(kind: String, a: float, mode: String = "graze", paid: bool = true
 		organs[-1]["inherent"] = true
 		organs[-1].ap_spent = 0
 		organs[-1].growth_spent = 0
+	if kind == "photosynthesis" and count("photosynthesis") == 1: chemistry.anchor_photosynthesis(self,organs[-1])
 	next_organ_id += 1
 	update_geometry()
 	render_revision += 1
@@ -384,18 +412,32 @@ func consumed(organ: Dictionary, amount: float) -> void:
 	reaction_flash = 1.0
 
 func spend_energy(amount: float, organ: Dictionary = {}, category: String = "upkeep", shares: Dictionary = {}) -> float:
-	var spent := minf(energy,maxf(0,amount))
-	energy -= spent
+	var at := local_point(organ.a)*0.88 if not organ.is_empty() else Vector2(0.32,-0.10)*radius
+	var spent := chemistry.spend_atp(amount,at,maxf(18,radius*0.65))
 	energy_budget.record(age,0,0,maxf(0,spent),organ.get("id",-1),category,shares)
 	if spent > 0: resource_effect("atp",organ.a if not organ.is_empty() else last_wound,spent,organ.get("id",-1))
 	return spent
 
+func available_energy(organ: Dictionary = {}) -> float:
+	var at := local_point(organ.a)*0.88 if not organ.is_empty() else Vector2(0.32,-0.10)*radius
+	return chemistry._local_amount("atp",at,maxf(18,radius*0.65))
+
+func spend_energy_at(amount: float, at: Vector2, reach: float, category: String) -> float:
+	var spent := chemistry.spend_atp(amount,at,reach)
+	energy_budget.record(age,0,0,spent,-1,category)
+	return spent
+
 func gain_energy(amount: float, organ: Dictionary = {}) -> void:
-	var previous := energy
-	energy += maxf(0,amount)
-	var stored := maxf(0,energy-previous)
-	energy_budget.record(age,maxf(0,amount),stored,0,organ.get("id",-1),"production")
-	if stored > 0: resource_effect("gain",organ.get("a",0.0),stored,organ.get("id",-1))
+	var at := local_point(organ.a)*0.85 if not organ.is_empty() else chemistry.site(chemistry.node_at(chemistry.find_module("respiration")))
+	var produced := chemistry.produce_atp(amount,at,maxf(18,radius*0.65))
+	report_energy_gain(produced,organ)
+
+func report_energy_gain(amount: float, organ: Dictionary = {}) -> void:
+	energy_budget.record(age,maxf(0,amount),maxf(0,amount),0,organ.get("id",-1),"production")
+	if amount > 0: resource_effect("gain",organ.get("a",0.0),amount,organ.get("id",-1))
+
+func receive_particle(kind: int, amount: float, capacity: float, at: Vector2) -> void:
+	chemistry.receive(kind,amount,capacity,at)
 
 static func organ_upkeep(organ: Dictionary) -> float:
 	var area: float = float(organ.get("scale",1.0))*float(organ.get("scale",1.0))
@@ -505,7 +547,7 @@ func heal(dt: float) -> float:
 		hole.size = maxf(0,hole.size-dt*1.1*repair)
 	holes = holes.filter(func(h): return h.size > 0)
 	if energy > 0:
-		var healed = minf(100-health, minf(8.0*repair*dt, minf(biomass/0.05,energy/(0.2*repair_cost))))
+		var healed = minf(100-health, minf(8.0*repair*dt, minf(biomass/0.05,available_energy()/(0.2*repair_cost))))
 		health += healed
 		# Repaired membrane incorporates mass into structure rather than deleting it.
 		biomass -= healed*0.05
@@ -515,7 +557,7 @@ func heal(dt: float) -> float:
 		for organ in organs:
 			if inherent(organ): continue
 			var unit: float = organ.get("max_material",organ_cost(organ.kind,organ.scale)) / organ.max_hp
-			var restore = minf(organ.max_hp-organ.hp,minf(dt*1.3*repair,minf(biomass/unit,energy/(0.15*repair_cost))))
+			var restore = minf(organ.max_hp-organ.hp,minf(dt*1.3*repair,minf(biomass/unit,available_energy(organ)/(0.15*repair_cost))))
 			organ.hp += restore
 			organ.material += restore*unit
 			biomass -= restore*unit
@@ -538,6 +580,7 @@ static func clone_state(source):
 		var key: String = property.name
 		var value = source.get(key)
 		if key in ["membrane","skeleton"]: value = clone_state(value)
+		elif key == "chemistry": value = value.clone_for(copy)
 		elif value is Array or value is Dictionary: value = value.duplicate(true)
 		copy.set(key,value)
 	return copy
@@ -631,15 +674,13 @@ func reserve(amount: float = 10.0, material_target: float = INF) -> void:
 		var atp := minf(energy,minf(amount,maxf(0,60-brood_energy)))
 		biomass -= tissue
 		brood_mass += tissue
-		energy -= atp
-		brood_energy += atp
+		chemistry.reserve_atp(atp,true)
 	else:
 		var tissue := minf(brood_mass,-amount)
 		var atp := minf(brood_energy,-amount)
 		brood_mass -= tissue
 		biomass += tissue
-		brood_energy -= atp
-		energy += atp
+		chemistry.reserve_atp(atp,false)
 	update_geometry()
 
 func fluid_drag() -> float:

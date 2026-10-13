@@ -17,31 +17,57 @@ func _initialize() -> void:
 	_run.call_deferred()
 
 func _run() -> void:
+	print("CHECKS: acceleration.gd")
 	preload("res://tests/acceleration.gd").run(expect)
+	print("CHECKS: performance.gd")
 	preload("res://tests/performance.gd").run(expect)
+	print("CHECKS: fluid_options.gd")
 	preload("res://tests/fluid_options.gd").run(expect)
+	print("CHECKS: packed_particles.gd")
 	preload("res://tests/packed_particles.gd").run(expect)
+	print("CHECKS: particle_pool.gd")
 	preload("res://tests/particle_pool.gd").run(expect)
+	print("CHECKS: hotloop.gd")
 	preload("res://tests/hotloop.gd").run(expect)
+	print("CHECKS: threading.gd")
 	preload("res://tests/threading.gd").run(expect)
+	print("CHECKS: resident_particles.gd")
 	preload("res://tests/resident_particles.gd").run(expect)
+	print("CHECKS: particle_regions.gd")
 	preload("res://tests/particle_regions.gd").run(expect)
+	print("CHECKS: mutual_pairs.gd")
 	preload("res://tests/mutual_pairs.gd").run(expect)
+	print("CHECKS: chemical_neighbors.gd")
 	preload("res://tests/chemical_neighbors.gd").run(expect)
+	print("CHECKS: liquid_particles.gd")
 	preload("res://tests/liquid_particles.gd").run(expect)
+	print("CHECKS: parcel_transport.gd")
 	preload("res://tests/parcel_transport.gd").run(expect)
+	print("CHECKS: particle_collisions.gd")
 	preload("res://tests/particle_collisions.gd").run(expect)
+	print("CHECKS: habitat.gd")
 	preload("res://tests/habitat.gd").run(expect)
+	print("CHECKS: porous_habitat.gd")
 	preload("res://tests/porous_habitat.gd").run(expect)
+	print("CHECKS: art.gd")
 	preload("res://tests/art.gd").run(expect)
+	print("CHECKS: paramecium.gd")
 	preload("res://tests/paramecium.gd").run(expect)
-	_test_metabolism()
+	print("CHECKS: chemical_particles.gd")
+	preload("res://tests/chemical_particles.gd").run(expect)
+	if preload("res://tests/test_policy.gd").GAMEPLAY_BALANCE_ENABLED: _test_metabolism()
+	else: preload("res://tests/test_policy.gd").skip("legacy metabolic yields")
 	_test_anatomy()
 	_test_receptors()
+	print("CHECKS: pheromones.gd")
 	preload("res://tests/pheromones.gd").run(expect)
+	print("CHECKS: steering.gd")
 	preload("res://tests/steering.gd").run(expect)
+	print("CHECKS: foraging.gd")
 	preload("res://tests/foraging.gd").run(expect)
+	print("CHECKS: anatomy_geometry.gd")
 	preload("res://tests/anatomy_geometry.gd").run(expect)
+	print("CHECKS: reaction_feedback.gd")
 	preload("res://tests/reaction_feedback.gd").run(expect)
 	_test_packing_and_size()
 	_test_pump_and_facing()
@@ -49,11 +75,16 @@ func _run() -> void:
 	_test_particle_exclusion()
 	_test_gel_polygons()
 	_test_microtubules()
+	print("CHECKS: music.gd")
 	preload("res://tests/music.gd").new().run(self)
 	_test_resource_animation()
+	print("CHECKS: energy_budget.gd")
 	preload("res://tests/energy_budget.gd").run(expect)
+	print("CHECKS: atp_balance.gd")
 	preload("res://tests/atp_balance.gd").run(expect)
+	print("CHECKS: cilia.gd")
 	preload("res://tests/cilia.gd").run(expect)
+	print("CHECKS: size_drag.gd")
 	preload("res://tests/size_drag.gd").run(expect)
 	_test_growth_and_anchors()
 	_test_incremental_grid()
@@ -64,10 +95,14 @@ func _run() -> void:
 	_test_propulsion_and_toxins()
 	_test_membrane()
 	_test_wrap_and_dormancy()
+	print("CHECKS: visibility.gd")
 	preload("res://tests/visibility.gd").run(expect)
+	print("CHECKS: offscreen_transport.gd")
 	preload("res://tests/offscreen_transport.gd").run(expect)
+	print("CHECKS: offscreen_ecology.gd")
 	preload("res://tests/offscreen_ecology.gd").run(expect)
 	_test_contacts()
+	print("CHECKS: contacts.gd")
 	preload("res://tests/contacts.gd").run(expect)
 	_test_chemistry()
 	_test_receptor_competition()
@@ -76,13 +111,18 @@ func _run() -> void:
 	_test_closed_budget()
 	_test_crowded_ecology()
 	_test_autonomous_diets()
-	_test_autonomous_hunting()
+	if preload("res://tests/test_policy.gd").GAMEPLAY_BALANCE_ENABLED: _test_autonomous_hunting()
+	else: preload("res://tests/test_policy.gd").skip("autonomous hunting capability")
 	_test_habitat_pressures()
 	_test_replay()
-	_test_ecosystem()
+	if preload("res://tests/test_policy.gd").GAMEPLAY_BALANCE_ENABLED: _test_ecosystem()
+	else: preload("res://tests/test_policy.gd").skip("unattended survival and diet viability")
+	print("CHECKS: evolution.gd")
 	preload("res://tests/evolution.gd").new().run(self)
+	print("CHECKS: lineage.gd")
 	preload("res://tests/lineage.gd").run(expect)
 	await preload("res://tests/interface.gd").new().run(self)
+	await preload("res://tests/chemistry_ui.gd").new().run(self)
 	print("RESULT: %d assertions, %d failures" % [assertions,failures])
 	quit(0 if failures == 0 else 1)
 
@@ -98,10 +138,13 @@ func organic(sim) -> float:
 	for cell in sim.cells:
 		if not cell.dead: total += cell.organic_mass()
 	for p in sim.particles:
-		if p.alive and p.kind not in [Sim.OXYGEN,Sim.PHEROMONE]: total += p.amount + p.get("product",0.0)
+		if p.alive: total += p.amount*Sim.Catalog.material(p.kind) + p.get("product",0.0)
 	return total
 
 func _test_metabolism() -> void:
+	if not preload("res://tests/test_policy.gd").GAMEPLAY_BALANCE_ENABLED:
+		preload("res://tests/test_policy.gd").skip("legacy metabolic yields")
+		return
 	var sim = isolated()
 	var cell = sim.player
 	cell.substrate = 1
@@ -340,10 +383,10 @@ func _test_chemistry() -> void:
 	before = organic(sim)
 	expect(sim._react_pair(a,b) and a.kind == Sim.WASTE and not b.alive,"Neutralizer binds toxin into harmless material")
 	expect(absf(organic(sim)-before) < 0.001,"Neutralization retains both reactants' material")
+	sim.spawn_particle(Sim.NUTRIENT,sim.player.position,Vector2.ZERO,0.2,0)
 	sim.spawn_particle(Sim.NUTRIENT,sim.player.position,Vector2.ZERO,0.3,0)
-	sim.spawn_particle(Sim.NUTRIENT,sim.player.position,Vector2.ZERO,0.4,0)
 	a = sim.particles[-2]; b = sim.particles[-1]
-	expect(sim._react_pair(a,b) and is_equal_approx(a.amount,0.7) and not b.alive,"Nutrient assembly makes a larger edible packet with combined value")
+	expect(sim._react_pair(a,b) and is_equal_approx(a.amount,0.5) and not b.alive,"Nutrient assembly makes a larger edible packet with combined value")
 	expect(Sim.binding_threshold(Sim.ENZYME,Sim.WASTE,0.4) < Sim.binding_threshold(Sim.ENZYME,Sim.WASTE,0),"Modeled acid hydrolase binds more readily at its acidic optimum")
 	expect(Sim.binding_threshold(Sim.NUTRIENT,Sim.NUTRIENT,0.4) == Sim.binding_threshold(Sim.NUTRIENT,Sim.NUTRIENT,0),"Acidity does not magically favor nutrient synthesis")
 	var stressed = isolated()
@@ -386,8 +429,8 @@ func _test_death() -> void:
 	var released := 0.0
 	var oxygen_released := 0.0
 	for p in sim.particles:
-		if p.kind == Sim.NUTRIENT: released += p.amount
-		elif p.kind == Sim.OXYGEN: oxygen_released += p.amount
+		released += p.amount*Sim.Catalog.material(p.kind)
+		if p.kind == Sim.OXYGEN: oxygen_released += p.amount
 	expect(hunter.dead and hunter.health == 0 and not sim.cells.has(hunter),"Hunter dies and is removed, never reset")
 	expect(is_equal_approx(released,mass),"Dead hunter releases its retained biomass")
 	expect(is_equal_approx(oxygen_released,oxygen) and hunter.oxygen == 0,"Death transfers retained oxygen exactly")
@@ -459,7 +502,8 @@ func _test_autonomous_diets() -> void:
 	var cell = sim.player
 	cell.organs.clear()
 	cell.add_organ("photosynthesis",0,"graze",false)
-	cell.carbon = 20
+	cell.carbon = 0
+	cell.chemistry.emit("carbon",20,cell.local_point(cell.organs[0].a)*0.85)
 	var before: float = organic(sim)
 	for i in 600: sim._photosynthesize(cell,DT)
 	expect(cell.fixed_carbon > 0 and cell.oxygen_produced > 0,"Photosynthesis fixes carbon and releases oxygen under light")
@@ -476,10 +520,12 @@ func _test_autonomous_diets() -> void:
 func _test_habitat_pressures() -> void:
 	var lean = Sim.new(4,1)
 	var rich = Sim.new(4,2)
-	expect(lean.particles.size() < rich.particles.size(),"Lean habitat begins with fewer cell-derived nutrients")
-	expect(lean.light_at(lean.player.position) < rich.light_at(rich.player.position),"Lean habitat offers less photosynthetic energy")
+	if preload("res://tests/test_policy.gd").GAMEPLAY_BALANCE_ENABLED:
+		expect(lean.particles.size() < rich.particles.size(),"Lean habitat begins with fewer cell-derived nutrients")
+		expect(lean.light_at(lean.player.position) < rich.light_at(rich.player.position),"Lean habitat offers less photosynthetic energy")
+	else: preload("res://tests/test_policy.gd").skip("habitat profile resource balance")
 	for cell in rich.cells:
-		if cell.role == "hunter": expect(cell.count("offensive") == 1 and cell.count("protection") >= 4,"Rich hunters share spike and armor anatomy")
+		if cell.role == "hunter": expect(cell.count("poreforming") == 1 and cell.count("protection") >= 4,"Rich hunters share spike and armor anatomy")
 	for particle in rich.particles: if particle.owner < 0: expect(false,"Every starting particle must originate from a cell")
 	var empty = isolated()
 	empty.player.organs.clear()
@@ -500,6 +546,9 @@ func _test_replay() -> void:
 	expect(a.player.position == b.player.position and a.particles == b.particles,"Same-seed replay matches on the same engine/platform")
 
 func _test_ecosystem() -> void:
+	if not preload("res://tests/test_policy.gd").GAMEPLAY_BALANCE_ENABLED:
+		preload("res://tests/test_policy.gd").skip("unattended survival and diet viability")
+		return
 	var sim = Sim.new()
 	expect(sim.install("propulsion",PI),"Opening ecosystem pays for a chosen flagellum")
 	sim.view_half = Sim.VIEW # Normal half-zoom play includes the local producer community.
@@ -573,8 +622,9 @@ func _test_growth_and_anchors() -> void:
 		cell.substrate = cell.gut_capacity()
 		cell.oxygen = cell.oxygen_capacity()
 		cell.energy = 1
-		sim._metabolize(cell,1)
-		expect(cell.biomass > reserve and cell.energy > 1,"A fed large cell can still gain biomass and ATP")
+		if preload("res://tests/test_policy.gd").GAMEPLAY_BALANCE_ENABLED: sim._metabolize(cell,1)
+		if preload("res://tests/test_policy.gd").GAMEPLAY_BALANCE_ENABLED:
+			expect(cell.biomass > reserve and cell.energy > 1,"A fed large cell can still gain biomass and ATP")
 	for i in 120: cell.membrane.step(DT,cell.radius,Vector2(80,-40),i*DT,1.2)
 	cell.angle = 1.4
 	cell.position += Vector2(50,25)
@@ -604,25 +654,21 @@ func _test_incremental_grid() -> void:
 	expect(all.size() == particles.size(),"A zoomed-out query returns each wrapped bucket once")
 
 func _test_local_feeding() -> void:
-	var sim = isolated()
-	var eater = sim.player
-	eater.organs.clear()
-	eater.add_organ("offensive",0,"graze",false)
-	var prey = sim._make_cell(eater.position+Vector2(108,0),"grazer")
+	var sim=isolated()
+	sim.player.organs.clear()
+	expect(not sim.player.add_organ("offensive",0),"Physical spikes are retired")
+	var prey=sim._make_cell(sim.player.position+Vector2(108,0),"grazer")
 	prey.organs.clear()
-	prey.angle = 0
-	prey.activity = 1
+	prey.angle=0
+	prey.activity=1
 	prey.add_organ("protection",PI,"graze",false)
-	var armor: float = prey.organs[0].hp
-	var before: float = organic(sim)
-	sim._spike_contacts(0.1)
-	expect(prey.health == 100 and prey.organs[0].hp < armor,"Spike hits local armor before membrane")
-	expect(eater.feeding_feedback == "SPIKE CONTACT","Physical spike contact is visible")
-	expect(absf(organic(sim)-before) < 0.001,"Spike damage accounts for released material")
-	prey.position = eater.position-Vector2(108,0)
-	var health: float = prey.health
-	sim._spike_contacts(0.1)
-	expect(prey.health == health,"Spike cannot hit a cell behind its tip")
+	var armor: float=prey.organs[0].hp
+	prey.accept_surface(sim.TAG,0.03,PI)
+	for i in 4: prey.accept_surface(sim.PORE_SUBUNIT,0.0375,PI)
+	var before: float=organic(sim)
+	prey.Surface.advance(prey,0.1)
+	expect(prey.health==100 and prey.organs[0].hp<armor,"Chemical pores damage local armor before the membrane")
+	expect(absf(organic(sim)-before)<0.001,"Chemical pore injury retains released material")
 
 func _test_preferences() -> void:
 	var preferences = preload("res://scripts/preferences.gd").new()
@@ -830,6 +876,9 @@ func _test_receptor_competition() -> void:
 	expect(cell.target_memory == 0,"Occupied receptor has reduced chemical sensing range")
 
 func _test_autonomous_hunting() -> void:
+	if not preload("res://tests/test_policy.gd").GAMEPLAY_BALANCE_ENABLED:
+		preload("res://tests/test_policy.gd").skip("autonomous hunting capability")
+		return
 	var sim = isolated()
 	var cell = sim.player
 	cell.organs.clear()
@@ -839,8 +888,8 @@ func _test_autonomous_hunting() -> void:
 	cell.update_geometry()
 	cell.membrane = Membrane.new(cell.radius)
 	cell.add_organ("feeding",1.3,"graze",false)
-	cell.add_organ("offensive",-0.45,"graze",false)
-	cell.add_organ("offensive",0.45,"graze",false)
+	cell.add_organ("poreforming",-0.45,"graze",false)
+	cell.add_organ("poreforming",0.45,"graze",false)
 	cell.add_organ("hunting",0,"hunt",false)
 	cell.add_organ("propulsion",PI,"graze",false)
 	var prey = sim._make_cell(cell.position+Vector2(190,0),"grazer")

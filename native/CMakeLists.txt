@@ -59,3 +59,5 @@ if(MSVC)
 else()
   target_compile_options(primordia_worker_test PRIVATE -UNDEBUG -fno-exceptions)
 endif()
+
+target_include_directories(primordia PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")

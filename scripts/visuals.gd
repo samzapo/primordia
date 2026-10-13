@@ -33,10 +33,11 @@ static func icon(c: Node2D, p: Vector2, kind: String, rotation: float, scale: fl
 			c.draw_colored_polygon(Transform2D(0,Vector2.ONE*0.83,0,Vector2(1,-1))*shield,Color("32bdf2"))
 			c.draw_arc(Vector2(-1,0),12,-1.2,1.2,steps,Color("9cebff"),4,true)
 			if detail: c.draw_line(Vector2(-3,-9),Vector2(-3,9),Color("248ccc"),3,true)
-		"offensive":
-			c.draw_colored_polygon(PackedVector2Array([Vector2(-9,-9),Vector2(6,-10),Vector2(42,0),Vector2(6,10),Vector2(-9,9)]),Color("ac215b"))
-			c.draw_colored_polygon(PackedVector2Array([Vector2(-5,-6),Vector2(42,0),Vector2(-3,7)]),Color("ff407b").lerp(Color("ffe783"),pulse))
-			c.draw_line(Vector2(-3,-4),Vector2(34,-1),Color("ffb58d"),3,true)
+		"poreforming":
+			c.draw_circle(Vector2(-3,0),13,Color("9c3a68"))
+			c.draw_circle(Vector2(-3,-1),10,Color("ff985c"))
+			c.draw_line(Vector2(2,0),Vector2(16,0),Color("ffdc83"),8,true)
+			c.draw_arc(Vector2(17,0),5,0,TAU,12,Color("fff0ba"),3,true)
 		"photosynthesis":
 			c.draw_colored_polygon(PackedVector2Array([Vector2(-12,-8),Vector2(4,-12),Vector2(17,-5),Vector2(20,2),Vector2(8,12),Vector2(-10,9)]),Color("198b59"))
 			c.draw_circle(Vector2(1,-1),11,Color("79e94d").lerp(Color("fff18a"),pulse))

@@ -21,16 +21,16 @@ func run() -> void:
 			data[k]=4095.0 if i%2==0 else 1.0
 			data[k+1]=100
 			data[k+2]=0 if i%2==0 else PI
-			data[k+7]=0;data[k+8]=8;data[k+9]=0.3
+			data[k+7]=0;data[k+8]=8;data[k+9]=0.2
 		for tick in 8:
 			await check_fixture(data,count,tick)
 	# Misalignment must suppress reactions, not collisions.
 	var data:=Fixture.make(2,"uniform")
 	data[0]=100;data[1]=100;data[12]=102;data[13]=100
 	data[2]=0;data[14]=0
-	data[7]=0;data[19]=0;data[8]=8;data[20]=8;data[9]=0.3;data[21]=0.3
+	data[7]=0;data[19]=0;data[8]=8;data[20]=8;data[9]=0.2;data[21]=0.2
 	await check_fixture(data,2)
-	for config in [[6,2,0.4,6,0],[6,2,0.95,6,2],[7,4,0.4,2,-1],[8,9,0.4,2,2],[2,1,0.4,0,5],[0,4,0.4,2,4]]:
+	for config in [[7,11,0.4,2,-1],[7,12,0.4,2,-1],[6,2,0.4,6,0],[6,2,0.95,6,2],[7,4,0.4,2,-1],[8,9,0.4,2,2],[2,1,0.4,0,5],[0,4,0.4,2,4]]:
 		await reaction_case(config)
 	await delayed_products()
 	print("MATCHING_VALIDATION ",checks," checks")
@@ -40,7 +40,7 @@ func check_fixture(data: PackedFloat32Array,count: int,tick: int=0) -> void:
 	for i in count:
 		var best: Array=[]
 		for j in count:
-			if i==j: continue
+			if i==j or data[i*12+9]+data[j*12+9]>float(preload("res://scripts/chemistry_catalog.gd").data().ecology.merge_limit): continue
 			var low:=mini(i,j);var high:=maxi(i,j)
 			var d:=Vector2(fposmod(data[high*12]-data[low*12]+2048,4096)-2048,
 				fposmod(data[high*12+1]-data[low*12+1]+1280,2560)-1280)
@@ -74,9 +74,9 @@ func check_fixture(data: PackedFloat32Array,count: int,tick: int=0) -> void:
 		var mutual:=j>=0 and expected[j]==i
 		if mutual and i<j: reactions+=1
 		require(output[i*12+7]==(-1.0 if mutual and i>j else 0.0),"Disjoint consumption")
-		require(is_equal_approx(output[i*12+9],0.0 if mutual and i>j else (0.6 if mutual else data[i*12+9])),"Finite material")
+		require(is_equal_approx(output[i*12+9],0.0 if mutual and i>j else (data[i*12+9]+data[j*12+9] if mutual else data[i*12+9])),"Finite material")
 		total+=output[i*12+9]
-	require(is_equal_approx(total,count*0.3),"Material conservation")
+	require(is_equal_approx(total,count*0.2),"Material conservation")
 	require(contacts.stats[4]==reactions,"Reaction count")
 	gpu.close();await gpu.closed
 

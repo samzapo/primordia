@@ -43,7 +43,7 @@ bool encounter(uint slot,uint body,uint channel,float rate,float dt){
  return roll<1.-exp(-max(0.,rate)*dt);
 }
 void shrink(uint i,vec4 v,vec4 m){
- const float radii[11]=float[11](4.,2.5,3.,2.5,5.,3.,4.,4.,3.,3.,3.5);
+ /*CATALOG_RADII*/
  if(m.y<=0.){v.w=-1.;m.x=0.;m.y=0.;}
  else m.x=2.*radii[int(v.w)]*clamp(sqrt(m.y/.3),.8,1.7);
  imageStore(state,pixel(i)+ivec2(1,0),v);
@@ -80,7 +80,7 @@ void main(){
    uint channel=query.w==0.?0u:(query.w==1.?1u:2u);
    vec4 budget=pc.accounts>0u?budgets[body]:bodies[body*4u+2u];
    vec4 shape=bodies[body*4u];
-   float remaining=max(0.,budget[channel]-receipts[body][channel]),taken_total=0.;
+   float remaining=max(0.,budget[channel]-receipts[body][channel]),taken_total=0.,fuel_total=0.;vec2 moment=vec2(0);
    float reach=query.z;
    ivec2 lo=ivec2(floor((query.xy-reach)/16.)),hi=ivec2(floor((query.xy+reach)/16.));
    for(int x=lo.x;x<=min(hi.x,lo.x+255)&&remaining>0.;x++)for(int y=lo.y;y<=min(hi.y,lo.y+159)&&remaining>0.;y++){
@@ -93,13 +93,14 @@ void main(){
      bool inside=meta.z>0.?distance<=reach:query.w==1.?(pc.parallel_oxygen>0u?((oxygen_mask[slot][body/32u]&(1u<<(body%32u)))!=0u):
       distance<support(body,atan(d.y,d.x)-shape.z,false)+14.):distance<=reach;
      if(!inside)continue;
-     float taken=min(m.y,remaining);m.y-=taken;remaining-=taken;taken_total+=taken;
+     float taken=min(m.y,remaining);float fuel=query.w==0.?min(m.z,m.y)*taken/max(m.y,.00000001):taken;
+     fuel_total+=fuel;moment+=offset(shape.xy,pose(slot).xy)*taken;if(query.w==0.)m.z=max(0.,m.z-fuel);m.y-=taken;remaining-=taken;taken_total+=taken;
      if(query.w!=1.&&identity[slot].y!=uint(budget.w))receipts[body].w+=taken;
      shrink(slot,v,m);
     }
    }
    receipts[body][channel]+=taken_total;
-   receipts[pc.body_count+f]=vec4(taken_total,0,0,0);
+   receipts[pc.body_count+f]=vec4(taken_total,fuel_total,moment);
   }
   if(pc.accounts>0u)for(uint b=0u;b<pc.body_count;b++)
    budgets[b].xyz=max(vec3(0),budgets[b].xyz-receipts[b].xyz);

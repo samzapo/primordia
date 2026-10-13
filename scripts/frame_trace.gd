@@ -47,7 +47,7 @@ func _post() -> void:
 		var viewport: RID = game.get_viewport().get_viewport_rid()
 		var sim = game.world
 		var times := {}
-		for key in ["cell_pair_checks","cell_contacts","spike_contacts","membrane_updates","mesh_updates","receptor_queries","receptor_candidates","pheromone_queries"]:
+		for key in ["cell_pair_checks","cell_contacts","membrane_updates","mesh_updates","receptor_queries","receptor_candidates","pheromone_queries"]:
 			if not counts.has(key): counts[key] = 0
 		for key in work_us: times[key] = work_us[key]/1000.0
 		rows.append({"frame":Engine.get_frames_drawn(),"wall_ms":(now-prior_post)/1000.0,

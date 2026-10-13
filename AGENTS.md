@@ -33,10 +33,10 @@ The whole rectangular view and a short offscreen margin must stay fully active. 
 
 Preserve same-world lineage succession: ordinary death must not refresh AP, drafts, crisis time or ecology. Dormant successors hold prepaid tissue/energy, with one explicitly accounted founder reserve in the starting inventory. Keep local history/knowledge separate from full-world saving, and recalling a known blueprint must consume the ordinary draft choice. Family/history UI stays cell-local; no Undo, organ resizing or persistent HUD returns. Validate born/adopted bodies through both simulation and paused-editor transitions.
 
-Spikes have no sensing or steering. The hunting receptor alone selects smaller or undefended prey from immutable local pheromone reports; flight remains explicit and higher priority. Preserve impulse-dependent spike injury and shared physical rules; do not grant hidden hunter bonuses or resolve emitted identities into live target data.
+Pore-forming secretion has no sensing or steering. The hunting receptor alone selects smaller or undefended prey from immutable local pheromone reports; flight remains explicit and higher priority. Preserve finite particle secretion, local membrane binding and shared physical rules; do not grant hidden hunter bonuses or resolve emitted identities into live target data.
 
 
-Particle transport never freezes or loses elapsed time outside the view. Keep bounded, staggered coarse advection/diffusion and background flow refresh, timestamped camera catch-up and global pheromone expiry. Revision 23 makes all chemical packets permeable to plant stems; retain solid cell/spike contacts, not particle/stem barriers. Living offscreen cells now receive staggered coarse biology; only explicitly banked successors remain dormant. Preserve shared resource costs/caps, real finite-packet absorption, pheromone-only hunting intent, no statistical kills inside the detailed halo, and full lysis without privileged auto-consumption. Nearby hidden chemistry retains orientation and timestamped unary processing; empty far regions still defer particle reactions. Benchmark on/offscreen growth, energy, hunting and timestep sensitivity as well as performance. Preserve sqrt(dt) diffusion, independent background random draws, material accounting, native/reference/GPU parity and cursor continuity through compaction. Benchmark against frozen and 60 Hz background transport as well as whole-game 80% view; transport throughput is not rendered FPS.
+Particle transport never freezes or loses elapsed time outside the view. Keep bounded, staggered coarse advection/diffusion and background flow refresh, timestamped camera catch-up and global pheromone expiry. Revision 23 makes all chemical packets permeable to plant stems; retain solid cell contacts, not particle/stem barriers. Living offscreen cells now receive staggered coarse biology; only explicitly banked successors remain dormant. Preserve shared resource costs/caps, real finite-packet absorption, pheromone-only hunting intent, no statistical hunting kills anywhere, and full lysis without privileged auto-consumption. Nearby hidden chemistry retains orientation and timestamped unary processing; empty far regions still defer particle reactions. Check on/offscreen accounting, elapsed time and performance; gameplay balance testing is held by the owner. Preserve sqrt(dt) diffusion, independent background random draws, material accounting, native/reference/GPU parity and cursor continuity through compaction. Benchmark against frozen and 60 Hz background transport as well as whole-game 80% view; transport throughput is not rendered FPS.
 
 
 Membrane shading follows the real deformed outline and uses explicit mesh rings; do not reintroduce unsafe polygon triangulation or replace the silhouette with a circle. Streamers read the signed fluid cache in bounded GPU batches, with world-anchored periodic seeds and simulation-time animation. Disturbance glints are presentation-only: preserve existing fluid, chemical particles and random streams. Keep ablation switches in the visual benchmark, rather than restoring flow arrows or new permanent panes to the player interface.
@@ -46,7 +46,7 @@ Whole-frame performance evidence must aggregate every catch-up tick. Keep mesh/s
 
 Keep anatomical steering separate from suction, absorption, secretion and photosynthesis. Use current per-organ weights at reception and delivery, retain the bounded switch margin, explicit flight priority and immutable family signatures. Zero steering must not disable physical feeding. Membrane-mounted art, previews, outlets, weapons and facing use the local outward normal. The tissue comparison is editing-only and uses usable biomass with a common stock/cost area scale. Wider microtubule hover stays edit-only; cell-adjacent lens suppression also invalidates tracked particles. Reaction sparks are bounded presentation samples of successful pair reactions, never a chemistry gate or a new random draw.
 
-Plants are porous to chemistry in both transport tiers and coarse chemical intake/exposure; hidden cell hunting still requires a clear solid path. Historical particle/stem contact helpers are diagnostic only and default off. AP is a build-only top-right gold-blob cluster, never an internal coin target or transfer effect. Follow zoom centers on the cell; free zoom keeps the cursor anchor.
+Plants are porous to chemistry in both transport tiers and coarse chemical intake/exposure; hidden predation still requires actual chemical contact. Historical particle/stem contact helpers are diagnostic only and default off. AP is a build-only top-right gold-blob cluster, never an internal coin target or transfer effect. Follow zoom centers on the cell; free zoom keeps the cursor anchor.
 
 ATP bookkeeping is bounded and read-only: actual gross/stored/spent rates, shared-area sacs and per-organ paid costs must not alter energy/RNG. Keep steady estimates explicit, upgrade cost/delta previews free, reserve transfers distinct and rates pause-stable. Size-dependent membrane drag is shared across detailed/coarse motion; preserve conservative impulses and no hard advection speed cap. Every cell wake draws below all bodies; broad water shimmer only changes the background brightness, with no scene warp or camera motion. Use parallel native compilation within verified host capacity; PRIMORDIA_BUILD_JOBS remains an explicit override.
 
@@ -153,3 +153,31 @@ performance. Whole-GPU reference: frame profiler --resident-streaming=off.
 - All suction uses body-relative linear and angular velocity with paired
   impulses. Godot Vector2.orthogonal() has the opposite sign to (-y,x);
   use (-y,x) for angular surface velocity and positive steering torque.
+
+## Revision 43 — owner balance-test hold
+
+Explicit owner instruction, October 13, 2026: disable every test whose purpose
+is gameplay balance until further notice. Keep the assertions in source for
+later restoration, gated by tests/test_policy.gd. Do not run economy playtests,
+survival/viability campaigns, autonomous kill-rate acceptance or ATP-yield
+tuning while this hold is active. Continue correctness tests for conservation,
+finite input/output, local particle transport/reactions, paid actions, physics,
+UI, determinism and native/reference/GPU consistency.
+
+## Revision 43 — current chemistry contracts
+
+Read docs/REVISION_43.md before changing the sandbox. Hunting spikes and hidden
+statistical kills are retired. Preserve finite tags/subunits, local membrane
+assembly, inhibitor/repair material and immutable pheromone/family safety.
+Every chemical transport path, including cytoplasmic energy, redox and offspring
+ATP reserves, uses particles. Derived totals are readouts; graph edges must never
+credit stocks or teleport a molecule. Editing pauses actual intracellular
+movement and all chemistry. Keep paid catalysts/compartments, source-bound local
+reactions, finite fuel, real local ADP/ATP conversion and species-preserving
+lysis. NAD/adenylate/water organic material weight is zero in every backend.
+
+The tenfold richer default is explicitly authorized and supersedes prior
+unchanged-density instructions. F3 distinguishes visible chemical packets,
+represented-material packets and signals. Counts and performance are separate
+from balance, which remains held. Generate native catalog tables from authored
+data/chemistry.json automatically; do not commit their deterministic output.

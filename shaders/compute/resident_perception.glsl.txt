@@ -143,7 +143,7 @@ void main(){
     uint slot=order[k].y;float kind=imageLoad(state,pixel(slot)+ivec2(1,0)).w;
     if(kind<0.)continue;
     if(self.w==3u&&kind!=2.)continue;
-    if(self.w==4u&&(kind!=4.||floatBitsToUint(reports[slot*4u+3u].y)==self.y))continue;
+    if(self.w==4u&&((kind!=4.&&kind!=11.&&kind!=12.)||floatBitsToUint(reports[slot*4u+3u].y)==self.y))continue;
     float distance=length(offset(query.xy,imageLoad(state,pixel(slot)).xy));
     if(distance>best)continue;
     float zoom=queries[i*4u+3u].z;

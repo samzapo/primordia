@@ -145,22 +145,24 @@ func _draw() -> void:
 				if highlight.size() > 1: draw_polyline(highlight,palette[4],cell.radius*0.068,true)
 				highlight.clear()
 		if highlight.size() > 1: draw_polyline(highlight,palette[4],cell.radius*0.068,true)
+	for complex in cell.surface_complexes:
+		var at: Vector2 = cell.local_point(complex.a)
+		var color := Color("ffdd80") if complex.units>=4 else Color("ff985c")
+		draw_arc(at,4+complex.units,0,TAU*maxf(0.2,complex.units/4.0),16,color,1.8,true)
 	for link in ([] if simple_view else cell.membrane.skeleton.links):
 		var a: Vector2 = cell.membrane.skeleton.point(link.a,cell.membrane)
 		var b: Vector2 = cell.membrane.skeleton.point(link.b,cell.membrane)
 		draw_line(a,b,hue.lightened(0.45)*Color(1,1,1,(0.5 if game.build_open else 0.16)+link.tension*0.3),1+link.tension*2,true)
 	for junction in ([] if simple_view else cell.membrane.skeleton.junctions.values()): draw_circle(junction.p,3,Color("cce6ee"))
-	# Six seeded vesicles replace fine repeated speckles; all remain inside the gel.
 	if not simple_view and cell != game.world.player:
-		for vesicle in art.vesicles:
-			var support: float = cell.visible_support(vesicle.angle)
-			var q: Vector2 = Vector2.from_angle(vesicle.angle)*support*vesicle.distance
-			var color: Color = [palette[1].lightened(0.16),palette[3],palette[2].lightened(0.13)][vesicle.tone]
-			draw_circle(q,minf(cell.radius*vesicle.radius,support*0.12),color)
-	if cell != game.world.player and cell.substrate > 0.05:
-		var food_at: Vector2 = cell.local_point(0)*0.60
-		draw_circle(food_at,5,Color("93e9af"))
-		draw_circle(food_at-Vector2.ONE,1.5,Color("d8ffe2"))
+		for packet in cell.chemistry.particles:
+			if not packet.alive: continue
+			var definition: Dictionary = cell.chemistry.Catalog.data().species[packet.species]
+			var color := Color(definition.color)
+			var diameter: float = 1.4+minf(2,sqrt(packet.amount)*1.5)
+			draw_circle(packet.p,diameter,color)
+		for vacuole in cell.chemistry.vacuoles:
+			draw_arc(vacuole.p,vacuole.radius,0,TAU,16,Color("8fe3bf").lerp(Color("f497c4"),vacuole.acid),0.8,true)
 	var safe_radius: float = cell.radius
 	for point in outline: safe_radius = minf(safe_radius,point.length())
 	var nucleus: Vector2 = Vector2(-0.12,-0.10)*safe_radius+nucleus_lag
@@ -178,11 +180,6 @@ func _draw() -> void:
 	if not simple_view:
 		draw_colored_polygon(Transform2D(-0.3,Vector2(0.30,0.38)*size,0,nucleus-Vector2.ONE*size*0.22)*core,palette[6])
 	for packet in cell.signals: draw_circle(packet.p,3,Color("fc8c90") if packet.fear else Color("b5a3f4"))
-	for packet in ([] if cell == game.world.player or simple_view else cell.resource_packets):
-		if packet.delay > 0: continue
-		var color := Color("f5d47b") if packet.kind == "atp" else Color("ffa8bd")
-		draw_circle(packet.p,5,color.darkened(0.25))
-		draw_circle(packet.p,3,color.lightened(0.3))
 	for hole in cell.holes:
 		var at: Vector2 = cell.local_point(hole.a)
 		draw_circle(at,3+hole.size*6,Color("27325e"))

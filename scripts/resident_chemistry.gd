@@ -1,6 +1,7 @@
 extends RefCounted
+const Catalog=preload("res://scripts/chemistry_catalog.gd")
 ## Resident unary chemistry and finite acid/buffer field exchange.
-const RECEIPT_VECTORS:=774
+const RECEIPT_VECTORS:=775
 var rd: RenderingDevice
 var shader:=RID()
 var pipeline:=RID()
@@ -13,9 +14,9 @@ var last_tick:=0
 var last_time:=0.0
 func initialize(device: RenderingDevice, state: RID, acid: RID, order: RID, ranges: RID, receipts: Array[RID], pair_stats: RID, identity: RID, events: RID, slots: int, random_seed: int, source: String) -> bool:
 	rd=device;count=slots;seed=random_seed
-	var zero:=PackedByteArray();zero.resize(ceili(count/128.0)*32)
+	var zero:=PackedByteArray();zero.resize(ceili(count/128.0)*48)
 	partials=rd.storage_buffer_create(zero.size(),zero)
-	var text:=RDShaderSource.new();text.source_compute=source
+	var text:=RDShaderSource.new();text.source_compute=Catalog.glsl(source)
 	var spirv:=rd.shader_compile_spirv_from_source(text)
 	if spirv.compile_error_compute!="": push_error(spirv.compile_error_compute);return false
 	shader=rd.shader_create_from_spirv(spirv);pipeline=rd.compute_pipeline_create(shader)
@@ -30,14 +31,16 @@ func initialize(device: RenderingDevice, state: RID, acid: RID, order: RID, rang
 		if not pipeline.is_valid() or not bindings.is_valid(): return false
 	return partials.is_valid()
 func dispatch(stage: int, groups: int, batch: Dictionary={}) -> void:
-	var params:=PackedByteArray();params.resize(32)
+	var params:=PackedByteArray();params.resize(48)
 	params.encode_u32(0,count);params.encode_u32(4,stage);params.encode_float(8,last_dt)
 	params.encode_u32(12,last_tick);params.encode_float(16,last_time)
 	params.encode_u32(20,batch.get("chemistry_offset",0));params.encode_u32(24,ceili(count/128.0))
 	params.encode_u32(28,seed&0xffffffff)
+	var scope: Vector4=batch.get("count_scope",Vector4(0,0,-1,-1))
+	params.encode_float(32,scope.x);params.encode_float(36,scope.y);params.encode_float(40,scope.z);params.encode_float(44,scope.w)
 	var list:=rd.compute_list_begin()
 	rd.compute_list_bind_compute_pipeline(list,pipeline);rd.compute_list_bind_uniform_set(list,sets[batch.get("ring_slot",0)],0)
-	rd.compute_list_set_push_constant(list,params,32);rd.compute_list_dispatch(list,groups,1,1);rd.compute_list_end()
+	rd.compute_list_set_push_constant(list,params,48);rd.compute_list_dispatch(list,groups,1,1);rd.compute_list_end()
 func advance(dt: float,tick: int,now: float) -> void:
 	last_dt=dt;last_tick=tick;last_time=now
 	dispatch(0,20);dispatch(1,ceili(count/128.0))
@@ -48,12 +51,13 @@ static func decode(bytes: PackedByteArray,offset: int) -> Dictionary:
 	var values:=bytes.slice(at,at+2560*4).to_float32_array()
 	var losses:=bytes.slice(at+2560*4,at+2560*4+16).to_float32_array()
 	var inventory:=bytes.slice(at+2560*4+16,at+2560*4+32).to_float32_array()
+	var visible:=bytes.slice(at+774*16,at+775*16).to_float32_array()
 	var cues: Array=[]
 	for i in 128:
 		var base:=at+(646+i)*16
 		if bytes.decode_float(base+12)>0: cues.append({"at":Vector2(bytes.decode_float(base),bytes.decode_float(base+4)),"detox":bytes.decode_float(base+12)==2})
 	return {"recycled":losses[2],"cues":cues,"acid":values,"loss":losses[0],"decay":int(losses[1]),"alive":int(inventory[0]),"pheromones":int(inventory[1]),
-		"material":inventory[2],"oxygen":inventory[3],"pairs":bytes.slice(at+2560*4+32,at+2560*4+96).to_int32_array()}
+		"visible":{"chemicals":int(visible[0]),"material":int(visible[1]),"signals":int(visible[2])},"material":inventory[2],"oxygen":inventory[3],"pairs":bytes.slice(at+2560*4+32,at+2560*4+96).to_int32_array()}
 func close() -> void:
 	for resource in sets+[pipeline,shader,partials]:
 		if resource.is_valid(): rd.free_rid(resource)

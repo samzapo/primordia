@@ -20,6 +20,13 @@ func run() -> void:
 	var before: int=scene.world.revision
 	scene._toggle_build()
 	check(scene.build_open and scene.is_paused(),"Tab enters paused anatomical editor")
+	var editor=scene.cell_ui.pathways
+	editor.open_cell()
+	var packets: Array=scene.world.player.chemistry.particles.duplicate(true)
+	editor._process(1)
+	scene._physics_process(1.0/60)
+	check(editor.visible and packets==scene.world.player.chemistry.particles,"Resident paused pathway editor retains authoritative intracellular particles")
+	editor.hide()
 	check(scene.world.install("cilia",PI),"Editor installs paid cilia")
 	scene._update_world(1)
 	check(scene.views[scene.world.player.id].cell==scene.world.player,"Editor clone is the visible cell")

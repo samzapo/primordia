@@ -1,5 +1,5 @@
 extends RefCounted
-## Bounded impulse contacts for soft radial membranes, solid stems and spikes.
+## Bounded impulse contacts for soft radial membranes and solid stems.
 ## The ring supplies geometry/compliance; this is not a continuum soft-body solver.
 const Medium = preload("res://scripts/medium.gd")
 const RESTITUTION := 0.12

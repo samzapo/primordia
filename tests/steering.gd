@@ -103,7 +103,7 @@ static func _family(check: Callable) -> void:
 	parent.organs.clear()
 	parent.add_organ("feeding",PI,"graze",false)
 	parent.add_organ("hunting",0,"hunt",false)
-	parent.add_organ("offensive",0.5,"graze",false)
+	parent.add_organ("poreforming",0.5,"graze",false)
 	Family.fund(sim)
 	check.call(sim.divide_lineage(false,false),"Family safety fixture releases an actual paid child")
 	var child = sim.cells[-1]
@@ -137,18 +137,14 @@ static func _family(check: Callable) -> void:
 	sim.player.target_memory = 1
 	sim._sense(sim.player,DT)
 	check.call(sim.player.target_memory == 0,"A remembered family signal cannot survive a lineage handoff")
-	# Family recognition preserves physical obstruction but removes injury.
+	# Family recognition applies to physical chemical-contact events.
 	for attacker in [parent,child]:
 		var other = child if attacker == parent else parent
-		attacker.angle = 0
-		var spike: Dictionary = attacker.organs.filter(func(item):return item.kind == "offensive")[0]
-		spike.a = 0
-		attacker.position = Vector2(2048,1280)
-		attacker.velocity = Vector2.ZERO
-		other.position = attacker.position+Vector2(attacker.extent()+other.extent()+16,0)
-		other.velocity = Vector2(-150,0)
-		for o in other.organs:
-			if o.kind == "offensive": o.a = PI
-		var hp: float = other.health
-		for i in 3: sim._spike_contacts(DT)
-		check.call(other.health == hp and not other.dead,"Actual parent/child spike contact is harmless in both directions")
+		sim.particles.clear()
+		sim.grid.clear()
+		var at: Vector2 = other.position+Vector2.RIGHT*other.radius
+		sim.spawn_particle(sim.TAG,at,Vector2.ZERO,0.03,attacker.id)
+		sim.particles[-1].direction=Vector2.LEFT
+		var hp: float=other.health
+		sim._surface_contacts()
+		check.call(other.health==hp and other.surface_complexes.is_empty(),"Parent/child chemical attacks are harmless in both directions")

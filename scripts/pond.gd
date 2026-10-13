@@ -13,8 +13,8 @@ const MINT := Color("80efce")
 const GOLD := Color("f5d47b")
 const TEXT := Color("e5f5ec")
 const MUTED := Color("a3bfc5")
-const TITLES := ["Flagellum","Protective cortex","Hunting spike","Repair body","Oral groove","Flight receptor","Photosynthesis","Toxin vesicle","Toxin neutralizer","Acid gland","Hunting receptor","Cilia"]
-const HELP := ["Flagella provide thrust. Anatomy chooses travel direction.","Protects the membrane directly beneath it. Coverage follows its membrane attachment.","A contact weapon with no senses or steering. Fast impacts puncture hard; slow pressure spends ATP for smaller wounds. Armor absorbs hits first. Pair spikes around a hunting receptor to line up collisions.","Uses biomass and ATP to repair organs and close punctures faster. Releases buffers that neutralize local acidity and accelerates receptor cleaning.","Senses and pumps nutrients into its opening. Secretes reusable enzymes that turn waste into food when aligned.","Reads nearby pheromones reporting larger or armed cells and retreats from their last reported location. This is the only organ that triggers flight.","Seeks brighter water. Light fixes dissolved carbon into biomass and food, releasing oxygen. Works best in bright habitat patches.","Spends ATP and biomass to fire toxins and receptor-blocking decoys toward a pheromone report received by a hunting or flight receptor.","Releases complementary particles that bind toxin into harmless waste. Costs small amounts of biomass and ATP.","Releases acidifying particles. Moderate acidity favors digestive enzymes; excess acidity costs ATP and stresses cells. Repair bodies release buffers.","Reads local pheromones reporting smaller or undefended prey. Faces and pursues the last reported location. Undefended means no functional spike, toxin vesicle or protective cortex at emission. Pair with spikes or toxins.","A short beating ciliary band provides propulsion and a strong local feeding current from the receptor-selected direction. Draws all particles with the water, including hazards; a grazing pore still consumes food."]
+const TITLES := ["Flagellum","Protective cortex","Pore-forming gland","Repair body","Oral groove","Flight receptor","Photosynthesis","Toxin vesicle","Toxin neutralizer","Acid gland","Hunting receptor","Cilia"]
+const HELP := ["Flagella provide thrust. Anatomy chooses travel direction.","Protects the membrane directly beneath it. Coverage follows its membrane attachment.","Spends tissue and ATP to emit surface tags and pore subunits toward a local pheromone report. Four aligned subunits assemble a membrane pore; inhibitors and repair can stop it.","Uses biomass and ATP to repair organs and close punctures faster. Releases buffers that neutralize local acidity and accelerates receptor cleaning.","Senses and pumps nutrients into its opening. Secretes reusable enzymes that turn waste into food when aligned.","Reads nearby pheromones reporting larger or armed cells and retreats from their last reported location. This is the only organ that triggers flight.","Seeks brighter water. Light fixes dissolved carbon into biomass and food, releasing oxygen. Works best in bright habitat patches.","Spends ATP and biomass to fire toxins and receptor-blocking decoys toward a pheromone report received by a hunting or flight receptor.","Releases complementary particles that bind toxin into harmless waste. Costs small amounts of biomass and ATP.","Releases acidifying particles. Moderate acidity favors digestive enzymes; excess acidity costs ATP and stresses cells. Repair bodies release buffers.","Reads local pheromones reporting smaller or undefended prey. Faces and pursues the last reported location. Undefended means no functional pore-forming gland, toxin vesicle or protective cortex at emission. Pair with secretory attack glands.","A short beating ciliary band provides propulsion and a strong local feeding current from the receptor-selected direction. Draws all particles with the water, including hazards; a grazing pore still consumes food."]
 var music := preload("res://scripts/music_director.gd").new()
 var music_slider := HSlider.new()
 var world: Simulation = Simulation.new()
@@ -438,7 +438,8 @@ func _sync_particles(alpha: float = 1.0) -> void:
 			batches[kind].multimesh.visible_instance_count = count
 		return
 	if world.spatial_queries: world.cell_index.rebuild(world.cells)
-	var counts := PackedInt32Array([0,0,0,0,0,0,0,0,0,0,0])
+	var counts := PackedInt32Array()
+	counts.resize(Simulation.SPECIES_COUNT)
 	for index in world.visible_particle_ids(30):
 		var p: Dictionary = world.particle_snapshot(index)
 		if not p.alive: continue
@@ -725,6 +726,9 @@ func _update_hud() -> void:
 		debug_label.text += "\nDetailed region: %d cells · Coarse: %d cells\nGPU nearby particles: %d · CPU stored: %d" % [world.active_cells,world.resident.coarse_cells,world.particle_count(),world.resident.stored_count()]
 	else:
 		debug_label.text += "\nDetailed region: %d cells / %d particles\nHabitat total: %d living cells / %d particles" % [world.active_cells,world.active_particles,world.cells.filter(func(c): return not c.dead).size(),world.particle_count()]
+	if show_debug:
+		var census: Dictionary = world.visible_particle_census()
+		debug_label.text += "\nOn screen: %d material packets · %d chemical packets · %d signals\nCytoplasm: %d actual particles · target ~%d chemical packets" % [census.material,census.chemicals,census.signals,world.player.chemistry.particles.size(),world.Catalog.data().ecology.visible_target]
 	if world.resident != null:
 		var p: Dictionary = world.profile_usec
 		debug_label.text += "\nTick: flow %.1f · particles %.1f · biology %.1f · motion %.1f · exposure %.1f ms\nGPU receipts: prepare %.1f · handoff %.1f ms" % [p.get("fluid",0)/1000.0,p.get("particles",0)/1000.0,p.get("biology",0)/1000.0,p.get("motion",0)/1000.0,p.get("ecology",0)/1000.0,p.get("gpu_receipt_prepare",0)/1000.0,p.get("gpu_receipt_wait",0)/1000.0]

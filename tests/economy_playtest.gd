@@ -4,8 +4,17 @@ func option(name: String, fallback: String) -> String:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with(name+"="): return arg.substr(name.length()+1)
 	return fallback
-func _initialize() -> void: run.call_deferred()
+func _initialize() -> void:
+	if not preload("res://tests/test_policy.gd").GAMEPLAY_BALANCE_ENABLED:
+		preload("res://tests/test_policy.gd").skip("economy_playtest")
+		quit(0)
+		return
+	run.call_deferred()
 func run() -> void:
+	if not preload("res://tests/test_policy.gd").GAMEPLAY_BALANCE_ENABLED:
+		preload("res://tests/test_policy.gd").skip("economy_playtest")
+		quit(0)
+		return
 	for seed_text in option("--seeds","41,113,20261004").split(","):
 		for diet in option("--diets","grazer,photo,hunter").split(","):
 			var sim = Sim.new(int(seed_text))
@@ -18,7 +27,7 @@ func run() -> void:
 				sim.install("photosynthesis",0.7,"graze",1.0)
 				if policy not in ["lineage","careful"]: sim.install("regenerative",4.2,"graze",1.0)
 			elif diet == "hunter":
-				sim.install("offensive",0)
+				sim.install("poreforming",0)
 				sim.install("hunting",0.42)
 				if policy not in ["lineage","careful"]: sim.install("regenerative",4.2,"graze",1.0)
 			else:

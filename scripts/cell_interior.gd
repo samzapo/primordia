@@ -63,18 +63,26 @@ func _draw() -> void:
 		draw_arc(at,atp_size*0.72,PI,PI*1.47,12,Color("fff5c7"),maxf(0.8,atp_size*0.13),true)
 	else:
 		draw_arc(at,1.5,0,TAU,12,Color("bc9459"),0.6,true)
-	# Food vacuoles and AP tokens are actual stock parcels, never extra currency.
+	# Cytoplasmic chemicals are the authoritative moving particles.
+	for packet in cell.chemistry.particles:
+		if not packet.alive: continue
+		var definition: Dictionary = cell.chemistry.Catalog.data().species[packet.species]
+		var color := Color(definition.color)
+		var size: float = 1.4+minf(2,sqrt(packet.amount)*1.5)
+		if packet.species == "catalyst": size = 3.2
+		draw_circle(packet.p,size,color)
+		if packet.species not in ["atp","adp","water"]:
+			var tip := Vector2.from_angle(packet.angle)*size*1.7
+			draw_line(packet.p,packet.p+tip,color.lightened(0.25),maxf(0.7,size*0.45),true)
+	for vacuole in cell.chemistry.vacuoles:
+		draw_arc(vacuole.p,vacuole.radius,0,TAU,20,Color("8fe3bf").lerp(Color("f497c4"),vacuole.acid),0.8,true)
 	for parcel in ecology.parcels:
-		var color := Color("f8c650") if parcel.kind == "ap" else Color("93e9af") if parcel.kind == "food" else Color("aa78c7")
-		draw_circle(parcel.p,parcel.radius*1.15,Color(color.darkened(0.4),0.60))
-		draw_circle(parcel.p,parcel.radius,color)
-		draw_circle(parcel.p-Vector2.ONE*parcel.radius*0.25,parcel.radius*0.28,color.lightened(0.65))
-	# Paired contractile vacuoles and radial canals. Osmotic anatomy is currently
-	# a visual model; it does not fabricate a second water/ATP resource balance.
+		if parcel.kind != "ap": continue
+		draw_circle(parcel.p,parcel.radius,Color("f8c650"))
+	# Contractile vacuole fill follows actual transported water and expulsion.
 	for side in [-1,1]:
 		var center := Vector2(0.02,side*0.62)*r
-		var phase := fposmod(ecology.clock*0.23+(0.5 if side < 0 else 0),1)
-		var swell := 0.35+0.65*sin(phase*PI)
+		var swell := 0.35+0.65*clampf(cell.chemistry.amount("water")/maxf(0.1,cell.growth_scale()),0,1)
 		for i in 6:
 			var ray := Vector2.from_angle(TAU*i/6)
 			draw_line(center+ray*r*0.05,center+ray*r*0.17,Color(0.55,0.94,0.93,0.30),r*0.026,true)
@@ -93,13 +101,13 @@ func _draw() -> void:
 		draw_polyline(points,Color("bc557d"),r*0.068,true)
 		draw_polyline(points,Color("ffa96a"),r*0.040,true)
 	draw_circle(at+Vector2(0.18,0.06)*r,r*0.047,Color("ffd267"))
-	# Chemistry chambers and their common outlet.
-	at = anchors.chemistry
-	for i in 3:
-		var p := at+Vector2((i-1)*0.10,abs(i-1)*0.07)*r
-		_ellipse(p,Vector2(0.063,0.13)*r,Color("235981"))
-		_ellipse(p-Vector2(0,r*0.02),Vector2(0.047,0.10)*r,Color("46dfcb"))
-		draw_circle(p-Vector2(0,r*0.055),r*0.025,Color("c8ffe1"))
+	# Template compartments are local catalyst domains with permeable outputs.
+	for node in cell.chemistry.nodes:
+		if node.compartment in ["digestive","contractile","membrane"]: continue
+		var site: Vector2 = cell.chemistry.site(node)
+		var shade := Color("6dceeb") if node.compartment == "mitochondrial" else Color("87e79e") if node.compartment == "photosynthetic" else Color("d9a5eb")
+		draw_arc(site,r*0.15,0,TAU,20,shade*Color(1,1,1,0.5),0.7,true)
+
 	at = anchors.bud
 	_ellipse(at,Vector2(0.17,0.145)*r,Color("9363ac"))
 	_ellipse(at,Vector2(0.15,0.125)*r,Color("4b3979"))
@@ -125,25 +133,3 @@ func _draw() -> void:
 		for scar in cell.lost_organs:
 			var p: Vector2 = cell.local_point(scar.a)
 			draw_arc(p,10*scar.scale,0,TAU,20,Color("ffb6ca"),1.8/game.zoom,true)
-	# ATP packets depart the visible sac; repair still leaves the nucleus.
-	for packet in cell.resource_packets:
-		if packet.delay > 0: continue
-		var p: Vector2 = packet.p
-		var color := Color("ffa8bd")
-		if packet.kind == "atp":
-			var organ: Dictionary = cell.organ_by_id(packet.organ_id)
-			var a: float = packet.a if organ.is_empty() else organ.a
-			var target: Vector2 = cell.local_point(a)*0.96
-			var original: Vector2 = Vector2(-0.15,-0.15)*cell.radius
-			var fraction := clampf(1-p.distance_to(target)/maxf(0.01,original.distance_to(target)),0,1)
-			p = anchors.atp.lerp(target,fraction)
-			color = Color("ffe071")
-		elif packet.kind == "gain":
-			var organ: Dictionary = cell.organ_by_id(packet.organ_id)
-			var target: Vector2 = cell.local_point(packet.a if organ.is_empty() else organ.a)*0.96
-			var original: Vector2 = Vector2(-0.15,-0.15)*cell.radius
-			var fraction := clampf(1-p.distance_to(target)/maxf(0.01,original.distance_to(target)),0,1)
-			var source: Vector2 = anchors.nucleus if organ.is_empty() else target
-			p = source.lerp(anchors.atp,fraction)
-			color = Color("affff0")
-		draw_circle(p,3,color)

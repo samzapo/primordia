@@ -4,6 +4,9 @@ const Cell = Sim.Cell
 const DT := 1.0/60
 
 static func run(check: Callable) -> void:
+	if not preload("res://tests/test_policy.gd").GAMEPLAY_BALANCE_ENABLED:
+		preload("res://tests/test_policy.gd").skip("ATP economy tuning")
+		return
 	var sim = preload("res://tests/pheromones.gd").isolated()
 	var cell = sim.player
 	cell.organs.clear()

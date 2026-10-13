@@ -1,6 +1,6 @@
 extends RefCounted
-## Bounded intracellular parcel dynamics. Every parcel represents existing stock;
-## motion continues in build mode but cannot award resources or advance biology.
+## Presentation-only AP blobs. Chemistry lives in CellChemistry particles.
+## Editing animation cannot award resources or advance biology.
 const MAX_FOOD := 12
 const MAX_WASTE := 8
 var parcels: Array = []
@@ -12,10 +12,7 @@ func sync(cell, ap: int) -> void:
 		parcels.clear()
 		clock = 0
 		identity = cell.id
-	var specifications := [
-		{"kind":"food","amount":maxf(0,cell.substrate),"count":mini(MAX_FOOD,ceili(maxf(0,cell.substrate)/1.5))},
-		{"kind":"waste","amount":maxf(0,cell.waste),"count":mini(MAX_WASTE,ceili(maxf(0,cell.waste)/0.4))},
-		{"kind":"ap","amount":float(maxi(0,ap)),"count":maxi(0,ap)}]
+	var specifications := [{"kind":"ap","amount":float(maxi(0,ap)),"count":maxi(0,ap)}]
 	var next: Array = []
 	for spec in specifications:
 		for i in spec.count:

@@ -20,8 +20,8 @@ func initialize(gpu) -> void:
 	multi.buffer=transforms
 	multi.custom_aabb=AABB(Vector3(-4096,-2560,-1),Vector3(8192,5120,2))
 	batch.multimesh=multi
-	var atlas := Image.create(96*11,96,false,Image.FORMAT_RGBA8)
-	for i in 11:
+	var atlas := Image.create(96*26,96,false,Image.FORMAT_RGBA8)
+	for i in 26:
 		var image: Image=ParticleArt.texture(i).get_image()
 		image.convert(Image.FORMAT_RGBA8)
 		atlas.blit_rect(image,Rect2i(0,0,96,96),Vector2i(i*96,0))

@@ -1,4 +1,5 @@
 #pragma once
+#include "chemical_catalog.h"
 // Diagnostic transport model shared with resident_particles.glsl. Never replaces
 // gameplay RNG, chemical state, contacts, feeding or background scheduling.
 #include "simulation_workers.h"
@@ -38,7 +39,7 @@ public:
     if(values.size()==0 || values.size()%12 || values.size()>100000*12 || velocity.size()!=2560 || threads<1 || threads>8) return false;
     for(int i=0;i<values.size();++i) if(!std::isfinite(values[i])) return false;
     for(int i=0;i<velocity.size();++i) if(!velocity[i].is_finite()) return false;
-    for(int i=0;i<values.size();i+=12) if(values[i+7]<0 || values[i+7]>10 || values[i+7]!=std::floor(values[i+7]) || values[i+8]<=0) return false;
+    for(int i=0;i<values.size();i+=12) if(values[i+7]<0 || values[i+7]>=primordia_chemistry::species_count || values[i+7]!=std::floor(values[i+7]) || values[i+8]<=0) return false;
     state.assign(values.ptr(),values.ptr()+values.size());flow=velocity;lanes=threads;return true;
   }
   bool advance(double elapsed,int64_t tick) {
@@ -75,7 +76,7 @@ public:
     PackedFloat32Array out;out.resize(state.size());float *dst=out.ptrw();
     for(size_t i=0;i<state.size();i+=12) {
       const float *p=state.data()+i;float co=std::cos(p[2])*p[8],si=std::sin(p[2])*p[8];
-      float values[12]={co,-si,0,wrap(p[0]-camera.x+2048.f,4096.f)-2048.f,si,co,0,wrap(p[1]-camera.y+1280.f,2560.f)-1280.f,p[7]/10.f,1,1,1};
+      float values[12]={co,-si,0,wrap(p[0]-camera.x+2048.f,4096.f)-2048.f,si,co,0,wrap(p[1]-camera.y+1280.f,2560.f)-1280.f,p[7]/float(primordia_chemistry::species_count-1),1,1,1};
       std::copy(values,values+12,dst+i);
     }
     return out;

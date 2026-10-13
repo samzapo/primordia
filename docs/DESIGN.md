@@ -370,3 +370,27 @@ beat; other notes must have an actual anatomical source. Remove anonymous
 backing music and soften other organisms. Source-local pitch-colored waves
 follow audible notes, not chemical-particle behavior. See [Revision 42](REVISION_42.md)
 and the biological motivations and explicit abstractions in [references.md](../references.md).
+
+## Revision 43 — particle-mediated intracellular chemistry
+
+The owner removes hunting spikes, requests ten times as many particles and a
+richer chemistry sandbox. Chemical transport remains exclusively particle
+based inside and outside cells. Named local pathways consume real nearby input
+particles and emit products in the cytoplasm. Wiring changes compatibility,
+not a stock or a position. Functional digestion/osmosis, finite chemical pore
+assemblies, conserved carrier/fuel handling, paid catalyst capacity, configuration
+blueprints and the existing CPU/GPU ownership options are covered by
+[Revision 43](REVISION_43.md).
+
+This supersedes prior scalar metabolism and editor-only chemical circulation.
+ATP sacs are readout metaphors; actual ATP, ADP, cofactors, metabolites and water
+are particles. Structural tissue and AP remain their existing distinct resources.
+The richer finite initial habitat is authorized independently of historical
+density-promotion gates. No new environmental food source, engine optimization
+program, world expansion or mobile export is part of this change.
+
+Owner correction, October 13, 2026: disable all tests focusing on gameplay
+balance until further notice. Preserve their source behind tests/test_policy.gd,
+print explicit skips, and continue conservation, particle/physics, elapsed-time,
+UI and backend correctness checks. Do not use a calibration/playthrough
+harness to assess survival, yields, kill rates or victory during this hold.

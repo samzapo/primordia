@@ -29,7 +29,7 @@ float sample_acid(vec2 at){
 }
 
 void store_particle(uint i,vec4 v,vec4 m){
- const float radii[11]=float[11](4.,2.5,3.,2.5,5.,3.,4.,4.,3.,3.,3.5);
+ /*CATALOG_RADII*/
  m.x=v.w<0.?0.:2.*radii[int(v.w)]*clamp(sqrt(m.y/.3),.8,1.7);
  imageStore(state,pixel(i)+ivec2(1,0),v);
  imageStore(state,pixel(i)+ivec2(2,0),m);
@@ -46,21 +46,21 @@ void main(){
  vec4 bv=motion(j),bm=matter(j);bv.xy+=impulses[j];
  float acid=sample_acid(pose(i).xy);
  bool event=false;float recycled=0.;float cue=1.;
-  bool swap_pair=(pv.w==2.&&bv.w==6.)||(pv.w==4.&&bv.w==7.)||(pv.w==1.&&(bv.w==2.||bv.w==4.))||(pv.w==4.&&bv.w==0.);
+  bool swap_pair=(pv.w==2.&&bv.w==6.)||((pv.w==4.||pv.w==11.||pv.w==12.)&&bv.w==7.)||(pv.w==1.&&(bv.w==2.||bv.w==4.))||(pv.w==4.&&bv.w==0.);
   vec4 uv=swap_pair?bv:pv,vv=swap_pair?pv:bv,um=swap_pair?bm:pm,vm=swap_pair?pm:bm;
-  if(uv.w==6.&&vv.w==2.&&acid<.9){vv.w=0.;recycled=vm.y;atomicAdd(stats[5],1u);event=true;}
-  else if(uv.w==7.&&vv.w==4.){cue=2.;uv.w=2.;um.y+=vm.y;vv.w=-1.;vm.y=0.;atomicAdd(stats[6],1u);event=true;}
+  if(uv.w==6.&&vv.w==2.&&acid<.9){vv.w=0.;vm.z=0.;recycled=vm.y;atomicAdd(stats[5],1u);event=true;}
+  else if(uv.w==7.&&(vv.w==4.||vv.w==11.||vv.w==12.)){cue=2.;uv.w=2.;um.y+=vm.y;vv.w=-1.;vm.y=0.;atomicAdd(stats[6],1u);event=true;}
   else if((uv.w==8.||uv.w==9.)&&(vv.w==8.||vv.w==9.)&&uv.w!=vv.w) {
    float used=min(um.z,vm.z);um.z-=used;vm.z-=used;
    if(um.z<=.000001)uv.w=2.;if(vm.z<=.000001)vv.w=2.;
    atomicAdd(stats[7],1u);event=true;
   }
   else if(uv.w==2.&&vv.w==1.&&vm.y>=um.y*.15&&acid<.8){
-   float amount=um.y;recycled=amount*.6;uv.w=0.;um.y=amount*.6;vv.w=5.;vm.y=amount*.4;atomicAdd(stats[8],1u);event=true;
+   float amount=um.y;recycled=amount*.6;uv.w=0.;um.z=0.;um.y=amount*.6;vv.w=5.;vm.y=amount*.4;atomicAdd(stats[8],1u);event=true;
   }
   else if(uv.w==0.&&vv.w==4.){uv.w=2.;atomicAdd(stats[9],1u);event=true;}
-  else if(uv.w==vv.w&&(uv.w==0.||uv.w==1.||uv.w==2.||uv.w==5.)&&um.y+vm.y<=1.4&&um.y+vm.y>0.) {
-   float total=um.y+vm.y;uv.xy=mix(uv.xy,vv.xy,vm.y/total);um.y=total;vv.w=-1.;vm.y=0.;atomicAdd(stats[10],1u);event=true;
+  else if(uv.w==vv.w&&(uv.w==0.||uv.w==1.||uv.w==2.||uv.w==5.)&&um.y+vm.y<=0.5&&um.y+vm.y>0.) {
+   float total=um.y+vm.y;uv.xy=mix(uv.xy,vv.xy,vm.y/total);um.y=total;um.z+=vm.z;vv.w=-1.;vm.y=0.;atomicAdd(stats[10],1u);event=true;
   }
 
  if(event){

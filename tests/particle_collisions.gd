@@ -15,8 +15,8 @@ static func fixture(backend: String, collisions: bool, hidden: bool, second_kind
 	sim.time = 0.00000001
 	sim.revision = 1
 	sim.rng.seed = 118
-	sim.spawn_particle(Sim.NUTRIENT,Vector2(4094,800),Vector2.ZERO,0.3,91)
-	sim.spawn_particle(second_kind,Vector2(2,800),Vector2.ZERO,0.3,92)
+	sim.spawn_particle(Sim.NUTRIENT,Vector2(4094,800),Vector2.ZERO,0.2,91)
+	sim.spawn_particle(second_kind,Vector2(2,800),Vector2.ZERO,0.2,92)
 	sim.particles[0].direction = Vector2.RIGHT if aligned else Vector2.LEFT
 	sim.particles[1].direction = Vector2.LEFT
 	sim.particles[0].chemical_at = 0.0
@@ -42,7 +42,7 @@ static func run(check: Callable) -> void:
 					var tag := "%s / collisions %s / hidden %s / %s" % [backend,collisions,hidden,scenario]
 					check.call(after[0].p == before[0].p and after[1].p == before[1].p,"Pair chemistry never projects positions: "+tag)
 					if scenario == "reaction":
-						check.call(after[0].alive and not after[1].alive and is_equal_approx(after[0].amount,0.6) and sim.chemistry_events.combine == 1 and sim.reaction_sparks.size() == (0 if hidden else 1),"Aligned reactions and finite mass still work: "+tag)
+						check.call(after[0].alive and not after[1].alive and is_equal_approx(after[0].amount,0.4) and sim.chemistry_events.combine == 1 and sim.reaction_sparks.size() == (0 if hidden else 1),"Aligned reactions and finite mass still work: "+tag)
 					else:
 						check.call(after[0].alive and after[1].alive and sim.reaction_sparks.is_empty(),"Wrong species/facing cannot bind: "+tag)
 						check.call((after[0].v.x < 0 and after[1].v.x > 0) if collisions else (after[0].v == Vector2.ZERO and after[1].v == Vector2.ZERO),"Only the collision comparison mode adds separation impulses: "+tag)

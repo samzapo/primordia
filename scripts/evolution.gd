@@ -9,7 +9,7 @@ const CRISIS_STARTS := [120.0,360.0,600.0]
 const CRISIS_ENDS := [360.0,600.0,810.0]
 const TIDES := [
 	{"title":"Emergence","light":1.0,"forecast":"Establish feeding, then fund a successor. Lean Current begins at 2:00."},
-	{"title":"Lean current","light":0.70,"forecast":"Hunters arrive after 30 seconds; diminished light makes feeding and reserves matter."},
+	{"title":"Lean current","light":0.70,"forecast":"Chemical predators arrive after 30 seconds; diminished light makes feeding and reserves matter."},
 	{"title":"Lean current deepens","light":0.60,"forecast":"Keep feeding through scarcity. Chemical Bloom begins at 6:00."},
 	{"title":"Chemical bloom","light":0.85,"forecast":"An incoming rival carries toxin vesicles. Neutralization, repair or avoidance can help."},
 	{"title":"Chemical bloom persists","light":0.65,"forecast":"Prepare an independent successor. Long Dusk begins at 10:00."},
@@ -27,7 +27,7 @@ var random := RandomNumberGenerator.new()
 var status := "growing"
 var ending := ""
 var light_factor := 1.0
-var exposures := {"toxin":0.0,"spike":0.0,"acid":0.0,"photo":0.0}
+var exposures := {"toxin":0.0,"pore":0.0,"acid":0.0,"photo":0.0}
 var resistance := ""
 var resistance_clock := 0.0
 var newcomer_count := 0
@@ -177,7 +177,7 @@ func advance(dt: float, sim) -> void:
 		var best := 1.0
 		resistance = ""
 		for kind in exposures:
-			var score: float = exposures[kind]/float({"toxin":50,"spike":80,"acid":3,"photo":12}[kind])
+			var score: float = exposures[kind]/float({"toxin":50,"pore":80,"acid":3,"photo":12}[kind])
 			if score > best: best = score; resistance = kind
 			exposures[kind] = 0.0
 		resistance_clock = clock+30
@@ -236,7 +236,7 @@ func newcomer(cell, sim) -> void:
 	elif tide >= 5 and newcomer_count%2 == 0 and cell.role == "hunter": kind = "protection"
 	var adaptive := clock >= resistance_clock and newcomer_count%3 == 0 and counter_budget > 0 and resistance != ""
 	if adaptive:
-		kind = {"toxin":"neutralizing","spike":"protection","acid":"regenerative","photo":"cilia"}.get(resistance,kind)
+		kind = {"toxin":"neutralizing","pore":"neutralizing","acid":"regenerative","photo":"cilia"}.get(resistance,kind)
 	if kind != "":
 		for i in 12:
 			if cell.biomass < cell.organ_cost(kind)+2: break
@@ -257,5 +257,5 @@ func forecast() -> String:
 	note += TIDES[tide].forecast
 	if tide < 6: note += "\nNext tide: %s in %ds." % [TIDES[tide+1].title,maxi(0,ceili((tide+1)*TIDE_SECONDS-clock))]
 	if resistance != "":
-		note += "\nEmerging response: "+{"toxin":"toxin neutralizers","spike":"protective cortex","acid":"buffer-producing repair bodies","photo":"competing grazers"}[resistance]
+		note += "\nEmerging response: "+{"toxin":"toxin neutralizers","pore":"pore inhibitors","acid":"buffer-producing repair bodies","photo":"competing grazers"}[resistance]
 	return note

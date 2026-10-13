@@ -263,7 +263,7 @@ func run(test_host) -> void:
 	settle()
 	cell = scene.world.player
 	scene.cell_ui.open_context({"kind":"chemistry"})
-	expect(scene.cell_ui.choices.size() == 4,"Chemistry factory exposes exactly the existing four organs")
+	expect(scene.cell_ui.choices.size() >= 5,"Chemistry factory retains the existing organs and exposes the pathway editor")
 	scene.cell_ui.close_context()
 	key(KEY_BRACKETRIGHT)
 	key(KEY_ENTER)
@@ -419,7 +419,7 @@ func _particles() -> void:
 	scene.camera_offset = Vector2.ZERO
 	scene.focus_animating = false
 	for kind in Sim.SPECIES_COUNT:
-		sim.spawn_particle(kind,sim.player.position+Vector2(170+kind*22,150),Vector2.ZERO,0.3)
+		sim.spawn_particle(kind,sim.player.position+Vector2(170+(kind%13)*22,150+(kind/13)*40),Vector2.ZERO,0.3)
 		var p: Dictionary = sim.particles[-1]
 		p.previous_angle = 0
 		p.angle = PI/2
@@ -681,7 +681,7 @@ func _lineage() -> void:
 	expect(bounds.encloses(scene.cell_ui.tip_box.get_global_rect()),"Nucleus goals remain inside the viewport after 175% text reflow")
 	sim.evolution.clock = 620
 	sim.evolution.tide = 5
-	sim.evolution.resistance = "spike"
+	sim.evolution.resistance = "pore"
 	for i in 4:
 		scene._process(DT)
 		await host.process_frame

@@ -31,12 +31,12 @@ float sample_acid(vec2 at){
 uint hash_key(uint v){v^=v>>16;v*=0x7feb352du;v^=v>>15;v*=0x846ca68bu;return v^(v>>16);}
 bool eligible(float a,float b,vec4 am,vec4 bm,float acid){
  if((a==6.&&b==2.)||(a==2.&&b==6.))return acid<.9;
- if((a==7.&&b==4.)||(a==4.&&b==7.))return true;
+ if((a==7.&&(b==4.||b==11.||b==12.))||((a==4.||a==11.||a==12.)&&b==7.))return true;
  if((a==8.&&b==9.)||(a==9.&&b==8.))return min(am.z,bm.z)>0.;
  if(a==2.&&b==1.)return bm.y>=am.y*.15&&acid<.8;
  if(a==1.&&b==2.)return am.y>=bm.y*.15&&acid<.8;
  if((a==0.&&b==4.)||(a==4.&&b==0.))return true;
- return a==b&&(a==0.||a==1.||a==2.||a==5.)&&am.y+bm.y<=1.4&&am.y+bm.y>0.;
+ return a==b&&(a==0.||a==1.||a==2.||a==5.)&&am.y+bm.y<=0.5&&am.y+bm.y>0.;
 }
 void main(){
  uint i=gl_GlobalInvocationID.x;if(i>=pc.count)return;

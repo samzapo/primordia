@@ -12,7 +12,7 @@ func organic(sim,packets: Array) -> float:
 	for cell in sim.cells:
 		if not cell.dead: total+=cell.organic_mass()
 	for p in packets:
-		if p.alive and p.kind not in [1,3]: total+=p.amount
+		if p.alive: total+=p.amount*Simulation.Catalog.material(p.kind)
 	return total
 func start(sim,capacity: int=8192):
 	var bridge=Ecology.new()

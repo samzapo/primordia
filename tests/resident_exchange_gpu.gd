@@ -120,7 +120,7 @@ func oxygen_and_carbon() -> void:
 	var cell=Cell.new(4,Vector2(600,500))
 	cell.add_organ("photosynthesis",0,"graze",false)
 	cell.oxygen=cell.oxygen_capacity()-0.1
-	cell.carbon=30*cell.growth_scale()-0.15
+	cell.carbon=float(preload("res://scripts/chemistry_catalog.gd").data().ecology.carbon_capacity)*cell.growth_scale()-0.15
 	var data:=packet(1,cell.position+Vector2(49,0),0.3)
 	data.append_array(packet(5,cell.position+Vector2(49,0),0.3))
 	var gpu=await setup(data)

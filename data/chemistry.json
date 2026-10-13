@@ -1,0 +1,514 @@
+{
+  "version": 1,
+  "external_species": [
+    {
+      "id": 0,
+      "key": "nutrient",
+      "name": "Nutrient",
+      "radius": 4,
+      "decay": 0.003,
+      "color": "91f04c"
+    },
+    {
+      "id": 1,
+      "key": "oxygen",
+      "name": "Oxygen",
+      "radius": 2.5,
+      "decay": 0.008,
+      "color": "22d7f2"
+    },
+    {
+      "id": 2,
+      "key": "waste",
+      "name": "Waste",
+      "radius": 3,
+      "decay": 0.006,
+      "color": "a955d0"
+    },
+    {
+      "id": 3,
+      "key": "pheromone",
+      "name": "Pheromone",
+      "radius": 2.5,
+      "decay": 0,
+      "color": "ffb9cb"
+    },
+    {
+      "id": 4,
+      "key": "toxin",
+      "name": "Toxin",
+      "radius": 5,
+      "decay": 0.1,
+      "color": "ff407b"
+    },
+    {
+      "id": 5,
+      "key": "carbon",
+      "name": "Carbon",
+      "radius": 3,
+      "decay": 0.001,
+      "color": "f4a755"
+    },
+    {
+      "id": 6,
+      "key": "enzyme",
+      "name": "Enzyme",
+      "radius": 4,
+      "decay": 0.02,
+      "color": "ffe34a"
+    },
+    {
+      "id": 7,
+      "key": "antitoxin",
+      "name": "Antitoxin",
+      "radius": 4,
+      "decay": 0.015,
+      "color": "4094ff"
+    },
+    {
+      "id": 8,
+      "key": "acid",
+      "name": "Acid",
+      "radius": 3,
+      "decay": 0.008,
+      "color": "f34db1"
+    },
+    {
+      "id": 9,
+      "key": "buffer",
+      "name": "Buffer",
+      "radius": 3,
+      "decay": 0.008,
+      "color": "2ce3bb"
+    },
+    {
+      "id": 10,
+      "key": "decoy",
+      "name": "Decoy",
+      "radius": 3.5,
+      "decay": 0.08,
+      "color": "ba50ee"
+    },
+    {
+      "id": 11,
+      "key": "tag",
+      "name": "Surface tag",
+      "radius": 3.5,
+      "decay": 0.04,
+      "color": "ff985c"
+    },
+    {
+      "id": 12,
+      "key": "pore",
+      "name": "Pore subunit",
+      "radius": 4,
+      "decay": 0.03,
+      "color": "ffdc83"
+    },
+    {
+      "id": 13,
+      "key": "glucose",
+      "name": "Glucose",
+      "radius": 3.0,
+      "decay": 0.005,
+      "color": "a0f44e"
+    },
+    {
+      "id": 14,
+      "key": "pyruvate",
+      "name": "Pyruvate",
+      "radius": 3.0,
+      "decay": 0.005,
+      "color": "ffd783"
+    },
+    {
+      "id": 15,
+      "key": "lactate",
+      "name": "Lactate",
+      "radius": 3.0,
+      "decay": 0.005,
+      "color": "ff88b4"
+    },
+    {
+      "id": 16,
+      "key": "precursor",
+      "name": "Building material",
+      "radius": 3.0,
+      "decay": 0.005,
+      "color": "c0e8a1"
+    },
+    {
+      "id": 17,
+      "key": "salvage",
+      "name": "Recycled material",
+      "radius": 3.0,
+      "decay": 0.005,
+      "color": "ac83bd"
+    },
+    {
+      "id": 18,
+      "key": "catalyst_a",
+      "name": "Catalyst A",
+      "radius": 3.0,
+      "decay": 0.005,
+      "color": "7de4f1"
+    },
+    {
+      "id": 19,
+      "key": "catalyst_b",
+      "name": "Catalyst B",
+      "radius": 3.0,
+      "decay": 0.005,
+      "color": "ffb8f2"
+    },
+    {
+      "id": 20,
+      "key": "nad",
+      "name": "NAD\u207a",
+      "radius": 2.0,
+      "decay": 0.005,
+      "color": "9f94ec"
+    },
+    {
+      "id": 21,
+      "key": "nadh",
+      "name": "NADH",
+      "radius": 2.0,
+      "decay": 0.005,
+      "color": "7ad9ec"
+    },
+    {
+      "id": 22,
+      "key": "atp",
+      "name": "ATP",
+      "radius": 2.0,
+      "decay": 0.03,
+      "color": "ffd267"
+    },
+    {
+      "id": 23,
+      "key": "adp",
+      "name": "ADP",
+      "radius": 2.0,
+      "decay": 0.03,
+      "color": "9a9067"
+    },
+    {
+      "id": 24,
+      "key": "catalyst",
+      "name": "Catalytic protein",
+      "radius": 3.0,
+      "decay": 0.03,
+      "color": "ffe34a"
+    },
+    {
+      "id": 25,
+      "key": "water",
+      "name": "Water",
+      "radius": 2.0,
+      "decay": 0.005,
+      "color": "b5eff2"
+    }
+  ],
+  "ecology": {
+    "seed_packets": 10,
+    "packet_quantum": 0.18,
+    "merge_limit": 0.5,
+    "photosynthesis_rate": 16,
+    "carbon_capacity": 90,
+    "visible_target": 7000
+  },
+  "species": {
+    "glucose": {
+      "name": "Glucose",
+      "material": 1,
+      "potential": 7.5,
+      "color": "a0f44e",
+      "quantum": 0.2
+    },
+    "pyruvate": {
+      "name": "Pyruvate",
+      "material": 1,
+      "potential": 5.5,
+      "color": "ffd783",
+      "quantum": 0.2
+    },
+    "lactate": {
+      "name": "Lactate",
+      "material": 1,
+      "potential": 5.5,
+      "color": "ff88b4",
+      "quantum": 0.2
+    },
+    "precursor": {
+      "name": "Building material",
+      "material": 1,
+      "potential": 7.5,
+      "color": "c0e8a1",
+      "quantum": 0.2
+    },
+    "salvage": {
+      "name": "Recycled material",
+      "material": 1,
+      "potential": 0,
+      "color": "ac83bd",
+      "quantum": 0.2
+    },
+    "catalyst_a": {
+      "name": "Catalyst A",
+      "material": 1,
+      "potential": 7.5,
+      "color": "7de4f1",
+      "quantum": 0.05
+    },
+    "catalyst_b": {
+      "name": "Catalyst B",
+      "material": 1,
+      "potential": 7.5,
+      "color": "ffb8f2",
+      "quantum": 0.05
+    },
+    "oxygen": {
+      "name": "Oxygen",
+      "material": 0,
+      "potential": 0,
+      "color": "22d7f2",
+      "quantum": 0.4
+    },
+    "carbon": {
+      "name": "Dissolved carbon",
+      "material": 1,
+      "potential": 0,
+      "color": "f4a755",
+      "quantum": 0.4
+    },
+    "waste": {
+      "name": "Waste",
+      "material": 1,
+      "potential": 0,
+      "color": "a955d0",
+      "quantum": 0.2
+    },
+    "biomass": {
+      "name": "Tissue",
+      "material": 1,
+      "potential": 7.5,
+      "color": "edbaff",
+      "quantum": 0.2
+    },
+    "nad": {
+      "name": "NAD\u207a",
+      "material": 0,
+      "potential": 0,
+      "color": "9f94ec",
+      "quantum": 0.05
+    },
+    "nadh": {
+      "name": "NADH",
+      "material": 0,
+      "potential": 0,
+      "color": "7ad9ec",
+      "quantum": 0.05
+    },
+    "food": {
+      "name": "Food",
+      "material": 1,
+      "potential": 7.5,
+      "quantum": 0.2,
+      "color": "93e9af"
+    },
+    "atp": {
+      "name": "ATP",
+      "material": 0,
+      "potential": 1,
+      "quantum": 1,
+      "color": "ffd267"
+    },
+    "adp": {
+      "name": "ADP",
+      "material": 0,
+      "potential": 0,
+      "quantum": 1,
+      "color": "9a9067"
+    },
+    "catalyst": {
+      "name": "Catalytic protein",
+      "material": 1,
+      "potential": 7.5,
+      "quantum": 0.025,
+      "color": "ffe34a"
+    },
+    "water": {
+      "name": "Water",
+      "material": 0,
+      "potential": 0,
+      "quantum": 0.04,
+      "color": "b5eff2"
+    },
+    "reserved_atp": {
+      "name": "Reserved ATP",
+      "material": 0,
+      "potential": 1,
+      "quantum": 1,
+      "color": "ffd267"
+    }
+  },
+  "modules": [
+    {
+      "id": "digestion",
+      "name": "Food vacuole",
+      "compartment": "digestive",
+      "rate": 2.4,
+      "inputs": {},
+      "outputs": {
+        "glucose": 0.85,
+        "precursor": 0.1,
+        "waste": 0.05
+      },
+      "atp": -0.08,
+      "action": "digest"
+    },
+    {
+      "id": "glycolysis",
+      "name": "Glycolysis",
+      "compartment": "cytosol",
+      "rate": 2.2,
+      "inputs": {
+        "glucose": 1,
+        "nad": 0.1
+      },
+      "outputs": {
+        "pyruvate": 1,
+        "nadh": 0.1
+      },
+      "atp": 2
+    },
+    {
+      "id": "respiration",
+      "name": "Respiration",
+      "compartment": "mitochondrial",
+      "rate": 2,
+      "inputs": {
+        "pyruvate": 1,
+        "oxygen": 1,
+        "nadh": 0.1
+      },
+      "outputs": {
+        "carbon": 0.8,
+        "precursor": 0.15,
+        "waste": 0.05,
+        "nad": 0.1
+      },
+      "atp": 4
+    },
+    {
+      "id": "fermentation",
+      "name": "Lactate fermentation",
+      "compartment": "cytosol",
+      "rate": 2,
+      "inputs": {
+        "pyruvate": 1,
+        "nadh": 0.1
+      },
+      "outputs": {
+        "lactate": 1,
+        "nad": 0.1
+      },
+      "atp": 0
+    },
+    {
+      "id": "biosynthesis",
+      "name": "Tissue synthesis",
+      "compartment": "cytosol",
+      "rate": 1.2,
+      "inputs": {
+        "precursor": 1
+      },
+      "outputs": {
+        "biomass": 1
+      },
+      "atp": -0.5
+    },
+    {
+      "id": "salvage",
+      "name": "Salvage activation",
+      "compartment": "cytosol",
+      "rate": 0.5,
+      "inputs": {
+        "salvage": 1
+      },
+      "outputs": {
+        "precursor": 1
+      },
+      "atp": -7.5
+    },
+    {
+      "id": "transport",
+      "name": "Excretion",
+      "compartment": "membrane",
+      "rate": 1.5,
+      "inputs": {
+        "lactate": 1
+      },
+      "outputs": {
+        "waste": 1
+      },
+      "atp": -0.02
+    },
+    {
+      "id": "osmosis",
+      "name": "Contractile vacuoles",
+      "compartment": "contractile",
+      "rate": 1,
+      "inputs": {},
+      "outputs": {},
+      "atp": 0,
+      "action": "water"
+    },
+    {
+      "id": "photosynthesis",
+      "name": "Photosynthesis",
+      "compartment": "photosynthetic",
+      "rate": 1,
+      "inputs": {
+        "carbon": 1
+      },
+      "outputs": {
+        "glucose": 0.65,
+        "oxygen": 2.5,
+        "biomass": 0.35
+      },
+      "atp": 0,
+      "action": "light"
+    },
+    {
+      "id": "autocatalysis",
+      "name": "Autocatalytic condensate",
+      "compartment": "condensate",
+      "rate": 0.25,
+      "inputs": {
+        "precursor": 1
+      },
+      "outputs": {
+        "catalyst_a": 0.5,
+        "catalyst_b": 0.5
+      },
+      "atp": -0.25,
+      "action": "autocatalysis"
+    },
+    {
+      "id": "adenylate",
+      "name": "Carrier synthesis",
+      "compartment": "cytosol",
+      "rate": 0.6,
+      "inputs": {
+        "precursor": 0.02
+      },
+      "outputs": {
+        "waste": 0.02,
+        "adp": 1
+      },
+      "atp": -0.15
+    }
+  ]
+}

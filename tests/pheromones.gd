@@ -29,7 +29,7 @@ static func run(check: Callable) -> void:
 	var report: Dictionary = p.report.duplicate(true)
 	prey.position += Vector2(600,80)
 	prey.body = 900
-	prey.add_organ("offensive",2,"graze",false)
+	prey.add_organ("poreforming",2,"graze",false)
 	listen(sim)
 	check.call(sim.player.target_id == prey.id and sim.player.target_position == report.at,"Pursuit uses the emitted location and size, never the live source")
 	check.call(p.report == report and not report.hostile,"Emission metadata remains immutable when the creature changes")

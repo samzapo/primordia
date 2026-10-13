@@ -1,4 +1,5 @@
 extends RefCounted
+const Catalog=preload("res://scripts/chemistry_catalog.gd")
 ## Main-device resident particles. All RD work is ordered on the render thread.
 ## No synchronous readback in advance(); snapshots are validation-only.
 signal ready(ok: bool, reason: String)
@@ -214,7 +215,7 @@ func _reserve_accounts(cells: Array) -> bool:
 	var capacities: Array[Vector3]=[]
 	for cell in cells:
 		ids.append(cell.id);instances.append(cell.get_instance_id())
-		capacities.append(Vector3(cell.gut_capacity(),cell.oxygen_capacity(),30*cell.growth_scale()))
+		capacities.append(Vector3(cell.gut_capacity(),cell.oxygen_capacity(),float(preload("res://scripts/chemistry_catalog.gd").data().ecology.carbon_capacity)*cell.growth_scale()))
 	if _accounts_started:
 		return ids==_account_ids and instances==_account_instances and capacities==_account_caps
 	_account_ids=ids;_account_instances=instances;_account_caps=capacities
@@ -232,6 +233,7 @@ func exchange(cells: Array, emissions: Array=[], handles: Array=[], asynchronous
 	var batch:=Exchange.prepare(cells,emissions,handles,options.get("feeding",true),options.get("coarse",{}))
 	if batch.has("error"): exchange_error=batch.error;return false
 	batch["scope"]=options.get("scope",Vector4(0,0,-1,-1))
+	batch["count_scope"]=options.get("count_scope",batch.scope)
 	batch["chemistry"]=chemistry_enabled and options.get("chemistry",true)
 	batch["summaries"]=options.get("summaries",false)
 	batch["projection"]=options.get("projection",true)
@@ -363,7 +365,7 @@ func initialize(values: PackedFloat32Array, velocity: PackedVector2Array, metada
 		for j in 12:
 			if not is_finite(values[k+j]):
 				_ready_main.call_deferred(false,"Nonfinite particle state");return
-		if values[k+7]<-1 or values[k+7]>10 or values[k+7]!=floor(values[k+7]) or values[k+9]<0 or values[k+10]<0 or (values[k+7]>=0 and (values[k+8]<=0 or values[k+8]>17)):
+		if values[k+7]<-1 or values[k+7]>25 or values[k+7]!=floor(values[k+7]) or values[k+9]<0 or values[k+10]<0 or (values[k+7]>=0 and (values[k+8]<=0 or values[k+8]>17)):
 			_ready_main.call_deferred(false,"Invalid particle kind, material or diameter");return
 		if exchange_enabled and values[k+11]!=0:
 			_ready_main.call_deferred(false,"Product reserves are not supported by the exchange prototype");return
@@ -406,7 +408,7 @@ func _initialize_rd(bytes: PackedByteArray, velocities: PackedByteArray) -> void
 		_ready_main.call_deferred(false,"RGBA32F storage/sampling unsupported")
 		return
 	var source := RDShaderSource.new()
-	source.source_compute = _source
+	source.source_compute = Catalog.glsl(_source)
 	var spirv := rd.shader_compile_spirv_from_source(source)
 	if spirv.compile_error_compute != "":
 		_ready_main.call_deferred(false,spirv.compile_error_compute)
@@ -475,7 +477,7 @@ func _initialize_contacts() -> bool:
 	rd.buffer_update(contact_buffers[7],0,acid.size()*4,acid.to_byte_array())
 	for text in contact_sources:
 		var source := RDShaderSource.new()
-		source.source_compute=text
+		source.source_compute=Catalog.glsl(text)
 		var spirv := rd.shader_compile_spirv_from_source(source)
 		if spirv.compile_error_compute!="":
 			push_error(spirv.compile_error_compute);return false

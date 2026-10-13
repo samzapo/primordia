@@ -1,7 +1,7 @@
 extends RefCounted
 ## Read-only musical observations. Rhythm is scheduled in audio sample frames.
 const Synth = preload("res://scripts/music_synth.gd")
-const KINDS := ["propulsion","protection","offensive","regenerative","feeding","sensing","photosynthesis","toxin","neutralizing","acidifying","hunting","cilia"]
+const KINDS := ["propulsion","protection","poreforming","regenerative","feeding","sensing","photosynthesis","toxin","neutralizing","acidifying","hunting","cilia"]
 const INSTRUMENTS := [4,5,6,7,8,9,10,11,12,13,9,16]
 const PATTERNS := [
 	[2,6,10,14], [0,7,12], [0,3,6,10,14], [3,11],

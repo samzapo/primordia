@@ -1,3 +1,4 @@
+#include "chemical_catalog.h"
 #include "music_mixer.h"
 #include "simulation_workers.h"
 #include "mutual_matching.h"
@@ -348,7 +349,7 @@ class PrimordiaKernels : public RefCounted {
   std::vector<int> packet_touched;
   PackedVector2Array packet_positions;
   std::vector<RenderPacket> render_packets;
-  std::array<std::vector<std::array<float,12>>,11> render_instances;
+  std::array<std::vector<std::array<float,12>>,primordia_chemistry::species_count> render_instances;
 
   // The pool owns hot state. Metadata is sparse and never a second mutable pose.
   bool pool_enabled=false;
@@ -411,6 +412,7 @@ class PrimordiaKernels : public RefCounted {
       if (key==keys->v) return v.v;
       if (key==keys->direction) return v.dir;
       if (key==keys->amount) return v.amount;
+      if (key==keys->capacity) return v.capacity;
       if (key==keys->angle) return v.angle;
       if (key==keys->previous_angle) return v.previous_angle;
       return slot->d.get(key,fallback);
@@ -425,6 +427,7 @@ class PrimordiaKernels : public RefCounted {
       auto &v=slot->value;
       if (key==keys->alive) v.alive=value;
       else if (key==keys->amount) v.amount=value;
+      else if (key==keys->capacity) v.capacity=value;
       else if (key==keys->p) v.p=value;
       else if (key==keys->previous) v.previous=value;
       else slot->d[key]=value;
@@ -513,10 +516,12 @@ protected:
     ClassDB::bind_method(D_METHOD("packet_regions"), &PrimordiaKernels::packet_regions);
     ClassDB::bind_method(D_METHOD("pool_needed"), &PrimordiaKernels::pool_needed);
     ClassDB::bind_method(D_METHOD("pool_decoys"), &PrimordiaKernels::pool_decoys);
+    ClassDB::bind_method(D_METHOD("pool_surface_contacts","ids","cells","inherited","camera","half"), &PrimordiaKernels::pool_surface_contacts);
     ClassDB::bind_method(D_METHOD("pool_toxins"), &PrimordiaKernels::pool_toxins);
     ClassDB::bind_method(D_METHOD("pool_exposure"), &PrimordiaKernels::pool_exposure);
     ClassDB::bind_method(D_METHOD("pool_inspection"), &PrimordiaKernels::pool_inspection);
     ClassDB::bind_method(D_METHOD("pool_material"), &PrimordiaKernels::pool_material);
+    ClassDB::bind_method(D_METHOD("particle_census","particles","ids","center","half"), &PrimordiaKernels::particle_census);
     ClassDB::bind_method(D_METHOD("packet_begin", "particles"), &PrimordiaKernels::packet_begin);
     ClassDB::bind_method(D_METHOD("packet_end"), &PrimordiaKernels::packet_end);
     ClassDB::bind_method(D_METHOD("packet_positions"), &PrimordiaKernels::get_packet_positions);
@@ -631,6 +636,9 @@ public:
     if (d.has("report")) s.d["report"]=Dictionary(d["report"]).duplicate(true);
     if (d.has("expires_at")) s.d["expires_at"]=d["expires_at"];
     if (d.has(keys.capacity)) v.capacity=d[keys.capacity];
+    if (d.has(keys.angle)) v.angle=d[keys.angle];
+    if (d.has(keys.previous_angle)) v.previous_angle=d[keys.previous_angle];
+    if (d.has(keys.direction)) v.dir=d[keys.direction];
     if (d.has(keys.transport_at)) { v.transport_at=d[keys.transport_at]; s.has_transport_clock=true; }
     if (d.has(keys.alive)) v.alive=d[keys.alive];
   }
@@ -813,9 +821,9 @@ public:
     ++pool_batches;
     for (int k=0;k<ids.size();++k) {
       const auto &s=packet_slots[int64_t(ids[k])]; const auto &p=s.value;
-      if (!p.alive || p.kind!=wanted || (!coarse && activity(p.p,camera,half)<=0)) continue;
+      if (!p.alive || (wanted==4 ? p.kind!=4 && p.kind!=11 && p.kind!=12 : p.kind!=wanted) || (!coarse && activity(p.p,camera,half)<=0)) continue;
       int owner=s.d.get("owner",-1);
-      if (wanted==4 && int(inherited.get(owner,owner))==lineage) continue;
+      if (wanted==4 && (p.kind!=7 && int(inherited.get(owner,owner))==lineage)) continue;
       if (perception_delta(at,p.p).length_squared()<=reach*reach) return true;
     }
     return false;
@@ -833,6 +841,22 @@ public:
       organ["blocked"]=std::min(1.,double(organ["blocked"])+.65);
       cell->set("waste",double(cell->get("waste"))+p.amount); p.alive=false;
       cell->set("render_revision",int(cell->get("render_revision"))+1);
+    }
+  }
+  void pool_surface_contacts(TypedArray<int64_t> ids,Array cells,Dictionary inherited,Vector2 camera,Vector2 half) {
+    ++pool_batches;
+    for (int k=0;k<ids.size();++k) {
+      auto &slot=packet_slots[int64_t(ids[k])]; auto &p=slot.value;
+      if (!p.alive || (p.kind!=7 && p.kind!=11 && p.kind!=12) || activity(p.p,camera,half)<=0) continue;
+      int owner=slot.d.get("owner",-1);
+      for (int i=0;i<cells.size();++i) {
+        Object *cell=cells[i];
+        if (bool(cell->get("dead")) || double(cell->get("activity"))<=0) continue;
+        if (p.kind!=7 && int(cell->call("lineage_id"))==int(inherited.get(owner,owner))) continue;
+        Vector2 d=perception_delta(cell->get("position"),p.p);
+        if (d.length()>double(cell->call("extent"))+5 || d.length()>double(cell->call("support",d.angle()))+5 || p.dir.dot(-d.normalized())<.5) continue;
+        if (bool(cell->call("accept_surface",p.kind,p.amount,d.angle(),owner))) {p.alive=false;break;}
+      }
     }
   }
   void pool_toxins(TypedArray<int64_t> ids,Array cells,Dictionary cell_bins,bool spatial,
@@ -865,9 +889,13 @@ public:
     int lineage=cell->call("lineage_id"); Array organs=cell->get("organs");
     for (int k=0;k<ids.size();++k) {
       auto &s=packet_slots[int64_t(ids[k])]; auto &p=s.value; int owner=s.d.get("owner",-1);
-      if (!p.alive || (p.kind!=4 && p.kind!=10) || activity(p.p,camera,half)>0 || int(inherited.get(owner,owner))==lineage) continue;
+      if (!p.alive || (p.kind!=4 && p.kind!=10 && p.kind!=7 && p.kind!=11 && p.kind!=12) || activity(p.p,camera,half)>0 || (p.kind!=7 && int(inherited.get(owner,owner))==lineage)) continue;
       Vector2 d=perception_delta(at,p.p);
       if (d.length()>radius || rng->randf()>=1-std::exp(-2*std::max(0.,dt))) continue;
+      if (p.kind==7 || p.kind==11 || p.kind==12) {
+        if (p.dir.dot(-d.normalized())<.5 || !bool(cell->call("accept_surface",p.kind,p.amount,d.angle(),owner))) continue;
+        p.alive=false; continue;
+      }
       if (p.kind==10) {
         bool bound=false;
         for (int i=0;i<organs.size();++i) {
@@ -891,7 +919,7 @@ public:
   }
   Array pool_inspection(TypedArray<int64_t> ids,Vector2 at,double alpha,int revision,double time,double zoom) {
     Array out;
-    static const double radii[]={4,2.5,3,2.5,5,3,4,4,3,3,3.5};
+    const auto &radii = primordia_chemistry::radii;
     for (int k=0;k<ids.size();++k) {
       int id=ids[k]; const auto &s=packet_slots[id]; const auto &p=s.value;
       if (!p.alive || (p.kind==3 && double(s.d.get("expires_at",0.))<=time)) continue;
@@ -905,9 +933,22 @@ public:
   }
   double pool_material() const {
     double total=0;
-    for (const auto &s : packet_slots) if (s.value.alive && s.value.kind!=1 && s.value.kind!=3)
-      total+=s.value.amount+double(s.d.get("product",0.));
+    for (const auto &s : packet_slots) if (s.value.alive)
+      total+=s.value.amount*primordia_chemistry::material[s.value.kind]+double(s.d.get("product",0.));
     return total;
+  }
+
+  Dictionary particle_census(Array particles, TypedArray<int64_t> ids, Vector2 center, Vector2 half) {
+    int chemicals=0, material=0, signals=0;
+    for (int k=0;k<ids.size();++k) {
+      auto p=access(particles,int64_t(ids[k]));
+      Vector2 d=delta(center,p.position());
+      if (!p.alive() || std::abs(d.x)>half.x || std::abs(d.y)>half.y) continue;
+      if (p.kind()==3) ++signals;
+      else ++chemicals;
+      if (primordia_chemistry::material[p.kind()]>0) ++material;
+    }
+    Dictionary out;out["chemicals"]=chemicals;out["material"]=material;out["signals"]=signals;return out;
   }
 
   void packet_begin(Array particles) {
@@ -1217,7 +1258,7 @@ public:
       render_source=particles; render_revision=revision; render_count=particles.size();
       ++render_epoch; render_packets.resize(particles.size());
     }
-    static const double radii[] = {4, 2.5, 3, 2.5, 5, 3, 4, 4, 3, 3, 3.5};
+    const auto &radii = primordia_chemistry::radii;
     for (int k = 0; k < ids.size(); ++k) {
       int id=ids[k];
       RenderPacket fresh, *pose=pool_enabled ? &fresh : cache ? &render_packets[id] : &fresh;
@@ -1291,8 +1332,8 @@ public:
     }
     Array out;
     PackedInt32Array counts;
-    counts.resize(11);
-    for (int kind = 0; kind < 11; ++kind) {
+    counts.resize(primordia_chemistry::species_count);
+    for (int kind = 0; kind < primordia_chemistry::species_count; ++kind) {
       int count = instances[kind].size(),
           capacity = std::max(1, capacities[kind]);
       while (capacity < count)
@@ -1347,7 +1388,7 @@ public:
            substrate = body->get("substrate"), eaten = body->get("eaten"),
            foreign = body->get("foreign_intake"), oxygen = body->get("oxygen"),
            carbon = body->get("carbon"), gut = body->call("gut_capacity"),
-           oxygen_cap = body->call("oxygen_capacity"), carbon_cap = 30 * double(body->call("growth_scale"));
+           oxygen_cap = body->call("oxygen_capacity"), carbon_cap = primordia_chemistry::carbon_capacity * double(body->call("growth_scale"));
     int owner = body->get("id");
     bool photo = int(body->call("count","photosynthesis")) > 0;
     bool solid = bool(habitat->get("enabled")) && !bool(habitat->get("particles_permeable"));
@@ -1372,6 +1413,10 @@ public:
         if (bool(moved[2])) continue;
       }
       double taken = std::min(p.amount(),capacity);
+      double available_fuel = double(p.get(keys.capacity,p.amount()));
+      double fuel = kind==0 ? std::min(available_fuel,p.amount())*taken/std::max(.00000001,p.amount()) : taken;
+      body->call("receive_particle",kind,taken,fuel,at);
+      if (kind==0) p.set(keys.capacity,std::max(0.,available_fuel-fuel));
       p.set(keys.amount,p.amount()-taken);
       invalidate_particle_render(int64_t(ids[k]));
       if (p.amount() <= .000001) p.set(keys.alive,false);
@@ -1397,7 +1442,7 @@ public:
     double substrate = body->get("substrate"), eaten = body->get("eaten"),
            foreign = body->get("foreign_intake"), oxygen = body->get("oxygen"),
            carbon = body->get("carbon"), gut = body->call("gut_capacity"),
-           oxygen_cap = body->call("oxygen_capacity"), carbon_cap = 30 * double(body->call("growth_scale"));
+           oxygen_cap = body->call("oxygen_capacity"), carbon_cap = primordia_chemistry::carbon_capacity * double(body->call("growth_scale"));
     int owner = body->get("id");
     bool photo = int(body->call("count","photosynthesis")) > 0;
     double angle = body->get("angle"), extent = body->call("extent");
@@ -1452,6 +1497,12 @@ public:
         }
       }
       if (!handled) continue;
+      if (taken > 0) {
+        double available_fuel = double(p.get(keys.capacity,p.amount()));
+        double fuel = kind==0 ? std::min(available_fuel,p.amount())*taken/std::max(.00000001,p.amount()) : taken;
+        body->call("receive_particle",kind,taken,fuel,at);
+        if (kind==0) p.set(keys.capacity,std::max(0.,available_fuel-fuel));
+      }
       if (taken > 0) p.set(keys.amount,p.amount()-taken);
       invalidate_particle_render(int64_t(ids[k]));
       if (p.amount() <= .000001) p.set(keys.alive,false);
@@ -1817,9 +1868,8 @@ public:
                        PackedFloat32Array acid, Vector2 camera, Vector2 half,
                        double dt, int revision,
                        Ref<RandomNumberGenerator> rng, double clock, bool background, bool dirty_writes, bool collisions, bool tight_bounds, bool lazy_acid) {
-    static const double radii[] = {4, 2.5, 3, 2.5, 5, 3, 4, 4, 3, 3, 3.5};
-    static const double decay[] = {.003, .008, .006, 0.0,  .1, .001,
-                                   .02,  .015, .008, .008, .08};
+    const auto &radii = primordia_chemistry::radii;
+    const auto &decay = primordia_chemistry::decay;
     static const char *names[] = {"decay", "combine", "recycle",   "detox",
                                   "spoil", "enzyme",  "neutralize"};
     std::array<int, 7> events{};
@@ -1927,8 +1977,7 @@ public:
           p.kind = 2;
       }
       if (rng->randf() < 1 - std::exp(-decay[p.kind] * t)) {
-        if (p.kind != 1 && p.kind != 3)
-          loss += p.amount;
+        loss += p.amount*primordia_chemistry::material[p.kind];
         p.alive = false;
         ++events[0];
         continue;
@@ -1964,16 +2013,17 @@ public:
             a = acid_sample(acid, p.p);
           Particle *u = &p, *v = &b;
           if ((u->kind == 2 && v->kind == 6) ||
-              (u->kind == 4 && v->kind == 7) ||
+              ((u->kind == 4 || u->kind == 11 || u->kind == 12) && v->kind == 7) ||
               (u->kind == 1 && (v->kind == 2 || v->kind == 4)) ||
               (u->kind == 4 && v->kind == 0))
             std::swap(u, v);
           if (u->kind == 6 && v->kind == 2 && a < .9) {
             v->kind = 0;
+            v->capacity = 0;
             recycled += v->amount;
             ++events[5];
             reacted = true;
-          } else if (u->kind == 7 && v->kind == 4) {
+          } else if (u->kind == 7 && (v->kind == 4 || v->kind == 11 || v->kind == 12)) {
             // Presentation samples are bounded; every chemical reaction still runs.
             if (neutralizations.size() < 32) {
               Dictionary cue;
@@ -2001,6 +2051,7 @@ public:
                      v->amount >= u->amount * .15 && a < .8) {
             double amount = u->amount;
             u->kind = 0;
+            u->capacity = 0;
             u->amount = amount * .6;
             v->kind = 5;
             v->amount = amount * .4;
@@ -2014,12 +2065,13 @@ public:
           } else if (u->kind == v->kind &&
                      (u->kind == 0 || u->kind == 2 || u->kind == 5 ||
                       u->kind == 1) &&
-                     u->amount + v->amount <= 1.4) {
+                     u->amount + v->amount <= primordia_chemistry::merge_limit) {
             double total = u->amount + v->amount;
             if (total <= 0)
               return false;
             u->v = u->v.lerp(v->v, v->amount / total);
             u->amount = total;
+            u->capacity += v->capacity;
             v->alive = false;
             ++events[1];
             reacted = true;

@@ -10,7 +10,7 @@ var forms: Array = []
 var segments: Array = []
 var bins: Dictionary = {}
 var enabled := true
-# Cells/spikes collide with stems; dissolved packets permeate the colony.
+# Cells collide with stems; dissolved packets permeate the colony.
 # False is retained solely for the historical contact benchmark.
 var particles_permeable := true
 var accelerator = preload("res://scripts/backend.gd").create()

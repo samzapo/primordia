@@ -23,6 +23,7 @@ func run() -> void:
 	await spatial_pair_rules()
 	await decay_and_inventory()
 	await flow_update()
+	await expanded_inventory()
 	print("ENVIRONMENT_VALIDATION ",checks," checks")
 	quit()
 func receipt(gpu) -> Dictionary:
@@ -111,4 +112,18 @@ func flow_update() -> void:
 	check(Fixture.compare(expected,out).passed,"Updated fluid drives resident transport")
 	field[10]=-1
 	check(not gpu.environment(flow,field),"Invalid environmental field rejected")
+	gpu.close();await gpu.closed
+
+
+func expanded_inventory() -> void:
+	var field:=PackedFloat32Array();field.resize(2560)
+	var data:=packet(13,Vector2(300,200),.2)
+	data.append_array(packet(22,Vector2(302,200),3))
+	data.append_array(packet(20,Vector2(304,200),1))
+	data.append_array(packet(11,Vector2(400,200),.03))
+	var gpu=await setup(data,field)
+	var r: Dictionary=gpu.exchange_sync([],[],[],[],{"projection":false,"scope":Vector4(300,200,20,20)})
+	check(absf(r.chemistry.material-.23)<.000001,"Spilled ATP/redox carriers carry no represented organic mass")
+	check(r.chemistry.visible=={"chemicals":3,"material":1,"signals":0},"GPU census uses the exact viewport and shared material definitions")
+	check(gpu.readbacks==0,"On-screen counts use compact receipts without downloading the particle pool")
 	gpu.close();await gpu.closed

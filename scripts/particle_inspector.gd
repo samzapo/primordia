@@ -190,7 +190,7 @@ func update_lens(dt: float, screen: Vector2, alpha: float, allowed: bool) -> voi
 		glyph.material.set_shader_parameter("canvas_aspect",get_viewport_rect().size.y/get_viewport_rect().size.x)
 	box.visible = active and lens_amount > 0.15
 	if box.visible:
-		var value: String = Art.NAMES[hovered.kind]+"\n"+DETAILS[hovered.kind]
+		var value: String = Art.Catalog.data().external_species[hovered.kind].name+"\n"+(DETAILS[hovered.kind] if hovered.kind < DETAILS.size() else "A finite cell-derived chemical packet.")
 		if hovered.kind == game.world.PHEROMONE:
 			var packet: Dictionary = hovered.packet
 			var report: Dictionary = packet.get("report",{})

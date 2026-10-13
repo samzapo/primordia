@@ -10,7 +10,7 @@ static func fixture():
 	return sim
 static func pair(sim, a: int, b: int, facing: bool = true) -> void:
 	for item in [{"kind":a,"d":Vector2.RIGHT,"x":0},{"kind":b,"d":Vector2.LEFT if facing else Vector2.RIGHT,"x":3}]:
-		sim.spawn_particle(item.kind,sim.player.position+Vector2(110+item.x,0),Vector2.ZERO,0.3,98)
+		sim.spawn_particle(item.kind,sim.player.position+Vector2(110+item.x,0),Vector2.ZERO,0.2,98)
 		sim.particles[-1].direction = item.d
 	sim.grid.rebuild(sim.particles)
 static func run(check: Callable) -> void:

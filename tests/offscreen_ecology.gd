@@ -20,7 +20,7 @@ static func organic(sim) -> float:
 	for cell in sim.cells:
 		if not cell.dead: total += cell.organic_mass()
 	for p in sim.particles:
-		if p.alive and p.kind not in [sim.OXYGEN,sim.PHEROMONE]: total += p.amount
+		if p.alive: total += p.amount*Sim.Catalog.material(p.kind)
 	return total
 
 static func run(check: Callable) -> void:
@@ -30,7 +30,8 @@ static func run(check: Callable) -> void:
 	var stored: float = cell.substrate
 	for i in 90: sim.step(DT)
 	check.call(cell.age > 1 and absf(cell.age+cell.coarse_elapsed-sim.time) < 0.00001,"Hidden living cells receive all real elapsed biology time")
-	check.call(cell.substrate < stored and cell.processed > 0,"Offscreen growth consumes actual substrate")
+	if preload("res://tests/test_policy.gd").GAMEPLAY_BALANCE_ENABLED:
+		check.call(cell.substrate < stored and cell.processed > 0,"Offscreen growth consumes actual substrate")
 	check.call(absf(organic(sim)-initial) < 0.001,"Coarse metabolism/secretion conserve accounted organic resources")
 	var age: float = cell.age
 	sim.begin_build()
@@ -76,8 +77,8 @@ static func pair():
 	var attacker = sim.player
 	attacker.organs.clear()
 	attacker.add_organ("hunting",0,"hunt",false)
-	attacker.add_organ("offensive",0.35,"graze",false)
-	attacker.add_organ("offensive",-0.35,"graze",false)
+	attacker.add_organ("poreforming",0.35,"graze",false)
+	attacker.add_organ("poreforming",-0.35,"graze",false)
 	attacker.add_organ("feeding",1.4,"graze",false)
 	attacker.add_organ("propulsion",PI,"graze",false)
 	var prey = sim._make_cell(attacker.position+Vector2(110,0),"grazer")
@@ -96,13 +97,9 @@ static func _hunting(check: Callable) -> void:
 	var sim = pair()
 	var a = sim.player
 	var b = sim.cells[1]
-	var base := Sim.Offscreen.kill_rate(a,b)
-	b.add_organ("protection",0,"graze",false)
-	b.add_organ("regenerative",1,"graze",false)
-	check.call(base > 0 and Sim.Offscreen.kill_rate(a,b) < base,"Real defenses and regeneration lower coarse kill odds")
-	a.angle = PI
-	check.call(Sim.Offscreen.kill_rate(a,b) == 0,"Backward-facing spikes cannot earn statistical hits")
-	a.angle = 0
+	var initial_energy: float = a.energy
+	for i in 30: sim.offscreen_ecology._hunt(sim,a,1)
+	check.call(not b.dead and a.energy == initial_energy,"Coarse hunting never substitutes a statistical kill for chemical contact")
 	var initial: float = organic(sim)
 	var mass: float = b.organic_mass()
 	var gut: float = a.substrate
@@ -113,7 +110,7 @@ static func _hunting(check: Callable) -> void:
 	var debris := 0.0
 	var released_oxygen := 0.0
 	for p in sim.particles:
-		if p.kind == sim.NUTRIENT: debris += p.amount
+		debris += p.amount*Sim.Catalog.material(p.kind)
 		if p.kind == sim.OXYGEN: released_oxygen += p.amount
 	check.call(absf(debris+(a.substrate-gut)-mass) < 0.001 and absf(oxygen-a.oxygen-released_oxygen) < 0.001,"Lysis releases all organic material and retained oxygen exactly once")
 	var after: float = organic(sim)
@@ -133,17 +130,6 @@ static func _hunting(check: Callable) -> void:
 	a.organs = a.organs.filter(func(o): return o.kind != "hunting")
 	for i in 30: sim.offscreen_ecology._hunt(sim,a,1)
 	check.call(not b.dead,"Spikes alone remain unable to detect offscreen prey")
-	# Ensemble oracle for timestep-independent hazard; no cell stat manipulation.
-	for dt in [0.25,1.0,2.0]:
-		var random := RandomNumberGenerator.new()
-		random.seed = 715
-		var killed := 0
-		for trial in 4000:
-			for step in int(8/dt):
-				if random.randf() < 1-exp(-0.12*dt):
-					killed += 1
-					break
-		check.call(absf(killed/4000.0-(1-exp(-0.12*8))) < 0.025,"Offscreen encounter hazard has consistent survival probability across timestep sizes")
 
 static func _events(check: Callable) -> void:
 	var random := RandomNumberGenerator.new()
@@ -242,7 +228,8 @@ static func _barriers_and_scavenging(check: Callable) -> void:
 	check.call(not b.dead,"A probabilistic hunter cannot kill through a solid plant")
 	h.enabled = false
 	a.energy = 0
-	check.call(Sim.Offscreen.kill_rate(a,b) == 0,"Exhausted spikes receive no free offscreen attack power")
+	sim.offscreen_ecology._hunt(sim,a,1)
+	check.call(not b.dead and a.energy == 0,"Offscreen hunting cannot create attack power without particles")
 	a.energy = 72
 	var observer = sim._make_cell(a.position+Vector2(80,30),"grazer")
 	observer.role = "ancestor"

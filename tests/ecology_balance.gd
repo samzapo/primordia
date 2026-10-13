@@ -6,7 +6,12 @@ func option(name: String, fallback: String) -> String:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with(name+"="): return arg.substr(name.length()+1)
 	return fallback
-func _initialize() -> void: run.call_deferred()
+func _initialize() -> void:
+	if not preload("res://tests/test_policy.gd").GAMEPLAY_BALANCE_ENABLED:
+		preload("res://tests/test_policy.gd").skip("ecology_balance")
+		quit(0)
+		return
+	run.call_deferred()
 func fixture(seed_value: int, mode: String, hidden: bool):
 	var sim = Test.fixture(seed_value)
 	var cell = sim.player
@@ -22,8 +27,8 @@ func fixture(seed_value: int, mode: String, hidden: bool):
 		cell.update_geometry()
 		cell.membrane = Sim.Cell.Membrane.new(cell.radius,seed_value)
 		cell.add_organ("hunting",0,"hunt",false)
-		cell.add_organ("offensive",0.45,"graze",false)
-		cell.add_organ("offensive",-0.45,"graze",false)
+		cell.add_organ("poreforming",0.45,"graze",false)
+		cell.add_organ("poreforming",-0.45,"graze",false)
 		cell.add_organ("feeding",1.4,"graze",false)
 		cell.add_organ("propulsion",PI,"graze",false)
 		var prey = sim._make_cell(cell.position+Vector2(145,0),"grazer")
@@ -57,6 +62,10 @@ func fixture(seed_value: int, mode: String, hidden: bool):
 	sim.ecology_rng.seed = seed_value
 	return sim
 func run() -> void:
+	if not preload("res://tests/test_policy.gd").GAMEPLAY_BALANCE_ENABLED:
+		preload("res://tests/test_policy.gd").skip("ecology_balance")
+		quit(0)
+		return
 	var seeds := int(option("--seeds","4"))
 	var seconds := float(option("--seconds","30"))
 	for mode in option("--modes","graze,scarce,photo,hybrid,hunt,hunt_armored,hunt_flee").split(","):

@@ -4,6 +4,7 @@ project_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$project_dir"
 mkdir -p build
 : > build/.gdignore
+python3 "$project_dir/tools/compile_chemistry.py"
 native_opt="${PRIMORDIA_NATIVE_OPT:-baseline}"
 case "$native_opt" in baseline|lto|pgo-generate|pgo-use) ;; *) echo "Invalid PRIMORDIA_NATIVE_OPT" >&2; exit 2 ;; esac
 profile_changed=false
@@ -13,7 +14,7 @@ if [[ "$native_opt" == pgo-use && -f build/native/.source_stamp ]] &&
 fi
 # Fast launches after a successful build. Source/config updates trigger a rebuild.
 if [[ "$profile_changed" == false && -f build/native/.optimization_stamp && "$(cat build/native/.optimization_stamp)" == "$native_opt" && -f build/native/primordia.gdextension && -f build/native/libprimordia.so && -f build/native/.source_stamp ]] &&
-   ! find native tools/build_native.sh tools/fetch_liquidfun.py -type f -newer build/native/.source_stamp -print -quit | grep -q .; then
+   ! find native data tools/build_native.sh tools/compile_chemistry.py tools/fetch_liquidfun.py -type f -newer build/native/.source_stamp -print -quit | grep -q .; then
   exit 0
 fi
 # Pinned, reproducible dependency; generated bindings/binaries stay under build/.

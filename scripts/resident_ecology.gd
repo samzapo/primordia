@@ -22,6 +22,7 @@ var elapsed_usec:=0
 var fallback_reason:=""
 # Display zoom never changes ecology resolution. The view sets this to its
 # widest playable footprint (including aspect ratio); activity adds a halo.
+var display_scope:=Vector4(0,0,-1,-1)
 var detail_half:=Vector2(800,500)
 var full_detail:=false # Benchmark ablation.
 var coarse_period:=0.1
@@ -131,6 +132,7 @@ func _receipt_batch(cells: Array,queries: Array,options: Dictionary,n: int) -> D
 	var sim=world.get_ref()
 	var products: Array=[]
 	for i in n: products.append(encode(pending[i],sim))
+	options["count_scope"]=display_scope
 	var result: Dictionary=gpu.exchange_sync(cells,products,[],queries,options)
 	if result.has("error"): return result
 	var refused: Array=[]
@@ -189,13 +191,22 @@ func _schedule(sim, dt: float) -> Dictionary:
 func _credit(cell, receipt: Dictionary, index: int, pore: int) -> int:
 	var sim=world.get_ref()
 	var intake=receipt.intake[index]
-	cell.substrate+=intake[0];cell.oxygen+=intake[1];cell.carbon+=intake[2]
 	cell.eaten+=intake[0];cell.foreign_intake+=intake[3]
 	if intake[0]>0: sim._record_sound("feeding",cell.position,cell.id,intake[0])
 	for organ in cell.organs:
-		if organ.kind=="feeding": cell.consumed(organ,receipt.pores[pore]);pore+=1
-	pore+=1
-	if cell.count("photosynthesis")>0: pore+=1
+		if organ.kind!="feeding": continue
+		var quantity: float=receipt.pores[pore]
+		var at: Vector2=cell.organ_position(organ)
+		if quantity>0 and receipt.has("pore_contacts"): at=cell.position+receipt.pore_contacts[pore]/quantity
+		cell.receive_particle(0,quantity,receipt.pore_fuel[pore] if receipt.has("pore_fuel") else quantity,at)
+		cell.consumed(organ,quantity);pore+=1
+	for kind in [1,5]:
+		if kind==5 and cell.count("photosynthesis")==0: continue
+		var quantity: float=receipt.pores[pore]
+		var at: Vector2=cell.position+Vector2.RIGHT*cell.radius
+		if quantity>0 and receipt.has("pore_contacts") and receipt.pore_contacts[pore].length()>0.001: at=cell.position+receipt.pore_contacts[pore]/quantity
+		cell.receive_particle(kind,quantity,quantity,at)
+		pore+=1
 	return pore
 
 func step(dt: float) -> void:
@@ -357,6 +368,9 @@ func _apply_exposure(cells: Array,exposure: Dictionary) -> void:
 	for i in cells.size():
 		var cell=cells[i]
 		for event in exposure.hits[i]:
+			if event.get("kind",4)!=4:
+				if not cell.accept_surface(event.kind,event.amount,event.angle,event.owner): cell.waste+=event.amount
+				continue
 			cell.waste+=cell.damage(event.amount*75,event.angle)+event.amount
 			cell.death_hint="Membrane failed after toxin exposure"
 			if event.owner==sim.player.id: sim.evolution.record("toxin",event.amount*75)

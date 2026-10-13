@@ -1,7 +1,8 @@
 extends RefCounted
 ## Authored vector paths; raster textures and mipmaps are generated once at runtime.
 ## Every glyph faces +X, the same axis used by Simulation's binding direction.
-const NAMES := ["Nutrient", "Oxygen", "Waste", "Pheromone", "Toxin", "Carbon", "Enzyme", "Antitoxin", "Acid", "Buffer", "Decoy"]
+const Catalog=preload("res://scripts/chemistry_catalog.gd")
+static var NAMES: Array = Catalog.data().external_species.map(func(item): return item.name)
 const GLYPHS := [
 	{"color":"91f04c", "shade":"268457", "path":"M -28 0 H -6 L 24 -21 M -6 0 L 24 21", "tips":"M 23 -21 H 26 M 23 21 H 26"},
 	{"color":"22d7f2", "shade":"278cb9", "path":"M -23 0 H 25", "lobes":"<circle cx='-20' cy='0' r='15'/><circle cx='23' cy='0' r='11'/>", "tips":"M 23 -2 H 27"},
@@ -40,6 +41,14 @@ static func texture(kind: int, simplified: bool = false) -> Texture2D:
 			var image := Image.new()
 			var error := image.load_svg_from_string(_svg(glyph,simplified))
 			assert(error == OK, "Particle vector artwork failed to load")
+			image.generate_mipmaps()
+			textures.append(ImageTexture.create_from_image(image))
+	if kind >= textures.size():
+		for i in range(textures.size(),Catalog.data().external_species.size()):
+			var definition: Dictionary = Catalog.data().external_species[i]
+			var glyph := {"color":definition.color,"shade":Color(definition.color).darkened(0.45).to_html(false),"path":"M -24 0 H 14 Q 28 0 28 -15 M 5 0 V 20","tips":"M 24 -15 H 29"}
+			var image := Image.new()
+			assert(image.load_svg_from_string(_svg(glyph,simplified)) == OK)
 			image.generate_mipmaps()
 			textures.append(ImageTexture.create_from_image(image))
 	return textures[kind]

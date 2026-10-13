@@ -108,9 +108,7 @@ func advance_body(sim, cell, h: float) -> void:
 	for leak in cell.leaks:
 		var normal := Vector2.from_angle(cell.angle+leak.a)
 		sim._emit_material(sim.NUTRIENT,cell.position+cell.local_point(leak.a).rotated(cell.angle)+normal*12,leak.amount,normal*12,cell.id)
-	if cell.waste >= 0.2:
-		sim._emit_material(sim.WASTE,cell.excretion_position(),cell.waste,Vector2.ZERO,cell.id)
-		cell.waste = 0
+	cell.chemistry.excrete(sim,cell,h)
 	_resize(cell)
 	while cell.occupied() > cell.perimeter() and not cell.organs.is_empty():
 		var organ: Dictionary = cell.organs.pop_back()
@@ -204,7 +202,7 @@ func _feed(sim, cell, dt: float) -> void:
 			capacity = maxf(0,cell.oxygen_capacity()-cell.oxygen)
 			rate = COLLECTION_SWEEP*2*(cell.extent()+14)*(relative+4)/area
 		elif p.kind == sim.CARBON and _functional(cell,"photosynthesis") > 0:
-			capacity = maxf(0,30*cell.growth_scale()-cell.carbon)
+			capacity = maxf(0,float(sim.Catalog.data().ecology.carbon_capacity)*cell.growth_scale()-cell.carbon)
 			rate = COLLECTION_SWEEP*2*(cell.extent()+18)*(relative+4)/area
 		if capacity <= 0 or not sim.chance(rate,dt): continue
 		# Dissolved resources permeate stems; legacy barriers are benchmark-only.
@@ -213,12 +211,14 @@ func _feed(sim, cell, dt: float) -> void:
 		p.amount -= amount
 		if sim.kernels != null: sim.kernels.invalidate_particle_render(index)
 		if p.amount <= 0.000001: p.alive = false
-		if p.kind == sim.OXYGEN: cell.oxygen += amount
+		if p.kind == sim.OXYGEN: cell.receive_particle(sim.OXYGEN,amount,amount,p.p)
 		elif p.kind == sim.CARBON:
-			cell.carbon += amount
+			cell.receive_particle(sim.CARBON,amount,amount,p.p)
 			if p.owner != cell.id: cell.foreign_intake += amount
 		else:
-			cell.substrate += amount
+			var fuel: float = minf(p.get("capacity",p.amount+amount),p.amount+amount)*amount/maxf(0.000001,p.amount+amount)
+			cell.receive_particle(sim.NUTRIENT,amount,fuel,p.p)
+			p.capacity=maxf(0,p.get("capacity",p.amount+amount)-fuel)
 			cell.eaten += amount
 			if p.owner != cell.id: cell.foreign_intake += amount
 			cell.consumed(mouth,amount)
@@ -236,11 +236,15 @@ func _exposure(sim, cell, dt: float) -> void:
 		return
 	for index in sim.grid.query(cell.position,radius):
 		var p: Dictionary = sim.particles[index]
-		if not p.alive or p.kind not in [sim.TOXIN,sim.DECOY] or sim.activity_at(p.p) > 0: continue
-		if sim.inherited_lineages.get(p.owner,p.owner) == cell.lineage_id(): continue
+		if not p.alive or p.kind not in [sim.TOXIN,sim.DECOY,sim.ANTITOXIN,sim.TAG,sim.PORE_SUBUNIT] or sim.activity_at(p.p) > 0: continue
+		if p.kind != sim.ANTITOXIN and sim.inherited_lineages.get(p.owner,p.owner) == cell.lineage_id(): continue
 		var delta := Medium.offset(cell.position,p.p)
 		if delta.length() > radius or not sim.chance(2.0,dt): continue
 		if not sim.habitat_geometry.particles_permeable and not _clear_path(sim,cell.position,p.p): continue
+		if p.kind in [sim.ANTITOXIN,sim.TAG,sim.PORE_SUBUNIT]:
+			if p.direction.dot(-delta.normalized())<0.5 or not cell.accept_surface(p.kind,p.amount,delta.angle(),p.owner): continue
+			p.alive=false
+			continue
 		if p.kind == sim.DECOY:
 			var bound := false
 			for organ in cell.organs:
@@ -261,61 +265,8 @@ func _exposure(sim, cell, dt: float) -> void:
 			cell.waste += cell.damage(p.amount*75,delta.angle())
 			cell.death_hint = "Membrane failed after toxin exposure"
 
-static func kill_rate(attacker, prey) -> float:
-	if attacker.dead or prey.dead or attacker.energy <= 0: return 0.0
-	var direction := Medium.offset(attacker.position,prey.position).normalized()
-	var weapon := 0.0
-	for organ in attacker.organs:
-		if organ.kind != "offensive" or organ.hp <= 0: continue
-		var facing: Vector2 = attacker.organ_normal(organ).rotated(attacker.angle)
-		weapon += organ.scale*organ.scale*organ.hp/organ.max_hp*Genes.factor(organ,"damage")*maxf(0,facing.dot(direction))
-	if weapon <= 0: return 0.0
-	var protection := 0.0
-	for organ in prey.organs:
-		protection += organ.hp*minf(1,prey.organ_width(organ)/prey.perimeter())
-	var repair: float = (8+16*_functional(prey,"regenerative")) if prey.energy > 0 and prey.biomass > 0 else 0.0
-	var closing := maxf(0,(attacker.velocity-prey.velocity).dot(direction))
-	var impact := minf(45,0.9*closing*attacker.mass/(attacker.mass+prey.mass))
-	var escape := 1.0
-	if prey.target_mode == "flee" and prey.target_memory > 0 and _functional(prey,"sensing") > 0:
-		escape = 1.0/(1.0+maxf(0,_swim(prey)-_swim(attacker))/maxf(4,_swim(attacker)+10))
-	var size_weight := minf(1.25,sqrt(attacker.mass/prey.mass))
-	return CONTACT_DUTY*weapon*(14.4+impact*0.5)*size_weight*escape/maxf(1,prey.health+protection+repair*3)
-
-func _hunt(sim, attacker, dt: float) -> void:
-	if not enabled_hunting or attacker.dead or attacker.coarse_handling > 0: return
-	if attacker.target_mode != "hunt" or attacker.target_memory <= 0 or _functional(attacker,"hunting") <= 0: return
-	if sim.activity_for_cell(attacker) > 0: return
-	# This is a contact broad phase, not a sensor: intent was set by a received
-	# immutable pheromone. Actual bodies may meet only inside the hidden region.
-	for prey in sim.cells.duplicate():
-		if prey == attacker or prey.dead or prey.id != attacker.target_id or prey.lineage_id() == attacker.lineage_id(): continue
-		if sim.activity_for_cell(prey) > 0 or prey.activity > 0: continue
-		var reach: float = attacker.extent()+prey.extent()+42
-		var distance: float = Medium.offset(attacker.position,prey.position).length()
-		if distance > reach: continue
-		if not _clear_path(sim,attacker.position,prey.position): continue
-		var rate := kill_rate(attacker,prey)
-		if rate <= 0: continue
-		var demand := 0.0
-		var shares := {}
-		var direction := Medium.offset(attacker.position,prey.position).normalized()
-		for organ in attacker.organs:
-			if organ.kind != "offensive" or organ.hp <= 0: continue
-			var facing: Vector2 = attacker.organ_normal(organ).rotated(attacker.angle)
-			# Charge the expected working contact, not every spike on the body.
-			var share: float = dt*1.2*organ.scale*organ.scale*Genes.factor(organ,"attack_cost")*maxf(0,facing.dot(direction))
-			demand += share
-			shares[organ.id] = share
-		demand *= CONTACT_DUTY
-		var paid: float = attacker.spend_energy(demand,{},"combat",shares)
-		rate *= minf(1,paid/maxf(0.000001,demand))
-		if sim.chance(rate,dt):
-			prey.death_hint = "Lost an offscreen hunting encounter"
-			_kill(sim,prey)
-			attacker.coarse_handling = 3.0 # Bounded handling time, never extra stats.
-			kills += 1
-		break
+func _hunt(_sim, _attacker, _dt: float) -> void:
+	pass # Predation is paid packet exposure; no statistical offscreen kill.
 
 func _kill(sim, prey) -> void:
 	# Lysis releases the complete corpse once. Predators and scavengers must use

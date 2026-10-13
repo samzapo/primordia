@@ -18,7 +18,7 @@ static func mass(sim) -> float:
 	for cell in sim.cells:
 		if not cell.dead: result += cell.organic_mass()
 	for packet in sim.particles:
-		if packet.alive and packet.kind not in [sim.OXYGEN,sim.PHEROMONE]: result += packet.amount
+		if packet.alive: result += packet.amount*Sim.Catalog.material(packet.kind)
 	return result
 
 static func fund(sim) -> void:

@@ -62,16 +62,6 @@ static func _plants(check: Callable) -> void:
 	check.call(cell.position.x < 2100 and cell.velocity.x < 0,"Fast membrane/stem collision stops crossing and rebounds")
 	check.call(absf(cell.angular_velocity) > 0.01,"Sliding along a stem spins the cell through friction")
 	check.call(cell.support(0) < original,"Plant contact visibly dents the approach side")
-	cell.position = Vector2(1980,1280)
-	cell.velocity = Vector2(100,0)
-	cell.angular_velocity = 0
-	cell.membrane = Cell.Membrane.new(cell.radius)
-	cell.angle = 0
-	cell.add_organ("offensive",0,"graze",false)
-	var before := {"p":cell.position,"angle":cell.angle}
-	cell.position.x += 40
-	sim._spike_plants(cell,cell.organs[0],before,DT)
-	check.call(cell.position.x < 2020 and cell.velocity.x <= 1,"Spike shaft catches a solid stem before the cell body touches it")
 	cell.organs.clear()
 	cell.position = Vector2(2100,1280)
 	cell.velocity = Vector2.ZERO
@@ -80,66 +70,9 @@ static func _plants(check: Callable) -> void:
 
 
 static func _spikes(check: Callable) -> void:
-	var sim = preload("res://tests/pheromones.gd").isolated()
-	var attacker = sim.player
-	attacker.organs.clear()
-	attacker.angle = 0
-	attacker.energy = 0
-	attacker.membrane = Cell.Membrane.new(attacker.radius)
-	attacker.add_organ("offensive",0,"graze",false)
-	var prey = body(99,attacker.position+Vector2(112,0))
-	sim.cells.append(prey)
-	prey.velocity = Vector2(-120,18)
-	var health: float = prey.health
-	var initial := Sim.Medium.offset(attacker.position,prey.position).length()
-	sim._spike_contacts(DT)
-	check.call(prey.velocity.x > -120 and attacker.velocity.x < 0,"An unpowered spike physically transfers impact into its owner")
-	check.call(Sim.Medium.offset(attacker.position,prey.position).length() > initial,"Spike contact separates bodies at the weapon instead of allowing visual impalement")
-	check.call(prey.health < health and attacker.energy == 0,"Mechanical puncture can wound a cell that runs into an unpowered spike")
-	check.call(attacker.target_id == -1 and attacker.signals.is_empty(),"Spike contact never acquires a sensory target")
-	# A fair isolated comparison verifies the mobility advantage.
-	var hits: Array[float] = []
-	for speed in [20.0,160.0]:
-		var striker = body(7,Vector2(2000,1280))
-		striker.angle = 0
-		striker.energy = 0
-		striker.add_organ("offensive",0,"graze",false)
-		var victim = body(8,Vector2(2112,1280))
-		victim.velocity = Vector2(-speed,0)
-		sim.cells = [striker,victim]
-		sim._spike_contacts(DT)
-		hits.append(100-victim.health)
-	check.call(hits[1] > hits[0]*3 and hits[1] >= 40,"Greater impact speed earns substantially more spike damage without an attack multiplier")
-	sim.cells = [attacker,prey]
-	# Three substantial collisions can kill exposed, repairing prey.
-	prey.lineage = -1
-	prey.health = 100
-	prey.energy = 100
-	prey.biomass = 20
-	for impact in 3:
-		prey.position = attacker.position+Vector2(112,0)
-		attacker.velocity = Vector2.ZERO
-		prey.velocity = Vector2(-160,0)
-		sim._spike_contacts(DT)
-		if impact < 2: prey.heal(1.0)
-	check.call(prey.health <= 0,"Three solid spike impacts kill exposed prey even with repair between hits")
-	prey.health = 100
-	prey.holes.clear()
-	# Cross the shaft quickly, without crossing the owner's body.
-	attacker.position = Vector2(2000,1280)
-	prey.position = Vector2(2082,1190)
-	var starts := {attacker.id:{"p":attacker.position,"angle":0.0},prey.id:{"p":prey.position,"angle":0.0}}
-	prey.position.y += 190
-	prey.velocity = Vector2(0,900)
-	sim._spike_contacts(DT,starts)
-	check.call(prey.position.y < 1280 and prey.velocity.y < 900,"Swept spike contact catches a fast cell crossing its shaft")
-	# Recognition removes injury, not collision; no false live-source sensor.
-	prey.lineage = attacker.lineage_id()
-	prey.position = attacker.position+Vector2(112,0)
-	prey.velocity = Vector2(-100,0)
-	health = prey.health
-	sim._spike_contacts(DT)
-	check.call(prey.health == health and prey.velocity.x > -100,"Relatives collide with spikes without deliberate injury")
+	var cell = Cell.new()
+	check.call(not cell.add_organ("offensive",0),"Retired physical spikes cannot be installed")
+	check.call(cell.add_organ("poreforming",0,"graze",false),"Chemical gland replaces spike construction")
 
 static func _hunting(check: Callable) -> void:
 	var test = preload("res://tests/pheromones.gd")
@@ -165,7 +98,7 @@ static func _hunting(check: Callable) -> void:
 	test.listen(sim)
 	check.call(sim.player.target_id == prey.id,"Smaller prey remains eligible even with reported armor")
 	sim.player.recycle(0)
-	sim.player.add_organ("offensive",0,"graze",false)
+	sim.player.add_organ("poreforming",0,"graze",false)
 	test.listen(sim,1.6)
 	check.call(sim.player.target_id == -1 and sim.player.signals.is_empty(),"Replacing the receptor with a spike clears sensory memory")
 	sim.player.add_organ("hunting",1,"hunt",false)
@@ -187,13 +120,8 @@ static func _pruning(check: Callable) -> void:
 		var sim = preload("res://tests/pheromones.gd").isolated()
 		sim.spatial_queries = pruning
 		sim.habitat_geometry.enabled = false
-		sim.player.organs.clear()
-		sim.player.add_organ("offensive",0,"graze",false)
-		sim.player.angle = 0
-		var near = body(80,sim.player.position+Vector2(115,15))
-		near.velocity = Vector2(-160,0)
+		var near = body(80,sim.player.position+Vector2(70,0))
 		sim.cells.append(near)
-		sim.cells.append(body(81,sim.player.position+Vector2(800,500)))
-		sim._spike_contacts(DT)
+		sim._contacts(DT)
 		results.append([sim.player.position,sim.player.velocity,near.position,near.velocity,near.health])
-	check.call(results[0] == results[1],"Conservative spike candidate rejection preserves physical contact and injury")
+	check.call(results[0] == results[1],"Spatial contact pruning preserves ordinary body collision")

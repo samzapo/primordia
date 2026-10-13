@@ -3,7 +3,6 @@ extends RefCounted
 const DATA := {
 	"economical_flagellum":{"title":"Economical stroke","kind":"propulsion","text":"Half propulsion ATP; 20% less thrust.","thrust":0.8,"motion_cost":0.5},
 	"layered_cortex":{"title":"Layered cortex","kind":"protection","text":"60% more organ health; extra tissue adds mass.","health":1.6},
-	"barbed_spike":{"title":"Barbed spike","kind":"offensive","text":"50% more damage per ATP; attacks cost 70% more ATP.","damage":1.5,"attack_cost":1.7},
 	"recuperative_repair":{"title":"Recuperative repair","kind":"regenerative","text":"60% stronger repair; 40% more ATP per repair.","repair":1.6,"repair_cost":1.4},
 	"wide_pore":{"title":"Wide intake","kind":"feeding","text":"30% wider intake and stronger suction; extra upkeep.","intake":1.3,"suction":1.3,"upkeep":0.10},
 	"enzyme_pore":{"title":"Concentrated digestion","kind":"feeding","text":"Twice the enzyme secretion; 60% more ATP per packet, slower dispersal.","secretion":2.0,"secretion_cost":1.6,"dispersal":0.5},

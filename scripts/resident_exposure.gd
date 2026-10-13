@@ -25,7 +25,7 @@ static func prepare(cells: Array) -> Dictionary:
 			organ_ids.append(organ.id);organ_bodies.append(b)
 		var at:=info.size();info.resize(at+16)
 		info.encode_s32(at,cell.id);info.encode_s32(at+4,cell.lineage_id())
-		info.encode_u32(at+8,start);info.encode_u32(at+12,organ_ids.size()-start)
+		info.encode_u32(at+8,start);info.encode_u32(at+12,(organ_ids.size()-start)|(0x80000000 if not cell.surface_complexes.is_empty() else 0))
 	if organ_ids.size()>MAX_DECOYS: return {"error":"Too many contact receptors"}
 	return {"body_info":info,"decoys":decoys.to_byte_array(),"decoy_count":organ_ids.size(),
 		"decoy_organs":organ_ids,"decoy_bodies":organ_bodies}
@@ -75,7 +75,7 @@ static func decode(bytes: PackedByteArray,batch: Dictionary) -> Dictionary:
 		var events: Array=[]
 		for k in n:
 			var p: int=start+(k+1)*16
-			events.append({"amount":bytes.decode_float(p),"angle":bytes.decode_float(p+4),"slot":bytes.decode_u32(p+8),"owner":bytes.decode_s32(p+12)})
+			events.append({"amount":bytes.decode_float(p),"angle":bytes.decode_float(p+4),"slot":bytes.decode_u32(p+8)&0x0fffffff,"kind":(bytes.decode_u32(p+8)>>28) if (bytes.decode_u32(p+8)>>28)>0 else 4,"owner":bytes.decode_s32(p+12)})
 		hits.append(events)
 	var decoys: Array=[]
 	at+=batch.body_count*(HITS_PER_BODY+1)*16

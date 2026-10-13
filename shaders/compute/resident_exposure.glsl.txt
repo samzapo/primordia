@@ -43,21 +43,23 @@ void main(){
   if(i>=pc.count)return;
   nomination[i]=uvec2(0xffffffffu);
   vec4 v=imageLoad(state,pixel(i)+ivec2(1,0));
-  if(v.w!=4.&&v.w!=10.)return;
+  if(v.w!=4.&&v.w!=10.&&v.w!=7.&&v.w!=11.&&v.w!=12.)return;
   vec4 p=imageLoad(state,pixel(i));float radius=imageLoad(state,pixel(i)+ivec2(2,0)).x*.5;
   uint lineage=floatBitsToUint(reports[i*4u+3u].y);
   for(uint b=0u;b<pc.bodies_count;b++){
-   if(info[b].y==lineage)continue;
+   if(v.w!=7.&&info[b].y==lineage)continue;
+   if(v.w==7.&&(info[b].w&0x80000000u)==0u)continue;
    vec4 body=bodies[b*4u];vec2 delta=offset(body.xy,p.xy);
    float coarse_dt=bodies[b*4u+3u].x;
    if(coarse_dt>0.&&(!hidden(p.xy)||!encounter(i,b,coarse_dt)))continue;
-   if(v.w==4.){
+   if(v.w!=10.){
     float bound=body.w+(coarse_dt>0.?24.:5.);
     if(abs(delta.x)>bound||abs(delta.y)>bound)continue;
     float angle=atan(delta.y,delta.x);
+    if(v.w!=4.&&dot(vec2(cos(p.z),sin(p.z)),-normalize(delta))<.5)continue;
     if(length(delta)<=(coarse_dt>0.?body.w+24.:support(b,angle-body.z)+5.)){nomination[i].x=b;return;}
    }else{
-    for(uint d=info[b].z;d<info[b].z+info[b].w;d++){
+    for(uint d=info[b].z;d<info[b].z+(info[b].w&0x7fffffffu);d++){
      vec4 q=decoys[d*2u],meta=decoys[d*2u+1u];vec2 direction=offset(q.xy,p.xy);
      float distance=length(direction);
      if(distance>meta.x+radius||distance<=.000001)continue;
@@ -84,16 +86,17 @@ void main(){
   for(uint k=range.x;k<range.y;k++){
    uint slot=order[k].y;
    if(nomination[slot].x!=b||nomination[slot].y!=0xffffffffu)continue;
-   if(imageLoad(state,pixel(slot)+ivec2(1,0)).w!=4.)continue;
+   float kind=imageLoad(state,pixel(slot)+ivec2(1,0)).w;
+   if(kind!=4.&&kind!=7.&&kind!=11.&&kind!=12.)continue;
    if(taken==128u){deferred++;continue;}
    vec2 delta=offset(body.xy,imageLoad(state,pixel(slot)).xy);
    float amount=imageLoad(state,pixel(slot)+ivec2(2,0)).y;
-   receipt[output_at+1u+taken]=vec4(amount,atan(delta.y,delta.x),uintBitsToFloat(slot),uintBitsToFloat(identity[slot].y));
+   receipt[output_at+1u+taken]=vec4(amount,atan(delta.y,delta.x),uintBitsToFloat(slot|(kind==4.?0u:uint(kind)<<28)),uintBitsToFloat(identity[slot].y));
    consume(slot);taken++;
   }
  }
  receipt[output_at]=vec4(taken,deferred,0,0);
- for(uint d=info[b].z;d<info[b].z+info[b].w;d++){
+ for(uint d=info[b].z;d<info[b].z+(info[b].w&0x7fffffffu);d++){
   vec4 q=decoys[d*2u],meta=decoys[d*2u+1u];float radius=meta.x+8.5;
   ivec2 dlo=ivec2(floor((q.xy-radius)/16.)),dhi=ivec2(floor((q.xy+radius)/16.));
   float amount=0.;uint number=0u;

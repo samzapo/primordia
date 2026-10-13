@@ -32,15 +32,17 @@ static func run(check: Callable) -> void:
 	cell.membrane.skeleton.links.clear()
 	for i in 120: cell.membrane.step(1.0/60,cell.radius,Vector2.ZERO,0)
 	check.call(cell.local_point(mouth.a).length() < cell.radius*0.75,"Oral groove is an inward physical dent")
-	check.call(absf(area(cell)-(cell.body+cell.biomass+cell.brood_mass)*cell.TISSUE_AREA)<0.002,"Physical volume uses the same tissue-area unit as the cost blob")
+	check.call(absf(area(cell)-(cell.body+cell.biomass+cell.brood_mass+cell.chemistry.reactor_mass+cell.chemistry.amount("catalyst"))*cell.TISSUE_AREA)<0.002,"Physical volume uses the same tissue-area unit as the cost blob")
 	var original_area := area(cell)
-	var original_volume: float = cell.body+cell.biomass+cell.brood_mass
+	var original_volume: float = cell.body+cell.biomass+cell.brood_mass+cell.chemistry.reactor_mass+cell.chemistry.amount("catalyst")
 	cell.biomass += 40
 	cell.update_geometry()
 	for i in 120: cell.membrane.step(1.0/60,cell.radius,Vector2.ZERO,0)
 	check.call(absf(area(cell)/original_area-(original_volume+40)/original_volume) < 0.0001,"Added biomass maps one-to-one to enclosed area, including groove displacement")
 	check.call(Geometry2D.triangulate_polygon(cell.membrane.outline()).size() > 0,"Indented anatomy remains renderable")
 	cell.energy = cell.energy_reference()
+	cell.chemistry.assign("adp",0)
+	cell.chemistry.emit("adp",cell.energy_reference()*9,cell.chemistry.site(cell.chemistry.node_at(cell.chemistry.find_module("respiration"))))
 	cell.gain_energy(cell.energy_reference()*9)
 	check.call(cell.energy > cell.energy_reference()*9,"ATP has no old storage ceiling")
 	var full_rate: float = cell.atp_decay_rate()
@@ -59,7 +61,7 @@ static func run(check: Callable) -> void:
 	for i in 180: interior.step(1.0/60,cell)
 	check.call(initial != interior.parcels.map(func(p): return p.p),"Intracellular parcels circulate independently of the paused outside")
 	check.call(stock == [cell.organic_mass(),cell.energy,cell.health,cell.age,sim.time,sim.rng.state,sim.ecology_rng.state],"Editing circulation cannot create energy, material, elapsed ecology or random draws")
-	check.call(is_equal_approx(interior.amount("food"),13.5) and is_equal_approx(interior.amount("waste"),2.2) and interior.amount("ap") == 7,"Vacuole quantities match real food, waste and AP")
+	check.call(cell.chemistry.amount("food")==13.5 and cell.chemistry.amount("waste")==2.2 and interior.amount("ap")==7,"Chemical quantities derive from physical particles; AP remains edit currency")
 	cell.substrate = 0
 	interior.sync(cell,2)
 	check.call(interior.amount("food") == 0 and interior.amount("ap") == 2,"Consumed food and spent AP disappear from internal stocks immediately")

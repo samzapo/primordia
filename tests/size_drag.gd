@@ -30,6 +30,7 @@ static func run(check: Callable) -> void:
 	var large = Sim.Cell.new()
 	large.body = baseline.body*8
 	large.biomass = baseline.biomass*8
+	large.chemistry.assign("catalyst",baseline.chemistry.amount("catalyst")*8)
 	large.update_geometry()
 	check.call(is_equal_approx(large.radius/baseline.radius,sqrt(8)) and is_equal_approx(large.fluid_drag()/baseline.fluid_drag(),sqrt(8)),"Eightfold represented volume scales radius and membrane drag by sqrt(8)")
 	var small_speed := swim(1,1)

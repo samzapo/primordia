@@ -1,5 +1,6 @@
 extends RefCounted
 ## Authoritative fixed-step ecology, independent of input and scene nodes.
+const Catalog = preload("res://scripts/chemistry_catalog.gd")
 const Evolution = preload("res://scripts/evolution.gd")
 const Lineage = preload("res://scripts/lineage.gd")
 var lineage = Lineage.new()
@@ -70,7 +71,9 @@ const ANTITOXIN := 7
 const ACID := 8
 const BUFFER := 9
 const DECOY := 10
-const SPECIES_COUNT := 11
+const TAG := 11
+const PORE_SUBUNIT := 12
+const SPECIES_COUNT := 26
 const Acidity = preload("res://scripts/acidity.gd")
 const HABITATS := ["BALANCED TIDE", "LEAN HUNTING GROUNDS", "RICH / ARMORED HUNTERS"]
 # Transport changes resolution outside the view, never the rate of elapsed time.
@@ -239,7 +242,7 @@ func _make_cell(p: Vector2, role: String):
 	cell.add_organ("feeding",1.1 if role == "hunter" else 1.4,"graze",false)
 	cell.add_organ("propulsion",PI,"graze",false)
 	if role == "hunter":
-		cell.add_organ("offensive",0,"graze",false)
+		cell.add_organ("poreforming",0,"graze",false)
 		cell.add_organ("hunting",0.48,"hunt",false)
 		if habitat == 2:
 			cell.add_organ("toxin",1.8,"graze",false)
@@ -276,6 +279,22 @@ func visible_particle_ids(margin: float = 0.0) -> Array[int]:
 	if resident != null: return [] # Rendering reads the resident texture directly.
 	if grid.source_size != particle_count(): grid.rebuild(particles)
 	return grid.query_rect(player.position if camera_follows_player else camera_position,view_half+Vector2.ONE*margin)
+
+func visible_particle_census() -> Dictionary:
+	if resident != null:
+		return resident.last_chemistry.get("visible",{"chemicals":0,"material":0,"signals":0})
+	var center: Vector2 = player.position if camera_follows_player else camera_position
+	var ids := visible_particle_ids()
+	if kernels != null: return kernels.particle_census(particles,ids,center,view_half)
+	var counts := {"chemicals":0,"material":0,"signals":0}
+	for index in ids:
+		var p: Dictionary = particles[index]
+		var d: Vector2 = Medium.offset(center,p.p)
+		if not p.alive or absf(d.x)>view_half.x or absf(d.y)>view_half.y: continue
+		if p.kind==PHEROMONE: counts.signals+=1
+		else: counts.chemicals+=1
+		if Catalog.material(p.kind)>0: counts.material+=1
+	return counts
 
 func local_particle_kind(kind: int) -> Array[int]:
 	if grid.source_size != particle_count(): grid.rebuild(particles)
@@ -321,6 +340,13 @@ func spawn_particle(kind: int, p: Vector2, v: Vector2 = Vector2.ZERO, amount: fl
 		if kernels != null: kernels.invalidate_particle_render(particle_count()-1)
 	grid.insert(particle_count()-1,last_spawn.p)
 
+func _emit_aimed(kind: int, at: Vector2, aim: Vector2, speed: float, quantity: float, identity: int) -> void:
+	spawn_particle(kind,at,aim*speed,quantity,identity)
+	last_spawn.angle = aim.angle()
+	last_spawn.previous_angle = last_spawn.angle
+	last_spawn.direction = aim
+	_commit_spawn_metadata()
+
 func _record_reaction(at: Vector2) -> void:
 	if activity_at(at) <= 0: return
 	var event := {"at":at,"time":time,"serial":reaction_serial}
@@ -354,8 +380,8 @@ func _emit_pheromone(cell, emitted_at: float = -1.0) -> Dictionary:
 	var hostile := false
 	var armored := false
 	for organ in cell.organs:
-		if organ.kind in ["offensive","toxin"] and organ.hp > 0: hostile = true
-		if organ.kind == "protection" and organ.hp > 0: armored = true
+		if organ.kind in ["poreforming","toxin"] and organ.hp > 0: hostile = true
+		if organ.kind in ["protection","neutralizing"] and organ.hp > 0: armored = true
 	# Value snapshots, never a Cell reference. Coordinates are deliberately old
 	# once the source moves; size and hostile anatomy can only update via new cues.
 	p.report = {"id":cell.id,"lineage":cell.lineage_id(),"at":cell.position,
@@ -382,7 +408,7 @@ func _expire_pheromones() -> void:
 
 func _emit_material(kind: int, at: Vector2, amount: float, motion: Vector2 = Vector2.ZERO, owner: int = 0) -> void:
 	# Packet merging requires oriented contact, never an emission shortcut.
-	var count := maxi(1,ceili(amount/0.35))
+	var count := maxi(1,ceili(amount/float(Catalog.data().ecology.packet_quantum)))
 	for i in count: spawn_particle(kind,at,motion,amount/count,owner)
 
 func step(dt: float) -> void:
@@ -391,6 +417,7 @@ func step(dt: float) -> void:
 		var shown_camera:=camera_position
 		var shown_follow:=camera_follows_player
 		# Fixed widest playable footprint prevents zoom from changing feeding.
+		resident.display_scope=Vector4(player.position.x,player.position.y,shown_half.x,shown_half.y) if shown_follow else Vector4(shown_camera.x,shown_camera.y,shown_half.x,shown_half.y)
 		view_half=resident.detail_half
 		resident.step(dt)
 		view_half=shown_half;camera_position=shown_camera;camera_follows_player=shown_follow
@@ -528,10 +555,7 @@ func _biology_after_feed(cell, local_dt: float) -> void:
 	for leak in cell.leaks:
 		var normal := Vector2.from_angle(cell.angle+leak.a)
 		_emit_material(NUTRIENT,cell.position+cell.local_point(leak.a).rotated(cell.angle)+normal*12,leak.amount,normal*12,cell.id)
-	# Tiny continuous emissions are aggregated into material-bearing packets.
-	if cell.waste >= 0.2:
-		_emit_material(WASTE,cell.excretion_position(),cell.waste,Vector2.ZERO,cell.id)
-		cell.waste = 0
+	cell.chemistry.excrete(self,cell,local_dt)
 	var organ_mark := Time.get_ticks_usec() if profiling else 0
 	cell.update_geometry()
 	# Shrinkage can shed crowded organs, releasing their remaining material.
@@ -569,7 +593,7 @@ func _step_cell_motion(dt: float) -> void:
 	for cell in cells:
 		cell.feeding_feedback = ""
 		for organ in cell.organs:
-			if organ.kind == "offensive": organ.feeding = false
+			if organ.kind == "poreforming": organ.feeding = false
 	for substep in 3:
 		var starts: Dictionary = {}
 		for cell in cells: starts[cell.id] = {"p":cell.position,"angle":cell.angle}
@@ -577,7 +601,6 @@ func _step_cell_motion(dt: float) -> void:
 		var contact_mark := Time.get_ticks_usec() if profiling else 0
 		_contacts(dt/3.0)
 		if profiling: contacts_us += Time.get_ticks_usec()-contact_mark
-		_spike_contacts(dt/3.0,starts)
 		for cell in cells:
 			if cell.dead or cell.activity <= 0: continue
 			habitat_geometry.move_cell(cell,cell.position,cell.position,dt/3.0)
@@ -759,8 +782,8 @@ func _chemistry(dt: float, patch: Array[int] = [], background: bool = false) -> 
 			var used := absf(acidity.exchange(p.p,sign_value*minf(p.capacity,local_dt*0.2)))
 			p.capacity -= used
 			if p.capacity <= 0.000001: p.kind = WASTE
-		if chance([0.003,0.008,0.006,0.0,0.1,0.001,0.02,0.015,0.008,0.008,0.08][p.kind],local_dt):
-			if p.kind != OXYGEN: respiration_loss += p.amount
+		if chance(Catalog.decay(p.kind),local_dt):
+			respiration_loss += p.amount*Catalog.material(p.kind)
 			p.alive = false
 			chemistry_events.decay += 1
 			continue
@@ -789,7 +812,7 @@ func _chemistry(dt: float, patch: Array[int] = [], background: bool = false) -> 
 				other.v += push*8
 
 static func particle_radius(kind: int) -> float:
-	return [4.0,2.5,3.0,2.5,5.0,3.0,4.0,4.0,3.0,3.0,3.5][kind]
+	return Catalog.radius(kind)
 
 static func particle_scale(amount: float) -> float:
 	return clampf(sqrt(amount/0.3),0.8,1.7)
@@ -815,11 +838,12 @@ func _react_pair(a: Dictionary, b: Dictionary, acid: float = 0.0) -> bool:
 	if b.kind == ENZYME and a.kind == WASTE: return _react_pair(b,a,acid)
 	if a.kind == ENZYME and b.kind == WASTE and acid < 0.9:
 		b.kind = NUTRIENT
+		b.capacity = 0.0 # Salvaged carbon has no restored fuel potential.
 		recycled += b.amount
 		chemistry_events.enzyme += 1
 		return true
-	if b.kind == ANTITOXIN and a.kind == TOXIN: return _react_pair(b,a,acid)
-	if a.kind == ANTITOXIN and b.kind == TOXIN:
+	if b.kind == ANTITOXIN and a.kind in [TOXIN,TAG,PORE_SUBUNIT]: return _react_pair(b,a,acid)
+	if a.kind == ANTITOXIN and b.kind in [TOXIN,TAG,PORE_SUBUNIT]:
 		_record_sound("neutralize",a.p,a.owner,b.amount)
 		a.kind = WASTE
 		a.amount += b.amount
@@ -837,6 +861,7 @@ func _react_pair(a: Dictionary, b: Dictionary, acid: float = 0.0) -> bool:
 	if a.kind == WASTE and b.kind == OXYGEN and b.amount >= a.amount*0.15 and acid < 0.8:
 		var amount: float = a.amount
 		a.kind = NUTRIENT
+		a.capacity = 0.0
 		a.amount = amount*0.6
 		b.kind = CARBON
 		b.amount = amount*0.4
@@ -848,7 +873,7 @@ func _react_pair(a: Dictionary, b: Dictionary, acid: float = 0.0) -> bool:
 		a.kind = WASTE
 		chemistry_events.spoil += 1
 		return true
-	if a.kind == b.kind and a.kind in [NUTRIENT,WASTE,CARBON,OXYGEN] and a.amount+b.amount <= 1.4:
+	if a.kind == b.kind and a.kind in [NUTRIENT,WASTE,CARBON,OXYGEN] and a.amount+b.amount <= float(Catalog.data().ecology.merge_limit):
 		if a.kind == TOXIN and a.owner != b.owner: return false
 		var total: float = a.amount+b.amount
 		if total <= 0: return false
@@ -856,6 +881,7 @@ func _react_pair(a: Dictionary, b: Dictionary, acid: float = 0.0) -> bool:
 		# remainders can be below float32 range while their ratio is well-defined.
 		a.v = a.v.lerp(b.v,b.amount/total)
 		a.amount += b.amount
+		a.capacity = float(a.get("capacity",0))+float(b.get("capacity",0))
 		b.alive = false
 		chemistry_events.combine += 1
 		return true
@@ -879,39 +905,18 @@ func light_direction(at: Vector2) -> Vector2:
 	return Vector2(0.28*TAU*3/WORLD.x*cos(TAU*p.x/WORLD.x*3+0.4),-0.22*TAU*3/WORLD.y*sin(TAU*p.y/WORLD.y*3-0.8)).normalized()
 
 func _photosynthesize(cell, dt: float) -> void:
+	cell.chemistry.light_flux = 0.0
 	for organ in cell.organs:
-		if organ.kind != "photosynthesis": continue
-		var light := light_at(cell.organ_position(organ))
-		var count := _event_count(10*light*organ.scale*organ.scale*organ.hp/organ.max_hp*Genes.factor(organ,"sun" if light >= 0.5 else "shade"),dt)
-		if count == 0: continue
-		# Light drives a coarse dissolved-carbon fixation event. Water is an
-		# implicit medium reservoir; oxygen units are not organic mass units.
-		var amount: float = minf(cell.carbon,0.35*count)
-		if amount <= 0: continue
-		cell.carbon -= amount
-		cell.biomass += amount*0.35
-		var stored: float = minf(amount*0.35,maxf(0,cell.gut_capacity()-cell.substrate))
-		cell.substrate += stored
-		var food := amount*0.65-stored
-		cell.fixed_carbon += amount
-		if cell == player: evolution.record("photo",amount)
-		cell.oxygen_produced += amount*2.5
-		cell.gain_energy(amount*4,organ)
-		var at: Vector2 = cell.organ_position(organ)+cell.organ_normal(organ).rotated(cell.angle)*16
-		spawn_particle(OXYGEN,at,Vector2.from_angle(rng.randf()*TAU)*12,amount*2.5,cell.id)
-		spawn_particle(NUTRIENT,at,Vector2.from_angle(rng.randf()*TAU)*18,food,cell.id)
-		cell.consumed(organ,amount)
+		if organ.kind == "photosynthesis" and organ.hp > 0:
+			cell.chemistry.photosynthesize(self,cell,organ,dt)
 
 func _seed_cell_products(cell) -> void:
-	# Explicit cell-derived starting stocks, representing earlier metabolism.
-	var food_count := 55 if habitat != 1 else 14
-	cell.carbon += food_count*0.3+24
-	cell.oxygen += 36
-	for i in (food_count+180):
-		var kind := NUTRIENT if i < food_count else CARBON if i < food_count+60 else OXYGEN
+	var multiplier := 1 if OS.get_environment("PRIMORDIA_ECOLOGY") == "reference" else int(Catalog.data().ecology.seed_packets)
+	var food_count := (55 if habitat != 1 else 14)*multiplier
+	# Explicit pre-observation cell-derived inputs. No habitat spawner follows.
+	for i in (food_count+180*multiplier):
+		var kind := NUTRIENT if i < food_count else CARBON if i < food_count+60*multiplier else OXYGEN
 		var amount := 0.3 if kind != CARBON else 0.4
-		if kind == OXYGEN: cell.oxygen -= amount
-		else: cell.carbon -= amount
 		var at: Vector2 = cell.position+Vector2.from_angle(rng.randf()*TAU)*(cell.radius+12+rng.randf()*160)
 		spawn_particle(kind,at,Vector2.ZERO,amount,cell.id)
 
@@ -927,10 +932,10 @@ func _suction_cell(cell, dt: float) -> void:
 		var cost: float = dt*(Cell.CILIA_PUMP if ciliary else Cell.PUMP_UPKEEP)*organ.scale*organ.scale
 		var health: float = organ.hp/organ.max_hp
 		var power: float = (Cell.CILIA_FLOW if ciliary else Cell.ORAL_FLOW)*organ.scale*health*Genes.factor(organ,"suction")
-		power *= minf(1,cell.energy/maxf(0.000001,cost))
+		var paid: float = cell.spend_energy(cost,organ,"pumping")
+		power *= minf(1,paid/maxf(0.000001,cost))
 		var at: Vector2 = cell.organ_position(organ)+cell.organ_normal(organ).rotated(cell.angle)*8 if ciliary else cell.pore_center(organ)
 		fluid.suction(cell,at,(Cell.CILIA_REACH if ciliary else Cell.ORAL_REACH)*sqrt(organ.scale),power,dt,cell.target if ciliary else Vector2.ZERO)
-		cell.spend_energy(cost,organ,"pumping")
 
 func _steering_weight(organ: Dictionary, mode: String) -> float:
 	# Explicit flight is a safety drive, independent of feeding/hunting tuning.
@@ -1126,7 +1131,9 @@ func _feed(cell) -> void:
 				var amount = minf(p.amount,maxf(0,cell.gut_capacity()-cell.substrate))
 				p.amount -= amount
 				if kernels != null: kernels.invalidate_particle_render(index)
-				cell.substrate += amount
+				var fuel: float = minf(p.get("capacity",p.amount+amount),p.amount+amount)*amount/maxf(0.000001,p.amount+amount)
+				cell.receive_particle(NUTRIENT,amount,fuel,p.p)
+				p.capacity = maxf(0,p.get("capacity",p.amount+amount)-fuel)
 				cell.eaten += amount
 				if p.owner != cell.id: cell.foreign_intake += amount
 				if amount > 0: cell.consumed(organ,amount)
@@ -1134,15 +1141,15 @@ func _feed(cell) -> void:
 	for index in grid.query(cell.position,cell.extent()+12):
 		var p: Dictionary = particles[index]
 		if p.alive and p.kind == CARBON and cell.count("photosynthesis") > 0 and activity_at(p.p) > 0 and Medium.offset(cell.position,p.p).length() < cell.extent()+18:
-			var carbon_taken: float = minf(p.amount,maxf(0,30*cell.growth_scale()-cell.carbon))
-			cell.carbon += carbon_taken
+			var carbon_taken: float = minf(p.amount,maxf(0,float(Catalog.data().ecology.carbon_capacity)*cell.growth_scale()-cell.carbon))
+			cell.receive_particle(CARBON,carbon_taken,carbon_taken,p.p)
 			if p.owner != cell.id: cell.foreign_intake += carbon_taken
 			p.amount -= carbon_taken
 			if kernels != null: kernels.invalidate_particle_render(index)
 			if p.amount <= 0.000001: p.alive = false
 		if p.alive and p.kind == OXYGEN and activity_at(p.p) > 0 and Medium.offset(cell.position,p.p).length() < cell.support(Medium.offset(cell.position,p.p).angle())+14:
 			var amount = minf(p.amount,maxf(0,cell.oxygen_capacity()-cell.oxygen))
-			cell.oxygen += amount
+			cell.receive_particle(OXYGEN,amount,amount,p.p)
 			p.amount -= amount
 			if kernels != null: kernels.invalidate_particle_render(index)
 			if p.amount <= 0.000001: p.alive = false
@@ -1150,38 +1157,16 @@ func _feed(cell) -> void:
 	if cell.eaten > before: _record_sound("feeding",cell.position,cell.id,cell.eaten-before)
 
 func _metabolize(cell, dt: float) -> void:
-	# Storage mobilization bridges a food gap; it is not free ATP. It transfers
-	# existing tissue through the same limited metabolic pathways.
 	cell.reserve_activity = maxf(0,cell.reserve_activity-dt)
-	if cell.energy < 10 and cell.substrate < 1:
+	if cell.energy < 10 and cell.substrate+cell.chemistry.storage_used() < 1:
 		var mobilized: float = minf(maxf(0,cell.biomass-8),dt*0.3*cell.growth_scale())
 		cell.biomass -= mobilized
 		cell.substrate += mobilized
 		cell.reserve_used += mobilized
 		if mobilized > 0: cell.reserve_activity = 2
-	var capacity: float = dt*1.8*cell.growth_scale()*(1-cell.acid_stress*0.6)
-	var amount = minf(minf(cell.substrate,cell.oxygen),capacity)
-	cell.substrate -= amount
-	cell.oxygen -= amount
-	cell.gain_energy(amount*Cell.AEROBIC_ATP)
-	cell.biomass += amount*0.7
-	cell.carbon += amount*0.1
-	cell.waste += amount*0.2
-	cell.processed += amount
 	cell.fermentation_activity = maxf(0,cell.fermentation_activity-dt)
-	var fermented: float = minf(cell.substrate,maxf(0,capacity-amount))
-	if fermented > 0:
-		cell.substrate -= fermented
-		cell.gain_energy(fermented*Cell.FERMENT_ATP)
-		cell.biomass += fermented*0.3
-		cell.waste += fermented*0.3
-		cell.carbon += fermented*0.1
-		# Unrecoverable end products leave the represented material pool. This
-		# prevents waste/enzyme recycling from becoming a closed energy source.
-		respiration_loss += fermented*0.3
-		cell.processed += fermented
-		cell.fermented += fermented
-		cell.fermentation_activity = 2
+	cell.chemistry.advance(cell,dt,0.15+acidity.sample(cell.position)*0.1)
+	cell.Surface.advance(cell,dt,self)
 	cell.decay_energy(dt)
 	cell.spend_energy(dt*Cell.BASAL_UPKEEP*cell.growth_scale())
 	for organ in cell.organs: cell.spend_energy(dt*organ.scale*organ.scale*Genes.factor(organ,"upkeep",0.0),organ)
@@ -1200,7 +1185,7 @@ func _secretion_needed(cell, organ: Dictionary, kind: int) -> bool:
 		return kernels.pool_needed(grid.query(at,reach),at,reach,wanted,coarse_mode,cell.lineage_id(),inherited_lineages,player.position if camera_follows_player else camera_position,view_half)
 	for index in grid.query(at,reach):
 		var packet: Dictionary = particles[index]
-		if not packet.alive or packet.kind != wanted or (not coarse_mode and activity_at(packet.p) <= 0): continue
+		if not packet.alive or (packet.kind not in [TOXIN,TAG,PORE_SUBUNIT] if wanted==TOXIN else packet.kind != wanted) or (not coarse_mode and activity_at(packet.p) <= 0): continue
 		if wanted == TOXIN and inherited_lineages.get(packet.owner,packet.owner) == cell.lineage_id(): continue
 		if Medium.offset(at,packet.p).length_squared() <= reach*reach: return true
 	return false
@@ -1211,12 +1196,6 @@ func _emit_and_attack(cell, dt: float) -> void:
 	while cell.emission_clock <= 0:
 		cell.emission_clock += 1.0/PHEROMONE_RATE
 		_emit_pheromone(cell,maxf(0,coarse_event_at+cell.emission_clock-1.0/PHEROMONE_RATE) if coarse_mode else time)
-	if cell.carbon > (3.0 if cell.count("photosynthesis") == 0 else 20.0):
-		for event in _event_count(5.0,dt):
-			if cell.carbon <= (3.0 if cell.count("photosynthesis") == 0 else 20.0): break
-			var amount: float = minf(0.3,cell.carbon)
-			cell.carbon -= amount
-			spawn_particle(CARBON,cell.excretion_position(),Vector2.ZERO,amount,cell.id)
 	for organ in cell.organs:
 		var kind: int = {"feeding":ENZYME,"neutralizing":ANTITOXIN,"acidifying":ACID,"regenerative":BUFFER}.get(organ.kind,-1)
 		var energy_cost := Cell.SECRETION_COST*Genes.factor(organ,"secretion_cost")
@@ -1224,7 +1203,7 @@ func _emit_and_attack(cell, dt: float) -> void:
 		if kind != ENZYME and cell.energy < 12: continue
 		var rate := 0.35 if kind == ENZYME else 2.0
 		for event in _event_count(rate*organ.scale*organ.scale*Genes.factor(organ,"secretion"),dt):
-			if cell.biomass < 0.06 or cell.energy < energy_cost: break
+			if cell.biomass < 0.06 or cell.available_energy(organ)+0.0000001 < energy_cost: break
 			# Query only on a scheduled secretion attempt, rather than every tick.
 			if not _secretion_needed(cell,organ,kind): continue
 			cell.biomass -= 0.06
@@ -1244,14 +1223,19 @@ func _emit_and_attack(cell, dt: float) -> void:
 			spawn_particle(TOXIN,cell.position+direction*(cell.radius+12),direction*24,0.08,cell.id)
 
 	for organ in cell.organs:
-		if organ.kind != "toxin": continue
+		if organ.kind not in ["toxin","poreforming"]: continue
 		organ["burst_clock"] = maxf(0,float(organ.get("burst_clock",0))-dt)
-		if organ.burst_clock > 0 or cell.target_id < 0 or cell.threat.length_squared() < 0.01: continue
+		var aim: Vector2 = cell.threat if cell.target_mode == "flee" else Medium.offset(cell.position,cell.target_position).normalized()
+		if organ.burst_clock > 0 or cell.target_id < 0 or cell.target_memory <= 0 or aim.length_squared() < 0.01: continue
 		var burst: float = organ.scale*organ.scale*Genes.factor(organ,"burst")
-		if cell.energy < maxf(12,2*burst) or cell.biomass < 0.18*burst: continue
-		spawn_particle(DECOY,cell.organ_position(organ),cell.threat*145,0.03*burst,cell.id)
-		spawn_particle(TOXIN,cell.organ_position(organ),cell.threat*170,0.15*burst,cell.id)
+		if cell.energy < 12 or cell.available_energy(organ)+0.0000001 < 2*burst or cell.biomass < 0.18*burst: continue
 		cell.spend_energy(2*burst,organ,"combat")
+		if organ.kind == "poreforming":
+			_emit_aimed(TAG,cell.organ_position(organ),aim,155,0.03*burst,cell.id)
+			for unit in 4: _emit_aimed(PORE_SUBUNIT,cell.organ_position(organ),aim,155+unit*4,0.0375*burst,cell.id)
+		else:
+			_emit_aimed(DECOY,cell.organ_position(organ),aim,145,0.03*burst,cell.id)
+			_emit_aimed(TOXIN,cell.organ_position(organ),aim,170,0.15*burst,cell.id)
 		cell.biomass -= 0.18*burst
 		organ.consume_flash = 1
 		organ.burst_clock = 0.75*Genes.factor(organ,"cooldown")
@@ -1270,7 +1254,7 @@ func _motion_cell(cell, local_dt: float) -> void:
 		var arm: Vector2 = cell.organ_position(organ)-cell.position
 		var power: float = (2600.0 if organ.kind == "propulsion" else Cell.CILIA_THRUST if organ.kind == "cilia" else 1100.0)*organ.scale*organ.scale*(organ.hp/organ.max_hp)*Genes.factor(organ,"thrust")
 		var energy_cost: float = local_dt*(Cell.CILIA_MOTION if organ.kind == "cilia" else Cell.MOTION_UPKEEP)*organ.scale*organ.scale*Genes.factor(organ,"motion_cost")
-		power *= minf(1,cell.energy/maxf(0.000001,energy_cost))
+		power *= minf(1,cell.available_energy(organ)/maxf(0.000001,energy_cost))
 		var thrust: Vector2 = cell.organ_normal(organ).rotated(cell.angle)
 		# Flagella can reverse their stroke, but force follows their mounted axis.
 		if organ.kind in ["propulsion","cilia"] and thrust.dot(cell.target) < 0: thrust = -thrust
@@ -1345,108 +1329,6 @@ func _contacts(dt: float) -> void:
 		profile_counts["cell_pair_checks"] = profile_counts.get("cell_pair_checks",0)+checks
 		profile_counts["cell_contacts"] = profile_counts.get("cell_contacts",0)+hits
 
-func _spike_contacts(dt: float, starts: Dictionary = {}) -> void:
-	for attacker in cells:
-		if attacker.dead or attacker.activity <= 0 or attacker.health <= 0: continue
-		for organ in attacker.organs:
-			if organ.kind != "offensive" or organ.hp <= 0: continue
-			_spike_plants(attacker,organ,starts.get(attacker.id,{}),dt)
-			for prey in cells:
-				if prey == attacker or prey.dead or prey.health <= 0: continue
-				if spatial_queries:
-					var travel_bound := 0.0
-					if starts.has(attacker.id): travel_bound += Medium.offset(starts[attacker.id].p,attacker.position).length()
-					if starts.has(prey.id): travel_bound += Medium.offset(starts[prey.id].p,prey.position).length()
-					var bound: float = attacker.extent()+50*organ.scale+prey.extent()+travel_bound
-					if Medium.offset(attacker.position,prey.position).length_squared() > bound*bound: continue
-				var base: Vector2 = attacker.organ_position(organ)
-				var direction: Vector2 = attacker.organ_normal(organ).rotated(attacker.angle)
-				var length: float = 42.0*organ.scale
-				# Translation sweep against the shaft. Rotation is handled by
-				# small motion substeps plus current overlap and tip sweeps below.
-				if starts.has(attacker.id) and starts.has(prey.id):
-					var old: Dictionary = starts[attacker.id]
-					var before: Dictionary = starts[prey.id]
-					var arm: Vector2 = (attacker.local_point(organ.a)+attacker.organ_normal(organ)*5*organ.scale).rotated(old.angle)
-					var old_base: Vector2 = old.p+arm
-					var old_direction: Vector2 = attacker.organ_normal(organ).rotated(old.angle)
-					var old_tip: Vector2 = old_base+old_direction*length
-					var from: Vector2 = old_base+Medium.offset(old_base,before.p)
-					var travel := Medium.offset(before.p,prey.position)-Medium.offset(old.p,attacker.position)
-					var closest := Habitat.closest(from,old_base,old_tip)
-					var reach: float = prey.support((closest-from).angle())+3*organ.scale
-					var hit := Habitat.capsule_hit(from,travel,old_base,old_tip,reach)
-					# Sweep shaft samples against the prey too, so a rotating weapon
-					# cannot jump past it between the bounded physics substeps.
-					for fraction in [0.0,0.5,1.0]:
-						var prior: Vector2 = old_base+old_direction*length*fraction
-						var current: Vector2 = base+direction*length*fraction
-						var relative_start := Medium.offset(before.p,prior)
-						var relative_travel := Medium.offset(prior,current)-Medium.offset(before.p,prey.position)
-						var radius: float = prey.support(relative_start.angle())+3*organ.scale
-						hit = minf(hit,Habitat.circle_hit(relative_start,relative_travel,Vector2.ZERO,radius))
-					if hit >= 0 and hit <= 1 and from.distance_to(closest) > reach+0.01:
-						# Preserve each body's traveled fraction at first contact;
-						# the impulse resolves the remaining closing velocity.
-						attacker.position = Medium.wrap_position(old.p+Medium.offset(old.p,attacker.position)*hit)
-						prey.position = Medium.wrap_position(before.p+Medium.offset(before.p,prey.position)*hit)
-						attacker.angle = lerp_angle(old.angle,attacker.angle,hit)
-						direction = attacker.organ_normal(organ).rotated(attacker.angle)
-						base = attacker.organ_position(organ)
-				var d := Medium.offset(base,prey.position)
-				var along := clampf(d.dot(direction),0,length)
-				var shaft: Vector2 = base+direction*along
-				var offset := Medium.offset(shaft,prey.position)
-				var normal := offset.normalized() if offset.length_squared() > 0.000001 else direction
-				var reach: float = prey.support((-normal).angle())+3*organ.scale
-				var penetration := reach-offset.length()
-				if penetration < -0.2: continue
-				var at: Vector2 = shaft+normal*3*organ.scale
-				var speed := maxf(0,-(Contacts.velocity_at(prey,at)-Contacts.velocity_at(attacker,at)).dot(normal))
-				if profiling: profile_counts["spike_contacts"] = profile_counts.get("spike_contacts",0)+1
-				var impact := Contacts.solve(attacker,prey,at,normal,penetration)
-				Contacts.dent(prey,at,maxf(0,penetration)*0.18+speed*dt*0.65)
-				Contacts.dent(attacker,base,speed*dt*0.12)
-				organ.consume_flash = maxf(organ.consume_flash,minf(1,0.2+speed/60))
-				# Physical obstruction applies to relatives too; recognition only
-				# prevents deliberate tissue injury. No contact writes AI targets.
-				if prey.activity <= 0 or prey.lineage_id() == attacker.lineage_id(): continue
-				var local_dt := dt*minf(attacker.activity,prey.activity)
-				var energy: float = attacker.spend_energy(local_dt*1.2*organ.scale*organ.scale*Genes.factor(organ,"attack_cost"),organ,"combat")
-				var damage: float = energy*12*Genes.factor(organ,"damage")+(minf(45,impact/prey.mass*0.9) if speed >= 6 else 0.0)
-				if damage <= 0: continue
-				prey.waste += prey.damage(damage,Medium.offset(prey.position,at).angle())
-				prey.death_hint = "Membrane failed after spike wounds"
-				if attacker == player: evolution.record("spike",damage)
-				organ.feeding = true
-				organ.link = at
-				attacker.feeding_feedback = "SPIKE CONTACT"
-
-func _spike_plants(cell, organ: Dictionary, before: Dictionary, dt: float) -> void:
-	if not habitat_geometry.enabled: return
-	var local: Vector2 = cell.local_point(organ.a)
-	var direction: Vector2 = cell.organ_normal(organ)
-	var root: Vector2 = local+direction*5*organ.scale
-	var old_p: Vector2 = before.get("p",cell.position)
-	var old_angle: float = before.get("angle",cell.angle)
-	var candidates: Array = habitat_geometry.query(old_p,cell.position,cell.extent()+50*organ.scale)
-	if candidates.is_empty(): return
-	# Bounded overlapping shaft samples, swept through translation and rotation.
-	# Main stems resist weapons; the decorative fern leaves remain permeable.
-	for fraction in [1.0,0.75,0.5,0.25,0.0]:
-		var arm: Vector2 = root+direction*42*organ.scale*fraction
-		var at: Vector2 = cell.position+arm.rotated(cell.angle)
-		var previous: Vector2 = old_p+arm.rotated(old_angle)
-		var result: Array = habitat_geometry.move(previous,at,Contacts.velocity_at(cell,at),(3+7*(1-fraction))*organ.scale,candidates)
-		if not result[2]: continue
-		var correction := Medium.offset(at,result[0])
-		if correction.length_squared() < 0.000001: continue
-		var normal := -correction.normalized()
-		var speed := maxf(0,Contacts.velocity_at(cell,at).dot(normal))
-		Contacts.solve(cell,null,at,normal,correction.length())
-		Contacts.dent(cell,cell.organ_position(organ),speed*dt*0.2)
-		organ.consume_flash = maxf(organ.consume_flash,minf(1,0.15+speed/60))
-
 func _exclude_particles() -> void:
 	if native_exclusion:
 		var ids := local_particle_ids()
@@ -1511,7 +1393,26 @@ func _receptor_contacts() -> void:
 				p.alive = false
 				cell.render_revision += 1
 
+func _surface_contacts() -> void:
+	var camera: Vector2 = player.position if camera_follows_player else camera_position
+	if particle_pool:
+		kernels.pool_surface_contacts(grid.query(player.position,view_half.length()+180),cells,inherited_lineages,camera,view_half)
+		return
+	for index in local_particle_ids():
+		var packet: Dictionary = particles[index]
+		if not packet.alive or packet.kind not in [TAG,PORE_SUBUNIT,ANTITOXIN]: continue
+		for cell in cells:
+			if cell.dead or cell.activity <= 0: continue
+			if packet.kind != ANTITOXIN and cell.lineage_id() == inherited_lineages.get(packet.owner,packet.owner): continue
+			var d := Medium.offset(cell.position,packet.p)
+			if d.length() > cell.extent()+5 or d.length() > cell.support(d.angle())+5: continue
+			if packet.direction.dot(-d.normalized()) < 0.5: continue
+			if cell.accept_surface(packet.kind,packet.amount,d.angle(),packet.owner):
+				packet.alive = false
+				break
+
 func _toxin_contacts() -> void:
+	_surface_contacts()
 	if spatial_queries: cell_index.rebuild(cells)
 	if particle_pool:
 		kernels.pool_toxins(local_particle_kind(TOXIN),cells,cell_index.buckets,spatial_queries,inherited_lineages,player.position if camera_follows_player else camera_position,view_half,player.id,evolution)
@@ -1541,17 +1442,40 @@ func _die(cell, transferred: float = 0.0) -> void:
 	cell.dead = true
 	cell.health = 0
 	var total: float = maxf(0,cell.organic_mass()-transferred)
-	var count := maxi(24,ceili(total/0.4))
+	var oxygen: float = cell.oxygen
+	var structural: float = maxf(0,cell.body+cell.biomass+cell.organ_mass()+cell.brood_mass+cell.chemistry.reactor_mass-transferred)
+	for vacuole in cell.chemistry.vacuoles: structural += vacuole.material
+	# Surface complexes have already oxidized; lysis does not refuel them.
+	if cell.surface_material() > 0: _emit_material(WASTE,cell.position,cell.surface_material(),Vector2.ZERO,cell.id)
+	var quantum: float = Catalog.data().ecology.packet_quantum
+	var count := maxi(1,ceili(structural/quantum))
 	for i in count:
-		var direction = Vector2.from_angle(TAU*i/count)
-		spawn_particle(NUTRIENT,cell.position+direction*cell.radius*0.9,direction*24,total/count,cell.id)
-	var oxygen: float = maxf(0,cell.oxygen)
-	cell.oxygen = 0
-	# Retained dissolved resource is released, never manufactured on death.
-	var oxygen_packets := ceili(oxygen/0.4)
-	for i in oxygen_packets:
-		var direction := Vector2.from_angle(TAU*(i+0.5)/oxygen_packets)
-		spawn_particle(OXYGEN,cell.position+direction*cell.radius*0.9,direction*24,oxygen/oxygen_packets,cell.id)
+		var direction := Vector2.from_angle(TAU*i/count)
+		spawn_particle(NUTRIENT,cell.position+direction*cell.radius*0.9,direction*24,structural/count,cell.id)
+	for packet in cell.chemistry.particles:
+		if not packet.alive: continue
+		var key: String = "nutrient" if packet.species == "food" else "atp" if packet.species == "reserved_atp" else packet.species
+		var kind := -1
+		for definition in Catalog.data().external_species:
+			if definition.key == key: kind = definition.id; break
+		assert(kind >= 0,"Intracellular species has no lysis packet")
+		var normal: Vector2 = packet.p.normalized().rotated(cell.angle)
+		var at: Vector2 = Medium.wrap_position(cell.position+packet.p.rotated(cell.angle))
+		spawn_particle(kind,at,normal*24,packet.amount,cell.id)
+		if kind == NUTRIENT:
+			last_spawn.capacity = clampf(packet.fuel/7.5,0,packet.amount)
+			_commit_spawn_metadata()
+		packet.alive = false
+	cell.chemistry.particles.clear()
+	cell.chemistry.totals.clear()
+	cell.chemistry.bins.clear()
+	cell.chemistry.vacuoles.clear()
+	cell.surface_complexes.clear()
+	cell.body = 0
+	cell.biomass = 0
+	cell.brood_mass = 0
+	cell.organs.clear()
+	cell.chemistry.reactor_mass = 0
 	events.append({"time":time,"type":"death","id":cell.id,"released":total,"oxygen_released":oxygen})
 	if cell == player: return
 	if cell.role == "ancestor" or cell.lineage_id() == 0:
@@ -1642,7 +1566,9 @@ func mutate_organ(identity: int, gene: String) -> bool:
 	return true
 
 func offspring_quote() -> Dictionary:
-	var tissue := 0.0
+	var tissue: float = player.chemistry.reactor_mass
+	for node in player.chemistry.nodes:
+		if not node.basal: tissue += 0.025
 	for organ in player.organs: tissue += organ.get("max_material",Cell.organ_cost(organ.kind,organ.scale))
 	var radius := maxf(34,player.occupied()/(TAU*0.8))
 	var body := maxf(30,pow(radius/47.0,2)*78-12)
@@ -1666,6 +1592,8 @@ func make_offspring(parent, quote: Dictionary):
 	child.carbon = 8
 	child.oxygen = minf(parent.oxygen,quote.oxygen)
 	child.energy = 40
+	child.body -= 0.25
+	child.chemistry.inherit_configuration(parent.chemistry)
 	child.organs = parent.organs.duplicate(true)
 	child.next_organ_id = parent.next_organ_id
 	child.exploration = parent.exploration
@@ -1682,6 +1610,8 @@ func make_offspring(parent, quote: Dictionary):
 		organ.consume_clock = 0.0
 		organ.charge_flash = 0.0
 		organ.consumed_total = 0.0
+	for organ in child.organs:
+		if organ.kind == "photosynthesis": child.chemistry.anchor_photosynthesis(child,organ); break
 	child.update_geometry()
 	child.membrane = Cell.Membrane.new(child.radius)
 	child.membrane.skeleton = Cell.clone_state(parent.membrane.skeleton)
@@ -1707,6 +1637,7 @@ func divide_lineage(dormant: bool = false, follow: bool = true) -> bool:
 				break
 	if not found: return false
 	var parent = player
+	child.chemistry.partition(parent.chemistry,0.25)
 	parent.brood_mass -= quote.material
 	parent.body -= quote.body_transfer
 	parent.brood_energy -= quote.energy

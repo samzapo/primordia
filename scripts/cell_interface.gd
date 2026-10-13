@@ -1,5 +1,6 @@
 extends Control
 ## Cell-local entry points replace the HUD and assembly/modify panes.
+var pathways := preload("res://scripts/chemistry_editor.gd").new()
 const Interior = preload("res://scripts/cell_interior.gd")
 const Action = preload("res://scripts/cell_action.gd")
 const Biomass = preload("res://scripts/biomass_preview.gd")
@@ -27,6 +28,8 @@ var last_goal := ""
 
 func initialize(owner_game) -> void:
 	game = owner_game
+	add_child(pathways)
+	pathways.initialize(game)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	interior.game = game
@@ -62,6 +65,7 @@ func reset() -> void:
 	last_goal = game.world.evolution.goal_key(game.world)
 
 func close_context() -> void:
+	pathways.hide()
 	context.clear()
 	hovered_price.clear()
 	for choice in choices:
@@ -135,6 +139,10 @@ func open_context(target: Dictionary) -> void:
 				var kind: String = sim.KINDS[index]
 				var cost: float = sim.Cell.organ_cost(kind)
 				_choice(game.TITLES[index],"%.0f tissue · 1 AP\n%s" % [cost,game.HELP[index]],game._select.bind(index),kind,"",cell.biomass >= cost and run.points >= 1,cost,1,{"kind":kind,"scale":1.0,"mutation":""})
+			if target.kind == "chemistry":
+				_choice("Pathways","Configure local catalysts. Chemical transport happens through real cytoplasmic particles.",func():
+					close_context()
+					pathways.open_cell(),"","Paths")
 		"organ":
 			var organ: Dictionary = cell.organ_by_id(target.id)
 			if organ.is_empty(): close_context(); return
@@ -296,7 +304,7 @@ func describe(target: Dictionary) -> String:
 	var sim = game.world
 	var run = sim.evolution
 	match target.kind:
-		"assembly": return "Assembly factory\nCilia, flagella, armor, spikes, repair and receptors."
+		"assembly": return "Assembly factory\nCilia, flagella, armor, chemical glands, repair and receptors."
 		"chemistry": return "Chemistry factory\nPhotosynthesis, toxins, neutralizers and acid."
 		"atp":
 			var rates: Dictionary = cell.energy_budget.rates(cell.age)

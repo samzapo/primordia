@@ -65,6 +65,7 @@ func run() -> void:
 	check(final.exposure.hits[0].is_empty(),"Drained exposure stays empty")
 	gpu.close();await gpu.closed
 	await coarse_exposure()
+	await surface_assemblies()
 	print("RESIDENT_EXPOSURE_VALIDATION ",checks," checks")
 	quit()
 
@@ -88,4 +89,24 @@ func coarse_exposure() -> void:
 	check(total==expected,"Overflow retry never rerolls the coarse exposure lottery")
 	receipt=gpu.exchange_sync([cell],[],[],[],options)
 	check(receipt.exposure.hits[0].is_empty(),"Completed hazard interval cannot consume more toxins")
+	gpu.close();await gpu.closed
+
+
+func surface_assemblies() -> void:
+	var cell=Cell.new(20,Vector2(2048,1280))
+	var normal:=Vector2.RIGHT
+	var at: Vector2=cell.position+cell.local_point(0)
+	var data:=packet(11,at,PI,.03)
+	data.append_array(packet(12,at,PI,.0375))
+	data.append_array(packet(11,at,PI,.03))
+	var gpu=await setup(data,[{"slot":0,"owner":21,"lineage":21},{"slot":1,"owner":21,"lineage":21},{"slot":2,"owner":20,"lineage":20}])
+	var result: Dictionary=gpu.exchange_sync([cell],[],[],[],{"feeding":false,"exposure":true,"projection":false})
+	check(result.exposure.hits[0].size()==2,"Only foreign, correctly facing surface packets bind")
+	check(result.exposure.hits[0][0].kind==11 and result.exposure.hits[0][1].kind==12,"Exposure receipt retains surface species and ordered finite subunits")
+	var Surface=preload("res://scripts/surface_chemistry.gd")
+	for hit in result.exposure.hits[0]:
+		check(Surface.bind(cell,hit.kind,hit.amount,hit.angle),"GPU-bound subunits form the same finite CPU membrane complex")
+	check(absf(cell.surface_material()-.0675)<.000001,"Bound GPU chemical material is retained exactly")
+	var again: Dictionary=gpu.exchange_sync([cell],[],[],[],{"feeding":false,"exposure":true,"projection":false})
+	check(again.exposure.hits[0].is_empty(),"Surface packets cannot be consumed twice")
 	gpu.close();await gpu.closed

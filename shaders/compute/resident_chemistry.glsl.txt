@@ -10,8 +10,10 @@ layout(set=0,binding=5,std430) buffer Receipt { vec4 receipt[]; };
 layout(set=0,binding=6,std430) readonly buffer PairStats { uint pair_stats[]; };
 layout(set=0,binding=7,std430) readonly buffer Identity { uvec2 identity[]; };
 layout(set=0,binding=8,std430) readonly buffer Events { vec4 events[]; };
-layout(push_constant,std430) uniform Params {uint count;uint stage;float dt;uint tick;float now;uint output_at;uint groups;uint seed;} pc;
+layout(push_constant,std430) uniform Params {uint count;uint stage;float dt;uint tick;float now;uint output_at;uint groups;uint seed;vec4 scope;} pc;
 shared vec4 sums[128];
+shared vec4 shown[128];
+/*CATALOG_MATERIAL*/
 ivec2 pixel(uint i){return ivec2(int(i%256u)*3,int(i/256u));}
 uint hash32(uint x){x=((x^(x>>16))*0x7feb352du);x=((x^(x>>15))*0x846ca68bu);return x^(x>>16);}
 void main(){
@@ -50,11 +52,11 @@ void main(){
   if(i<pc.count){
    vec4 v=imageLoad(state,pixel(i)+ivec2(1,0)),m=imageLoad(state,pixel(i)+ivec2(2,0));
    if(v.w>=0.&&v.w!=3.){
-    const float rates[11]=float[11](.003,.008,.006,0.,.1,.001,.02,.015,.008,.008,.08);
+    /*CATALOG_DECAY*/
     uint random=hash32(i^hash32(pc.tick)^hash32(identity[i].x)^pc.seed);
     float roll=(float(random>>8)+.5)/16777216.;
     if(roll<1.-exp(-rates[int(v.w)]*pc.dt)){
-     total=vec4(v.w==1.?0.:m.y,1,0,0);
+     total=vec4(m.y*materials[int(v.w)],1,0,0);
      v.w=-1.;m=vec4(0);
      imageStore(state,pixel(i)+ivec2(1,0),v);imageStore(state,pixel(i)+ivec2(2,0),m);
     }
@@ -62,29 +64,35 @@ void main(){
   }
   sums[lane]=total;barrier();
   for(uint stride=64u;stride>0u;stride>>=1){if(lane<stride)sums[lane]+=sums[lane+stride];barrier();}
-  if(lane==0u)partials[gl_WorkGroupID.x*2u]=sums[0];
+  if(lane==0u)partials[gl_WorkGroupID.x*3u]=sums[0];
   return;
  }
  if(pc.stage==2u){
-  vec4 total=vec4(0);
+  vec4 total=vec4(0),visible=vec4(0);
   if(i<pc.count){
    float kind=imageLoad(state,pixel(i)+ivec2(1,0)).w;
    float amount=imageLoad(state,pixel(i)+ivec2(2,0)).y;
-   if(kind>=0.)total=vec4(1,kind==3.?1.:0.,kind!=1.&&kind!=3.?amount:0.,kind==1.?amount:0.);
+   if(kind>=0.){
+    total=vec4(1,kind==3.?1.:0.,amount*materials[int(kind)],kind==1.?amount:0.);
+    vec2 at=imageLoad(state,pixel(i)).xy;
+    vec2 d=mod(at-pc.scope.xy+vec2(2048,1280),vec2(4096,2560))-vec2(2048,1280);
+    if(pc.scope.z>=0.&&all(lessThanEqual(abs(d),pc.scope.zw)))
+     visible=vec4(kind!=3.?1.:0.,materials[int(kind)]>0.?1.:0.,kind==3.?1.:0.,0);
+   }
   }
-  sums[lane]=total;barrier();
-  for(uint stride=64u;stride>0u;stride>>=1){if(lane<stride)sums[lane]+=sums[lane+stride];barrier();}
-  if(lane==0u)partials[gl_WorkGroupID.x*2u+1u]=sums[0];
+  sums[lane]=total;shown[lane]=visible;barrier();
+  for(uint stride=64u;stride>0u;stride>>=1){if(lane<stride){sums[lane]+=sums[lane+stride];shown[lane]+=shown[lane+stride];}barrier();}
+  if(lane==0u){partials[gl_WorkGroupID.x*3u+1u]=sums[0];partials[gl_WorkGroupID.x*3u+2u]=shown[0];}
   return;
  }
  if(pc.stage==3u){
   for(uint a=lane;a<640u;a+=128u)receipt[pc.output_at+a]=vec4(acid[a*4u+1u],acid[a*4u+2u],acid[a*4u+3u],acid[a*4u+4u]);
-  for(uint channel=0u;channel<2u;channel++){
+  for(uint channel=0u;channel<3u;channel++){
    vec4 total=vec4(0);
-   for(uint group=lane;group<pc.groups;group+=128u)total+=partials[group*2u+channel];
+   for(uint group=lane;group<pc.groups;group+=128u)total+=partials[group*3u+channel];
    sums[lane]=total;barrier();
    for(uint stride=64u;stride>0u;stride>>=1){if(lane<stride)sums[lane]+=sums[lane+stride];barrier();}
-   if(lane==0u)receipt[pc.output_at+640u+channel]=sums[0];
+   if(lane==0u)receipt[pc.output_at+(channel==2u?774u:640u+channel)]=sums[0];
    barrier();
   }
   vec4 selected=vec4(0);float recycled=0.;

@@ -1,4 +1,5 @@
 extends RefCounted
+const Catalog=preload("res://scripts/chemistry_catalog.gd")
 ## Bounded GPU exchange transport. It returns receipts; it never credits cells.
 const MAX_BODIES:=64
 const MAX_FEEDS:=256
@@ -46,7 +47,7 @@ static func prepare(cells: Array, emissions: Array, handles: Array, feeding: boo
 		bodies.append_array(PackedFloat32Array([cell.position.x,cell.position.y,cell.angle,cell.extent(),
 			start,visual.size(),physical_start,physical.size(),
 			maxf(0,cell.gut_capacity()-cell.substrate),maxf(0,cell.oxygen_capacity()-cell.oxygen),
-			maxf(0,30*cell.growth_scale()-cell.carbon),cell.id,rates.get("dt",0),rates.get("radius",0),rates.get("seed",0),0]))
+			maxf(0,float(preload("res://scripts/chemistry_catalog.gd").data().ecology.carbon_capacity)*cell.growth_scale()-cell.carbon),cell.id,rates.get("dt",0),rates.get("radius",0),rates.get("seed",0),0]))
 		if feeding:
 			var first := true
 			for organ in cell.organs:
@@ -70,7 +71,7 @@ static func prepare(cells: Array, emissions: Array, handles: Array, feeding: boo
 			return {"error":"Invalid emission"}
 		for v in value:
 			if not is_finite(v): return {"error":"Nonfinite emission"}
-		if value[7]<0 or value[7]>10 or floor(value[7])!=value[7] or value[8]<=0 or value[8]>17 or value[9]<=0 or value[10]<0 or value[11]!=0:
+		if value[7]<0 or value[7]>25 or floor(value[7])!=value[7] or value[8]<=0 or value[8]>17 or value[9]<=0 or value[10]<0 or value[11]!=0:
 			return {"error":"Unsupported emission material, diameter or product reserve: "+str(value)}
 		value=value.duplicate()
 		value[0]=fposmod(value[0],4096);value[1]=fposmod(value[1],2560)
@@ -90,7 +91,7 @@ func initialize(device: RenderingDevice, texture: RID, slots: int, order: RID, r
 	for size in [MAX_BODIES*64,MAX_POINTS*8,MAX_FEEDS*32,MAX_EMISSIONS*64,count*8,MAX_RECEIPTS*16,MAX_INSPECTIONS*8,MAX_BODIES*16,count*8]:
 		var buffer:=rd.storage_buffer_create(size);buffers.append(buffer)
 		if not buffer.is_valid(): return false
-	var text:=RDShaderSource.new();text.source_compute=source
+	var text:=RDShaderSource.new();text.source_compute=Catalog.glsl(source)
 	var spirv:=rd.shader_compile_spirv_from_source(text)
 	if spirv.compile_error_compute!="": push_error(spirv.compile_error_compute);return false
 	shader=rd.shader_create_from_spirv(spirv);pipeline=rd.compute_pipeline_create(shader)
@@ -129,12 +130,15 @@ func upload(batch: Dictionary) -> int:
 		if not data.is_empty(): rd.buffer_update(buffers[pair[0]],0,data.size(),data);bytes+=data.size()
 	return bytes
 static func decode(bytes: PackedByteArray,batch: Dictionary) -> Dictionary:
-	var result: Dictionary={"intake":[],"pores":[],"emissions":[],"inspections":[]}
+	var result: Dictionary={"intake":[],"pores":[],"pore_fuel":[],"pore_contacts":[],"emissions":[],"inspections":[]}
 	var at:=0
 	for i in batch.body_count:
 		result.intake.append(bytes.slice(at,at+16).to_float32_array());at+=16
 	for i in batch.feed_count:
-		result.pores.append(bytes.decode_float(at));at+=16
+		result.pores.append(bytes.decode_float(at))
+		result.pore_fuel.append(bytes.decode_float(at+4))
+		result.pore_contacts.append(Vector2(bytes.decode_float(at+8),bytes.decode_float(at+12)))
+		at+=16
 	for i in batch.emit_count:
 		result.emissions.append({"accepted":bytes.decode_u32(at)==1,"handle":Vector2i(bytes.decode_s32(at+4),bytes.decode_s32(at+8))});at+=16
 	for i in batch.inspect_count:

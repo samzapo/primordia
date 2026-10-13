@@ -1,4 +1,5 @@
 #pragma once
+#include "chemical_catalog.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -15,12 +16,12 @@ void mutual_matching(std::vector<P> &ps,const Grid &grid,int lanes,uint32_t tick
  auto available=[](const P &p){return p.alive&&p.active>0&&p.elapsed>0&&p.kind!=3;};
  auto eligible=[](const P &a,const P &b,double acidity){
   if((a.kind==6&&b.kind==2)||(a.kind==2&&b.kind==6))return acidity<.9;
-  if((a.kind==7&&b.kind==4)||(a.kind==4&&b.kind==7))return true;
+  if((a.kind==7&&(b.kind==4||b.kind==11||b.kind==12))||((a.kind==4||a.kind==11||a.kind==12)&&b.kind==7))return true;
   if((a.kind==8&&b.kind==9)||(a.kind==9&&b.kind==8))return std::min(a.capacity,b.capacity)>0;
   if(a.kind==2&&b.kind==1)return b.amount>=a.amount*.15&&acidity<.8;
   if(a.kind==1&&b.kind==2)return a.amount>=b.amount*.15&&acidity<.8;
   if((a.kind==0&&b.kind==4)||(a.kind==4&&b.kind==0))return true;
-  return a.kind==b.kind&&(a.kind==0||a.kind==1||a.kind==2||a.kind==5)&&a.amount+b.amount>0&&a.amount+b.amount<=1.4;
+  return a.kind==b.kind&&(a.kind==0||a.kind==1||a.kind==2||a.kind==5)&&a.amount+b.amount>0&&a.amount+b.amount<=primordia_chemistry::merge_limit;
  };
  SimulationWorkers::shared().run(ps.size(),lanes,[&](size_t begin,size_t end){
   for(size_t i=begin;i<end;++i){
@@ -63,17 +64,17 @@ void mutual_matching(std::vector<P> &ps,const Grid &grid,int lanes,uint32_t tick
    if(!mutual)continue;
    auto &b=ps[j];b.v+=choices[j].impulse;
    P *u=&a,*v=&b;
-   if((u->kind==2&&v->kind==6)||(u->kind==4&&v->kind==7)||(u->kind==1&&v->kind==2)||(u->kind==4&&v->kind==0))std::swap(u,v);
+   if((u->kind==2&&v->kind==6)||((u->kind==4||u->kind==11||u->kind==12)&&v->kind==7)||(u->kind==1&&v->kind==2)||(u->kind==4&&v->kind==0))std::swap(u,v);
    auto &event=outcomes[i];event.reacted=true;event.other=j;
-   if(u->kind==6&&v->kind==2){v->kind=0;event.event=5;event.recycled=v->amount;}
-   else if(u->kind==7&&v->kind==4){event.neutralizer=u==&a?int(i):j;event.neutralized=v->amount;u->kind=2;u->amount+=v->amount;v->alive=false;event.event=6;}
+   if(u->kind==6&&v->kind==2){v->kind=0;v->capacity=0;event.event=5;event.recycled=v->amount;}
+   else if(u->kind==7&&(v->kind==4||v->kind==11||v->kind==12)){event.neutralizer=u==&a?int(i):j;event.neutralized=v->amount;u->kind=2;u->amount+=v->amount;v->alive=false;event.event=6;}
    else if((u->kind==8||u->kind==9)&&(v->kind==8||v->kind==9)){
     double used=std::min(u->capacity,v->capacity);u->capacity-=used;v->capacity-=used;
     if(u->capacity<=.000001)u->kind=2;if(v->capacity<=.000001)v->kind=2;
    }else if(u->kind==2&&v->kind==1){
-    double amount=u->amount;u->kind=0;u->amount=amount*.6;v->kind=5;v->amount=amount*.4;event.event=2;event.recycled=amount*.6;
+    double amount=u->amount;u->kind=0;u->capacity=0;u->amount=amount*.6;v->kind=5;v->amount=amount*.4;event.event=2;event.recycled=amount*.6;
    }else if(u->kind==0&&v->kind==4){u->kind=2;event.event=4;}
-   else {double total=u->amount+v->amount;u->v=u->v.lerp(v->v,v->amount/total);u->amount=total;v->alive=false;event.event=1;}
+   else {double total=u->amount+v->amount;u->v=u->v.lerp(v->v,v->amount/total);u->amount=total;u->capacity+=v->capacity;v->alive=false;event.event=1;}
    a.reacted=b.reacted=true;
   }
  });
