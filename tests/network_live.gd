@@ -17,7 +17,7 @@ func poll() -> void:
 		sockets[i].poll()
 		while sockets[i].get_available_packet_count()>0: messages[i].append(Protocol.unpack(sockets[i].get_packet()))
 func until(predicate: Callable) -> bool:
-	var end:=Time.get_ticks_msec()+15000
+	var end:=Time.get_ticks_msec()+45000
 	while Time.get_ticks_msec()<end:
 		poll()
 		if predicate.call(): return true
@@ -31,14 +31,16 @@ func run() -> void:
 	host=Host.new();host.cpu=not ("--gpu" in OS.get_cmdline_user_args())
 	host.port=18000+OS.get_process_id()%20000
 	host.store.directory=ProjectSettings.globalize_path("res://build/network-live-"+str(OS.get_process_id()))
-	var sim=Sim.new(81,0,false)
-	sim.cells=[sim.player]
-	sim.player.position=Vector2(2048,1280);sim.player.previous_position=sim.player.position
-	var other=Sim.Cell.new(1,Vector2(900,1200));sim.cells.append(other);sim.next_id=2
-	sim.habitat_geometry=Sim.Habitat.new(81,sim.cells)
-	sim.spawn_particle(0,sim.player.position+Vector2(100,0),Vector2.ZERO,.3)
-	sim.spawn_particle(0,other.position+Vector2(100,0),Vector2.ZERO,.3)
-	sim.grid.rebuild(sim.particles)
+	var full_world:= "--full-world" in OS.get_cmdline_user_args()
+	var sim=Sim.new(81,0,full_world)
+	if not full_world:
+		sim.cells=[sim.player]
+		sim.player.position=Vector2(2048,1280);sim.player.previous_position=sim.player.position
+		var other=Sim.Cell.new(1,Vector2(900,1200));sim.cells.append(other);sim.next_id=2
+		sim.habitat_geometry=Sim.Habitat.new(81,sim.cells)
+		sim.spawn_particle(0,sim.player.position+Vector2(100,0),Vector2.ZERO,.3)
+		sim.spawn_particle(0,other.position+Vector2(100,0),Vector2.ZERO,.3)
+		sim.grid.rebuild(sim.particles)
 	host.world=sim
 	root.add_child(host)
 	check(await until(func():return host.running),"world authority starts")

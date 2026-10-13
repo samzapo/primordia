@@ -19,9 +19,9 @@ var cpu := false
 var running := false
 var port := 9001
 var bind_address := "127.0.0.1"
-var publication_clock := 0.0
+var last_publication_usec := 0
 var checkpoint_clock := 0.0
-var metrics_clock := 0.0
+var last_metrics_usec := 0
 var pending_frame: Dictionary = {}
 var started_usec := 0
 var tick_samples: Array = []
@@ -98,16 +98,16 @@ func _started() -> void:
 	print("WORLD_READY id=%s epoch=%d tick=%d backend=%s port=%d" % [world_id,epoch,world.revision,"cpu" if world.resident==null else "gpu",port])
 	_write_metrics()
 
-func _process(dt: float) -> void:
+func _process(_dt: float) -> void:
 	if not running: return
 	if FileAccess.file_exists(store.directory.path_join("stop.request")):
 		DirAccess.remove_absolute(store.directory.path_join("stop.request"));stop();return
 	_poll()
-	publication_clock += dt; metrics_clock += dt
-	if publication_clock >= .1:
-		publication_clock = 0; _publish()
-	if metrics_clock >= 5:
-		metrics_clock = 0; _write_metrics()
+	var now:=Time.get_ticks_usec()
+	if now-last_publication_usec>=100000:
+		last_publication_usec=now;_publish()
+	if now-last_metrics_usec>=5000000:
+		_write_metrics()
 	if shutdown_after>0 and (Time.get_ticks_usec()-started_usec)/1000000.0>=shutdown_after:
 		stop()
 
@@ -363,6 +363,7 @@ func _send(peer: Dictionary,value: Dictionary) -> void:
 	if peer.socket.put_packet(bytes)==OK: sent_bytes+=bytes.size()
 
 func _write_metrics() -> void:
+	last_metrics_usec=Time.get_ticks_usec()
 	var samples:=tick_samples.duplicate();samples.sort()
 	var wall: float=(Time.get_ticks_usec()-started_usec)/1000000.0
 	var metrics={"world_id":world_id,"epoch":epoch,"tick":world.revision,"simulation_seconds":world.time,"uptime_seconds":wall,"simulation_wall_ratio":(world.time-start_simulation_seconds)/maxf(wall,.000001),"checkpoint_age_seconds":(Time.get_ticks_usec()-last_checkpoint_usec)/1000000.0,"updated_unix":Time.get_unix_time_from_system(),

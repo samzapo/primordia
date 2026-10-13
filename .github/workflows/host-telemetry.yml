@@ -101,6 +101,17 @@ jobs:
               report["samples"].append(sample())
               if index < 2:
                   time.sleep(5)
+          os.environ.setdefault("XDG_RUNTIME_DIR",f"/run/user/{os.getuid()}")
+          report["service_manager"] = command(["systemctl","--user","show","primordia.service","-p","MainPID","-p","ActiveState","-p","SubState","-p","NRestarts","-p","ControlGroup"])
+          fields = dict(line.split("=",1) for line in report["service_manager"].get("output","").splitlines() if "=" in line)
+          group = pathlib.Path("/sys/fs/cgroup") / fields.get("ControlGroup","").lstrip("/") / "cgroup.procs"
+          report["owned_service_processes"] = []
+          if fields.get("ControlGroup") and group.exists():
+              for pid in group.read_text().split():
+                  proc=pathlib.Path("/proc")/pid
+                  try:
+                      report["owned_service_processes"].append({"pid":int(pid),"name":(proc/"comm").read_text().strip(),"wait":(proc/"wchan").read_text().strip(),"cwd":str((proc/"cwd").resolve()),"runner_tracking_present":b"RUNNER_TRACKING_ID=" in (proc/"environ").read_bytes()})
+                  except OSError:pass
           from urllib.request import build_opener, ProxyHandler
           try:
               with build_opener(ProxyHandler({})).open("http://127.0.0.1:8766/metrics",timeout=5) as response:
