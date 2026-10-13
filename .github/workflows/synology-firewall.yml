@@ -4,6 +4,15 @@ name: Primordia IPv6 firewall
     branches: [samzapo/remote-ipv6]
     paths: [.github/workflows/synology-firewall.yml, tools/synology_firewall.py, tests/test_synology_firewall.py]
   workflow_dispatch:
+    inputs:
+      apply:
+        description: Apply only the authorized Primordia IPv6 TCP firewall exceptions
+        type: boolean
+        default: false
+      address:
+        description: Exact current IPv6 HTTPS listener address on samzapo-desktop
+        type: string
+        default: ''
 permissions:
   contents: read
 concurrency:
@@ -43,9 +52,12 @@ jobs:
         run: |
           cd "$GITHUB_WORKSPACE/samzapo--remote-ipv6--firewall-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           python3 tests/test_synology_ipv6.py
-      - name: Inspect exact destination and firewall schema
+          python3 tests/test_synology_firewall.py
+      - name: Inspect or apply narrowly scoped Primordia IPv6 firewall rules
         shell: bash
         env:
+          PRIMORDIA_FIREWALL_APPLY: ${{ github.event_name == 'workflow_dispatch' && inputs.apply || false }}
+          PRIMORDIA_FIREWALL_ADDRESS: ${{ inputs.address }}
           PRIMORDIA_ROUTER_USERNAME: ${{ secrets.PRIMORDIA_ROUTER_USERNAME }}
           PRIMORDIA_ROUTER_PASSWORD: ${{ secrets.PRIMORDIA_ROUTER_PASSWORD }}
           PRIMORDIA_ROUTER_CERT_SHA256: c7197b8899f0ce05a0fa163bc3161613688ef27e1f6663e97ae9b2b9939de3f5
