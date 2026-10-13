@@ -4,6 +4,11 @@ name: Primordia Synology IPv6 inspection
     branches: [samzapo/remote-ipv6]
     paths: [.github/workflows/synology-readonly.yml, tools/synology_ipv6.py, tests/test_synology_ipv6.py, tools/synology_ui_inspect.py]
   workflow_dispatch:
+    inputs:
+      ui_paths:
+        description: Read-only SRM static client paths (at most four)
+        type: string
+        default: /webman/index.cgi /webman/initdata.cgi /synoSDSjslib/sds.js
 permissions:
   contents: read
 concurrency:
@@ -63,9 +68,10 @@ jobs:
       - name: Read vendor UI request definitions through the pinned session
         shell: bash
         env:
+          PRIMORDIA_UI_PATHS: ${{ inputs.ui_paths || '/webman/index.cgi /webman/initdata.cgi /synoSDSjslib/sds.js' }}
           PRIMORDIA_ROUTER_USERNAME: ${{ secrets.PRIMORDIA_ROUTER_USERNAME }}
           PRIMORDIA_ROUTER_PASSWORD: ${{ secrets.PRIMORDIA_ROUTER_PASSWORD }}
           PRIMORDIA_ROUTER_CERT_SHA256: c7197b8899f0ce05a0fa163bc3161613688ef27e1f6663e97ae9b2b9939de3f5
         run: |
           cd "$GITHUB_WORKSPACE/samzapo--remote-ipv6--$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          python3 tools/synology_ui_inspect.py /webman/index.cgi /synoSDSjslib/sds.js
+          python3 tools/synology_ui_inspect.py

@@ -42,7 +42,10 @@ class Router:
             data=dict(fields)
             if self.sid:data['_sid']=self.sid
             headers={'Content-Type':'application/x-www-form-urlencoded'}
-            if self.synotoken:headers['X-SYNO-TOKEN']=self.synotoken
+            if self.sid:headers['Cookie']='id='+self.sid
+            if self.synotoken:
+                headers['X-SYNO-TOKEN']=self.synotoken
+                data['SynoToken']=self.synotoken
             connection.request('POST','/webapi/'+path,body=urlencode(data).encode(),headers=headers)
             response=connection.getresponse();body=response.read(131073)
             if response.status!=200 or len(body)>131072:

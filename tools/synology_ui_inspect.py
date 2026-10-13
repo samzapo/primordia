@@ -11,7 +11,7 @@ import sys
 from urllib.parse import urlsplit
 
 def fetch(path, sid=""):
-    if not (path in {"/webman/index.cgi","/webman/synodefs.cgi","/synoSDSjslib/sds.js"} or re.fullmatch(r"/webman/[A-Za-z0-9_./-]+\.js",path)):
+    if not (path in {"/webman/index.cgi","/webman/synodefs.cgi","/synoSDSjslib/sds.js","/webman/initdata.cgi"} or re.fullmatch(r"/webman/[A-Za-z0-9_./-]+\.js",path)):
         raise ValueError("Only SRM static JavaScript and page definitions are allowed")
     url=urlsplit(path)
     if url.scheme or url.netloc or not url.path.startswith("/") or ".." in url.path or len(path)>512:
@@ -31,7 +31,7 @@ def fetch(path, sid=""):
     finally:connection.close()
 
 def main():
-    paths=sys.argv[1:] or ["/webman/index.cgi"]
+    paths=sys.argv[1:] or os.environ.get("PRIMORDIA_UI_PATHS","/webman/index.cgi").split()
     from synology_ipv6 import Router
     router=Router("192.168.1.1",os.environ["PRIMORDIA_ROUTER_CERT_SHA256"])
     if os.environ.get("PRIMORDIA_ROUTER_USERNAME"):
@@ -49,8 +49,9 @@ def inspect(paths,sid,synotoken=""):
             # Only static references and bounded vendor request definitions are shown.
             refs=sorted(set(re.findall(r"(?:src|href)=[\"']([^\"']+)",source)))
             matches=[]
-            for match in list(re.finditer(r"SYNO\.Core\.Network\.IPv6|SYNO\.Core\.Security\.Firewall|SYNO\.Core\.Desktop|jsBaseURL|jsFiles|Initdata|/webman/modules/|[Nn]etwork[^\s\"'<>]{0,100}",source))[:30]:
-                matches.append(source[max(0,match.start()-160):match.end()+500])
+            for pattern in [r"SYNO\.Core\.Network\.IPv6",r"SYNO\.Core\.Security\.Firewall",r"jsBaseURL|JSConfig|SynoToken|synotoken|/webman/modules/",r"nsm-Home|nsm-Network"]:
+                for match in list(re.finditer(pattern,source))[:12]:
+                    matches.append(source[max(0,match.start()-120):match.end()+400])
             print(json.dumps({"path":path,"bytes":len(source),"static_references":refs[:80],"style_modules":sorted(set(re.findall(r"@import url\(\"([^\"]+)",source)))[:100],"request_definitions":matches}))
         except (OSError,ValueError) as error:print(json.dumps({"path":path,"error":type(error).__name__}))
 if __name__=="__main__":main()
