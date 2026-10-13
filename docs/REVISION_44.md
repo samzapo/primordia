@@ -22,7 +22,7 @@ The GPU publishes a deduplicated view union at up to ten updates per second with
 
 ## Deployment
 
-`tools/deploy.py` stages only committed authored source into a revision-named private release and builds native libraries and browser assets on the target. Checksum-pinned Godot 4.7.2 and its web templates live in a private runtime. Generated libraries, imported projects, browser packages and caches stay out of Git and are never copied from a CI checkout into releases. Wired routes and aggregate memory/build pressure are checked before and during long provisioning/build steps.
+`tools/deploy.py` creates a task-owned revision branch/worktree from committed authored source in a private release and builds native libraries and browser assets on the target. Checksum-pinned Godot 4.7.2 and its web templates live in a private runtime. Generated libraries, imported projects, browser packages and caches stay out of Git and are never copied from a CI checkout into releases. Wired routes and aggregate memory/build pressure are checked before and during long provisioning/build steps.
 
 The independent user service is `primordia.service`; it supervises a private Xvfb display, the real Vulkan GPU authority and the HTTP/WebSocket gateway. Port **8766** serves the browser, `/ws`, `/health`, `/metrics` and `/api/network`. The world socket is **8767**, bound only to loopback. GSOC remains on 8765. User-manager lingering permits startup and continued operation without an interactive login. A service lock prevents two authorities from writing the same world.
 

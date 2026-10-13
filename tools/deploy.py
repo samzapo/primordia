@@ -8,7 +8,6 @@ from pathlib import Path
 import secrets
 import subprocess
 import signal
-import tarfile
 import time
 from urllib.request import build_opener, ProxyHandler
 
@@ -85,13 +84,17 @@ def main():
     releases = root / "releases"
     releases.mkdir(exist_ok=True)
     candidate = releases / ("samzapo--persistent-multiplayer--" + sha)
+    repository = root / "repository.git"
+    release_branch = "samzapo/persistent-multiplayer/" + sha
+    if not repository.exists(): run("git", "init", "--bare", str(repository))
     if not candidate.exists():
-        candidate.mkdir(mode=0o700)
-        archive = candidate / "authored-source.tar"
-        run("git", "-C", str(source), "archive", "--format=tar", "--output", str(archive), sha)
-        with tarfile.open(archive) as retained:
-            retained.extractall(candidate, filter="data")
-        archive.unlink()
+        run("git", "--git-dir", str(repository), "fetch", "--update-shallow", "--no-tags", str(source), sha)
+        run("git", "--git-dir", str(repository), "worktree", "add", "-b", release_branch, str(candidate), sha)
+    else:
+        actual = subprocess.check_output(["git", "-C", str(candidate), "branch", "--show-current"], text=True).strip()
+        head = subprocess.check_output(["git", "-C", str(candidate), "rev-parse", "HEAD"], text=True).strip()
+        if actual != release_branch or head != sha:
+            raise RuntimeError("Existing release directory is not owned by this revision")
     (root / "OWNERSHIP.json").write_text(json.dumps({"repository":"samzapo/primordia", "owner":"persistent-multiplayer-20261013", "release":str(candidate), "revision":sha,"retention":"Active service and state retained; no automatic deletion of source or saves"}, indent=2))
     runtime = root / "runtime"
     run("python3", str(candidate / "tools/provision_runtime.py"), "--runtime-dir", str(runtime))

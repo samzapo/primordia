@@ -6,9 +6,9 @@ The first connection needs the invitation from `~/.local/share/primordia-deploy/
 
 ## Continuous deployment
 
-Pushes to `samzapo/persistent-multiplayer` run `.github/workflows/deploy.yml`. The guarded runner is `samzapo-desktop`. The source is built and validated in `~/.local/share/primordia-deploy/releases/samzapo--persistent-multiplayer--<commit>` before changing `current`. The Actions process installs/restarts the service and exits; systemd keeps the world running. A second job proves the service survives Actions cleanup.
+Pushes to `samzapo/persistent-multiplayer` run `.github/workflows/deploy.yml`. The guarded runner is `samzapo-desktop`. The source has its own revision branch and Git worktree in `~/.local/share/primordia-deploy/releases/samzapo--persistent-multiplayer--<commit>` before changing `current`. The Actions process installs/restarts the service and exits; systemd keeps the world running. A second job proves the service survives Actions cleanup.
 
-Godot and templates are checksum-pinned in `tools/toolchain.json`. Large dependencies download only over verified wired routes. The target needs Python 3.12+, curl, Git, CMake, a C++ compiler, Xvfb/xauth, a user systemd manager and Vulkan hardware. The deployer enables lingering for its own user and verifies it. It does not change GSOC configuration or use sudo.
+Godot and templates are checksum-pinned in `tools/toolchain.json`. Large dependencies download only over verified wired routes. The target needs Python 3.10+, curl, Git, CMake, a C++ compiler, Xvfb/xauth, a user systemd manager and Vulkan hardware. The deployer enables lingering for its own user and verifies it. It does not change GSOC configuration or use sudo.
 
 State and credentials remain under `~/.local/share/primordia-deploy/`, outside release/checkouts. The service holds an exclusive world lock. Do not start another authority on those saves. A graceful service stop writes a final checkpoint. Restart resumes saved simulation time and increments the connection epoch. A forced crash can lose uncheckpointed ordinary simulation since the last 30-second save; acknowledged successful edits are saved before acknowledgement.
 
