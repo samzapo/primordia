@@ -69,6 +69,10 @@ class RouterFixture(unittest.TestCase):
                     self.assertEqual(summarize(value),{'model':'RT6600ax','enabled':False})
                     self.assertNotIn('must-never-be-printed',json.dumps(summarize(value)))
                     self.assertNotIn('private-fixture-session',json.dumps(summarize(value)))
+                    self.assertEqual(summarize({'rules':None,'default_policy':None}),{'default_policy':None})
+                    for _,fields in requests:
+                        if fields['api'] not in {'SYNO.API.Info','SYNO.API.Auth'}:
+                            self.assertEqual(fields['SynoToken'],'private-fixture-csrf')
                     self.assertEqual([x[1]['method'] for x in requests],['query','login','info','get','logout'])
                     self.assertTrue(all('passwd' not in path and '_sid' not in path for path,_ in requests))
                     self.assertEqual(router.sid,'')

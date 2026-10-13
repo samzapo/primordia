@@ -119,7 +119,7 @@ def main():
         for api in sorted(ALLOWED):
             try:
                 data=router.read(api,interface='wan' if api=='SYNO.Core.Network.IPv6' else 'eth0' if api=='SYNO.Core.Network.IPv6.Router' else None);report['apis'][api]={'status':'read','summary':summarize(data),'field_names':sorted(data) if isinstance(data,dict) else []}
-                if api=='SYNO.Core.Security.Firewall.Rules':report['apis'][api].update(default_policy=data.get('default_policy'),rule_count=len(data.get('rules',[])),rule_schema=sorted({key for row in data.get('rules',[]) for key in row}))
+                if api=='SYNO.Core.Security.Firewall.Rules':report['apis'][api].update(default_policy=data.get('default_policy'),rule_count=len(data.get('rules') or []),rule_schema=sorted({key for row in (data.get('rules') or []) if isinstance(row,dict) for key in row}))
             except RouterError as error:report['apis'][api]={'status':'unavailable','reason':str(error)}
         for api,interfaces in [('SYNO.Core.Network.IPv6',['eth0']),('SYNO.Core.Network.IPv6.Router',[])]:
             for interface in interfaces:
