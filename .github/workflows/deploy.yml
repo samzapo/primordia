@@ -2,7 +2,7 @@ name: Primordia persistent server CD
 "on":
   push:
     branches: [samzapo/persistent-multiplayer]
-    paths-ignore: [docs/**, README.md, AGENTS.md, .github/workflows/target-probe.yml]
+    paths-ignore: [docs/**, README.md, AGENTS.md, .github/workflows/target-probe.yml, .github/workflows/host-telemetry.yml]
   workflow_dispatch:
 permissions:
   contents: read

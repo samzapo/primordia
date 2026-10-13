@@ -8,11 +8,16 @@ var host
 var sockets: Array=[]
 var messages: Array=[[],[]]
 var deadline:=0
+var keepalive_at:=0
 func check(value: bool,message: String) -> void:
 	assertions+=1
 	if not value: failures+=1;push_error("FAIL: "+message)
 func _initialize() -> void: run.call_deferred()
 func poll() -> void:
+	if Time.get_ticks_msec()-keepalive_at>=500:
+		keepalive_at=Time.get_ticks_msec()
+		for i in sockets.size():
+			if sockets[i].get_ready_state()==WebSocketPeer.STATE_OPEN and not find_message(i,"welcome").is_empty(): sockets[i].send_text(JSON.stringify({"op":"ping"}))
 	for i in sockets.size():
 		sockets[i].poll()
 		while sockets[i].get_available_packet_count()>0: messages[i].append(Protocol.unpack(sockets[i].get_packet()))

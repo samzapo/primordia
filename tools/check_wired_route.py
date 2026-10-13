@@ -8,7 +8,7 @@ import subprocess
 from urllib.parse import urlsplit
 
 HOSTS = ("github.com", "api.github.com", "raw.githubusercontent.com",
-         "objects.githubusercontent.com", "release-assets.githubusercontent.com")
+         "objects.githubusercontent.com", "release-assets.githubusercontent.com", "codeload.github.com")
 
 def verify(hosts=HOSTS):
     peers = set(hosts)

@@ -161,6 +161,7 @@ func _poll() -> void:
 			peer.seen=now
 			if message.get("op","")=="hello": _hello(id,message)
 			elif peer.account=="" : socket.close(1008,"Authenticate first")
+			elif message.get("op","")=="ping": pass
 			elif message.get("op","")=="view": _view(peer,message)
 			elif message.get("op","")=="command" and queued.size()<128:
 				var valid:=message.get("action") is String and message.get("args",{}) is Dictionary and _safe_args(message.get("args",{}))
