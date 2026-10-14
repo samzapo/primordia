@@ -31,12 +31,16 @@ jobs:
           python3 - <<'PY'
           import csv
           import glob
+          import hashlib
           import io
           import json
           import os
           import pathlib
           import platform
           import shutil
+          import re
+          import socket
+          import ssl
           import subprocess
           import time
 
@@ -135,7 +139,7 @@ jobs:
               except OSError: pass
           report["service_journal"] = command(["journalctl","--user","-u","primordia.service","--since","-3 minutes","--no-pager","-n","80"])
           from urllib.error import HTTPError
-          from urllib.request import build_opener, ProxyHandler
+          from urllib.request import build_opener, ProxyHandler, HTTPSHandler
           try:
               with build_opener(ProxyHandler({})).open("http://127.0.0.1:8766/metrics",timeout=5) as response:
                   report["primordia_service"] = json.load(response)
@@ -144,6 +148,58 @@ jobs:
               except ValueError: report["primordia_service"] = {"http_status":error.code}
           except OSError:
               report["primordia_service"] = {"status":"unavailable"}
+          # Read only bounded documents and an unauthenticated upgrade; never send player keys.
+          def browser_delivery(host, context):
+              authority = f"[{host}]:8766" if ":" in host else f"{host}:8766"
+              url = f"https://{authority}"
+              result = {}
+              opener = build_opener(ProxyHandler({}), HTTPSHandler(context=context))
+              try:
+                  with opener.open(url + "/?delivery-check=1", timeout=5) as response:
+                      document = response.read(262145)
+                      if len(document) > 262144:
+                          raise ValueError("Browser document exceeds telemetry limit")
+                      match = re.search(rb"const GODOT_CONFIG = ([^\r\n]+);", document)
+                      if not match:
+                          raise ValueError("Browser document has no Godot configuration")
+                      config = json.loads(match.group(1))
+                      result["document"] = {"status": response.status,
+                                            "experimental_virtual_keyboard": config.get("experimentalVK"),
+                                            "sha256": hashlib.sha256(document).hexdigest(),
+                                            "cache_control": response.headers.get("Cache-Control")}
+              except (OSError, ValueError) as error:
+                  result["document"] = {"error": type(error).__name__, "detail": str(error)[:300]}
+              try:
+                  with opener.open(url + "/health", timeout=5) as response:
+                      health = json.load(response)
+                      result["health"] = {key: health.get(key) for key in ["build", "backend", "gpu", "world_id", "epoch", "tick", "backend_error", "checkpoint_error"]}
+              except (OSError, ValueError) as error:
+                  result["health"] = {"error": type(error).__name__, "detail": str(error)[:300]}
+              try:
+                  import base64
+                  key = base64.b64encode(os.urandom(16)).decode("ascii")
+                  request = (f"GET /ws HTTP/1.1\r\nHost: {authority}\r\nOrigin: {url}\r\n"
+                             f"Upgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: {key}\r\n"
+                             "Sec-WebSocket-Version: 13\r\n\r\n").encode("ascii")
+                  with socket.create_connection((host, 8766), timeout=5) as raw:
+                      with context.wrap_socket(raw, server_hostname=host) as connection:
+                          connection.sendall(request)
+                          headers = b""
+                          while b"\r\n\r\n" not in headers and len(headers) < 16384:
+                              block = connection.recv(4096)
+                              if not block:
+                                  break
+                              headers += block
+                          result["websocket"] = {"status_line": headers.split(b"\r\n", 1)[0].decode("ascii", "replace")}
+              except OSError as error:
+                  result["websocket"] = {"error": type(error).__name__, "detail": str(error)[:300]}
+              return result
+
+          report["browser_delivery"] = {}
+          ca = pathlib.Path.home() / ".local/share/primordia-deploy/tls/authority/ca.pem"
+          if ca.exists():
+              report["browser_delivery"]["native_https"] = browser_delivery("127.0.0.1", ssl.create_default_context(cafile=str(ca)))
+          report["browser_delivery"]["public_https"] = browser_delivery("2601:19b:401:f7b5:6f5e:e2e9:76e8:8258", ssl.create_default_context())
           payload = json.dumps(report, indent=2)
           print(payload)
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
