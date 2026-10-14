@@ -109,6 +109,9 @@ jobs:
           kernel_driver = pathlib.Path("/proc/driver/nvidia/version")
           report["nvidia_loaded_module"] = kernel_driver.read_text().strip() if kernel_driver.exists() else None
           report["nvidia_installed_module"] = command(["modinfo", "-F", "version", "nvidia"])
+          report["nvidia_modules_by_kernel"] = {path.name: command(["modinfo", "-k", path.name, "-F", "version", "nvidia"]) for path in pathlib.Path("/lib/modules").iterdir() if path.is_dir()}
+          report["default_boot_kernel"] = str(pathlib.Path("/vmlinuz").resolve())
+          report["nvidia_packages"] = command(["dpkg-query", "-W", "-f=${binary:Package} ${Version}\n", "nvidia-driver-*", "nvidia-dkms-*", "linux-modules-nvidia-*", "libnvidia-compute-*", "libnvidia-gl-*"])
           os.environ.setdefault("XDG_RUNTIME_DIR",f"/run/user/{os.getuid()}")
           report["service_manager"] = command(["systemctl","--user","show","primordia.service","-p","MainPID","-p","ActiveState","-p","SubState","-p","NRestarts","-p","ControlGroup"])
           fields = dict(line.split("=",1) for line in report["service_manager"].get("output","").splitlines() if "=" in line)
