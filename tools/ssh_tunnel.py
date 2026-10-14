@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Bounded, IP-restricted relay to the existing local SSH server; no sudo/config writes."""
 import ipaddress
+import datetime
+import re
+import shutil
+import sys
 import json
 import os
 from pathlib import Path
@@ -27,6 +31,59 @@ def inspect():
     print(json.dumps(report), flush=True)
     return report
 
+def launch(report, address):
+    environment = dict(os.environ)
+    environment.setdefault("XDG_RUNTIME_DIR", "/run/user/" + str(os.getuid()))
+    active = subprocess.check_output(["systemctl", "--user", "list-units", "primordia-operator-ssh-*", "--state=active,activating", "--no-legend", "--plain"], text=True, env=environment).strip()
+    if active:
+        raise ValueError("A Primordia operator tunnel is already active; reuse or stop that owned session first")
+    identifier = os.environ["GITHUB_RUN_ID"] + "-" + os.environ.get("GITHUB_RUN_ATTEMPT", "1")
+    if not re.fullmatch(r"[0-9]+-[0-9]+", identifier):
+        raise ValueError("Invalid run identity")
+    root = Path.home()/".local/share/primordia-deploy/operator-ssh"
+    root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    task = root/("samzapo--remote-ipv6--ssh-" + identifier)
+    task.mkdir(mode=0o700)
+    source = task/"ssh_tunnel.py"
+    shutil.copyfile(__file__, source)
+    source.chmod(0o600)
+    unit = "primordia-operator-ssh-" + identifier
+    args = ["systemd-run", "--user", "--collect", "--unit=" + unit,
+            "--description=Temporary Primordia operator SSH access", "--working-directory=" + str(task),
+            "--property=RuntimeMaxSec=" + str(DURATION_SECONDS + 10), "--property=KillMode=control-group",
+            "--property=UMask=0077", "--property=NoNewPrivileges=yes", "--property=Restart=no"]
+    for key, value in {"GITHUB_REPOSITORY": "samzapo/primordia", "GITHUB_ACTOR": "samzapo", "RUNNER_NAME": "samzapo-desktop",
+                       "PRIMORDIA_SSH_START": "true", "PRIMORDIA_SSH_CLIENT_IPV4": address, "RUNNER_TEMP": str(task)}.items():
+        args.append("--setenv=" + key + "=" + value)
+    args.extend([sys.executable, str(source), "--serve"])
+    subprocess.run(args, env=environment, check=True)
+    expires = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=DURATION_SECONDS)).isoformat()
+    try:
+        for attempt in range(18):
+            time.sleep(2)
+            log = subprocess.check_output(["journalctl", "--user", "-u", unit, "-o", "cat", "-n", "40", "--no-pager"], text=True, env=environment)
+            match = re.search(r"tcp://([a-zA-Z0-9.-]+):([0-9]+)", log)
+            if match:
+                host, port = match.group(1), int(match.group(2))
+                if not host.endswith((".pinggy.link", ".pinggy.online", ".pinggy.io")) or not 1 <= port <= 65535:
+                    raise ValueError("Unexpected SSH relay endpoint")
+                value = {"ssh_tunnel_ready": True, "hostname": host, "port": port, "account": report["account"],
+                         "allowed_client_ipv4": address, "expires_utc": expires, "unit": unit + ".service", "host_keys": report["host_keys"],
+                         "private_task_directory": str(task)}
+                output = task/"connection.json"
+                with os.fdopen(os.open(output, os.O_WRONLY|os.O_CREAT|os.O_EXCL, 0o600), "w") as stream:
+                    json.dump(value, stream, indent=2)
+                print(json.dumps(value), flush=True)
+                return
+            state = subprocess.run(["systemctl", "--user", "is-active", unit], capture_output=True, text=True, env=environment)
+            if state.stdout.strip() not in {"active", "activating"}:
+                print(log[-3000:], flush=True)
+                raise RuntimeError("SSH relay unit exited before becoming ready")
+        raise TimeoutError("SSH relay did not publish an endpoint in 36 seconds")
+    except BaseException:
+        subprocess.run(["systemctl", "--user", "stop", unit], env=environment, check=False)
+        raise
+
 def main():
     if os.environ.get("GITHUB_REPOSITORY") != "samzapo/primordia" or os.environ.get("GITHUB_ACTOR") != "samzapo" or os.environ.get("RUNNER_NAME") != "samzapo-desktop" or socket.gethostname() != "samzapo-desktop":
         raise ValueError("Only the owner-authorized Primordia runner may launch operator access")
@@ -38,6 +95,9 @@ def main():
     address = ipaddress.ip_address(os.environ.get("PRIMORDIA_SSH_CLIENT_IPV4", ""))
     if address.version != 4 or not address.is_global:
         raise ValueError("One exact public client IPv4 address is required; no unrestricted relay permitted")
+    if "--serve" not in sys.argv:
+        launch(report, str(address))
+        return
     # An isolated SSH client config prevents using or forwarding the runner's credentials.
     with tempfile.TemporaryDirectory(prefix="samzapo--remote-ipv6--ssh-", dir=os.environ["RUNNER_TEMP"]) as folder:
         args = ["ssh", "-F", "/dev/null", "-T", "-p", "443",
