@@ -55,7 +55,7 @@ func _ready() -> void:
 	login.position=Vector2(24,24);login.custom_minimum_size=Vector2(420,0)
 	status.text="Sign in to the running pond. Paste your personal access key the first time.";status.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;box.add_child(status)
 	url_input.text=server_url;url_input.placeholder_text="Server address";url_input.editable=not OS.has_feature("web");box.add_child(url_input)
-	invite_input.secret=true;invite_input.text=invitation;invite_input.placeholder_text="Personal access key (first sign-in)";box.add_child(invite_input)
+	invite_input.secret=true;invite_input.virtual_keyboard_type=LineEdit.KEYBOARD_TYPE_PASSWORD;invite_input.text=invitation;invite_input.placeholder_text="Personal access key (first sign-in)";box.add_child(invite_input)
 	join_button.text="Sign in / reconnect";join_button.pressed.connect(_connect);box.add_child(join_button)
 	if OS.has_feature("web"):
 		url_input.hide()

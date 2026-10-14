@@ -12,6 +12,8 @@ The CA signing key stays private in `~/.local/share/primordia-deploy/tls/authori
 
 Godot 4.7.2's launcher requires a secure context even for the single-threaded build, and its audio initialization uses AudioWorklet. A plain HTTP LAN IP fails this requirement; localhost testing alone does not cover LAN access. Production assets and WebSockets require TLS. The public CA certificate and read-only health remain available over HTTP on the same port for bootstrap and local supervision.
 
+Phone key entry uses Godot's browser keyboard bridge, enabled by `html/experimental_virtual_keyboard` in the Web export preset. The sign-in field requests a password keyboard so the browser masks the key. Mobile validation must include a touch followed by browser text insertion; desktop key events alone do not exercise this path.
+
 ## Continuous deployment
 
 Pushes to `samzapo/persistent-multiplayer` run `.github/workflows/deploy.yml`. The guarded runner is `samzapo-desktop`. The source has its own revision branch and Git worktree in `~/.local/share/primordia-deploy/releases/samzapo--persistent-multiplayer--<commit>` before changing `current`. The Actions process installs/restarts the service and exits; systemd keeps the world running. A second job proves the service survives Actions cleanup.
