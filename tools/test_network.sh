@@ -28,6 +28,10 @@ fi
 ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
 grep -Eq 'TOUCH CONTROLS: [0-9]+ assertions, 0 failures' "$report_file"
 
+"$godot_bin" --headless --path "$project_dir" --script tests/world_status_run.gd 2>&1 | tee "$report_file"
+! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
+grep -Eq 'WORLD SELECTION: [0-9]+ assertions, 0 failures' "$report_file"
+
 python3 "$project_dir/tests/test_web_gateway.py"
 python3 "$project_dir/tests/test_web_version.py"
 

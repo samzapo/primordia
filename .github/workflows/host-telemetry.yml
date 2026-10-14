@@ -21,6 +21,8 @@ jobs:
     steps:
       - name: Collect bounded host capabilities and load
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           test "$RUNNER_NAME" = "samzapo-desktop"
           task_dir="$RUNNER_TEMP/samzapo--persistent-multiplayer--telemetry-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
@@ -138,6 +140,34 @@ jobs:
                   report["service_driver_environment"].append({"process": item["name"], "driver_variables": {key: values[key.encode()].decode() for key in driver_variables if key.encode() in values}})
               except OSError: pass
           report["service_journal"] = command(["journalctl","--user","-u","primordia.service","--since","-3 minutes","--no-pager","-n","80"])
+          # Inspect checksummed saved selection without restoring a world, joining,
+          # rotating credentials, or writing the live state directory.
+          deployment = pathlib.Path.home() / ".local/share/primordia-deploy"
+          current = deployment / "current"
+          if current.is_dir():
+              runtime = deployment / "runtime/Godot_v4.7.2-stable_linux.x86_64"
+              if not runtime.is_file():
+                  matches = list((deployment / "runtime").glob("**/Godot_v4.7.2-stable_linux.x86_64"))
+                  runtime = matches[0] if matches else runtime
+              import base64
+              from urllib.request import Request, urlopen
+              request = Request("https://api.github.com/repos/samzapo/primordia/contents/tools/world_status.gd?ref=" + os.environ["GITHUB_SHA"], headers={"Authorization":"Bearer " + os.environ["GH_TOKEN"], "Accept":"application/vnd.github+json"})
+              with urlopen(request, timeout=10) as response:
+                  source = base64.b64decode(json.load(response)["content"]).decode()
+              if runtime.is_file():
+                  inspection = pathlib.Path("selection-project").resolve()
+                  (inspection / "scripts/network").mkdir(parents=True)
+                  (inspection / "project.godot").write_text('config_version=5\n[application]\nconfig/name="Primordia selection inspection"\n')
+                  (inspection / "scripts/network/world_store.gd").write_text((current / "scripts/network/world_store.gd").read_text())
+                  (inspection / "report.gd").write_text(source)
+                  try:
+                      result = subprocess.run([str(runtime), "--headless", "--path", str(inspection), "--script", str(inspection / "report.gd"), "--", "--state-dir=" + str(deployment / "state")], capture_output=True, text=True, timeout=30)
+                      lines = [line for line in result.stdout.splitlines() if line.startswith("WORLD_SELECTION ")]
+                      report["saved_selection"] = json.loads(lines[-1].split(" ", 1)[1]) if lines else {"status":"unavailable", "exit_status":result.returncode}
+                  finally:
+                      shutil.rmtree(inspection)
+              else:
+                  report["saved_selection"] = {"status":"unavailable", "reason":"Inspection runtime unavailable in current deployment"}
           from urllib.error import HTTPError
           from urllib.request import build_opener, ProxyHandler, HTTPSHandler
           try:
