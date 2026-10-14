@@ -1559,7 +1559,7 @@ func _die(cell, transferred: float = 0.0) -> void:
 		return
 	kills += 1
 	cells.erase(cell)
-	pending_replacements.append({"role":cell.role,"id":cell.id})
+	if not server_mode:pending_replacements.append({"role":cell.role,"id":cell.id})
 	_replace_population()
 
 func _replace_population() -> void:

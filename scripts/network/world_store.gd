@@ -54,6 +54,20 @@ func load_latest() -> Dictionary:
 	sequence = best.sequence; last_saved_tick = best.payload.get("tick",-1); last_error = ""
 	return best.payload
 
+func archive_pond(payload: Dictionary) -> String:
+	# A complete independent, checksummed pair survives rotating active saves.
+	var identity: String=payload.get("world_id","")
+	var pattern:=RegEx.new();pattern.compile("^[a-f0-9]{32}$")
+	if pattern.search(identity)==null:_fail("Invalid pond archive identity");return ""
+	var relative: String="archives/pond-%s--epoch-%d--tick-%d" % [identity,int(payload.get("epoch",0)),int(payload.get("tick",0))]
+	var archive=get_script().new();archive.directory=directory.path_join(relative)
+	var prior: Dictionary=archive.load_latest()
+	if not archive.last_error.is_empty():_fail(archive.last_error);return ""
+	if not prior.is_empty():
+		if var_to_bytes(prior)!=var_to_bytes(payload):_fail("Pond archive already contains different state");return ""
+	if not archive.save(payload) or not archive.save(payload):_fail(archive.last_error);return ""
+	return relative
+
 func retain_latest(version: int=1) -> bool:
 	# Preserve the validated pre-migration generation outside the rotating pair.
 	var target:=directory.path_join("before-particle-resolution-v%d.pworld" % version)

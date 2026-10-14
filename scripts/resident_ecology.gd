@@ -166,7 +166,12 @@ func _schedule(sim, dt: float) -> Dictionary:
 	var coarse: Dictionary={}
 	var delayed: Dictionary={}
 	sim.active_cells=0;coarse_cells=0;sim.offscreen_ecology.visits=0
-	for cell in _living(sim):
+	var living:=_living(sim)
+	var live_ids: Dictionary={}
+	for cell in living:live_ids[cell.id]=true
+	for identity in scheduled.keys():
+		if not live_ids.has(identity):scheduled.erase(identity)
+	for cell in living:
 		if not scheduled.has(cell.id):
 			scheduled[cell.id]=true
 			cell.coarse_due=coarse_period*(0.25+fposmod(cell.id*0.61803398875,0.75))

@@ -11,11 +11,16 @@ def publish(temporary: Path, final: Path) -> None:
     with temporary.open("rb") as handle:
         os.fsync(handle.fileno())
     os.replace(temporary, final)
-    descriptor = os.open(final.parent, os.O_RDONLY | os.O_DIRECTORY)
-    try:
-        os.fsync(descriptor)
-    finally:
-        os.close(descriptor)
+    directories = [final.parent]
+    if final.parent.parent.name == "archives":
+        # Persist both newly created archive directory entries before reseeding.
+        directories.extend([final.parent.parent, final.parent.parent.parent])
+    for directory in directories:
+        descriptor = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
 
 if __name__ == "__main__":
     publish(Path(sys.argv[1]), Path(sys.argv[2]))

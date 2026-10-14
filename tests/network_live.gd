@@ -131,6 +131,22 @@ func run() -> void:
 	var restored=preload("res://scripts/network/state_codec.gd").new().restore(saved.graph)
 	check(restored.accounts[welcome0.token.sha256_text()].sequence==1,"idempotency sequence survives restart")
 	check(restored.accounts[welcome0.token.sha256_text()].lineage==restored.world.family_ledgers[0],"ownership ledger references survive checkpoint")
+	if "--recovery" in OS.get_cmdline_user_args():
+		var ended: int=account.selected
+		check(account.lineage.dormant.is_empty(),"Replacement fixture has no prepaid backup")
+		host.world._die(host._selected(account))
+		check(await until(func():return account.selected!=ended and not account.current.dead),"A disconnected-independent replacement reaches the retained live account")
+		check(host.accounts.has(welcome0.token.sha256_text()) and account.sequence==1 and account.receipts.has(1) and account.root!=ended,"Replacement retains the session and paid receipt while switching lineage")
+		camera_reports[0].perception="interoception"
+		camera_reports[0].rect=[account.current.position.x,account.current.position.y,Sim.VIEW.x/.8/2,Sim.VIEW.y/.8/2]
+		check(await until(func():
+			for frame in messages[0]:
+				if frame.get("kind","")=="snapshot" and not frame.get("warming",true):
+					var data=preload("res://scripts/network/state_codec.gd").new().restore(frame.graph)
+					if data.player.id==account.selected and not data.player.dead:return true
+			return false),"The existing socket receives the new selected body without another sign-in")
+		if not host.cpu:check(await until(func():return account.current.chemistry.accelerator!=null),"The replacement's viewed cytoplasm enters the existing resident GPU backend")
+		check(host.checkpoint(),"The new lineage and retained authentication are committed together")
 	if personal_keys:
 		var rejected:=WebSocketPeer.new();rejected.connect_to_url("ws://127.0.0.1:"+str(host.port))
 		sockets.append(rejected);messages.append([])

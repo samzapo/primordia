@@ -5,6 +5,7 @@ const Codec = preload("res://scripts/network/state_codec.gd")
 const Store = preload("res://scripts/network/world_store.gd")
 const Protocol = preload("res://scripts/network/protocol.gd")
 const GPU = preload("res://scripts/resident_ecology.gd")
+const Population = preload("res://scripts/network/pond_population.gd")
 const MAX_PLAYERS := 8
 var world
 var accounts: Dictionary = {}
@@ -40,6 +41,12 @@ var save_interval := 30.0
 var last_checkpoint_usec := 0
 var start_simulation_seconds := 0.0
 var checkpoint_total_ms := 0.0
+var pond_restarts := 0
+var previous_world_id := ""
+var pond_archive := ""
+var introduced_cells := 0
+var lineage_restarts := 0
+var population_retry_at := 0.0
 
 func _ready() -> void:
 	get_tree().auto_accept_quit = false
@@ -76,13 +83,26 @@ func _ready() -> void:
 		world_id = saved.world_id; epoch = int(saved.epoch)
 		restored_gpu_tick = saved.get("gpu_tick",0)
 		restored_stream_rng = saved.get("stream_rng",PackedInt64Array())
+		pond_restarts=int(saved.get("pond_restarts",0));previous_world_id=saved.get("previous_world_id","");pond_archive=saved.get("pond_archive","")
+		introduced_cells=int(saved.get("introduced_cells",0));lineage_restarts=int(saved.get("lineage_restarts",0))
 		particle_resolution=saved.get("particle_resolution",{})
 		var resolution=preload("res://scripts/network/particle_resolution.gd")
 		if saved.get("particle_resolution_version",0)<resolution.VERSION:
 			if not store.retain_latest(resolution.VERSION): _fatal(store.last_error);return
 			world.disable_particle_pool()
 			particle_resolution=resolution.apply(world,int(saved.get("particle_resolution_version",0)))
+		if Population.living(world).is_empty():
+			pond_archive=store.archive_pond(saved)
+			if pond_archive=="":_fatal(store.last_error);return
+			var replacement:=Population.fresh(accounts)
+			if replacement.has("error"):_fatal(replacement.error);return
+			previous_world_id=world_id;world_id=Crypto.new().generate_random_bytes(16).hex_encode()
+			world=replacement.world;pond_restarts+=1;introduced_cells=0;lineage_restarts=0
+			restored_gpu_tick=0;restored_stream_rng=PackedInt64Array();particle_resolution={}
+			print("POND_RESTART previous=%s current=%s archive=%s" % [previous_world_id,world_id,pond_archive])
 	epoch += 1
+	world.pending_replacements.clear()
+	introduced_cells+=Population.replenish(world)
 	world.server_mode = true; world.camera_views.clear();world.enable_perception_domains();world.external_offscreen=false;world.interoceptive_cells.clear()
 	world.evolution.sandbox = true
 	world.grid.rebuild(world.particles)
@@ -146,7 +166,13 @@ func _physics_process(dt: float) -> void:
 		if not world.resident.gpu.cytoplasm_error.is_empty():_fatal(world.resident.gpu.cytoplasm_error);return
 		for cell in world.cells:
 			if cell.chemistry.accelerator!=null and not cell.chemistry.accelerator.error.is_empty():_fatal(cell.chemistry.accelerator.error);return
+	if Population.living(world).is_empty():
+		print("POND_EXTINCT restarting after durable checkpoint")
+		stop(Population.RESTART_EXIT);return
 	_recover_families(dt)
+	if world.time>=population_retry_at:
+		introduced_cells+=Population.replenish(world)
+		population_retry_at=world.time+.5 if Population.living(world).size()<Population.MIN_LIVING else world.time
 	world.events = world.events.slice(maxi(0,world.events.size()-128))
 	for phase in world.profile_usec: tick_phase_peak_usec[phase]=maxi(tick_phase_peak_usec.get(phase,0),int(world.profile_usec[phase]))
 	tick_samples.append((Time.get_ticks_usec()-start)/1000.0)
@@ -370,7 +396,25 @@ func _recover_families(dt: float) -> void:
 		if not selected.dead: continue
 		world.player=selected;world.lineage=account.lineage;world.evolution=account.evolution
 		if account.lineage.recover(world,dt): account.selected=world.player.id;account.current=world.player;account.edit+=1
+		elif account.lineage.dormant.is_empty() and account.lineage.active_family(world).is_empty() and world.time>=float(account.get("restart_at",0)):
+			var founder=Population.introduce(world,true)
+			account.restart_at=world.time+.5
+			if founder!=null:
+				Population.enroll(world,account,founder);introduced_cells+=1;lineage_restarts+=1
 	world.player=prior_player;world.lineage=prior_lineage;world.evolution=prior_evolution
+	# The shared managed reference must not retain an exhausted body forever.
+	if world.player.dead:
+		for account in accounts.values():
+			if not account.current.dead:
+				world.player=account.current;world.lineage=account.lineage;world.evolution=account.evolution;break
+	if prior_player.dead and world.player!=prior_player:world.cells.erase(prior_player)
+	if world.player.dead:
+		var candidates:=Population.living(world)
+		if not candidates.is_empty():
+			world.cells.erase(world.player);world.player=candidates[0]
+			world.lineage=world._family_ledger(world.player)
+	# Histories retained by accounts remain serialized through previous_lineages.
+	world.family_ledgers=world.family_ledgers.filter(func(ledger):return not ledger.dormant.is_empty() or not ledger.active_family(world).is_empty())
 
 func checkpoint() -> bool:
 	if world==null: return false
@@ -385,7 +429,7 @@ func checkpoint() -> bool:
 		gpu_tick=world.resident.gpu.reaction_tick
 	var overrides: Dictionary={world.get_instance_id():{"particles":world.particle_snapshots(),"pheromones":[],"particle_pool":false}}
 	var graph:=Codec.new().capture({"world":world,"accounts":accounts},overrides)
-	var result: bool=store.save({"world_id":world_id,"epoch":epoch,"tick":world.revision,"gpu_tick":gpu_tick,"stream_rng":stream_rng,"particle_resolution_version":preload("res://scripts/network/particle_resolution.gd").VERSION,"particle_resolution":particle_resolution,"build":OS.get_environment("PRIMORDIA_BUILD_SHA"),"graph":graph})
+	var result: bool=store.save({"world_id":world_id,"epoch":epoch,"tick":world.revision,"gpu_tick":gpu_tick,"stream_rng":stream_rng,"particle_resolution_version":preload("res://scripts/network/particle_resolution.gd").VERSION,"particle_resolution":particle_resolution,"build":OS.get_environment("PRIMORDIA_BUILD_SHA"),"pond_restarts":pond_restarts,"previous_world_id":previous_world_id,"pond_archive":pond_archive,"introduced_cells":introduced_cells,"lineage_restarts":lineage_restarts,"graph":graph})
 	checkpoint_total_ms=(Time.get_ticks_usec()-checkpoint_start)/1000.0
 	if result: last_checkpoint_usec=Time.get_ticks_usec()
 	return result
@@ -487,6 +531,10 @@ func _write_metrics() -> void:
 		"views":world.camera_views.size(),"peers":peers.size(),"packets":world.particle_count(),"cold_packets":world.resident.stored_count() if world.resident!=null else 0,"accounts":accounts.size(),"stored_packets":world.particle_count()+world.resident.stored_count() if world.resident!=null else world.particle_count(),
 		"sent_bytes":sent_bytes,"skipped_frames":skipped_frames,"publication_readback_bytes":world.resident.gpu._publication.bytes_read if world.resident!=null and world.resident.gpu._publication!=null else 0,"checkpoint_tick":store.last_saved_tick,"checkpoint_ms":checkpoint_total_ms,"checkpoint_write_ms":store.latency_ms,"checkpoint_error":store.last_error,"backend_error":startup_error}
 	metrics["automatic_reproduction"]=world.automatic_reproduction
+	metrics["minimum_living_cells"]=Population.MIN_LIVING
+	metrics["automatic_lineage_restart"]=true;metrics["automatic_pond_restart"]=true
+	metrics["pond_restarts"]=pond_restarts;metrics["previous_world_id"]=previous_world_id;metrics["pond_archive"]=pond_archive
+	metrics["introduced_cells"]=introduced_cells;metrics["lineage_restarts"]=lineage_restarts
 	metrics["internal_packets"]=world.cells.reduce(func(total,cell):return total+cell.chemistry.particle_count(),0)
 	metrics["resident_internal_cells"]=world.cells.filter(func(cell):return cell.chemistry.accelerator!=null).size()
 	metrics["internal_parcel_scale"]=world.Catalog.data().ecology.get("internal_parcel_scale",1)
@@ -513,14 +561,16 @@ func _write_metrics() -> void:
 		file.store_string(JSON.stringify(metrics));file.close()
 		DirAccess.rename_absolute(store.directory.path_join("health.json.tmp"),store.directory.path_join("health.json"))
 
-func stop() -> void:
+func stop(exit_status: int=0) -> void:
 	if not running: return
-	running=false;checkpoint();listener.stop()
+	running=false
+	if not checkpoint():_fatal(store.last_error);return
+	listener.stop()
 	for peer in peers.values(): peer.socket.close(1001,"World service restarting")
 	if world.resident!=null:
 		var gpu=world.resident.gpu
-		gpu.closed.connect(func():get_tree().quit(),CONNECT_ONE_SHOT);gpu.close()
-	else: get_tree().quit()
+		gpu.closed.connect(func():get_tree().quit(exit_status),CONNECT_ONE_SHOT);gpu.close()
+	else: get_tree().quit(exit_status)
 
 func _notification(what: int) -> void:
 	if what==NOTIFICATION_WM_CLOSE_REQUEST: stop()
@@ -552,4 +602,4 @@ func _family_recovery(account: Dictionary) -> Dictionary:
 	var living: int=account.lineage.active_family(world).size()
 	var stored: int=account.lineage.dormant.size()
 	var selected=_selected(account)
-	return {"living":living,"stored":stored,"state":"active" if not selected.dead else "recovering" if living>0 else "waiting_for_space" if stored>0 else "extinct"}
+	return {"living":living,"stored":stored,"state":"active" if not selected.dead else "recovering" if living>0 else "waiting_for_space" if stored>0 else "restarting_lineage"}

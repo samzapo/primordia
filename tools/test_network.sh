@@ -5,7 +5,7 @@ source "$project_dir/tools/godot.sh"
 godot_bin="$(resolve_godot)"
 export PRIMORDIA_INVITE=bounded-infrastructure-fixture
 report_file="$(mktemp "${TMPDIR:-/tmp}/primordia-network.XXXXXX")"
-trap 'rm -f -- "$report_file"' EXIT
+trap 'rm -f -- "$report_file"; if [[ -n ${recovery_state:-} ]]; then rm -rf -- "$recovery_state"; fi' EXIT
 for script in network_state network_live; do
   "$godot_bin" --headless --path "$project_dir" --script "tests/$script.gd" 2>&1 | tee "$report_file"
   ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
@@ -14,16 +14,27 @@ done
 "$godot_bin" --headless --path "$project_dir" --script tests/reproduction_accounting.gd 2>&1 | tee "$report_file"
 ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
 grep -Eq 'REPRODUCTION ACCOUNTING: [0-9]+ assertions, 0 failures' "$report_file"
+recovery_state="$(mktemp -d "${TMPDIR:-/tmp}/primordia-recovery.XXXXXX")"
+PRIMORDIA_RECOVERY_TEST_STATE="$recovery_state" "$godot_bin" --headless --path "$project_dir" --script tests/pond_recovery_accounting.gd 2>&1 | tee "$report_file"
+! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
+grep -Eq 'POND RECOVERY ACCOUNTING: [0-9]+ assertions, 0 failures' "$report_file"
+rm -rf -- "$recovery_state"
+recovery_state="$(mktemp -d "${TMPDIR:-/tmp}/primordia-restart.XXXXXX")"
+PRIMORDIA_RESTART_TEST_STATE="$recovery_state" "$godot_bin" --headless --path "$project_dir" --script tests/pond_restart_network.gd 2>&1 | tee "$report_file"
+! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
+grep -Eq 'POND RESTART NETWORK: [0-9]+ assertions, 0 failures' "$report_file"
+rm -rf -- "$recovery_state"
 if [[ "${1:-}" == gpu ]]; then
   xvfb-run -a -s '-screen 0 1280x720x24 -nolisten tcp' "$godot_bin" --path "$project_dir" --rendering-method mobile --rendering-driver vulkan --gpu-index 0 --script tests/resident_cytoplasm_gpu.gd 2>&1 | tee "$report_file"
   ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
   grep -Eq 'CYTOPLASM GPU: [0-9]+ assertions, 0 failures' "$report_file"
   grep -Eq 'NVIDIA|AMD|Intel' "$report_file"
   ! grep -Eiq 'llvmpipe|lavapipe|swiftshader' "$report_file"
-  for scope in fixture full-world slow-observer; do
+  for scope in fixture full-world slow-observer recovery; do
     extra=()
     [[ "$scope" != full-world ]] || extra=(--full-world)
     [[ "$scope" != slow-observer ]] || extra=(--slow-observer)
+    [[ "$scope" != recovery ]] || extra=(--recovery)
     xvfb-run -a -s '-screen 0 1280x720x24 -nolisten tcp' "$godot_bin" --path "$project_dir" --rendering-method mobile --rendering-driver vulkan --gpu-index 0 --script tests/network_live.gd -- --gpu "${extra[@]}" 2>&1 | tee "$report_file"
     ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:|returned to CPU' "$report_file"
     grep -Eq 'NETWORK LIVE: [0-9]+ assertions, 0 failures' "$report_file"
@@ -48,6 +59,7 @@ grep -Eq 'PERCEPTION: [0-9]+ assertions, 0 failures' "$report_file"
 ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
 grep -Eq 'SNAPSHOT TRANSPORT: [0-9]+ assertions, 0 failures' "$report_file"
 
+GODOT_BIN="$godot_bin" python3 "$project_dir/tests/test_pond_rollover.py"
 python3 "$project_dir/tests/test_web_gateway.py"
 python3 "$project_dir/tests/test_web_version.py"
 

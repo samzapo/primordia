@@ -286,6 +286,7 @@ func _poll_network() -> void:
 			_connection_closed(socket.get_close_code(),socket.get_close_reason())
 
 func _welcome(message: Dictionary) -> void:
+	camera_initialized=false;cells_by_id.clear();packet_ids.clear();received_usec=0
 	token=message.token;epoch=message.epoch;command_sequence=message.sequence;edit_revision=message.edit
 	world.seed_value=message.seed;world.habitat_geometry=Codec.new().restore(message.habitat)
 	habitat_view.configure(world.habitat_geometry)
@@ -331,6 +332,10 @@ func _snapshot(message: Dictionary) -> void:
 	# The selected body is already in the snapshot graph; retain it for immediate refocus.
 	if not player_visible:world.cells.append(world.player)
 	_snapshot_focus(data)
+	var retained_ids: Dictionary={}
+	for cell in world.cells:retained_ids[cell.id]=true
+	for identity in cells_by_id.keys():
+		if not retained_ids.has(identity):cells_by_id.erase(identity)
 	world.lineage=data.lineage;world.evolution=data.evolution
 	family_recovery=message.get("family_recovery",{})
 	if not camera_initialized or previous_player!=world.player.id:

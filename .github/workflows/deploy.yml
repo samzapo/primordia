@@ -60,6 +60,8 @@ jobs:
           test "$RUNNER_NAME" = samzapo-desktop
           python3 - <<'PY'
           import json, os, pathlib, subprocess, time, ssl, hashlib
+          root=pathlib.Path.home()/".local/share/primordia-deploy"
+          registry_before=hashlib.sha256((root/"access-keys.json").read_bytes()).hexdigest()
           from urllib.request import build_opener, ProxyHandler, HTTPSHandler
           os.environ.setdefault('XDG_RUNTIME_DIR',f'/run/user/{os.getuid()}')
           subprocess.run(['systemctl','--user','is-active','primordia.service'],check=True)
@@ -74,6 +76,7 @@ jobs:
               samples.append(value)
               if index<2: time.sleep(6)
           assert samples[-1]['tick']>samples[0]['tick']
+          assert all(value['living_cells']>=15 and value['minimum_living_cells']==15 and value['automatic_pond_restart'] and value['automatic_lineage_restart'] for value in samples)
           before=samples[-1]
           subprocess.run(['systemctl','--user','restart','primordia.service'],check=True)
           resumed=None
@@ -84,6 +87,7 @@ jobs:
                       resumed=candidate;break
               except OSError:pass
               time.sleep(2)
+          assert hashlib.sha256((root/'access-keys.json').read_bytes()).hexdigest()==registry_before, 'Access key registry changed during saved-world restart'
           assert resumed is not None and resumed['backend']=='gpu' and not resumed['backend_error'] and not resumed['checkpoint_error'], 'Saved world did not resume after a service restart'
           with opener.open('https://127.0.0.1:8766/api/network',timeout=5) as response: urls=json.load(response)
           assert all(url.startswith('https://') for url in urls['home_urls'])

@@ -2,6 +2,7 @@
 """Build retained authored source on the target, then switch one private service."""
 import argparse
 import fcntl
+import hashlib
 import json
 import re
 import os
@@ -44,7 +45,22 @@ def switch(link, destination):
     temporary.symlink_to(destination)
     temporary.replace(link)
 
-def health(build, previous=None, ca_file=None):
+def retained_restart(value, previous, state):
+    """Allow a new pond only with its explicit, durable predecessor archive."""
+    if value.get("previous_world_id") != previous.get("world_id") or value.get("pond_restarts", 0) <= previous.get("pond_restarts", 0):
+        return False
+    relative = value.get("pond_archive", "")
+    if not re.fullmatch(r"archives/pond-" + re.escape(previous["world_id"]) + r"--epoch-[0-9]+--tick-[0-9]+", relative):
+        return False
+    for slot in ("world-0.pworld", "world-1.pworld"):
+        path = state / relative / slot
+        if not path.is_file(): return False
+        with path.open("rb") as handle:
+            digest = handle.readline().strip().decode("ascii")
+            if hashlib.sha256(handle.read()).hexdigest() != digest: return False
+    return True
+
+def health(build, previous=None, ca_file=None, state=None):
     context = ssl.create_default_context(cafile=str(ca_file))
     opener = build_opener(ProxyHandler({}), HTTPSHandler(context=context))
     deadline = time.monotonic() + 120
@@ -57,8 +73,15 @@ def health(build, previous=None, ca_file=None):
                 raise ValueError("Unhealthy build or GPU backend")
             if any(name in value.get("gpu", "").lower() for name in ["llvmpipe", "lavapipe", "swiftshader"]):
                 raise ValueError("Software GPU rejected")
-            if previous and (value["world_id"] != previous["world_id"] or value["tick"] < previous["tick"] or value["epoch"] <= previous["epoch"]):
-                raise ValueError("World identity/time did not resume")
+            if previous:
+                if value["epoch"] <= previous["epoch"]:
+                    raise ValueError("World epoch did not advance")
+                if value["world_id"] == previous["world_id"]:
+                    if value["tick"] < previous["tick"]: raise ValueError("World time did not resume")
+                elif state is None or not retained_restart(value, previous, state):
+                    raise ValueError("New pond is missing its retained predecessor")
+            if value.get("automatic_pond_restart") and value.get("living_cells", 0) < value.get("minimum_living_cells", 15):
+                raise ValueError("Pond population is below its configured floor")
             if first is not None and value["tick"] > first:
                 with opener.open("https://127.0.0.1:8766/music-bank.json", timeout=3) as response:
                     music = json.load(response)
@@ -180,7 +203,10 @@ def main():
     try:
         run("systemctl", "--user", "daemon-reload")
         run("systemctl", "--user", "enable", "--now", UNIT)
-        report = health(sha, previous, root / "tls/authority/ca.pem")
+        report = health(sha, previous, root / "tls/authority/ca.pem", state)
+        if previous and report.get("accounts", 0) < previous.get("accounts", 0):
+            raise RuntimeError("Deployment lost a retained account")
+        report["access_registry_sha256"] = hashlib.sha256(registry.read_bytes()).hexdigest() if registry.exists() else None
         (root / "last-deploy.json").write_text(json.dumps(report, indent=2))
     except BaseException:
         subprocess.run(["systemctl", "--user", "stop", UNIT], check=False)
