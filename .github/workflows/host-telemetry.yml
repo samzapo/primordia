@@ -111,6 +111,10 @@ jobs:
           report["nvidia_installed_module"] = command(["modinfo", "-F", "version", "nvidia"])
           report["nvidia_modules_by_kernel"] = {path.name: command(["modinfo", "-k", path.name, "-F", "version", "nvidia"]) for path in pathlib.Path("/lib/modules").iterdir() if path.is_dir()}
           report["default_boot_kernel"] = str(pathlib.Path("/vmlinuz").resolve())
+          report["boot_kernel_images"] = sorted(path.name for path in pathlib.Path("/boot").glob("vmlinuz-*") if path.is_file())
+          report["boot_kernel_symlink"] = str(pathlib.Path("/boot/vmlinuz").resolve())
+          grub = pathlib.Path("/etc/default/grub")
+          report["grub_default"] = [line for line in grub.read_text().splitlines() if line.startswith(("GRUB_DEFAULT=", "GRUB_TOP_LEVEL="))] if grub.exists() else []
           report["nvidia_packages"] = command(["dpkg-query", "-W", "-f=${binary:Package} ${Version}\n", "nvidia-driver-*", "nvidia-dkms-*", "linux-modules-nvidia-*", "libnvidia-compute-*", "libnvidia-gl-*"])
           os.environ.setdefault("XDG_RUNTIME_DIR",f"/run/user/{os.getuid()}")
           report["service_manager"] = command(["systemctl","--user","show","primordia.service","-p","MainPID","-p","ActiveState","-p","SubState","-p","NRestarts","-p","ControlGroup"])
