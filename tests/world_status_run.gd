@@ -8,5 +8,9 @@ func _initialize() -> void:
 	fixture.graph.root.accounts["fixture-private-key"].selected=2;fixture.graph.root.accounts["fixture-private-key"].root=2
 	result=inspector.selection(fixture)
 	assert(not result.accounts[0].selected_dead and result.accounts[0].selected_location=="world" and result.accounts[0].living_family_count==1,"Current living selection and founder lineage resolve from graph references")
-	print("WORLD SELECTION: 3 assertions, 0 failures")
+	fixture.graph.objects[1].fields.chemistry={"$ref":4}
+	fixture.graph.objects.append({"fields":{"particles":{"$array":[{"species":"water","source":-1,"compartment":-1,"amount":1.0},{"species":"water","source":-1,"compartment":-1,"amount":2.0,"sparse_fact":true}]}}})
+	result=inspector.selection(fixture)
+	assert(result.living_chemistry[0].species.water==2 and result.living_chemistry[0].compatible_groups==1 and result.living_chemistry[0].extra_facts.sparse_fact==1,"Bounded chemistry telemetry counts species and constraints without restoring or mutating the saved world")
+	print("WORLD SELECTION: 4 assertions, 0 failures")
 	quit(0)

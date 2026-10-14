@@ -34,7 +34,11 @@ static func selection(saved: Dictionary) -> Dictionary:
 		var at: Vector2=body.get("position",Vector2.ZERO)
 		records.append({"selected_location":location,"selected_dead":body.get("dead",true),"retained_cytoplasm_packets":fields(body.get("chemistry"),objects).get("particles",{}).get("$array",[]).size(),"position":[at.x,at.y],"radius":body.get("radius",0),"dormant_count":ledger.get("dormant",{}).get("$array",[]).size(),"living_family_count":cells.filter(func(reference):return not fields(reference,objects).get("dead",true) and lineage(fields(reference,objects))==account.get("root",-1)).size()})
 	var living_counts: Array=cells.filter(func(reference):return not fields(reference,objects).get("dead",true)).map(func(reference):return fields(fields(reference,objects).get("chemistry"),objects).get("particles",{}).get("$array",[]).size())
-	return {"living_cytoplasm_packets":living_counts.reduce(func(total,value):return total+value,0),"largest_living_cytoplasm_packets":living_counts.max() if not living_counts.is_empty() else 0,"status":"ok","world_id":saved.get("world_id",""),"epoch":saved.get("epoch",0),"tick":saved.get("tick",0),"accounts":records}
+	var details: Array=[]
+	for reference in cells.slice(0,8):
+		var body:=fields(reference,objects)
+		if not body.get("dead",true):details.append(chemistry_summary(body,objects))
+	return {"living_cytoplasm_packets":living_counts.reduce(func(total,value):return total+value,0),"largest_living_cytoplasm_packets":living_counts.max() if not living_counts.is_empty() else 0,"status":"ok","world_id":saved.get("world_id",""),"epoch":saved.get("epoch",0),"tick":saved.get("tick",0),"accounts":records,"living_chemistry":details}
 
 static func fields(reference,objects: Array) -> Dictionary:
 	if not reference is Dictionary:return {}
@@ -44,3 +48,14 @@ static func fields(reference,objects: Array) -> Dictionary:
 static func lineage(cell: Dictionary) -> int:
 	var root: int=cell.get("lineage",-1)
 	return root if root>=0 else int(cell.get("id",-2))
+
+static func chemistry_summary(body: Dictionary,objects: Array) -> Dictionary:
+	var packets: Array=fields(body.get("chemistry"),objects).get("particles",{}).get("$array",[])
+	var species: Dictionary={};var groups: Dictionary={};var extra: Dictionary={}
+	for packet in packets:
+		var kind: String=packet.get("species","")
+		species[kind]=int(species.get(kind,0))+1
+		groups[var_to_bytes([kind,packet.get("source",-1),packet.get("compartment",-1)]).hex_encode()]=true
+		for key in packet:
+			if key not in ["id","species","amount","fuel","p","previous","v","angle","source","compartment","alive"]:extra[key]=int(extra.get(key,0))+1
+	return {"radius":body.get("radius",0),"packets":packets.size(),"species":species,"compatible_groups":groups.size(),"extra_facts":extra}
