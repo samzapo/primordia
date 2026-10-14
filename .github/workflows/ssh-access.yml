@@ -1,0 +1,58 @@
+name: Primordia temporary SSH access
+"on":
+  push:
+    branches: [samzapo/remote-ipv6]
+    paths: [.github/workflows/ssh-access.yml, tools/ssh_tunnel.py]
+  workflow_dispatch:
+    inputs:
+      start:
+        description: Start a 45-minute operator SSH tunnel
+        type: boolean
+        default: false
+      client_ipv4:
+        description: Exact public IPv4 address allowed to connect
+        type: string
+        default: ''
+permissions:
+  contents: read
+concurrency:
+  group: primordia-operator-ssh
+  cancel-in-progress: false
+jobs:
+  access:
+    if: github.repository == 'samzapo/primordia' && github.actor == 'samzapo'
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 48
+    steps:
+      - name: Verify the intended host and wired checkout route
+        shell: bash
+        run: |
+          test "$RUNNER_NAME" = samzapo-desktop
+          test "$(hostname)" = samzapo-desktop
+          python3 - <<'PYCODE'
+          import json,pathlib,socket,subprocess
+          for host in ['github.com','api.github.com','codeload.github.com']:
+              addresses=socket.getaddrinfo(host,443,type=socket.SOCK_STREAM)
+              found=False
+              for item in addresses:
+                  result=subprocess.run(['ip','-j','route','get',item[4][0]],capture_output=True,text=True)
+                  if result.returncode:continue
+                  for route in json.loads(result.stdout):
+                      device=pathlib.Path('/sys/class/net')/route['dev']
+                      assert (device/'device').exists() and not (device/'wireless').exists() and not (device/'phy80211').exists() and (device/'operstate').read_text().strip()=='up'
+                      found=True
+              assert found
+          PYCODE
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: samzapo--remote-ipv6--ssh-${{ github.run_id }}-${{ github.run_attempt }}
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Inspect or launch bounded operator access
+        shell: bash
+        env:
+          PRIMORDIA_SSH_START: ${{ github.event_name == 'workflow_dispatch' && inputs.start || false }}
+          PRIMORDIA_SSH_CLIENT_IPV4: ${{ inputs.client_ipv4 }}
+        run: |
+          cd "$GITHUB_WORKSPACE/samzapo--remote-ipv6--ssh-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          python3 tools/ssh_tunnel.py
