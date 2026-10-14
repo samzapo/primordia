@@ -24,6 +24,10 @@ if [[ "${1:-}" == gpu ]]; then
   done
 fi
 
+"$godot_bin" --headless --path "$project_dir" --script tests/touch_zoom_run.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"
+! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
+grep -Eq 'TOUCH CONTROLS: [0-9]+ assertions, 0 failures' "$report_file"
+
 python3 "$project_dir/tests/test_web_gateway.py"
 python3 "$project_dir/tests/test_web_version.py"
 

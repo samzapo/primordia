@@ -8,7 +8,7 @@ Gameplay objectives, timed expedition endings and progression design are deferre
 
 Every active camera contributes its fixed widest-view detail footprint. Native transport, cell activity, fluid activity and GPU exchange use the union. Streaming adds the existing chunk/halo preparation; regions outside every camera use the existing cold/coarse methods. The world continues with no clients. Missing view updates expire after ten seconds, so an inactive tab cannot retain detailed simulation indefinitely. Display zoom does not improve feeding. Camera movement waits for prepared particle ownership before publishing detailed water.
 
-Opening assembly or chemistry editors never pauses the shared world. Edits run on the authority at a tick boundary, validate lineage ownership and epoch/edit versions, use ordinary tissue/AP costs, and retain bounded idempotency receipts. Successful edits and receipts are checkpointed together before acknowledgement. Local single-player retains its existing assembly pause and CPU default.
+Opening assembly or chemistry editors never pauses the shared world. Edits run on the authority at a tick boundary, validate lineage ownership and epoch/edit versions, use ordinary tissue/AP costs, and retain bounded idempotency receipts. Successful edits and receipts are checkpointed together before acknowledgement. Local single-player retains its existing assembly pause; the October 14 resident-default direction supersedes its original CPU default.
 
 A powered-off host does no simulation. Restart restores the last valid checkpoint and continues from that simulation time, without wall-time catch-up or free resource accrual.
 
@@ -35,3 +35,7 @@ This remains one bounded 4096 by 2560 toroidal habitat with at most eight camera
 The service uses the same private LAN host requested for GSOC, with TLS on Primordia’s independent port. Godot 4.7.2 requires a secure browser context; each device installs the retained private LAN CA once. Certificate name constraints exclude public hostnames; server certificates renew automatically for physical-interface private addresses. Invitations and saved identities travel through HTTPS/WSS. Public Internet access still needs a separate access policy and trusted public hostname. See `docs/deployment.md` for phone setup.
 
 Measure actual simulation/wall ratio and view load. Passing short integration checks establishes ownership and service operation, not sustained 50k/60 FPS or phone performance. Checkpointing can pause a frame; the latest telemetry reports its cost.
+
+## October 14 — touch zoom and local view pause
+
+The initial phone controls provide two-finger pinch/spread zoom, touch-sized −/+ buttons and Pause/Resume. The owner explicitly chose freezing only their own view while the shared world continues. Networking remains active during a view pause, keeps one latest snapshot and returns directly to it on Resume. Frozen views cannot submit edits. Zoom changes magnification within existing bounds and never changes organ size, chemistry or simulation density. Native local Pause stops actual local time/transport. Gameplay objectives, balance acceptance and broader touch editing remain deferred.

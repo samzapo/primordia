@@ -71,6 +71,7 @@ var packet_ids: Dictionary = {}
 var cells_by_id: Dictionary = {}
 var network_particles
 var network_alpha := 1.0
+var paused_snapshot: Dictionary = {}
 
 func _ready() -> void:
 	world = Simulation.new(0,0,false)
@@ -122,6 +123,24 @@ func _publish_login_geometry() -> void:
 	button=Rect2(button.position*conversion,button.size*conversion)
 	JavaScriptBridge.eval("window.primordiaConnectionDiagnostics="+JSON.stringify({"invite_present":invitation!="","status":status.text,"connected":connected,"retrying":retry_enabled,"transport_failures":transport_failures,"attempts":connection_attempts,"key_characters":invite_input.text.length(),"user_arg_count":OS.get_cmdline_user_args().size(),"invitation_bounds":[input.position.x,input.position.y,input.size.x,input.size.y],"join_bounds":[button.position.x,button.position.y,button.size.x,button.size.y]}))
 
+func _toggle_user_pause() -> void:
+	if not connected or world.revision==0:return
+	user_paused=not user_paused
+	touch_zoom.cancel()
+	if user_paused:
+		build_open=false;selected=-1;moving_id=-1;tube_start.clear();cell_ui.close_context()
+	else:
+		var latest:=paused_snapshot;paused_snapshot={}
+		if not latest.is_empty():_snapshot(latest)
+		for cell in world.cells:cell.previous_position=cell.position;cell.previous_angle=cell.angle
+		for packet in world.particles:packet.previous=packet.p;packet.previous_angle=packet.angle
+		if network_particles!=null:network_particles.prepare(world.particles,world.cells)
+		received_usec=0
+	touch_zoom.layout()
+
+func touch_controls_available() -> bool:
+	return connected and not login.visible and world.revision>0
+
 func _input(event: InputEvent) -> void:
 	if login.visible: return # Controls receive every key; pond shortcuts cannot consume credentials.
 	super(event)
@@ -131,11 +150,11 @@ func _unhandled_input(event: InputEvent) -> void:
 func _configure_backend() -> void: pass
 func _restart(_profile: int=-1) -> void:
 	_message("The shared world cannot be restarted by a client.")
-func is_paused() -> bool: return false
+func is_paused() -> bool: return user_paused
 func _physics_process(_dt: float) -> void:
 	if music.refill_between_ticks: music.refill()
 func _update_world(_alpha: float) -> void:
-	var alpha:=clampf((Time.get_ticks_usec()-received_usec)/interval_usec,0,1) if received_usec>0 else 1.0
+	var alpha:=clampf((Time.get_ticks_usec()-received_usec)/interval_usec,0,1) if received_usec>0 and not user_paused else 1.0
 	network_alpha=alpha
 	super(alpha)
 func _process(dt: float) -> void:
@@ -178,7 +197,8 @@ func _connect(manual: bool=true) -> void:
 	if socket.get_ready_state()!=WebSocketPeer.STATE_CLOSED: socket.close(-1)
 	socket=WebSocketPeer.new();socket.inbound_buffer_size=Protocol.MAX_FRAME;socket.outbound_buffer_size=65536;socket.max_queued_packets=8
 	hello_sent=false;connected=false;connecting=true;attempted=true;retry_enabled=true;reconnect_due=3;inflight.clear();commands.clear()
-	view_announced=false;view_clock=0;keepalive_clock=0
+	view_announced=false;view_clock=0;keepalive_clock=0;received_usec=0
+	user_paused=false;paused_snapshot={};touch_zoom.cancel()
 	connect_started_usec=Time.get_ticks_usec()
 	if OS.has_feature("web"):
 		JavaScriptBridge.eval(BROWSER_SOCKET_ADDRESS % JSON.stringify(server_url))
@@ -242,6 +262,9 @@ func _poll_network() -> void:
 
 func _snapshot(message: Dictionary) -> void:
 	if int(message.epoch)!=epoch: return
+	if user_paused:
+		if not message.get("warming",false):paused_snapshot=message
+		return
 	if message.get("warming",false):
 		status.text="Preparing detailed water for your camera…";login.show()
 		var initial=Codec.new().restore(message.graph)
@@ -305,6 +328,7 @@ func _copy_cell(incoming):
 	return cell
 
 func _queue_command(action: String,args: Dictionary) -> void:
+	if user_paused:_message("Resume the view before editing this cell.");return
 	if not connected or world.player.dead: _message("Reconnect before editing.");return
 	if commands.size()>=16: _message("Waiting for pending edits.");return
 	commands.append({"action":action,"args":_json_value(args),"cell":world.player.id})

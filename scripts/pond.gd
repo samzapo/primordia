@@ -45,6 +45,9 @@ var flow_wakes := true
 var currents_origin := Vector2.ZERO
 var preview := Node2D.new()
 var ui := Control.new()
+var touch_zoom := preload("res://scripts/touch_zoom.gd").new()
+var user_paused := false
+var pause_control_ready := true
 var cell_ui := preload("res://scripts/cell_interface.gd").new()
 var inspector := preload("res://scripts/particle_inspector.gd").new()
 var moving_id := -1
@@ -245,7 +248,7 @@ func _physics_process(dt: float) -> void:
 
 func is_paused() -> bool:
 	if world.server_mode: return resident_starting
-	return resident_starting or build_open or settings_panel.visible or cell_ui.context.get("kind","") in ["lineage","archive","past"] or world.evolution.terminal()
+	return user_paused or resident_starting or build_open or settings_panel.visible or cell_ui.context.get("kind","") in ["lineage","archive","past"] or world.evolution.terminal()
 
 func _can_edit_tubules() -> bool:
 	return build_open and not settings_panel.visible and not world.player.dead and not world.evolution.terminal()
@@ -646,6 +649,7 @@ func _build_ui() -> void:
 	quit_button.text = "Quit game"
 	quit_button.pressed.connect(func(): get_tree().quit())
 	settings_panel.hide()
+	touch_zoom.initialize(self)
 
 func _style(color: Color, border: Color) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
@@ -682,6 +686,7 @@ func _apply_ui_scale(value: float) -> void:
 
 func _layout() -> void:
 	var size := get_viewport_rect().size
+	touch_zoom.layout()
 	light_layer.size = size
 	microscope_layer.size = size
 	var width := minf(530*preferences.hud_scale,size.x-32)
@@ -739,6 +744,7 @@ func _update_hud() -> void:
 
 
 func _toggle_build() -> void:
+	if user_paused:_message("Resume before editing the cell.");return
 	if death_focus_age < 1.8: return
 	if settings_panel.visible or world.player.dead or world.evolution.terminal(): return
 	if build_open:
@@ -824,6 +830,7 @@ func _select(index: int) -> void:
 	tube_start.clear()
 
 func _restart(profile: int = -1) -> void:
+	user_paused=false;touch_zoom.cancel()
 	archive.sync(world)
 	archive.begin()
 	if resident_controller!=null: resident_controller.close()
@@ -861,7 +868,26 @@ func _message(value: String) -> void:
 	notice_timer = 6
 	_update_hud()
 
+func touch_controls_available() -> bool:
+	return true
+
+func _toggle_user_pause() -> void:
+	if not pause_control_ready:return
+	user_paused=not user_paused
+	if not user_paused:
+		settings_panel.hide()
+		if build_open:_finish_build()
+		cell_ui.close_context()
+	touch_zoom.cancel();touch_zoom.layout()
+
+func _notification(what: int) -> void:
+	if what==NOTIFICATION_WM_WINDOW_FOCUS_OUT:touch_zoom.cancel()
+
 func _input(event: InputEvent) -> void:
+	if event is InputEventScreenTouch or event is InputEventScreenDrag:
+		if touch_zoom.handle(event):get_viewport().set_input_as_handled()
+		return
+	if touch_zoom.enabled and (event is InputEventMouseButton or event is InputEventMouseMotion) and event.device==-1:return
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT and build_open and not settings_panel.visible:
 		if selected >= 0 or moving_id >= 0 or not cell_ui.context.is_empty():
 			selected = -1
@@ -894,6 +920,7 @@ func _input(event: InputEvent) -> void:
 				if not build_open or (selected < 0 and moving_id < 0): return
 				placement_keyboard = true
 				placement_angle = fposmod(placement_angle+(-0.10 if event.keycode in [KEY_LEFT,KEY_UP] else 0.10),TAU)
+			KEY_P: _toggle_user_pause()
 			KEY_SPACE: _toggle_camera()
 			KEY_ESCAPE: _toggle_settings()
 			KEY_F11: set_fullscreen(not preferences.fullscreen)
@@ -911,6 +938,7 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 func _unhandled_input(event: InputEvent) -> void:
+	if touch_zoom.enabled and (event is InputEventMouseButton or event is InputEventMouseMotion) and event.device==-1:return
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT and not cell_ui.context.is_empty():
 		cell_ui.close_context()
 		return
