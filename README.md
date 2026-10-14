@@ -16,7 +16,7 @@ The launcher finds Godot in standard Steam locations, custom Steam libraries and
 
 ## Desktop backend playtest
 
-The resident GPU game is available for desktop comparison. A reported Threadripper/RTX 3090 performance failure is being addressed in [Revision 41](docs/REVISION_41.md):
+Normal desktop launches use the resident GPU implementation. A reported Threadripper/RTX 3090 performance failure is being addressed in [Revision 41](docs/REVISION_41.md):
 
 ~~~sh
 ./tools/playtest.sh resident      # GPU particles, reactions, queries and drawing
@@ -26,7 +26,7 @@ The resident GPU game is available for desktop comparison. A reported Threadripp
 
 These launchers find Steam Godot and use the same Mobile renderer. **F3 shows the backend, count scope, whole-frame timing and simulation/wall speed.** The GPU option retains cell-local editing, music, chemistry, predation and paid family succession, and advances distant cells with shared coarse CPU physiology while nearby cells receive full detail. If a resident limit is reached, it preserves the habitat and continues on CPU.
 
-Resident now runs nearby particles on the GPU and stores distant particles in sparse CPU chunks, with bounded transfers and large-step cold transport. F3 separates GPU nearby packets (including the transition buffer) from CPU stored slots. Zoom does not change feeding; rapid camera travel waits for prepared water. [Revision 41](docs/REVISION_41.md) records correctness checks, performance tradeoffs and limits: the normal workstation run remains at 60 FPS, but the dense hybrid still costs more than whole-GPU simulation in the current small habitat. The habitat's fluid grid and cell scheduler are not yet unbounded, and the owner's Threadripper/RTX 3090 needs a fresh comparison. Use `./tools/profile_playtest.sh resident` for the Steam-compatible trace. The ordinary launcher remains the CPU default.
+Resident now runs nearby particles on the GPU and stores distant particles in sparse CPU chunks, with bounded transfers and large-step cold transport. F3 separates GPU nearby packets (including the transition buffer) from CPU stored slots. Zoom does not change feeding; rapid camera travel waits for prepared water. [Revision 41](docs/REVISION_41.md) records correctness checks, performance tradeoffs and limits: the normal workstation run remains at 60 FPS, but the dense hybrid still costs more than whole-GPU simulation in the current small habitat. The habitat's fluid grid and cell scheduler are not yet unbounded, and the owner's Threadripper/RTX 3090 needs a fresh comparison. Use `./tools/profile_playtest.sh resident` for the Steam-compatible trace. The ordinary launcher defaults to resident; CPU launch modes remain explicit correctness and diagnostic comparisons.
 
 ## Cell pathways and current test policy
 

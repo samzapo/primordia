@@ -6,4 +6,9 @@ godot_bin="$(resolve_godot)"
 if [[ "${PRIMORDIA_BACKEND:-native}" != script ]]; then
   "$project_dir/tools/build_native.sh" >&2
 fi
-exec "$godot_bin" --path "$project_dir" "$@"
+export PRIMORDIA_PARTICLES="${PRIMORDIA_PARTICLES:-resident}"
+renderer_args=()
+if [[ "$PRIMORDIA_PARTICLES" == resident ]]; then
+  renderer_args=(--rendering-method mobile)
+fi
+exec "$godot_bin" --path "$project_dir" "${renderer_args[@]}" "$@"

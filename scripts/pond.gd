@@ -1040,7 +1040,7 @@ func _capture() -> void:
 func _configure_backend() -> void:
 	var args := OS.get_cmdline_user_args()
 	particle_backend=OS.get_environment("PRIMORDIA_PARTICLES")
-	if particle_backend=="": particle_backend="cpu"
+	if particle_backend=="": particle_backend="resident"
 	for arg in args:
 		if arg.begins_with("--particle-backend="): particle_backend=arg.trim_prefix("--particle-backend=")
 	if particle_backend=="resident":

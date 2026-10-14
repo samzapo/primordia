@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Explicit desktop backend comparison; ordinary run.sh retains the CPU default.
+# Explicit desktop backend comparison; ordinary run.sh defaults to resident.
 set -euo pipefail
 project_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 backend="${1:-resident}"

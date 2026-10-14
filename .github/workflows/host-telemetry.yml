@@ -106,6 +106,9 @@ jobs:
           report["runner_driver_environment"] = {key: os.environ[key] for key in driver_variables if key in os.environ}
           report["vulkan_icds"] = {path.name: json.loads(path.read_text()) for path in pathlib.Path("/usr/share/vulkan/icd.d").glob("*.json")}
           report["nvidia_library_versions"] = command(["nvidia-smi", "--query-gpu=name,driver_version", "--format=csv,noheader"])
+          kernel_driver = pathlib.Path("/proc/driver/nvidia/version")
+          report["nvidia_loaded_module"] = kernel_driver.read_text().strip() if kernel_driver.exists() else None
+          report["nvidia_installed_module"] = command(["modinfo", "-F", "version", "nvidia"])
           os.environ.setdefault("XDG_RUNTIME_DIR",f"/run/user/{os.getuid()}")
           report["service_manager"] = command(["systemctl","--user","show","primordia.service","-p","MainPID","-p","ActiveState","-p","SubState","-p","NRestarts","-p","ControlGroup"])
           fields = dict(line.split("=",1) for line in report["service_manager"].get("output","").splitlines() if "=" in line)

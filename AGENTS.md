@@ -185,3 +185,7 @@ data/chemistry.json automatically; do not commit their deterministic output.
 ## Revision 44 — persistent shared world
 
 Read docs/REVISION_44.md and docs/deployment.md. The authorized private service keeps native GPU chemistry/transport on samzapo-desktop; WebGL browsers present server poses. Union every active camera's fixed detail footprint and preserve existing coarse out-of-camera ecology, including zero clients. Shared editors submit paid, validated live commands and never pause authority; local single-player keeps its CPU default/pause. Hold gameplay objectives and balance tests until the owner restores them; retain physical and infrastructure checks. Preserve data-only shared-reference checkpoints, RNG, all particle owners/escrow, durable edit receipts, invitation/account privacy and fail-closed recovery. Resume saved time after downtime without catch-up. Deploy Primordia independently on port 8766 with internal loopback 8767; GSOC hosting was explicitly inspected for this task only. No unrelated repository/chat access follows from that exception.
+
+## October 14, 2026 — resident default
+
+Explicit owner direction: normal play now always uses the resident implementation. This supersedes older CPU-default launch instructions. Keep the browser as a WebGL presentation client, require a real hardware GPU for persistent deployment, and retain explicit CPU reference paths for correctness comparisons.

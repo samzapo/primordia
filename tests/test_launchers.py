@@ -148,9 +148,22 @@ class SteamLaunchers(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.splitlines(),
-                         ["<--path>", f"<{PROJECT}>", "<--editor>", "<-->",
+                         ["<--path>", f"<{PROJECT}>", "<--rendering-method>", "<mobile>", "<--editor>", "<-->",
                           "<text with spaces>", "<$(not-a-command)>"])
 
+
+    def test_normal_launch_defaults_to_resident_and_preserves_cpu_override(self):
+        engine = self.install(self.steam)
+        engine.write_text('#!/bin/sh\nprintf "BACKEND=%s\\n" "$PRIMORDIA_PARTICLES"\nprintf "<%s>\\n" "$@"\n')
+        result = subprocess.run([BASH, str(PROJECT / "tools/run.sh")], env=self.env, text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("BACKEND=resident", result.stdout)
+        self.assertIn("<--rendering-method>\n<mobile>", result.stdout)
+        env = dict(self.env, PRIMORDIA_PARTICLES="cpu")
+        result = subprocess.run([BASH, str(PROJECT / "tools/run.sh")], env=env, text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("BACKEND=cpu", result.stdout)
+        self.assertNotIn("<--rendering-method>", result.stdout)
 
     def test_fluid_launcher_preserves_overrides_and_steam_discovery(self):
         self.install(self.steam)
