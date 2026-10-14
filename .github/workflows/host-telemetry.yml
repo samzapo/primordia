@@ -165,6 +165,7 @@ jobs:
                       config = json.loads(match.group(1))
                       result["document"] = {"status": response.status,
                                             "experimental_virtual_keyboard": config.get("experimentalVK"),
+                                            "main_pack": config.get("mainPack"),
                                             "sha256": hashlib.sha256(document).hexdigest(),
                                             "cache_control": response.headers.get("Cache-Control")}
               except (OSError, ValueError) as error:

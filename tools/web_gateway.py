@@ -74,10 +74,20 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_error(404)
         return None
 
+    def send_head(self):
+        self.serving_asset = True
+        try:
+            return super().send_head()
+        finally:
+            self.serving_asset = False
+
     def end_headers(self):
         if not self.server.tls_context or isinstance(self.connection, ssl.SSLSocket):
             self.send_header("Cross-Origin-Opener-Policy", "same-origin")
             self.send_header("Cross-Origin-Embedder-Policy", "require-corp")
+        if getattr(self, "serving_asset", False):
+            # Revalidate unversioned page/runtime URLs; unchanged large files can return 304.
+            self.send_header("Cache-Control", "no-cache")
         self.send_header("X-Content-Type-Options", "nosniff")
         super().end_headers()
 

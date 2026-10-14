@@ -7,3 +7,4 @@ web_project="$(python3 "$project_dir/tools/prepare_web.py")"
 mkdir -p "$project_dir/build/web"
 PRIMORDIA_BACKEND=script "$godot_bin" --headless --path "$web_project" --editor --import --quit
 PRIMORDIA_BACKEND=script "$godot_bin" --headless --path "$web_project" --export-release Web "$project_dir/build/web/index.html"
+python3 "$project_dir/tools/version_web.py" "$project_dir/build/web"

@@ -70,8 +70,26 @@ class LanGateway(unittest.TestCase):
                 with trusted.open(f"https://127.0.0.1:{port}/", timeout=5) as response:
                     self.assertEqual(response.read(), b"actual game asset")
                     self.assertEqual(response.headers["Cross-Origin-Opener-Policy"], "same-origin")
+                    self.assertEqual(response.headers["Cache-Control"], "no-cache")
+                    modified = response.headers["Last-Modified"]
+                # A reload can reuse unchanged engine data, but must see replaced client files.
+                try:
+                    trusted.open(Request(f"https://127.0.0.1:{port}/", headers={"If-Modified-Since":modified}), timeout=5)
+                    self.fail("Unchanged asset should be revalidated with 304")
+                except HTTPError as error:
+                    self.assertEqual(error.code,304)
+                    self.assertEqual(error.headers["Cache-Control"], "no-cache")
+                    error.close()
+                (web / "index.html").write_text("updated game asset")
+                import os
+                changed = (web / "index.html").stat().st_mtime + 2
+                os.utime(web / "index.html", (changed,changed))
+                with trusted.open(Request(f"https://127.0.0.1:{port}/", headers={"If-Modified-Since":modified}), timeout=5) as response:
+                    self.assertEqual(response.read(), b"updated game asset")
+                    self.assertEqual(response.headers["Cache-Control"], "no-cache")
                 with trusted.open(f"https://127.0.0.1:{port}/health", timeout=5) as response:
                     self.assertEqual(json.load(response)["tick"], 123)
+                    self.assertEqual(response.headers["Cache-Control"], "no-store")
                 with trusted.open(f"https://127.0.0.1:{port}/api/network", timeout=5) as response:
                     self.assertTrue(all(url.startswith("https://") for url in json.load(response)["home_urls"]))
                 with self.assertRaises(URLError):
