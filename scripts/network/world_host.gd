@@ -187,6 +187,9 @@ func _poll() -> void:
 			if message.get("op","")=="hello": _hello(id,message)
 			elif peer.account=="" : socket.close(1008,"Authenticate first")
 			elif message.get("op","")=="ping": pass
+			elif message.get("op","")=="snapshot_ack":
+				if message.get("serial") is float or message.get("serial") is int:
+					if message.serial==peer.get("awaiting_snapshot",0) and message.get("epoch",-1)==epoch:peer.awaiting_snapshot=0
 			elif message.get("op","")=="view": _view(peer,message)
 			elif message.get("op","")=="command" and queued.size()<128:
 				var valid:=message.get("action") is String and message.get("args",{}) is Dictionary and _safe_args(message.get("args",{}))
@@ -257,6 +260,8 @@ func _hello(id: int,message: Dictionary) -> void:
 	if dirty and not checkpoint(): peer.socket.close(1011,"Cannot retain account");_fatal("Cannot retain account");return
 	_close_sessions(key,id)
 	peer.account=key
+	peer.snapshot_ack=message.get("snapshot_ack",false)==true;peer.compact_cytoplasm=message.get("compact_cytoplasm",false)==true
+	peer.frame_serial=0;peer.awaiting_snapshot=0
 	var account: Dictionary=accounts[key]
 	var cell=_selected(account)
 	var focus=_focus(peer)
@@ -380,7 +385,7 @@ func checkpoint() -> bool:
 func _publish() -> void:
 	# Inside views need current intracellular graphs, not an external pose gather.
 	for peer in peers.values():
-		if peer.account!="" and peer.view!=null and peer.get("perception","exteroception")=="interoception" and peer.view_tick<world.revision:
+		if peer.account!="" and peer.view!=null and peer.get("perception","exteroception")=="interoception" and peer.view_tick<world.revision and peer.get("awaiting_snapshot",0)==0:
 			_send_snapshot(peer,PackedByteArray())
 	if world.camera_views.is_empty() or not pending_frame.is_empty(): return
 	if world.resident!=null:
@@ -389,13 +394,13 @@ func _publish() -> void:
 		var regions: Array=[]
 		for id in peers:
 			var peer: Dictionary=peers[id]
-			if peer.account=="" or peer.view==null or peer.view_tick>=world.revision or peer.get("perception","exteroception")!="exteroception": continue
+			if peer.account=="" or peer.view==null or peer.view_tick>=world.revision or peer.get("perception","exteroception")!="exteroception" or peer.get("awaiting_snapshot",0)>0: continue
 			pending_frame.frames[id]={"view":peer.view,"frame":_frame(peer)}
 			regions.append(peer.view)
 		if regions.is_empty() or not world.resident.gpu.publish_views(regions): pending_frame.clear()
 	else:
 		for peer in peers.values():
-			if peer.account=="" or peer.get("perception","exteroception")!="exteroception": continue
+			if peer.account=="" or peer.get("perception","exteroception")!="exteroception" or peer.get("awaiting_snapshot",0)>0: continue
 			var bytes:=PackedByteArray()
 			var view: Vector4=peer.view
 			for index in world.grid.query_rect(Vector2(view.x,view.y),Vector2(view.z,view.w)+Vector2.ONE*32):
@@ -422,12 +427,12 @@ func _frame(peer: Dictionary) -> Dictionary:
 	for cell in world.cells:
 		if Sim.Medium.visibility(cell.position,Vector2(view.x,view.y),Vector2(view.z,view.w)+Vector2.ONE*cell.extent())>0: cells.append(cell)
 	return {"kind":"snapshot","world_id":world_id,"epoch":epoch,"tick":world.revision,"time":world.time,"edit":account.edit,"sequence":account.sequence,
-		"graph":Codec.new().capture({"cells":cells,"player":_selected(account),"focus":_focus(peer),"lineage":account.lineage,"evolution":account.evolution}),
+		"graph":Codec.new().capture({"cells":cells,"player":_selected(account),"focus":_focus(peer),"lineage":account.lineage,"evolution":account.evolution},{},peer.get("compact_cytoplasm",false)),
 		"particles":PackedByteArray(),"flow":world.fluid.velocity.duplicate(),"acid":world.acidity.values.duplicate(),
 		"sounds":world.sound_events.duplicate(true),"sound_sequence":world.sound_sequence,"sparks":world.reaction_sparks.duplicate(true),"perception":peer.get("perception","exteroception"),"warming":false}
 
 func _send_snapshot(peer: Dictionary,records: PackedByteArray,frame: Dictionary={}) -> void:
-	if peer.view==null or peer.socket.get_ready_state()!=WebSocketPeer.STATE_OPEN: return
+	if peer.view==null or peer.socket.get_ready_state()!=WebSocketPeer.STATE_OPEN or peer.get("awaiting_snapshot",0)>0: return
 	if frame.is_empty(): frame=_frame(peer)
 	var bytes:=PackedByteArray()
 	var view: Vector4=peer.view
@@ -435,16 +440,25 @@ func _send_snapshot(peer: Dictionary,records: PackedByteArray,frame: Dictionary=
 		var d:=Sim.Medium.offset(Vector2(view.x,view.y),Vector2(records.decode_float(offset),records.decode_float(offset+4))).abs()
 		if d.x<=view.z+32 and d.y<=view.w+32: bytes.append_array(records.slice(offset,offset+32))
 	frame.particles=bytes
-	_send(peer,frame)
+	var serial: int=peer.get("frame_serial",0)+1
+	frame.serial=serial
+	if _send(peer,frame):
+		peer.frame_serial=serial
+		if peer.get("snapshot_ack",false):peer.awaiting_snapshot=serial
 
-func _send(peer: Dictionary,value: Dictionary) -> void:
-	if peer.socket.get_current_outbound_buffered_amount()>1048576: skipped_frames+=1;return
+func _send(peer: Dictionary,value: Dictionary) -> bool:
+	if peer.socket.get_current_outbound_buffered_amount()>1048576: skipped_frames+=1;return false
 	value.protocol=Protocol.VERSION
 	var bytes:=Protocol.pack(value)
-	if bytes.size()>Protocol.MAX_FRAME: skipped_frames+=1;return
+	if bytes.is_empty() or bytes.size()>Protocol.MAX_FRAME:
+		skipped_frames+=1
+		if value.get("kind","")=="snapshot":_send(peer,{"kind":"snapshot_error","message":"The world view could not be loaded. Your sign-in is saved."})
+		return false
 	if peer.socket.put_packet(bytes)==OK:
 		sent_bytes+=bytes.size()
 		if value.get("kind","")=="snapshot" and not value.get("warming",false): snapshots_sent+=1
+		return true
+	return false
 
 func _write_metrics() -> void:
 	last_metrics_usec=Time.get_ticks_usec()
@@ -469,6 +483,7 @@ func _write_metrics() -> void:
 	metrics["interoception_peers"]=peers.values().filter(func(peer):return peer.account!="" and peer.get("perception","exteroception")=="interoception").size()
 	metrics["internal_pending_seconds"]=world.cells.filter(func(cell):return not cell.dead).map(func(cell):return cell.chemistry.pending_time).reduce(func(total,value):return total+value,0.0)
 	metrics["publication_pending"]=not pending_frame.is_empty()
+	metrics["snapshots_awaiting_ack"]=peers.values().filter(func(peer):return peer.get("awaiting_snapshot",0)>0).size()
 	metrics["tick_phase_peak_ms"]={}
 	for phase in tick_phase_peak_usec: metrics.tick_phase_peak_ms[phase]=tick_phase_peak_usec[phase]/1000.0
 	tick_phase_peak_usec.clear()

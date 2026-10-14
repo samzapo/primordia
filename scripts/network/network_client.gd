@@ -75,6 +75,8 @@ var network_alpha := 1.0
 var paused_snapshot: Dictionary = {}
 var camera_initialized := false
 var focus_cell
+var loading_world := false
+var connection_stage := "sign_in"
 
 func _ready() -> void:
 	world = Simulation.new(0,0,false)
@@ -124,7 +126,7 @@ func _publish_login_geometry() -> void:
 	var input:=invite_input.get_global_rect();var button:=join_button.get_global_rect()
 	input=Rect2(input.position*conversion,input.size*conversion)
 	button=Rect2(button.position*conversion,button.size*conversion)
-	JavaScriptBridge.eval("window.primordiaConnectionDiagnostics="+JSON.stringify({"invite_present":invitation!="","status":status.text,"connected":connected,"retrying":retry_enabled,"transport_failures":transport_failures,"attempts":connection_attempts,"key_characters":invite_input.text.length(),"user_arg_count":OS.get_cmdline_user_args().size(),"invitation_bounds":[input.position.x,input.position.y,input.size.x,input.size.y],"join_bounds":[button.position.x,button.position.y,button.size.x,button.size.y]}))
+	JavaScriptBridge.eval("window.primordiaConnectionDiagnostics="+JSON.stringify({"invite_present":invitation!="","status":status.text,"connected":connected,"loading":loading_world,"stage":connection_stage,"key_visible":invite_input.visible,"join_visible":join_button.visible,"retrying":retry_enabled,"transport_failures":transport_failures,"attempts":connection_attempts,"key_characters":invite_input.text.length(),"user_arg_count":OS.get_cmdline_user_args().size(),"invitation_bounds":[input.position.x,input.position.y,input.size.x,input.size.y],"join_bounds":[button.position.x,button.position.y,button.size.x,button.size.y]}))
 
 func _toggle_user_pause() -> void:
 	if not connected or world.revision==0:return
@@ -192,13 +194,19 @@ func _process(dt: float) -> void:
 		if reconnect_due<=0: reconnect_due=3;_connect(false)
 	_send_next()
 
-func _show_connection(text: String) -> void:
+func _show_connection(text: String,credentials: bool=false,retry: bool=false) -> void:
 	status.text=text;login.show()
+	invite_input.visible=credentials;url_input.visible=credentials and not OS.has_feature("web")
+	join_button.visible=credentials or retry;join_button.disabled=not (credentials or retry)
+	join_button.text="Sign in" if credentials else "Reconnect"
+	if not credentials:
+		invite_input.release_focus();DisplayServer.virtual_keyboard_hide()
 	_publish_login_geometry.call_deferred()
 	if OS.has_feature("web"):
 		JavaScriptBridge.eval("window.primordiaDiagnostics=Object.assign(window.primordiaDiagnostics||{},"+JSON.stringify({"connected":connected})+")")
 
 func _connect(manual: bool=true) -> void:
+	if connected or connecting:return
 	connection_attempts+=1
 	var address:=url_input.text.strip_edges() if url_input.text!="" else server_url
 	if address!=server_url: server_url=address;_load_identity()
@@ -206,7 +214,8 @@ func _connect(manual: bool=true) -> void:
 	if manual: transport_failures=0
 	if token=="" and invitation=="":
 		retry_enabled=false;attempted=false
-		_show_connection("Paste your personal access key, then press Sign in. The shared world is already running.")
+		connection_stage="sign_in"
+		_show_connection("Paste your personal access key, then press Sign in. The shared world is already running.",true)
 		return
 	if socket.get_ready_state()!=WebSocketPeer.STATE_CLOSED: socket.close(-1)
 	socket=WebSocketPeer.new();socket.inbound_buffer_size=Protocol.MAX_FRAME;socket.outbound_buffer_size=65536;socket.max_queued_packets=8
@@ -218,12 +227,14 @@ func _connect(manual: bool=true) -> void:
 		JavaScriptBridge.eval(BROWSER_SOCKET_ADDRESS % JSON.stringify(server_url))
 	if socket.connect_to_url(server_url)!=OK:
 		connecting=false;retry_enabled=false
-		_show_connection("Cannot connect to this server address. Check it and press Sign in again.")
+		connection_stage="error"
+		_show_connection("Cannot connect to this server address. Check it and try again.",not OS.has_feature("web"),true)
 		return
+	connection_stage="connecting"
 	_show_connection("Connecting to the shared pond…")
 
 func _connection_closed(code: int,reason: String) -> void:
-	connecting=false;connected=false;commands.clear();inflight.clear()
+	connecting=false;connected=false;loading_world=false;commands.clear();inflight.clear();connection_stage="disconnected"
 	if code==1008:
 		retry_enabled=false
 		var explanation:="The server refused this connection. Check your access key and try again."
@@ -232,17 +243,19 @@ func _connection_closed(code: int,reason: String) -> void:
 			"No unclaimed living cell": explanation="Your key is valid, but no unclaimed living cell is available in this pond. The world is still running."
 			"Pond connection limit": explanation="The pond currently has eight connected players. Try again when a place is free."
 			"Authentication timeout": explanation="Sign-in timed out. Press Sign in to retry."
-		_show_connection(explanation)
+		var needs_key: bool=reason in ["Invalid access key","Invalid invitation","Access key required"]
+		if needs_key:token="";connection_stage="sign_in"
+		_show_connection(explanation,needs_key,not needs_key)
 	elif code==1000 and reason=="Session resumed elsewhere":
 		retry_enabled=false
-		_show_connection("This identity signed in on another browser. Paste its key and press Sign in to return here.")
+		_show_connection("This identity signed in on another browser. Paste its key and press Sign in to return here.",true)
 	else:
 		transport_failures+=1;retry_enabled=transport_failures<3
 		var text:="Connection lost; the world continues. Reconnecting…" if retry_enabled else "Cannot reach the game server. Check the address and press Sign in to retry."
 		if not hello_sent and server_url.begins_with("wss://"):
 			text="The game connection could not be opened. Reload this page and press Sign in again."
 			if retry_enabled:text+=" Retrying…"
-		_show_connection(text)
+		_show_connection(text,false,not retry_enabled)
 
 func _poll_network() -> void:
 	socket.poll()
@@ -250,19 +263,16 @@ func _poll_network() -> void:
 		socket.close(-1);_connection_closed(-1,"");return
 	if socket.get_ready_state()==WebSocketPeer.STATE_OPEN:
 		if not hello_sent:
-			_send({"op":"hello","token":token,"invite":invitation});hello_sent=true
-		while socket.get_available_packet_count()>0:
+			_send({"op":"hello","token":token,"invite":invitation,"snapshot_ack":true,"compact_cytoplasm":true});hello_sent=true
+		var polled:=0
+		while socket.get_available_packet_count()>0 and polled<4:
+			polled+=1
 			var message:=Protocol.unpack(socket.get_packet())
 			match message.get("kind",""):
-				"welcome":
-					token=message.token;epoch=message.epoch;command_sequence=message.sequence;edit_revision=message.edit
-					world.seed_value=message.seed;world.habitat_geometry=Codec.new().restore(message.habitat)
-					habitat_view.configure(world.habitat_geometry)
-					light_layer.material.set_shader_parameter("habitat_seed",float(posmod(world.seed_value,997)))
-					connected=true;connecting=false;retry_enabled=true;transport_failures=0;status.text="Connected to the shared pond.";login.hide();_save_identity();light_factor_shown=-1
-					_publish_login_geometry.call_deferred()
-					music.reset();_message("Connected · editing and chemistry remain live.")
+				"welcome": _welcome(message)
 				"snapshot": _snapshot(message)
+				"snapshot_error":
+					connection_stage="error";_show_connection(message.message)
 				"result":
 					if int(message.sequence)==int(inflight.get("sequence",-2)):
 						edit_revision=message.get("edit",edit_revision)
@@ -274,13 +284,29 @@ func _poll_network() -> void:
 		if socket.get_ready_state()==WebSocketPeer.STATE_CLOSED and (connected or connecting):
 			_connection_closed(socket.get_close_code(),socket.get_close_reason())
 
+func _welcome(message: Dictionary) -> void:
+	token=message.token;epoch=message.epoch;command_sequence=message.sequence;edit_revision=message.edit
+	world.seed_value=message.seed;world.habitat_geometry=Codec.new().restore(message.habitat)
+	habitat_view.configure(world.habitat_geometry)
+	light_layer.material.set_shader_parameter("habitat_seed",float(posmod(world.seed_value,997)))
+	connected=true;connecting=false;loading_world=true;retry_enabled=true;transport_failures=0;connection_stage="preparing"
+	_save_identity();light_factor_shown=-1
+	invitation="";invite_input.text=""
+	_show_connection("Signed in. Preparing the world for your camera…")
+	music.reset();_message("Connected · editing and chemistry remain live.")
+
+func _ack_snapshot(message: Dictionary) -> void:
+	if message.get("serial",0)>0:_send({"op":"snapshot_ack","serial":message.serial,"epoch":epoch})
+
 func _snapshot(message: Dictionary) -> void:
 	if int(message.epoch)!=epoch: return
 	if user_paused:
 		if not message.get("warming",false):paused_snapshot=message
+		_ack_snapshot(message)
 		return
 	if message.get("warming",false):
-		status.text="Preparing detailed water for your camera…";login.show()
+		loading_world=true;connection_stage="preparing"
+		_show_connection("Signed in. Preparing detailed water for your camera…")
 		var initial=Codec.new().restore(message.graph)
 		if initial is Dictionary:
 			world.player=_copy_cell(initial.player)
@@ -289,7 +315,7 @@ func _snapshot(message: Dictionary) -> void:
 				camera_locked=can_follow();camera_offset=Vector2.ZERO;free_camera=_follow_cell().position;camera_rotation=0
 		return
 	if login.visible:
-		status.text="Connected to the shared pond.";login.hide()
+		status.text="Connected to the shared pond.";login.hide();loading_world=false;connection_stage="ready"
 		_publish_login_geometry.call_deferred()
 	var data=Codec.new().restore(message.graph)
 	if not data is Dictionary: return
@@ -344,6 +370,8 @@ func _snapshot(message: Dictionary) -> void:
 	_update_hud()
 	if OS.has_feature("web"):
 		JavaScriptBridge.eval("window.primordiaDiagnostics="+JSON.stringify({"connected":connected,"tick":world.revision,"world_id":message.world_id,"packets":packets.size(),"cells":world.cells.size(),"time":world.time}))
+
+	_ack_snapshot(message)
 
 func _copy_cell(incoming):
 	var cell=cells_by_id.get(incoming.id)

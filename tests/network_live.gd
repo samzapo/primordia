@@ -10,6 +10,8 @@ var messages: Array=[[],[]]
 var deadline:=0
 var keepalive_at:=0
 var camera_reports: Dictionary={}
+var withheld_acks: Dictionary={}
+var deferred_acks: Dictionary={}
 func check(value: bool,message: String) -> void:
 	assertions+=1
 	if not value: failures+=1;push_error("FAIL: "+message)
@@ -27,7 +29,11 @@ func poll() -> void:
 				sockets[i].send_text(JSON.stringify(camera_reports.get(i,{"op":"ping"})))
 	for i in sockets.size():
 		sockets[i].poll()
-		while sockets[i].get_available_packet_count()>0: messages[i].append(Protocol.unpack(sockets[i].get_packet()))
+		while sockets[i].get_available_packet_count()>0:
+			var message:=Protocol.unpack(sockets[i].get_packet());messages[i].append(message)
+			if message.get("kind","")=="snapshot" and message.get("serial",0)>0:
+				deferred_acks[i]={"op":"snapshot_ack","serial":message.serial,"epoch":message.epoch}
+		if deferred_acks.has(i) and not withheld_acks.has(i):sockets[i].send_text(JSON.stringify(deferred_acks[i]));deferred_acks.erase(i)
 func until(predicate: Callable) -> bool:
 	var end:=Time.get_ticks_msec()+45000
 	while Time.get_ticks_msec()<end:
@@ -70,13 +76,26 @@ func run() -> void:
 		var socket:=WebSocketPeer.new();socket.inbound_buffer_size=Protocol.MAX_FRAME;socket.outbound_buffer_size=65536
 		sockets.append(socket);socket.connect_to_url("ws://127.0.0.1:"+str(host.port))
 	check(await until(func():return sockets.all(func(s):return s.get_ready_state()==WebSocketPeer.STATE_OPEN)),"two real WebSocket connections")
-	for i in sockets.size():sockets[i].send_text(JSON.stringify({"op":"hello","invite":fixture_keys[i] if personal_keys else OS.get_environment("PRIMORDIA_INVITE")}))
+	for i in sockets.size():sockets[i].send_text(JSON.stringify({"op":"hello","invite":fixture_keys[i] if personal_keys else OS.get_environment("PRIMORDIA_INVITE"),"snapshot_ack":true,"compact_cytoplasm":true}))
 	check(await until(func():return not find_message(0,"welcome").is_empty() and not find_message(1,"welcome").is_empty()),"distinct lineage accounts authenticated")
 	var welcome0:=find_message(0,"welcome")
 	var welcome1:=find_message(1,"welcome")
 	check(welcome0.cell!=welcome1.cell,"accounts own distinct cells")
 	check(await until(func():return host.world.camera_views.size()==2),"camera union tracks both clients")
 	check(await until(func():return messages[0].any(func(m):return m.get("kind","")=="snapshot" and m.get("particles",PackedByteArray()).size()>0 and not m.get("warming",true))),"bounded particle publication reaches client")
+	withheld_acks[0]=true
+	check(await until(func():return deferred_acks.has(0)),"Slow browser leaves one complete snapshot awaiting acknowledgement")
+	var slow_peer: Dictionary=host.peers.values().filter(func(peer):return peer.account==welcome0.token.sha256_text())[0]
+	var pending_serial: int=slow_peer.awaiting_snapshot
+	var received_count: int=messages[0].filter(func(m):return m.get("serial",0)>0).size()
+	var flow_time: float=host.world.time
+	check(await until(func():return host.world.time>flow_time+.1),"Authority keeps simulating while a browser processes its snapshot")
+	check(slow_peer.awaiting_snapshot==pending_serial and messages[0].filter(func(m):return m.get("serial",0)>0).size()==received_count,"An unacknowledged browser cannot accumulate another full snapshot")
+	sockets[0].send_text(JSON.stringify({"op":"snapshot_ack","serial":pending_serial+1,"epoch":host.epoch}))
+	await process_frame;poll();await process_frame
+	check(slow_peer.awaiting_snapshot==pending_serial,"A wrong acknowledgement cannot release the pending frame")
+	withheld_acks.erase(0)
+	check(await until(func():return messages[0].any(func(m):return m.get("serial",0)>pending_serial)),"Processing acknowledgement automatically resumes advancing world delivery")
 	check(await until(func():return camera_reports.has(0) and camera_reports.has(1)),"both fixture cameras are advertised before changing perception")
 	camera_reports[0]["perception"]="interoception"
 	check(await until(func():return host.world.camera_views.size()==1 and host.world.interoceptive_cells.has(welcome0.cell)),"Inside and outside clients retain independent detail interests")

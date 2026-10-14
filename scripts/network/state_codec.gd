@@ -19,9 +19,10 @@ const DERIVED_CELL := ["raw_fuel","substrate","oxygen","carbon","energy","waste"
 var objects: Array = []
 var identities: Dictionary = {}
 var overrides: Dictionary = {}
+var compact_cytoplasm := false
 
-func capture(value, field_overrides: Dictionary = {}) -> Dictionary:
-	objects.clear(); identities.clear(); overrides = field_overrides
+func capture(value, field_overrides: Dictionary = {}, compact: bool = false) -> Dictionary:
+	objects.clear(); identities.clear(); overrides = field_overrides;compact_cytoplasm=compact
 	var root = _encode(value)
 	var index := 0
 	while index < objects.size():
@@ -35,7 +36,8 @@ func capture(value, field_overrides: Dictionary = {}) -> Dictionary:
 			var field = source.get(key)
 			if overrides.has(source.get_instance_id()) and overrides[source.get_instance_id()].has(key):
 				field = overrides[source.get_instance_id()][key]
-			fields[key] = _encode(field)
+			var columns=preload("res://scripts/network/cytoplasm_codec.gd").encode(field) if compact_cytoplasm and kind=="chemistry" and key=="particles" else null
+			fields[key] = columns if columns!=null else _encode(field)
 		objects[index].fields = fields
 		index += 1
 	var records: Array = []
@@ -97,6 +99,7 @@ func restore(document: Dictionary):
 
 func _decode(value):
 	if value is Dictionary:
+		if value.has("$cytoplasm"):return preload("res://scripts/network/cytoplasm_codec.gd").decode(value)
 		if value.has("$ref"):
 			var index: int = value["$ref"]
 			return objects[index].source if index >= 0 and index < objects.size() else null

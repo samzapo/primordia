@@ -94,11 +94,19 @@ func run(suite) -> void:
 	client.world.player.previous_position=client.world.player.position-Vector2(10,0)
 	client._toggle_user_pause()
 	suite.expect(not client.user_paused and client.received_usec==0,"Quick Resume cannot rewind interpolation before a new snapshot arrives")
+	client.connected=false;client.invitation="accepted-fixture-key";client.invite_input.text=client.invitation
+	client._welcome({"token":"a".repeat(64),"epoch":2,"sequence":0,"edit":0,"seed":9,"habitat":preload("res://scripts/network/state_codec.gd").new().capture(client.world.habitat_geometry)})
+	suite.expect(client.connected and client.loading_world and client.login.visible and not client.invite_input.visible and not client.join_button.visible and client.invitation=="","Accepted authentication becomes a loading status with no key entry or sign-in button")
+	var attempts: int=client.connection_attempts;client._connect()
+	suite.expect(client.connection_attempts==attempts and client.connected,"Repeated sign-in cannot restart an authenticated camera preparation")
 	var incoming=preload("res://scripts/simulation.gd").new(9,0,false)
 	incoming.cells=[incoming.player];incoming.player.id=client.world.player.id
 	incoming.player.position=Vector2(3000,1200);incoming.player.previous_position=Vector2(1800,1200);incoming.player.activity=0
 	var message={"epoch":2,"tick":20,"time":20,"graph":preload("res://scripts/network/state_codec.gd").new().capture({"cells":incoming.cells,"player":incoming.player,"lineage":incoming.lineage,"evolution":incoming.evolution}),"flow":incoming.fluid.velocity,"acid":incoming.acidity.values,"sounds":incoming.sound_events,"sound_sequence":0,"sparks":incoming.reaction_sparks,"sequence":0,"edit":0,"particles":PackedByteArray(),"world_id":"camera-fixture"}
+	var warming: Dictionary=message.duplicate();warming.warming=true;client._snapshot(warming)
+	suite.expect(client.loading_world and client.login.visible and not client.invite_input.visible and not client.join_button.visible,"Initial camera preparation preserves accepted sign-in presentation")
 	client.camera_locked=false;client.camera_rotation=1;client.camera_offset=Vector2(80,30);client._snapshot(message)
+	suite.expect(not client.login.visible and not client.loading_world and client.connection_stage=="ready","First complete world snapshot dismisses loading automatically")
 	client.received_usec=Time.get_ticks_usec()-250000;client.interval_usec=1000000;client._update_world(1)
 	suite.expect(client.camera_initialized and client.camera_locked and client.camera_rotation==0,"First real snapshot resets stale free-view state even if the server cell ID matches the local placeholder")
 	suite.expect(client.views.has(client.world.player.id) and client.views[client.world.player.id].position.length()<.005,"A coarse server cell stays rendered at the follow center throughout browser interpolation")
