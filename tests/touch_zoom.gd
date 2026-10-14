@@ -107,5 +107,23 @@ func run(suite) -> void:
 	message.tick=22;message.graph=preload("res://scripts/network/state_codec.gd").new().capture({"cells":[],"player":incoming.player,"lineage":incoming.lineage,"evolution":incoming.evolution})
 	client._snapshot(message);client._toggle_camera()
 	suite.expect(client.camera_locked and client.views.has(client.world.player.id) and client.views[client.world.player.id].position.length()<.005,"Refocus immediately draws the owned cell even when the prior camera snapshot omitted it")
+	var observer=preload("res://scripts/cell.gd").new(71);observer.position=Vector2(800,1400);observer.previous_position=observer.position
+	incoming.player.dead=true;message.tick=23;message.graph=preload("res://scripts/network/state_codec.gd").new().capture({"cells":[observer],"player":incoming.player,"focus":observer,"lineage":incoming.lineage,"evolution":incoming.evolution})
+	client._snapshot(message)
+	if not client.camera_locked:client._toggle_camera()
+	client._update_world(1)
+	suite.expect(client.world.player.dead and client._follow_cell().id==71 and client.views[71].position.length()<.005,"A dead owned lineage follows an existing living observer body without changing ownership")
+	client._queue_command("install",{"kind":"propulsion","angle":0})
+	suite.expect(client.commands.is_empty(),"Camera observation grants no authority to edit the observed body")
+	client.touch_zoom.enabled=true;client.touch_zoom.layout()
+	suite.expect(client.touch_zoom.follow_button.text=="Follow" and client.touch_zoom.follow_button.button_pressed and client.touch_zoom.follow_button.self_modulate.a==1,"Follow has a fixed label and highlighted active state")
+	client._toggle_camera();client.touch_zoom.layout()
+	suite.expect(not client.touch_zoom.follow_button.button_pressed and client.touch_zoom.follow_button.self_modulate.a<1,"Inactive Follow is dim without changing its label")
+	var host=preload("res://scripts/network/world_host.gd").new();host.world=incoming;host.world.cells=[observer]
+	host.accounts={"private-fixture-account":{"selected":incoming.player.id,"current":incoming.player,"root":incoming.player.lineage_id(),"lineage":incoming.lineage}}
+	var peer={"account":"private-fixture-account"}
+	var chosen=host._focus(peer)
+	suite.expect(chosen==observer and host.accounts[peer.account].selected==incoming.player.id and host.world.cells.size()==1,"Authority chooses an existing live camera target without adopting, creating or reviving a body")
+	host.free()
 	client.queue_free()
 	game.queue_free();await suite.process_frame

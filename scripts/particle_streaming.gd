@@ -49,7 +49,7 @@ func minimum_zoom(size: Vector2) -> float:
 	return maxf(size.x/(2*maxf(1,available.x)),size.y/(2*maxf(1,available.y)))
 
 func update_region(sim) -> void:
-	multiview=sim.server_mode
+	multiview=sim.server_mode or sim.external_offscreen
 	if multiview:
 		regions.clear()
 		for view in sim.camera_views:

@@ -27,6 +27,12 @@ var solar_work := 0.0
 var heat := 0.0
 var frame_dt := 1.0
 var light_flux := 0.0
+# Independent intracellular clock. Unresolved time survives checkpoint/restart.
+var pending_time := 0.0
+var coarse_due := -1.0
+var simulated_time := 0.0
+var fine_updates := 0
+var coarse_updates := 0
 
 func _init() -> void:
 	for identity in ["digestion","glycolysis","respiration","fermentation","biosynthesis","salvage","transport","osmosis","photosynthesis","adenylate"]:

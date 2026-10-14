@@ -12,6 +12,8 @@ var game
 var seen_revision := -1
 var simple_view := false
 var last_draw_tick := -2
+var last_internal_tick := -1
+var was_internal := false
 var detail_lod := true
 var label := Label.new()
 var appendages := Node2D.new()
@@ -63,7 +65,10 @@ func sync(render_position: Vector2, render_angle: float, zoom: float, alpha: flo
 		seen_revision = -1
 		surface_revision = -1
 		surface.visible = depth_style
-	var reduced: bool = detail_lod and cell.radius*zoom < 18 and not game.build_open
+	var internal: bool=game.internal_visible(cell)
+	if internal!=was_internal or (internal and last_internal_tick!=cell.chemistry.tick):
+		queue_redraw();last_internal_tick=cell.chemistry.tick;was_internal=internal
+	var reduced: bool = detail_lod and cell.radius*zoom < 18 and not game.build_open and not internal
 	var detail_changed: bool = reduced != simple_view
 	simple_view = reduced
 	if (seen_revision != cell.render_revision and (not reduced or game.world.revision-last_draw_tick >= 2)) or detail_changed or game.show_senses != get_meta("senses",false) or game.build_open != get_meta("assembly",false):
@@ -154,13 +159,13 @@ func _draw() -> void:
 		var b: Vector2 = cell.membrane.skeleton.point(link.b,cell.membrane)
 		draw_line(a,b,hue.lightened(0.45)*Color(1,1,1,(0.5 if game.build_open else 0.16)+link.tension*0.3),1+link.tension*2,true)
 	for junction in ([] if simple_view else cell.membrane.skeleton.junctions.values()): draw_circle(junction.p,3,Color("cce6ee"))
-	if not simple_view and cell != game.world.player:
+	if not simple_view and cell != game.world.player and game.internal_visible(cell):
 		for packet in cell.chemistry.particles:
 			if not packet.alive: continue
 			var definition: Dictionary = cell.chemistry.Catalog.data().species[packet.species]
 			var color := Color(definition.color)
-			var diameter: float = 1.4+minf(2,sqrt(packet.amount)*1.5)
-			draw_circle(packet.p,diameter,color)
+			var radius: float = Visuals.internal_particle_radius(packet)
+			draw_circle(packet.p,radius,color)
 		for vacuole in cell.chemistry.vacuoles:
 			draw_arc(vacuole.p,vacuole.radius,0,TAU,16,Color("8fe3bf").lerp(Color("f497c4"),vacuole.acid),0.8,true)
 	var safe_radius: float = cell.radius
@@ -179,7 +184,7 @@ func _draw() -> void:
 	draw_colored_polygon(Transform2D(0,Vector2.ONE*size*0.74,0,nucleus-Vector2.ONE*size*0.08)*core,palette[5])
 	if not simple_view:
 		draw_colored_polygon(Transform2D(-0.3,Vector2(0.30,0.38)*size,0,nucleus-Vector2.ONE*size*0.22)*core,palette[6])
-	for packet in cell.signals: draw_circle(packet.p,3,Color("fc8c90") if packet.fear else Color("b5a3f4"))
+	for packet in (cell.signals if game.internal_visible(cell) else []): draw_circle(packet.p,3*Visuals.INTERNAL_PARTICLE_SCALE,Color("fc8c90") if packet.fear else Color("b5a3f4"))
 	for hole in cell.holes:
 		var at: Vector2 = cell.local_point(hole.a)
 		draw_circle(at,3+hole.size*6,Color("27325e"))

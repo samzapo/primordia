@@ -50,6 +50,8 @@ the balance-test hold.
 
 ## Controls
 
+On a phone, use two fingers to pan, twist and zoom with fixed world anchors. **Follow** is highlighted while it centers a living cell and dim while the camera is free. The perception button switches to **Interoception** (internal particles; outside grey/dim) or **Exteroception** (external particles). **I** switches perception on desktop. Hidden chemistry uses its actual offscreen simulation; view Pause freezes only a browser's presentation while the shared world continues. See [Revision 45](docs/REVISION_45.md).
+
 - **Tab:** pause and zoom inside your cell; press Tab again to keep edits and resume. Enter also resumes when no choice or placement is active. There are no Undo, Apply or Cancel-plan controls. **Escape** opens settings without discarding edits.
 - **Click an intracellular factory:** the folded assembly ribbons offer physical organs in small pages; the chamber cluster offers the four chemistry organs. Choose a picture, then click the membrane. New organs have one fixed size and neighbors move aside. **1–4 / 6–9 / 0** remain construction shortcuts; **V** selects the hunting receptor. Cilia are available in the assembly factory.
 - **Click an installed organ:** move, recycle or apply an already-kept matching blueprint. The inherent oral groove, hunting receptors and photosynthetic organs also offer **Steering**: click to cycle Off, 25%, 50%, 100%, 200% and 400%. This changes directional priority and following time versus exploration; size, power and feeding throughput stay unchanged. The oral groove only offers Steering. There is no resizing during placement or afterward. Recycling returns half the tissue and never refunds AP. Click a damaged attachment scar to restore its original anatomy.

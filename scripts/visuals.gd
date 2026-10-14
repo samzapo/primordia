@@ -3,6 +3,11 @@ extends RefCounted
 const MINT := Color("35dab1")
 const GOLD := Color("ffbe32")
 const PURPLE := Color("b84fe9")
+# Presentation only: preserve chemistry amounts, contacts and packet motion.
+const INTERNAL_PARTICLE_SCALE := 0.2
+static func internal_particle_radius(packet: Dictionary) -> float:
+	return INTERNAL_PARTICLE_SCALE*(3.2 if packet.species=="catalyst" else 1.4+minf(2,sqrt(packet.amount)*1.5))
+
 static func icon(c: Node2D, p: Vector2, kind: String, rotation: float, scale: float, animation_time: float = 0, mode: String = "graze", pulse: float = 0, detail: bool = true, charge: float = 0) -> void:
 	c.draw_set_transform(p,rotation,Vector2.ONE*scale)
 	var steps := 24 if detail else 10

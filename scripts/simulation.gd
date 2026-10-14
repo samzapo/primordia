@@ -9,7 +9,10 @@ var evolution
 var server_mode := false
 var remote_client := false
 var command_sink: Callable
-var camera_views: Array = []
+var camera_views: Array = [] # External particle detail footprints.
+var external_offscreen := false
+var perception_modes_enabled := false # Explicit old-reference fixtures retain coupled stepping.
+var interoceptive_cells: Dictionary = {}
 var family_ledgers: Array = []
 var build_original = null
 var build_state: Dictionary = {}
@@ -269,6 +272,7 @@ func screen_position(p: Vector2) -> Vector2:
 	return view_half+Medium.offset(camera_position if not camera_follows_player else player.position,p)
 
 func activity_at(p: Vector2) -> float:
+	if external_offscreen:return 0.0
 	if resident != null and resident.full_detail: return 1.0
 	if server_mode and not remote_client:
 		var detail := 0.0
@@ -277,6 +281,7 @@ func activity_at(p: Vector2) -> float:
 	return Medium.visibility(p,player.position if camera_follows_player else camera_position,view_half)
 
 func activity_for_cell(cell) -> float:
+	if external_offscreen:return 0.0
 	if resident != null and resident.full_detail: return 1.0
 	# A visible membrane or appendage must not freeze when its center is outside.
 	var half: Vector2 = view_half+Vector2.ONE*(cell.extent()+80)
@@ -473,10 +478,12 @@ func _step_simulation(dt: float) -> void:
 		profile_usec["traction"] = 0
 	time += dt
 	revision += 1
+	_step_internal_chemistry(dt)
 	if particle_pool and not _pool_supported(): disable_particle_pool()
 	if grid.source_size != particle_count(): grid.rebuild(particles)
 	var mark := Time.get_ticks_usec()
-	if server_mode: fluid.set_views(camera_views)
+	if external_offscreen:fluid.set_views([])
+	elif server_mode: fluid.set_views(camera_views)
 	else: fluid.set_camera(player.position if camera_follows_player else camera_position,view_half)
 	if experimental_fluid != null:
 		fluid.velocity = experimental_fluid.step(fluid.velocity,cells,habitat_geometry,dt)
@@ -1184,6 +1191,33 @@ func _feed(cell) -> void:
 
 	if cell.eaten > before: _record_sound("feeding",cell.position,cell.id,cell.eaten-before)
 
+func enable_perception_domains() -> void:
+	if perception_modes_enabled:return
+	# Legacy chemistry advanced inside due body updates. Preserve its unresolved
+	# body interval exactly once when the independent clock takes ownership.
+	for cell in cells:
+		if not cell.dead:cell.chemistry.pending_time+=cell.coarse_elapsed
+	perception_modes_enabled=true
+
+func _step_internal_chemistry(dt: float) -> void:
+	if not perception_modes_enabled:return
+	for cell in cells:
+		if cell.dead:continue
+		var chemistry=cell.chemistry
+		var period: float=maxf(.001,offscreen_ecology.period)
+		var phase: float=period*(.25+fposmod(cell.id*.61803398875,.75))
+		if chemistry.coarse_due<0:chemistry.coarse_due=maxf(0,phase-chemistry.pending_time)
+		chemistry.pending_time+=dt;chemistry.coarse_due-=dt
+		var detailed: bool=interoceptive_cells.has(cell.id)
+		if not detailed and chemistry.coarse_due>.0000001:continue
+		var elapsed: float=chemistry.pending_time;chemistry.pending_time=0
+		chemistry.advance(cell,elapsed,0.15+acidity.sample(cell.position)*0.1)
+		chemistry.simulated_time+=elapsed
+		if detailed:
+			chemistry.fine_updates+=1;chemistry.coarse_due=phase
+		else:
+			chemistry.coarse_updates+=1;chemistry.coarse_due=period-fposmod(-chemistry.coarse_due,period)
+
 func _metabolize(cell, dt: float) -> void:
 	cell.reserve_activity = maxf(0,cell.reserve_activity-dt)
 	if cell.energy < 10 and cell.substrate+cell.chemistry.storage_used() < 1:
@@ -1193,7 +1227,7 @@ func _metabolize(cell, dt: float) -> void:
 		cell.reserve_used += mobilized
 		if mobilized > 0: cell.reserve_activity = 2
 	cell.fermentation_activity = maxf(0,cell.fermentation_activity-dt)
-	cell.chemistry.advance(cell,dt,0.15+acidity.sample(cell.position)*0.1)
+	if not perception_modes_enabled:cell.chemistry.advance(cell,dt,0.15+acidity.sample(cell.position)*0.1)
 	cell.Surface.advance(cell,dt,self)
 	cell.decay_energy(dt)
 	cell.spend_energy(dt*Cell.BASAL_UPKEEP*cell.growth_scale())

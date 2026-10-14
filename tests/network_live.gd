@@ -77,6 +77,17 @@ func run() -> void:
 	check(welcome0.cell!=welcome1.cell,"accounts own distinct cells")
 	check(await until(func():return host.world.camera_views.size()==2),"camera union tracks both clients")
 	check(await until(func():return messages[0].any(func(m):return m.get("kind","")=="snapshot" and m.get("particles",PackedByteArray()).size()>0 and not m.get("warming",true))),"bounded particle publication reaches client")
+	check(await until(func():return camera_reports.has(0) and camera_reports.has(1)),"both fixture cameras are advertised before changing perception")
+	camera_reports[0]["perception"]="interoception"
+	check(await until(func():return host.world.camera_views.size()==1 and host.world.interoceptive_cells.has(welcome0.cell)),"Inside and outside clients retain independent detail interests")
+	var switch_tick: int=host.world.revision
+	check(await until(func():return messages[0].any(func(m):return m.get("kind","")=="snapshot" and m.get("perception","")=="interoception" and m.get("tick",0)>switch_tick and m.get("particles",PackedByteArray()).is_empty())),"Inside snapshots advance without external pose bytes")
+	camera_reports[1]["perception"]="interoception"
+	check(await until(func():return host.world.camera_views.is_empty() and host.world.interoceptive_cells.size()==2),"All-inside clients release all external fine footprints")
+	switch_tick=host.world.revision
+	check(await until(func():return messages[1].any(func(m):return m.get("kind","")=="snapshot" and m.get("perception","")=="interoception" and m.get("tick",0)>switch_tick)),"Internal views continue with zero external cameras")
+	for report in camera_reports.values():report["perception"]="exteroception"
+	check(await until(func():return host.world.camera_views.size()==2 and host.world.interoceptive_cells.is_empty()),"Returning outside restores the external camera union and coarsens hidden interiors")
 	var account: Dictionary=host.accounts[welcome0.token.sha256_text()]
 	var before_points: int=account.evolution.points
 	var command={"op":"command","epoch":host.epoch,"sequence":1,"edit":0,"cell":welcome0.cell,"action":"install","args":{"kind":"propulsion","angle":2.0}}

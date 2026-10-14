@@ -11,6 +11,12 @@ uniform float edge_blur_pixels : hint_range(0.0,12.0) = 6.0;
 uniform sampler2D light_map : filter_linear, repeat_enable;
 uniform vec2 camera;
 uniform float camera_rotation = 0.0;
+uniform bool interoception = false;
+uniform bool focus_valid = false;
+uniform sampler2D focus_mask : filter_linear, repeat_disable;
+uniform vec2 focus_center;
+uniform float focus_heading = 0.0;
+uniform float focus_extent = 1.0;
 uniform vec2 view_size;
 uniform vec2 screen_center = vec2(0.5,0.52);
 vec3 radiance(vec3 color) {
@@ -49,5 +55,16 @@ void fragment() {
 		base = mix(base,textureLod(screen_texture,sample_uv,level).rgb,fringe);
 	}
 	// Preserve the light halo without tinting or darkening the edges.
-	COLOR = vec4(base+(vec3(1.0)-base)*glow*sunlit*0.8,1.0);
+	vec3 color = base+(vec3(1.0)-base)*glow*sunlit*0.8;
+	if(interoception){
+		vec2 d=mod(world-focus_center+vec2(2048.0,1280.0),vec2(4096.0,2560.0))-vec2(2048.0,1280.0);
+		float fc=cos(focus_heading),fs=sin(focus_heading);
+		vec2 local=vec2(fc*d.x+fs*d.y,-fs*d.x+fc*d.y);
+		vec2 mask_uv=local/(2.0*focus_extent)+vec2(.5);
+		float inside=0.0;
+		if(focus_valid && all(greaterThanEqual(mask_uv,vec2(0.0))) && all(lessThanEqual(mask_uv,vec2(1.0))))inside=texture(focus_mask,mask_uv).r;
+		float grey=dot(color,vec3(.2126,.7152,.0722));
+		color=mix(vec3(grey*.35),color,inside);
+	}
+	COLOR = vec4(color,1.0);
 }

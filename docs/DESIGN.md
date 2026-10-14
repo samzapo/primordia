@@ -402,3 +402,9 @@ remain the only transport mechanism. This is a coarser spatial resolution,
 not a claim of unchanged reaction distributions or gameplay balance. Existing
 shared worlds migrate once during trusted checkpoint loading and retain an
 independent pre-conversion checkpoint. See docs/deployment.md.
+
+## October 14 — exteroception and interoception
+
+The owner requests separate internal/external particle simulation interests. Exteroception hides internal packets and uses the existing offscreen cadence for their real transport/reactions. Interoception displays the focused body's internal packets, hides external chemicals and uses existing external offscreen methods; the actual area outside the membrane is grey and dim. These are view/scheduling choices, not pauses, resources or statistical chemistry. Multiplayer takes the union of requested detail for each domain. Preserve finite particle stocks and retained elapsed clocks through switching, promotion and saved restart.
+
+Follow uses one fixed-label highlighted/dim toggle. Camera observation may follow an existing living cell when the account's owned lineage has ended, while ownership and paid commands remain unchanged. [Revision 45](REVISION_45.md) defines the implemented domain and observation contracts.

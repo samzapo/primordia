@@ -36,7 +36,7 @@ func sync() -> void:
 	queue_redraw()
 
 func animate(dt: float) -> void:
-	if not visible or game.settings_panel.visible: return
+	if not visible or game.settings_panel.visible or not game.internal_visible(game.world.player): return
 	ecology.step(dt,game.world.player)
 	queue_redraw()
 
@@ -64,21 +64,20 @@ func _draw() -> void:
 	else:
 		draw_arc(at,1.5,0,TAU,12,Color("bc9459"),0.6,true)
 	# Cytoplasmic chemicals are the authoritative moving particles.
-	for packet in cell.chemistry.particles:
+	for packet in (cell.chemistry.particles if game.internal_visible(cell) else []):
 		if not packet.alive: continue
 		var definition: Dictionary = cell.chemistry.Catalog.data().species[packet.species]
 		var color := Color(definition.color)
-		var size: float = 1.4+minf(2,sqrt(packet.amount)*1.5)
-		if packet.species == "catalyst": size = 3.2
+		var size: float = preload("res://scripts/visuals.gd").internal_particle_radius(packet)
 		draw_circle(packet.p,size,color)
 		if packet.species not in ["atp","adp","water"]:
 			var tip := Vector2.from_angle(packet.angle)*size*1.7
-			draw_line(packet.p,packet.p+tip,color.lightened(0.25),maxf(0.7,size*0.45),true)
-	for vacuole in cell.chemistry.vacuoles:
+			draw_line(packet.p,packet.p+tip,color.lightened(0.25),maxf(0.14,size*0.45),true)
+	for vacuole in (cell.chemistry.vacuoles if game.internal_visible(cell) else []):
 		draw_arc(vacuole.p,vacuole.radius,0,TAU,20,Color("8fe3bf").lerp(Color("f497c4"),vacuole.acid),0.8,true)
-	for parcel in ecology.parcels:
+	for parcel in (ecology.parcels if game.internal_visible(cell) else []):
 		if parcel.kind != "ap": continue
-		draw_circle(parcel.p,parcel.radius,Color("f8c650"))
+		draw_circle(parcel.p,parcel.radius*preload("res://scripts/visuals.gd").INTERNAL_PARTICLE_SCALE,Color("f8c650"))
 	# Contractile vacuole fill follows actual transported water and expulsion.
 	for side in [-1,1]:
 		var center := Vector2(0.02,side*0.62)*r

@@ -1,0 +1,3 @@
+shader_type canvas_item;
+render_mode unshaded, blend_disabled;
+void fragment(){COLOR=vec4(1.0);}

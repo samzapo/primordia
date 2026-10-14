@@ -65,6 +65,7 @@ var view_clock := 0.0
 var keepalive_clock := 0.0
 var last_camera: Vector4
 var last_detail: Vector2
+var last_perception := ""
 var view_announced := false
 var reconnect_due := 0.0
 var packet_ids: Dictionary = {}
@@ -73,6 +74,7 @@ var network_particles
 var network_alpha := 1.0
 var paused_snapshot: Dictionary = {}
 var camera_initialized := false
+var focus_cell
 
 func _ready() -> void:
 	world = Simulation.new(0,0,false)
@@ -139,6 +141,17 @@ func _toggle_user_pause() -> void:
 		received_usec=0
 	touch_zoom.layout()
 
+func _follow_cell():
+	return focus_cell if focus_cell!=null else world.player
+
+func _snapshot_focus(data: Dictionary) -> void:
+	var incoming=data.get("focus",data.player if not data.player.dead else null)
+	focus_cell=null
+	if incoming==null:return
+	for cell in world.cells:
+		if cell.id==incoming.id:focus_cell=cell;return
+	focus_cell=_copy_cell(incoming);world.cells.append(focus_cell)
+
 func touch_controls_available() -> bool:
 	return connected and not login.visible and world.revision>0
 
@@ -169,9 +182,9 @@ func _process(dt: float) -> void:
 		var base:=minf(size.x/Simulation.VIEW.x,size.y/Simulation.VIEW.y)
 		var detail:=_camera_bounds(size/(2*base*MIN_ZOOM))
 		detail=Vector2(minf(2048,detail.x),minf(1280,detail.y))
-		if not view_announced or view!=last_camera or detail!=last_detail:
-			_send({"op":"view","rect":[view.x,view.y,view.z,view.w],"detail":[detail.x,detail.y]})
-			last_camera=view;last_detail=detail;view_announced=true;keepalive_clock=0
+		if not view_announced or view!=last_camera or detail!=last_detail or perception!=last_perception:
+			_send({"op":"view","rect":[view.x,view.y,view.z,view.w],"detail":[detail.x,detail.y],"perception":perception})
+			last_camera=view;last_detail=detail;last_perception=perception;view_announced=true;keepalive_clock=0
 		elif keepalive_clock>=2:
 			_send({"op":"ping"});keepalive_clock=0
 	if not connected and attempted and retry_enabled and (token!="" or invitation!="") and socket.get_ready_state()==WebSocketPeer.STATE_CLOSED:
@@ -271,8 +284,9 @@ func _snapshot(message: Dictionary) -> void:
 		var initial=Codec.new().restore(message.graph)
 		if initial is Dictionary:
 			world.player=_copy_cell(initial.player)
+			world.cells=[];_snapshot_focus(initial)
 			if not camera_initialized:
-				camera_locked=true;camera_offset=Vector2.ZERO;free_camera=world.player.position;camera_rotation=0
+				camera_locked=can_follow();camera_offset=Vector2.ZERO;free_camera=_follow_cell().position;camera_rotation=0
 		return
 	if login.visible:
 		status.text="Connected to the shared pond.";login.hide()
@@ -280,6 +294,7 @@ func _snapshot(message: Dictionary) -> void:
 	var data=Codec.new().restore(message.graph)
 	if not data is Dictionary: return
 	var previous_player: int=world.player.id
+	var previous_focus: int=_follow_cell().id
 	var models: Array=[]
 	for incoming in data.cells:
 		var cell=_copy_cell(incoming);models.append(cell)
@@ -288,12 +303,19 @@ func _snapshot(message: Dictionary) -> void:
 	world.player=cells_by_id[data.player.id] if player_visible else _copy_cell(data.player)
 	# The selected body is already in the snapshot graph; retain it for immediate refocus.
 	if not player_visible:world.cells.append(world.player)
+	_snapshot_focus(data)
 	world.lineage=data.lineage;world.evolution=data.evolution
 	if not camera_initialized or previous_player!=world.player.id:
 		cell_ui.close_context();build_open=false;moving_id=-1;selected=-1
 		touch_zoom.cancel()
-		camera_offset=Vector2.ZERO;free_camera=world.player.position;camera_locked=true;camera_rotation=0
+		camera_offset=Vector2.ZERO;free_camera=_follow_cell().position;camera_locked=can_follow();camera_rotation=0
 		camera_initialized=true
+	elif camera_locked and not can_follow():
+		camera_locked=false;free_camera=render_camera
+	elif camera_locked and previous_focus!=_follow_cell().id:
+		camera_offset=Vector2.ZERO
+	if world.player.dead and can_follow():
+		notice="Your lineage has ended · following a living cell for observation.";notice_timer=12
 	world.time=message.time;world.revision=message.tick
 	world.fluid.velocity=message.flow;world.acidity.values=message.acid
 	world.sound_events=message.sounds;world.sound_sequence=message.sound_sequence;world.reaction_sparks=message.sparks
@@ -376,4 +398,6 @@ func _save_identity() -> void:
 
 func _sync_particles(_alpha: float=1.0) -> void:
 	for item in batches: item.visible=false
-	if network_particles!=null: network_particles.draw_camera(render_camera,network_alpha)
+	if network_particles!=null:
+		network_particles.visible=perception=="exteroception"
+		if network_particles.visible:network_particles.draw_camera(render_camera,network_alpha)

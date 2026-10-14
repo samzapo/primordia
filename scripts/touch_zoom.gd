@@ -15,6 +15,7 @@ var minus_button:=Button.new()
 var plus_button:=Button.new()
 var state_label:=Label.new()
 var follow_button:=Button.new()
+var perception_button:=Button.new()
 
 func initialize(owner_game) -> void:
 	game=owner_game
@@ -33,6 +34,8 @@ func initialize(owner_game) -> void:
 	plus_button.pressed.connect(func():game._zoom_at(game.camera_screen,1.25))
 	follow_button.z_index=80;follow_button.toggle_mode=true;game.ui.add_child(follow_button)
 	follow_button.pressed.connect(game._toggle_camera)
+	perception_button.z_index=80;game.ui.add_child(perception_button)
+	perception_button.pressed.connect(game._toggle_perception)
 	layout()
 
 func layout() -> void:
@@ -55,24 +58,32 @@ func layout() -> void:
 	follow_button.custom_minimum_size=Vector2(208,48)*pixels
 	follow_button.size=follow_button.custom_minimum_size
 	follow_button.position=Vector2(size.x-220*pixels,66*pixels)
-	follow_button.text="Following cell" if game.camera_locked else "Free view"
-	follow_button.set_pressed_no_signal(game.camera_locked)
-	state_label.visible=bar.visible and game.user_paused
+	follow_button.text="Follow"
+	follow_button.self_modulate=Color.WHITE if game.camera_locked and game.can_follow() else Color(1,1,1,.60)
+	follow_button.set_pressed_no_signal(game.camera_locked and game.can_follow())
+	follow_button.disabled=not game.can_follow()
+	perception_button.visible=bar.visible
+	perception_button.text="Interoception" if game.perception=="exteroception" else "Exteroception"
+	perception_button.add_theme_font_size_override("font_size",roundi(18*pixels))
+	perception_button.custom_minimum_size=Vector2(208,48)*pixels;perception_button.size=perception_button.custom_minimum_size
+	perception_button.position=Vector2(size.x-220*pixels,120*pixels)
+	state_label.visible=bar.visible and (game.user_paused or game.world.player.dead)
 	state_label.text="View paused · world continues" if game.world.remote_client else "Game paused"
+	if not game.user_paused and game.world.player.dead:state_label.text="Observing a living cell" if game.can_follow() else "No living cell to follow"
 	state_label.add_theme_font_size_override("font_size",roundi(14*pixels))
-	state_label.position=Vector2(size.x-220*pixels,120*pixels);state_label.size=Vector2(208,44)*pixels
+	state_label.position=Vector2(size.x-220*pixels,174*pixels);state_label.size=Vector2(208,44)*pixels
 
 
 	if OS.has_feature("web") and enabled:
 		var conversion:=Vector2(float(JavaScriptBridge.eval("window.innerWidth")),float(JavaScriptBridge.eval("window.innerHeight")))/size
 		var bounds: Dictionary={}
-		for pair in [["pause",pause_button],["zoom_out",minus_button],["zoom_in",plus_button],["follow",follow_button]]:
+		for pair in [["pause",pause_button],["zoom_out",minus_button],["zoom_in",plus_button],["follow",follow_button],["perception",perception_button]]:
 			var rect: Rect2=pair[1].get_global_rect()
 			bounds[pair[0]]=[rect.position.x*conversion.x,rect.position.y*conversion.y,rect.size.x*conversion.x,rect.size.y*conversion.y]
-		JavaScriptBridge.eval("window.primordiaTouchControls="+JSON.stringify({"visible":bar.visible,"paused":game.user_paused,"zoom":game.manual_zoom,"editing":game.build_open,"locked":game.camera_locked,"rotation":game.camera_rotation,"camera":[game.render_camera.x,game.render_camera.y],"player_screen":_player_screen(conversion),"bounds":bounds,"buffered_tick":game.paused_snapshot.get("tick",0) if game.world.remote_client else 0}))
+		JavaScriptBridge.eval("window.primordiaTouchControls="+JSON.stringify({"visible":bar.visible,"paused":game.user_paused,"zoom":game.manual_zoom,"editing":game.build_open,"locked":game.camera_locked,"rotation":game.camera_rotation,"camera":[game.render_camera.x,game.render_camera.y],"player_screen":_body_screen(game.world.player,conversion),"focus_screen":_body_screen(game._follow_cell(),conversion),"focus_alive":game.can_follow(),"perception":game.perception,"internal_packets":game._follow_cell().chemistry.particles.size(),"mask_enabled":game.perception_mask.enabled,"bounds":bounds,"buffered_tick":game.paused_snapshot.get("tick",0) if game.world.remote_client else 0}))
 
-func _player_screen(conversion: Vector2) -> Array:
-	var view=game.views.get(game.world.player.id)
+func _body_screen(body,conversion: Vector2) -> Array:
+	var view=game.views.get(body.id)
 	if view==null:return []
 	var at: Vector2=view.get_global_transform_with_canvas().origin*conversion
 	return [at.x,at.y]

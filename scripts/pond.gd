@@ -47,6 +47,8 @@ var preview := Node2D.new()
 var ui := Control.new()
 var touch_zoom := preload("res://scripts/touch_zoom.gd").new()
 var user_paused := false
+var perception := "exteroception"
+var perception_mask:=preload("res://scripts/perception_mask.gd").new()
 var pause_control_ready := true
 var cell_ui := preload("res://scripts/cell_interface.gd").new()
 var inspector := preload("res://scripts/particle_inspector.gd").new()
@@ -118,6 +120,7 @@ var notice := "Establish a lineage through three crises.\nFirst: choose cilia or
 var notice_timer := 12.0
 
 func _ready() -> void:
+	world.enable_perception_domains()
 	if manage_catchup: Engine.max_physics_steps_per_frame = 2
 	var args := OS.get_cmdline_user_args()
 	preferences.persist = DisplayServer.get_name() != "headless" and not Array(args).any(func(a): return a.begins_with("--capture=") or a == "--benchmark")
@@ -143,6 +146,7 @@ func _ready() -> void:
 	var microscope_material := ShaderMaterial.new()
 	microscope_material.shader = preload("res://shaders/microscope.gdshader")
 	microscope_layer.material = microscope_material
+	perception_mask.initialize(self)
 	microscope_layer.z_index = 4
 	microscope_material.set_shader_parameter("bloom_enabled",preferences.bloom)
 	acidity_texture = ImageTexture.create_from_image(Image.create_from_data(64,40,false,Image.FORMAT_RF,world.acidity.values.to_byte_array()))
@@ -227,6 +231,11 @@ func _physics_process(dt: float) -> void:
 	if is_paused(): return
 	var started := Time.get_ticks_usec()
 	var identity: int = world.player.id
+	world.interoceptive_cells.clear()
+	if perception=="interoception" and can_follow():world.interoceptive_cells[_follow_cell().id]=true
+	world.external_offscreen=perception=="interoception"
+	if world.kernels!=null:world.kernels.set_activity_views([],world.external_offscreen)
+	if world.resident!=null:world.resident.gpu.set_activity_views([],world.external_offscreen)
 	world.step(dt)
 	_track_player_death()
 	if identity != world.player.id:
@@ -308,7 +317,7 @@ func _process(dt: float) -> void:
 
 	var inspection_start := Time.get_ticks_usec() if frame_trace != null else 0
 	var cursor := get_global_mouse_position()
-	var inspect_allowed := death_focus_age >= 1.8 and get_viewport_rect().has_point(cursor) and not settings_panel.visible and not camera_dragging and selected < 0 and moving_id < 0 and tube_start.is_empty() and cell_ui.context.is_empty() and get_viewport().gui_get_hovered_control() == null
+	var inspect_allowed := perception=="exteroception" and death_focus_age >= 1.8 and get_viewport_rect().has_point(cursor) and not settings_panel.visible and not camera_dragging and selected < 0 and moving_id < 0 and tube_start.is_empty() and cell_ui.context.is_empty() and get_viewport().gui_get_hovered_control() == null
 	inspector.update_lens(dt,cursor,alpha,inspect_allowed)
 	preview.queue_redraw()
 	var hover := _nearest_tubule(_player_relative(get_global_mouse_position()).rotated(-world.player.angle)) if _can_edit_tubules() and selected < 0 and moving_id < 0 and cell_ui.hit(get_global_mouse_position()).is_empty() else {}
@@ -340,6 +349,25 @@ func _track_player_death() -> void:
 		camera_locked = true
 		camera_offset = Vector2.ZERO
 
+func _follow_cell():
+	return world.player
+
+func internal_visible(cell) -> bool:
+	return perception=="interoception" and cell.id==_follow_cell().id
+
+func _toggle_perception() -> void:
+	perception="interoception" if perception=="exteroception" else "exteroception"
+	if perception=="interoception" and can_follow():
+		camera_locked=false;_toggle_camera()
+	touch_zoom.cancel()
+	for view in views.values():view.seen_revision=-1;view.queue_redraw()
+	_update_world(1.0 if is_paused() else Engine.get_physics_interpolation_fraction())
+	touch_zoom.layout()
+	_message("Interoception · external chemistry continues offscreen." if perception=="interoception" else "Exteroception · internal chemistry continues offscreen.")
+
+func can_follow() -> bool:
+	return _follow_cell()!=null and not _follow_cell().dead
+
 func _cell_render_alpha(cell,alpha: float) -> float:
 	# Server activity tiers do not determine the browser's snapshot interpolation.
 	return alpha if cell.activity>0 or world.remote_client else 1.0
@@ -363,7 +391,8 @@ func _update_world(alpha: float) -> void:
 			world.view_half=_camera_bounds(size/(2*zoom))
 			scale_bar.configure(size,zoom,preferences.hud_scale)
 	_track_player_death()
-	render_camera = world.player.previous_position+Simulation.Medium.offset(world.player.previous_position,world.player.position)*_cell_render_alpha(world.player,alpha)+camera_offset if camera_locked else free_camera
+	var followed=_follow_cell()
+	render_camera = followed.previous_position+Simulation.Medium.offset(followed.previous_position,followed.position)*_cell_render_alpha(followed,alpha)+camera_offset if camera_locked else free_camera
 	if death_focus_age < 1.8:
 		var blend: float = smoothstep(1.15,1.8,death_focus_age)
 		render_camera = Simulation.Medium.wrap_position(death_focus_at+Simulation.Medium.offset(death_focus_at,render_camera)*blend)
@@ -390,7 +419,7 @@ func _update_world(alpha: float) -> void:
 	habitat_view.sync(render_camera,world.view_half)
 	currents.visible = not flow_streamers
 	flow_view.sync(world,render_camera,world.view_half,zoom,flow_streamers,flow_wakes)
-	reaction_view.sync(world,render_camera,world.view_half,zoom,show_reaction_sparks)
+	reaction_view.sync(world,render_camera,world.view_half,zoom,show_reaction_sparks and perception=="exteroception")
 	death_view.sync(world,render_camera,zoom,death_frame_dt)
 	death_frame_dt = 0
 	# Cached glyph variants preserve facing while dropping subpixel embellishment.
@@ -428,9 +457,15 @@ func _update_world(alpha: float) -> void:
 			views[identity].queue_free()
 			views.erase(identity)
 	cell_ui.interior.sync()
+	perception_mask.sync()
 	if frame_trace != null: frame_trace.work("cell_sync",Time.get_ticks_usec()-cells_start)
 
 func _sync_particles(alpha: float = 1.0) -> void:
+	if perception=="interoception":
+		for batch in batches:batch.visible=false
+		if resident_view!=null:resident_view.visible=false
+		return
+	for batch in batches:batch.visible=true
 	if world.resident!=null and resident_view!=null:
 		for batch in batches: batch.visible=false
 		resident_view.visible=true;resident_view.camera(render_camera)
@@ -558,6 +593,8 @@ func _player_relative(screen: Vector2) -> Vector2:
 	return (screen-camera_screen).rotated(-camera_rotation)/zoom-origin
 
 func _toggle_camera() -> void:
+	if not camera_locked and not can_follow():
+		_message("There is currently no living cell to follow.");touch_zoom.layout();return
 	if camera_locked: free_camera = Simulation.Medium.wrap_position(render_camera)
 	camera_locked = not camera_locked
 	if camera_locked: camera_offset = Vector2.ZERO;camera_rotation=0
@@ -957,6 +994,7 @@ func _input(event: InputEvent) -> void:
 				placement_keyboard = true
 				placement_angle = fposmod(placement_angle+(-0.10 if event.keycode in [KEY_LEFT,KEY_UP] else 0.10),TAU)
 			KEY_P: _toggle_user_pause()
+			KEY_I: _toggle_perception()
 			KEY_SPACE: _toggle_camera()
 			KEY_ESCAPE: _toggle_settings()
 			KEY_F11: set_fullscreen(not preferences.fullscreen)
@@ -979,7 +1017,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		cell_ui.close_context()
 		return
 	if not _can_edit_tubules(): tube_start.clear()
-	if settings_panel.visible or world.player.dead or world.evolution.terminal(): return
+	if settings_panel.visible or world.evolution.terminal(): return
 	if event is InputEventMouseMotion and camera_dragging:
 		if camera_locked: camera_offset -= event.relative.rotated(-camera_rotation)/zoom
 		else: free_camera = Simulation.Medium.wrap_position(free_camera-event.relative.rotated(-camera_rotation)/zoom)
@@ -1015,6 +1053,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			_message("Microtubule tension %d%%" % roundi(tube_tension*100))
 			return
 		_zoom_at(event.position,1.12 if event.button_index == MOUSE_BUTTON_WHEEL_UP else 1/1.12)
+		return
+	if world.player.dead:
+		if event.button_index==MOUSE_BUTTON_LEFT and not camera_locked:
+			camera_dragging=true;camera_button=event.button_index
 		return
 	if event.button_index == MOUSE_BUTTON_RIGHT:
 		if selected >= 0 or moving_id >= 0:

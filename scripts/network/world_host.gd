@@ -83,7 +83,7 @@ func _ready() -> void:
 			world.disable_particle_pool()
 			particle_resolution=resolution.apply(world)
 	epoch += 1
-	world.server_mode = true; world.camera_views.clear()
+	world.server_mode = true; world.camera_views.clear();world.enable_perception_domains();world.external_offscreen=false;world.interoceptive_cells.clear()
 	world.evolution.sandbox = true
 	world.grid.rebuild(world.particles)
 	world.pheromones = world.particles.filter(func(p): return p.alive and p.kind==3)
@@ -147,12 +147,15 @@ func _physics_process(dt: float) -> void:
 	if (Time.get_ticks_usec()-last_checkpoint_usec)/1000000.0>=save_interval: checkpoint()
 
 func _set_views() -> void:
-	world.camera_views.clear()
+	world.camera_views.clear();world.interoceptive_cells.clear()
 	var now := Time.get_ticks_msec()
 	for peer in peers.values():
 		if peer.account=="" or peer.view==null or now-peer.seen>10000: continue
 		var v: Vector4=peer.view
-		world.camera_views.append(Vector4(v.x,v.y,peer.detail.x,peer.detail.y))
+		if peer.get("perception","exteroception")=="interoception":
+			var focus=_focus(peer)
+			if focus!=null:world.interoceptive_cells[focus.id]=true
+		else:world.camera_views.append(Vector4(v.x,v.y,peer.detail.x,peer.detail.y))
 	if world.kernels!=null: world.kernels.set_activity_views(world.camera_views,true)
 	if world.resident!=null: world.resident.gpu.set_activity_views(world.camera_views,true)
 
@@ -256,7 +259,9 @@ func _hello(id: int,message: Dictionary) -> void:
 	peer.account=key
 	var account: Dictionary=accounts[key]
 	var cell=_selected(account)
-	peer.view=Vector4(cell.position.x,cell.position.y,Sim.VIEW.x/.8/2,Sim.VIEW.y/.8/2)
+	var focus=_focus(peer)
+	var center: Vector2=focus.position if focus!=null else cell.position
+	peer.view=Vector4(center.x,center.y,Sim.VIEW.x/.8/2,Sim.VIEW.y/.8/2)
 	peer.view_tick=world.revision
 	_send(peer,{"kind":"welcome","token":token,"world_id":world_id,"epoch":epoch,"sequence":account.sequence,"edit":account.edit,"seed":world.seed_value,"habitat":Codec.new().capture(world.habitat_geometry),"cell":cell.id})
 	var initial:=_frame(peer)
@@ -264,6 +269,9 @@ func _hello(id: int,message: Dictionary) -> void:
 	_send(peer,initial)
 
 func _view(peer: Dictionary,message: Dictionary) -> void:
+	var mode=message.get("perception","exteroception")
+	if mode not in ["exteroception","interoception"]:return
+	var old_mode: String=peer.get("perception","exteroception")
 	var v=message.get("rect")
 	if not v is Array or v.size()!=4: return
 	for item in v:
@@ -273,13 +281,13 @@ func _view(peer: Dictionary,message: Dictionary) -> void:
 	var next_view:=Vector4(at.x,at.y,v[2],v[3])
 	var changed: bool=peer.view!=next_view
 	var prior_detail: Vector2=peer.detail
-	peer.view=next_view
+	peer.view=next_view;peer.perception=mode
 	var detail=message.get("detail",[Sim.VIEW.x/.8/2,Sim.VIEW.y/.8/2])
 	if detail is Array and detail.size()==2 and (detail[0] is float or detail[0] is int) and (detail[1] is float or detail[1] is int):
 		if is_finite(float(detail[0])) and is_finite(float(detail[1])):
 			peer.detail=Vector2(maxf(v[2],clampf(detail[0],Sim.VIEW.x/.8/2,2048)),maxf(v[3],clampf(detail[1],Sim.VIEW.y/.8/2,1280)))
 	# A repeated camera heartbeat must not restart the warm-up gate.
-	if changed or peer.detail!=prior_detail: peer.view_tick=world.revision
+	if changed or peer.detail!=prior_detail or old_mode!=mode: peer.view_tick=world.revision
 
 func _selected(account: Dictionary):
 	for cell in world.cells:
@@ -290,6 +298,19 @@ func _selected(account: Dictionary):
 	var ghost=Sim.Cell.new(account.selected)
 	ghost.lineage=account.root;ghost.dead=true;ghost.health=0
 	return ghost
+
+func _focus(peer: Dictionary):
+	var selected=_selected(accounts[peer.account])
+	if not selected.dead:return selected
+	for cell in world.cells:
+		if cell.id==peer.get("focus_id",-1) and not cell.dead:return cell
+	var nearest=null;var distance:=INF
+	for cell in world.cells:
+		if cell.dead:continue
+		var d: float=Sim.Medium.offset(selected.position,cell.position).length_squared()
+		if d<distance:nearest=cell;distance=d
+	if nearest!=null:peer.focus_id=nearest.id
+	return nearest
 
 func _apply(id: int,message: Dictionary) -> void:
 	if not peers.has(id) or peers[id].account=="": return
@@ -357,6 +378,10 @@ func checkpoint() -> bool:
 	return result
 
 func _publish() -> void:
+	# Inside views need current intracellular graphs, not an external pose gather.
+	for peer in peers.values():
+		if peer.account!="" and peer.view!=null and peer.get("perception","exteroception")=="interoception" and peer.view_tick<world.revision:
+			_send_snapshot(peer,PackedByteArray())
 	if world.camera_views.is_empty() or not pending_frame.is_empty(): return
 	if world.resident!=null:
 		if world.resident.streaming.queue_depth>0 or world.resident.streaming.eviction_deferred>0: return
@@ -364,13 +389,13 @@ func _publish() -> void:
 		var regions: Array=[]
 		for id in peers:
 			var peer: Dictionary=peers[id]
-			if peer.account=="" or peer.view==null or peer.view_tick>=world.revision: continue
+			if peer.account=="" or peer.view==null or peer.view_tick>=world.revision or peer.get("perception","exteroception")!="exteroception": continue
 			pending_frame.frames[id]={"view":peer.view,"frame":_frame(peer)}
 			regions.append(peer.view)
 		if regions.is_empty() or not world.resident.gpu.publish_views(regions): pending_frame.clear()
 	else:
 		for peer in peers.values():
-			if peer.account=="": continue
+			if peer.account=="" or peer.get("perception","exteroception")!="exteroception": continue
 			var bytes:=PackedByteArray()
 			var view: Vector4=peer.view
 			for index in world.grid.query_rect(Vector2(view.x,view.y),Vector2(view.z,view.w)+Vector2.ONE*32):
@@ -385,7 +410,7 @@ func _publish() -> void:
 func _publication_done(data: Dictionary) -> void:
 	if not data.has("error") and not data.get("overflow",false):
 		for id in pending_frame.get("frames",{}):
-			if peers.has(id) and _view_covered(pending_frame.frames[id].view,peers[id].view):
+			if peers.has(id) and peers[id].get("perception","exteroception")=="exteroception" and _view_covered(pending_frame.frames[id].view,peers[id].view):
 				_send_snapshot(peers[id],data.bytes,pending_frame.frames[id].frame)
 	else: skipped_frames+=1
 	pending_frame.clear()
@@ -397,9 +422,9 @@ func _frame(peer: Dictionary) -> Dictionary:
 	for cell in world.cells:
 		if Sim.Medium.visibility(cell.position,Vector2(view.x,view.y),Vector2(view.z,view.w)+Vector2.ONE*cell.extent())>0: cells.append(cell)
 	return {"kind":"snapshot","world_id":world_id,"epoch":epoch,"tick":world.revision,"time":world.time,"edit":account.edit,"sequence":account.sequence,
-		"graph":Codec.new().capture({"cells":cells,"player":_selected(account),"lineage":account.lineage,"evolution":account.evolution}),
+		"graph":Codec.new().capture({"cells":cells,"player":_selected(account),"focus":_focus(peer),"lineage":account.lineage,"evolution":account.evolution}),
 		"particles":PackedByteArray(),"flow":world.fluid.velocity.duplicate(),"acid":world.acidity.values.duplicate(),
-		"sounds":world.sound_events.duplicate(true),"sound_sequence":world.sound_sequence,"sparks":world.reaction_sparks.duplicate(true),"warming":false}
+		"sounds":world.sound_events.duplicate(true),"sound_sequence":world.sound_sequence,"sparks":world.reaction_sparks.duplicate(true),"perception":peer.get("perception","exteroception"),"warming":false}
 
 func _send_snapshot(peer: Dictionary,records: PackedByteArray,frame: Dictionary={}) -> void:
 	if peer.view==null or peer.socket.get_ready_state()!=WebSocketPeer.STATE_OPEN: return
@@ -440,6 +465,9 @@ func _write_metrics() -> void:
 	metrics["visible_particle_target"]=world.Catalog.data().ecology.visible_target
 	metrics["snapshots_sent"]=snapshots_sent
 	metrics["ready_views"]=peers.values().filter(func(peer):return peer.account!="" and peer.view!=null and peer.view_tick<world.revision).size()
+	metrics["interoceptive_cells"]=world.interoceptive_cells.size()
+	metrics["interoception_peers"]=peers.values().filter(func(peer):return peer.account!="" and peer.get("perception","exteroception")=="interoception").size()
+	metrics["internal_pending_seconds"]=world.cells.filter(func(cell):return not cell.dead).map(func(cell):return cell.chemistry.pending_time).reduce(func(total,value):return total+value,0.0)
 	metrics["publication_pending"]=not pending_frame.is_empty()
 	metrics["tick_phase_peak_ms"]={}
 	for phase in tick_phase_peak_usec: metrics.tick_phase_peak_ms[phase]=tick_phase_peak_usec[phase]/1000.0

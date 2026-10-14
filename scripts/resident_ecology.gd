@@ -222,6 +222,7 @@ func step(dt: float) -> void:
 			var admission:=_receipt([],[],{"feeding":false,"projection":false,"chemistry":false})
 			if admission.has("error") or admission.get("_capacity",false): fallback("Nearby particle capacity reached");return
 	sim.time+=dt;sim.transport_clock+=dt;sim.revision+=1
+	sim._step_internal_chemistry(dt)
 	sim.profile_counts.clear();sim.profile_usec.clear()
 	sim.profile_usec["streaming"]=Time.get_ticks_usec()-start
 	for name in ["sensing","feeding","organ_geometry","traction","membrane","contacts","coarse_chemistry","coarse_feeding","coarse_motion","offscreen_biology"]:
@@ -233,14 +234,15 @@ func step(dt: float) -> void:
 	var mark:=Time.get_ticks_usec()
 	# Cheap habitat field and GPU transport remain continuous. Only cell
 	# detail is tiered; no full particle download or frozen offscreen clouds.
-	if sim.server_mode: sim.fluid.set_views(sim.camera_views)
+	if sim.external_offscreen:sim.fluid.set_views([])
+	elif sim.server_mode: sim.fluid.set_views(sim.camera_views)
 	if sim.native_fluid:
 		sim.fluid.velocity=sim.kernels.fluid_step(sim.fluid.velocity,sim.fluid.activity,sim.fluid.tide,dt,sim.fluid.driven)
 		if sim.revision%6==0: sim.acidity.values=sim.kernels.acid_step(sim.acidity.values,sim.fluid.velocity,sim.fluid.activity,dt*6)
 	else:
 		sim.fluid.step(dt)
 		if sim.revision%6==0: sim.acidity.step(dt*6,sim.fluid)
-	if sim.server_mode: sim._step_background_fluid(dt)
+	if sim.server_mode or sim.external_offscreen: sim._step_background_fluid(dt)
 	# Coarse bodies pay their own elapsed suction inside advance_body.
 	for cell in cells:
 		if not schedule.delayed.has(cell.id): sim._suction_cell(cell,dt)
