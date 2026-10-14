@@ -212,14 +212,14 @@ func open_context(target: Dictionary) -> void:
 				open_context(target),"","%.0fs" % cell.response_cycle)
 			_choice("Nucleus","Return to goals and blueprints.",open_context.bind({"kind":"nucleus"}),"","Back")
 		"bud":
-			_choice("Fund offspring","Transfer up to 10 usable tissue and 10 ATP to the reserve.",func():
+			_choice("Fund offspring","Automatic investment uses surplus tissue and ATP. This adds up to 10 of each now.",func():
 				sim.edit("reserve",{"value":10})
 				game._message(run.objective(sim)),"","+10")
 			_choice("Reclaim reserves","Withdraw up to 10 tissue and 10 ATP.",func():
 				sim.edit("reserve",{"value":-10})
 				game._message(run.objective(sim)),"","−10")
 			var funded: bool = cell.brood_mass >= sim.offspring_quote().material and cell.brood_energy >= 60
-			_choice("Release successor","A paid juvenile lives autonomously nearby. You keep this body until choosing family or dying.",_reproduce.bind(false),"","Divide",funded and sim.lineage.active_family(sim).size() < sim.Lineage.MAX_ACTIVE)
+			_choice("Release successor","A fully funded bud releases automatically when there is room. This releases it now; you keep this body.",_reproduce.bind(false),"","Divide",funded and sim.lineage.active_family(sim).size() < sim.Lineage.MAX_ACTIVE)
 			_choice("Store dormant successor","Same tissue and ATP cost. A prepaid dormant body hatches if the active family is lost.",_reproduce.bind(true),"","Cyst",funded and sim.lineage.dormant.size() < sim.Lineage.MAX_DORMANT)
 			var family: Array = sim.lineage.active_family(sim)
 			for relative in family:
@@ -317,7 +317,7 @@ func describe(target: Dictionary) -> String:
 		"lineage": return "FAMILY TREE\n"+sim.lineage.summary(sim)+"\n"+run.forecast()
 		"archive": return "Known blueprints · %d\nOne draft choice per tide; recalling grants no free anatomy." % game.archive.discovered.size()
 		"past": return "Expedition history · %d recorded\nYour next expedition retains these discoveries, not extra stats." % game.archive.expeditions.size()
-		"bud": return "Offspring reserve\n%.0f / %.0f tissue · %.0f / 60 ATP\n%d living family · %d dormant\nRelease, store or follow a successor at any time.\nDescendant viability: %.0f / 60 s" % [cell.brood_mass,sim.offspring_quote().material,cell.brood_energy,sim.lineage.active_family(sim).size(),sim.lineage.dormant.size(),run.viable_seconds]
+		"bud": return "Offspring reserve\n%.0f / %.0f tissue · %.0f / 60 ATP\n%d living family · %d dormant\nSurplus is invested automatically; a funded bud releases when there is room.\nDescendant viability: %.0f / 60 s" % [cell.brood_mass,sim.offspring_quote().material,cell.brood_energy,sim.lineage.active_family(sim).size(),sim.lineage.dormant.size(),run.viable_seconds]
 		"organ":
 			var organ: Dictionary = cell.organ_by_id(target.id)
 			if organ.is_empty(): return ""

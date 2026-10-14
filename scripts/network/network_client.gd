@@ -1,4 +1,5 @@
 extends "res://scripts/pond.gd"
+var family_recovery: Dictionary={}
 const Codec = preload("res://scripts/network/state_codec.gd")
 const Protocol = preload("res://scripts/network/protocol.gd")
 # Godot 4.7.2 EMWSPeer removes IPv6 brackets when reconstructing a web URL.
@@ -331,6 +332,7 @@ func _snapshot(message: Dictionary) -> void:
 	if not player_visible:world.cells.append(world.player)
 	_snapshot_focus(data)
 	world.lineage=data.lineage;world.evolution=data.evolution
+	family_recovery=message.get("family_recovery",{})
 	if not camera_initialized or previous_player!=world.player.id:
 		cell_ui.close_context();build_open=false;moving_id=-1;selected=-1
 		touch_zoom.cancel()

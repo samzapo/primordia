@@ -353,6 +353,7 @@ func step(dt: float) -> void:
 	sim.spawn_clock+=dt
 	if sim.spawn_clock>=.5:
 		sim.spawn_clock-=.5;sim._replace_population()
+	sim._step_reproduction()
 	if not sim.server_mode and sim.evolution.enabled and (sim.player.dead or sim.player.health<=0):
 		if not sim.player.dead: sim._die(sim.player)
 		sim.lineage.recover(sim,dt)

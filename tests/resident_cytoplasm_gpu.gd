@@ -264,3 +264,16 @@ func deeper(gpu) -> void:
 	var catalyst_export: Array=chem.particle_snapshots()
 	check(catalyst_export.any(func(packet):return packet.compartment==node.id) and catalyst_export.any(func(packet):return packet.get("protected_fact",false)),"installed/active catalyst sites and sparse facts remain separate")
 	chem.ensure_cpu()
+
+	var auto_world=preload("res://scripts/simulation.gd").new(77,0,false)
+	auto_world.server_mode=true;auto_world.player.add_organ("feeding",0,"graze",false);auto_world.cells=[auto_world.player];auto_world.habitat_geometry=auto_world.Habitat.new(77,auto_world.cells);auto_world.habitat_geometry.enabled=false
+	var auto_parent=auto_world.player;var auto_quote: Dictionary=auto_world.offspring_quote()
+	auto_parent.biomass=auto_quote.material+20;auto_parent.energy=100
+	var auto_material: float=auto_parent.organic_mass();var auto_energy: float=auto_parent.energy+auto_parent.brood_energy
+	check(Cytoplasm.new().attach(gpu,auto_parent.chemistry,auto_parent),"resident reproductive investment fixture")
+	auto_world._fund_reproduction(auto_parent,.5)
+	check(auto_parent.chemistry.accelerator!=null and auto_parent.chemistry.particles.is_empty() and absf(auto_parent.organic_mass()-auto_material)<.000001 and absf(auto_parent.energy+auto_parent.brood_energy-auto_energy)<.000001,"automatic investment keeps GPU ownership and transfers only paid finite reserves")
+	auto_parent.reserve(maxf(60,auto_quote.material),auto_quote.material)
+	auto_world._step_reproduction()
+	check(auto_world.cells.size()==2 and auto_world.player==auto_parent and auto_parent.chemistry.accelerator==null,"paid structural division explicitly takes CPU ownership without selecting a different body")
+	check(absf(auto_parent.organic_mass()+auto_world.cells[-1].organic_mass()-auto_material)<.00001 and absf(auto_parent.energy+auto_parent.brood_energy+auto_world.cells[-1].energy-(auto_energy-20))<.00001,"resident-to-newborn transfer conserves inventory and accounts division ATP exactly once")

@@ -14,6 +14,11 @@ var external_offscreen := false
 var perception_modes_enabled := false # Explicit old-reference fixtures retain coupled stepping.
 var interoceptive_cells: Dictionary = {}
 var family_ledgers: Array = []
+var automatic_reproduction := true
+const MAX_LIVE_CELLS := 64
+const REPRODUCTION_RATE := 10.0
+const REPRODUCTION_TISSUE_FLOOR := 12.0
+const REPRODUCTION_ATP_FLOOR := 20.0
 var build_original = null
 var build_state: Dictionary = {}
 var build_waste := 0.0
@@ -570,6 +575,7 @@ func _step_simulation(dt: float) -> void:
 		_compact_particles()
 		grid.rebuild(particles)
 		_replace_population()
+	_step_reproduction()
 	profile_usec["ecology"] = Time.get_ticks_usec()-mark
 	mark = Time.get_ticks_usec()
 	if not server_mode and evolution.enabled and (player.dead or player.health <= 0):
@@ -617,6 +623,7 @@ func _biology_after_feed(cell, local_dt: float) -> void:
 		profile_counts["membrane_updates"] = profile_counts.get("membrane_updates",0)+1
 	cell.render_revision += 1
 	_emit_and_attack(cell,local_dt)
+	_fund_reproduction(cell,local_dt)
 
 func _step_cell_motion(dt: float) -> void:
 	# Short motion substeps plus swept contacts avoid crossing from one side to the other.
@@ -1637,14 +1644,15 @@ func mutate_organ(identity: int, gene: String) -> bool:
 	evolution.spend(cost,"Apply "+gene)
 	return true
 
-func offspring_quote() -> Dictionary:
-	var tissue: float = player.chemistry.reactor_mass
-	for node in player.chemistry.nodes:
+func offspring_quote(subject = null) -> Dictionary:
+	var parent=player if subject==null else subject
+	var tissue: float = parent.chemistry.reactor_mass
+	for node in parent.chemistry.nodes:
 		if not node.basal: tissue += 0.025
-	for organ in player.organs: tissue += organ.get("max_material",Cell.organ_cost(organ.kind,organ.scale))
-	var radius := maxf(34,player.occupied()/(TAU*0.8))
+	for organ in parent.organs: tissue += organ.get("max_material",Cell.organ_cost(organ.kind,organ.scale))
+	var radius := maxf(34,parent.occupied()/(TAU*0.8))
 	var body := maxf(30,pow(radius/47.0,2)*78-12)
-	var inherited_body := minf(body,maxf(0,player.body-30))
+	var inherited_body := minf(body,maxf(0,parent.body-30))
 	return {"body":body,"body_transfer":inherited_body,"biomass":12.0,"material":body+12+6+8+tissue-inherited_body,"total_material":body+12+6+8+tissue,"energy":60.0,"oxygen":12.0}
 
 func safe_birth_position(at: Vector2, radius: float) -> bool:
@@ -1694,49 +1702,54 @@ func make_offspring(parent, quote: Dictionary):
 func divide_lineage(dormant: bool = false, follow: bool = true) -> bool:
 	if remote_client: return edit("divide",{"dormant":dormant})
 	if player.dead or evolution.terminal() or build_original != null: return false
-	if dormant and lineage.dormant.size() >= Lineage.MAX_DORMANT: return false
-	if not dormant and lineage.active_family(self).size() >= Lineage.MAX_ACTIVE: return false
-	var quote := offspring_quote()
-	if player.brood_mass+0.000001 < quote.material or player.brood_energy < quote.energy: return false
-	if player.count("feeding")+player.count("photosynthesis") == 0: return false
-	var child = make_offspring(player,quote)
-	child.position = player.position
+	return _divide_paid(player,lineage,dormant,follow,true)
+
+func _divide_paid(parent,ledger,dormant: bool=false,follow: bool=false,progress: bool=false) -> bool:
+	if parent.dead or parent.health<=0 or parent.lineage_id()!=ledger.root_id:return false
+	if not dormant and cells.filter(func(cell):return not cell.dead).size()>=MAX_LIVE_CELLS:return false
+	if dormant and ledger.dormant.size() >= Lineage.MAX_DORMANT: return false
+	if not dormant and ledger.active_family(self).size() >= Lineage.MAX_ACTIVE: return false
+	var quote := offspring_quote(parent)
+	if parent.brood_mass+0.000001 < quote.material or parent.brood_energy < quote.energy: return false
+	if parent.count("feeding")+parent.count("photosynthesis") == 0: return false
+	var child = make_offspring(parent,quote)
+	child.position = parent.position
 	var found := dormant
 	if not dormant:
 		for i in 32:
-			child.position = Medium.wrap_position(player.position+Vector2.from_angle(player.angle+TAU*i/32)*(player.extent()+child.extent()+45))
+			child.position = Medium.wrap_position(parent.position+Vector2.from_angle(parent.angle+TAU*i/32)*(parent.extent()+child.extent()+45))
 			if safe_birth_position(child.position,child.extent()):
 				found = true
 				break
 	if not found: return false
-	var parent = player
 	child.chemistry.partition(parent.chemistry,0.25)
 	parent.brood_mass -= quote.material
 	parent.body -= quote.body_transfer
 	parent.brood_energy -= quote.energy
 	parent.oxygen -= child.oxygen
 	parent.update_geometry()
+	parent.render_revision+=1
 	child.previous_position = child.position
 	child.angle = parent.angle
 	child.previous_angle = child.angle
 	inherited_lineages[child.id] = child.lineage_id()
 	next_id += 1
-	lineage.births += 1
-	lineage.register(child,parent.id,child.generation,"dormant" if dormant else "active" if follow else "living",time)
+	ledger.births += 1
+	ledger.register(child,parent.id,child.generation,"dormant" if dormant else "active" if follow else "living",time)
 	if dormant:
-		lineage.dormant.append(child)
+		ledger.dormant.append(child)
 	else:
 		cells.append(child)
 		if follow:
-			var record := lineage.record_for(parent.id)
+			var record: Dictionary = ledger.record_for(parent.id)
 			if not record.is_empty(): record.state = "living"
 			parent.role = "ancestor"
 			child.role = "player"
 			player = child
 			evolution.observe_successor(child)
-	evolution.offspring_id = child.id if not dormant else evolution.offspring_id
+	if progress:evolution.offspring_id = child.id if not dormant else evolution.offspring_id
 	_record_sound("division",parent.position,parent.id)
-	lineage.notify("Dormant successor funded · family safety costs real tissue and ATP." if dormant else "Successor released · the family now has another living branch.")
+	ledger.notify("Dormant successor funded · family safety costs real tissue and ATP." if dormant else "Successor released · the family now has another living branch.")
 	events.append({"type":"division","id":child.id,"parent":parent.id,"dormant":dormant,"time":time,"material":quote.total_material,"reserve_used":quote.material,"body_transferred":quote.body_transfer,"oxygen_transferred":child.oxygen,"atp_used":20})
 	return true
 
@@ -1756,3 +1769,38 @@ func edit(action: String,args: Dictionary = {}):
 		if action in ["route_add","configuration"]: return ""
 		return true
 	return preload("res://scripts/network/editor_commands.gd").execute(self,action,args)
+
+func _fund_reproduction(cell,dt: float) -> void:
+	if not automatic_reproduction or remote_client or cell.dead or cell.health<=0 or dt<=0:return
+	if cell==player and build_original!=null:return
+	cell.reproduction_elapsed+=dt
+	if cell.reproduction_elapsed<.5:return
+	var elapsed: float=cell.reproduction_elapsed;cell.reproduction_elapsed=0
+	if cell.count("feeding")+cell.count("photosynthesis")==0:return
+	var quote:=offspring_quote(cell)
+	var tissue: float=minf(REPRODUCTION_RATE*elapsed,minf(maxf(0,cell.biomass-REPRODUCTION_TISSUE_FLOOR),maxf(0,quote.material-cell.brood_mass)))
+	var atp: float=minf(REPRODUCTION_RATE*elapsed,minf(maxf(0,cell.energy-REPRODUCTION_ATP_FLOOR),maxf(0,quote.energy-cell.brood_energy)))
+	if tissue<=0 and atp<=0:return
+	cell.biomass-=tissue;cell.brood_mass+=tissue
+	if atp>0:cell.chemistry.reserve_atp(atp,true)
+	cell.update_geometry();cell.render_revision+=1
+
+func _family_ledger(cell):
+	if lineage.root_id==cell.lineage_id():
+		if not family_ledgers.has(lineage):family_ledgers.append(lineage)
+		return lineage
+	for ledger in family_ledgers:
+		if ledger.root_id==cell.lineage_id():return ledger
+	var ledger=Lineage.new();ledger.root_id=cell.lineage_id()
+	ledger.register(cell,-1,cell.generation,"living",time);family_ledgers.append(ledger)
+	return ledger
+
+func _step_reproduction() -> void:
+	if not automatic_reproduction or remote_client:return
+	for cell in cells.duplicate():
+		if cell.dead or cell.health<=0 or cell.brood_mass<=0 or cell.brood_energy<60 or time<cell.reproduction_retry_at:continue
+		if cell==player and (build_original!=null or (not server_mode and evolution.terminal())):continue
+		var quote:=offspring_quote(cell)
+		if cell.brood_mass+.000001<quote.material:continue
+		cell.reproduction_retry_at=time+.5
+		_divide_paid(cell,_family_ledger(cell),false,false)

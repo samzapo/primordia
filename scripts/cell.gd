@@ -88,6 +88,8 @@ var membrane = Membrane.new()
 var organs: Array = []
 var lost_organs: Array = []
 var brood_mass := 0.0
+var reproduction_elapsed := 0.0
+var reproduction_retry_at := 0.0
 var brood_energy: float:
 	get: return chemistry.amount("reserved_atp")
 	set(value): chemistry.assign("reserved_atp",value)

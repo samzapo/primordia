@@ -89,7 +89,10 @@ func layout() -> void:
 	music_volume.set_value_no_signal(game.preferences.music_volume*100)
 	state_label.visible=bar.visible and (game.user_paused or game.world.player.dead)
 	state_label.text="View paused · world continues" if game.world.remote_client else "Game paused"
-	if not game.user_paused and game.world.player.dead:state_label.text="Observing a living cell" if game.can_follow() else "No living cell to follow"
+	if not game.user_paused and game.world.player.dead:
+		var received_recovery=game.get("family_recovery") if game.world.remote_client else {}
+		var recovery: Dictionary=received_recovery if received_recovery is Dictionary else {}
+		state_label.text="Stored successor waiting for space" if recovery.get("state","")=="waiting_for_space" else "Lineage exhausted · observing" if game.can_follow() and recovery.get("state","")=="extinct" else "Lineage exhausted · no stored successor" if recovery.get("state","")=="extinct" else "Observing a living cell" if game.can_follow() else "No living cell to follow"
 	state_label.add_theme_font_size_override("font_size",roundi(14*pixels))
 	state_label.position=Vector2(size.x-220*pixels,228*pixels);state_label.size=Vector2(208,44)*pixels
 

@@ -11,6 +11,9 @@ for script in network_state network_live; do
   ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
   grep -Eq 'NETWORK (LIVE|CORRECTNESS): [0-9]+ assertions, 0 failures' "$report_file"
 done
+"$godot_bin" --headless --path "$project_dir" --script tests/reproduction_accounting.gd 2>&1 | tee "$report_file"
+! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
+grep -Eq 'REPRODUCTION ACCOUNTING: [0-9]+ assertions, 0 failures' "$report_file"
 if [[ "${1:-}" == gpu ]]; then
   xvfb-run -a -s '-screen 0 1280x720x24 -nolisten tcp' "$godot_bin" --path "$project_dir" --rendering-method mobile --rendering-driver vulkan --gpu-index 0 --script tests/resident_cytoplasm_gpu.gd 2>&1 | tee "$report_file"
   ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"

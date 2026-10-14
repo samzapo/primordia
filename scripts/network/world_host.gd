@@ -254,13 +254,14 @@ func _hello(id: int,message: Dictionary) -> void:
 			if not cell.dead and not owned.has(cell.lineage_id()): founder=cell;break
 		if founder==null: peer.socket.close(1008,"No unclaimed living cell");return
 		token=Crypto.new().generate_random_bytes(32).hex_encode();key=token.sha256_text()
-		var ledger=world.lineage if founder.lineage_id()==0 else Sim.Lineage.new()
+		var ledger=world._family_ledger(founder)
 		ledger.root_id=founder.lineage_id()
 		if ledger.record_for(founder.id).is_empty(): ledger.register(founder,-1,founder.generation,"active",world.time)
+		else:ledger.record_for(founder.id).state="active"
 		var evolution=Sim.Evolution.new(world.seed_value^founder.id)
 		evolution.sandbox=true
 		accounts[key]={"root":founder.lineage_id(),"selected":founder.id,"lineage":ledger,"evolution":evolution,"edit":0,"sequence":0,"receipts":{},"current":founder}
-		world.family_ledgers.append(ledger)
+		if not world.family_ledgers.has(ledger):world.family_ledgers.append(ledger)
 		founder.role="player"
 		if not access_hashes.is_empty(): accounts[key].access_hash=grant
 		dirty=true
@@ -368,7 +369,7 @@ func _recover_families(dt: float) -> void:
 		account.evolution.clock=world.time
 		if not selected.dead: continue
 		world.player=selected;world.lineage=account.lineage;world.evolution=account.evolution
-		if account.lineage.recover(world,dt): account.selected=world.player.id;account.edit+=1
+		if account.lineage.recover(world,dt): account.selected=world.player.id;account.current=world.player;account.edit+=1
 	world.player=prior_player;world.lineage=prior_lineage;world.evolution=prior_evolution
 
 func checkpoint() -> bool:
@@ -438,7 +439,7 @@ func _frame(peer: Dictionary) -> Dictionary:
 	for cell in world.cells:
 		if peer.get("perception","exteroception")!="interoception" or cell!=focus:internal_overrides[cell.chemistry.get_instance_id()]={"particles":[],"presentation_totals":{"material":cell.chemistry.material(),"storage":cell.chemistry.storage_used(),"potential":cell.chemistry.potential(),"raw_fuel":cell.chemistry.raw_fuel(),"packets":cell.chemistry.particle_count()}}
 	return {"kind":"snapshot","world_id":world_id,"epoch":epoch,"tick":world.revision,"time":world.time,"edit":account.edit,"sequence":account.sequence,
-		"graph":Codec.new().capture({"cells":cells,"player":_selected(account),"focus":_focus(peer),"lineage":account.lineage,"evolution":account.evolution},internal_overrides,peer.get("compact_cytoplasm",false)),
+		"family_recovery":_family_recovery(account),"graph":Codec.new().capture({"cells":cells,"player":_selected(account),"focus":_focus(peer),"lineage":account.lineage,"evolution":account.evolution},internal_overrides,peer.get("compact_cytoplasm",false)),
 		"particles":PackedByteArray(),"flow":world.fluid.velocity.duplicate(),"acid":world.acidity.values.duplicate(),
 		"sounds":world.sound_events.duplicate(true),"sound_sequence":world.sound_sequence,"sparks":world.reaction_sparks.duplicate(true),"perception":peer.get("perception","exteroception"),"warming":false}
 
@@ -485,6 +486,7 @@ func _write_metrics() -> void:
 		"backend":"gpu" if world.resident!=null else "cpu","gpu":RenderingServer.get_video_adapter_name(),"build":OS.get_environment("PRIMORDIA_BUILD_SHA"),
 		"views":world.camera_views.size(),"peers":peers.size(),"packets":world.particle_count(),"cold_packets":world.resident.stored_count() if world.resident!=null else 0,"accounts":accounts.size(),"stored_packets":world.particle_count()+world.resident.stored_count() if world.resident!=null else world.particle_count(),
 		"sent_bytes":sent_bytes,"skipped_frames":skipped_frames,"publication_readback_bytes":world.resident.gpu._publication.bytes_read if world.resident!=null and world.resident.gpu._publication!=null else 0,"checkpoint_tick":store.last_saved_tick,"checkpoint_ms":checkpoint_total_ms,"checkpoint_write_ms":store.latency_ms,"checkpoint_error":store.last_error,"backend_error":startup_error}
+	metrics["automatic_reproduction"]=world.automatic_reproduction
 	metrics["internal_packets"]=world.cells.reduce(func(total,cell):return total+cell.chemistry.particle_count(),0)
 	metrics["resident_internal_cells"]=world.cells.filter(func(cell):return cell.chemistry.accelerator!=null).size()
 	metrics["internal_parcel_scale"]=world.Catalog.data().ecology.get("internal_parcel_scale",1)
@@ -545,3 +547,9 @@ func _safe_args(value,depth: int=0) -> bool:
 func _view_covered(old: Vector4,current: Vector4) -> bool:
 	var d:=Sim.Medium.offset(Vector2(old.x,old.y),Vector2(current.x,current.y)).abs()
 	return d.x+current.z<=old.z+32 and d.y+current.w<=old.w+32
+
+func _family_recovery(account: Dictionary) -> Dictionary:
+	var living: int=account.lineage.active_family(world).size()
+	var stored: int=account.lineage.dormant.size()
+	var selected=_selected(account)
+	return {"living":living,"stored":stored,"state":"active" if not selected.dead else "recovering" if living>0 else "waiting_for_space" if stored>0 else "extinct"}
