@@ -10,6 +10,7 @@ uniform float lens_magnification = 3.5;
 uniform float edge_blur_pixels : hint_range(0.0,12.0) = 6.0;
 uniform sampler2D light_map : filter_linear, repeat_enable;
 uniform vec2 camera;
+uniform float camera_rotation = 0.0;
 uniform vec2 view_size;
 uniform vec2 screen_center = vec2(0.5,0.52);
 vec3 radiance(vec3 color) {
@@ -25,7 +26,9 @@ void fragment() {
 	float lens_distance = length((SCREEN_UV-lens_center)*vec2(1.0,view_size.y/view_size.x));
 	float lens_weight = (1.0-smoothstep(lens_radius*0.62,lens_radius,lens_distance))*lens_amount;
 	sample_uv = lens_center+(SCREEN_UV-lens_center)/mix(1.0,lens_magnification,lens_weight);
-	vec2 world = camera + (sample_uv-screen_center)*view_size;
+	vec2 delta = (sample_uv-screen_center)*view_size;
+	float c = cos(camera_rotation), s = sin(camera_rotation);
+	vec2 world = camera + vec2(c*delta.x+s*delta.y,-s*delta.x+c*delta.y);
 	float light = texture(light_map,fract(world/vec2(4096.0,2560.0))).r;
 	float sunlit = smoothstep(0.4,0.9,light);
 	vec3 base = textureLod(screen_texture,sample_uv,0.0).rgb;

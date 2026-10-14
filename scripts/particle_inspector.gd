@@ -55,7 +55,7 @@ func _near_cell(at: Vector2, alpha: float) -> bool:
 	var padding: float = 24*game.preferences.hud_scale/game.zoom
 	for cell in sim.cells:
 		if cell.dead: continue
-		var fraction: float = alpha if cell.activity > 0 else 1.0
+		var fraction: float = game._cell_render_alpha(cell,alpha)
 		var center: Vector2 = cell.previous_position+sim.Medium.offset(cell.previous_position,cell.position)*fraction
 		var offset: Vector2 = sim.Medium.offset(center,at)
 		if offset.length_squared() > pow(cell.extent()+padding,2): continue
@@ -64,11 +64,11 @@ func _near_cell(at: Vector2, alpha: float) -> bool:
 	return false
 
 func _world_at(screen: Vector2) -> Vector2:
-	return game.world.Medium.wrap_position(game.render_camera+(screen-game.camera_screen)/game.zoom)
+	return game._screen_world(screen)
 
 func pick(screen: Vector2, alpha: float) -> Dictionary:
 	var sim = game.world
-	var at: Vector2 = sim.Medium.wrap_position(game.render_camera+(screen-game.camera_screen)/game.zoom)
+	var at: Vector2 = game._screen_world(screen)
 	candidates_examined = 0
 	# Keep anatomy and feeding clouds visually quiet, including pheromones.
 	if _near_cell(at,alpha): return {}
@@ -91,12 +91,12 @@ func pick(screen: Vector2, alpha: float) -> Dictionary:
 		if particle.get("updated",-1) == sim.revision:
 			p = particle.previous+sim.Medium.offset(particle.previous,p)*alpha
 			angle = lerp_angle(particle.previous_angle,particle.angle,alpha)
-		var screen_point: Vector2 = game.camera_screen+sim.Medium.offset(game.render_camera,p)*game.zoom
+		var screen_point: Vector2 = game._world_screen(p)
 		var radius: float = sim.particle_radius(particle.kind)*sim.particle_scale(particle.amount)*game.zoom
 		var tolerance: float = maxf(radius+3,7)
 		if screen.distance_to(screen_point) > tolerance+10: continue
 		if particle.kind != sim.PHEROMONE: p = game._visible_particle_position(p,alpha)
-		screen_point = game.camera_screen+sim.Medium.offset(game.render_camera,p)*game.zoom
+		screen_point = game._world_screen(p)
 		var distance := screen.distance_to(screen_point)
 		if distance <= tolerance and distance < best and not _near_cell(p,alpha):
 			best = distance
@@ -130,7 +130,7 @@ func _tracked_pose(alpha: float) -> Dictionary:
 		p = tracked_packet.previous+sim.Medium.offset(tracked_packet.previous,p)*alpha
 		angle = lerp_angle(tracked_packet.previous_angle,angle,alpha)
 	if tracked_packet.kind != sim.PHEROMONE: p = game._visible_particle_position(p,alpha)
-	var screen: Vector2 = game.camera_screen+sim.Medium.offset(game.render_camera,p)*game.zoom
+	var screen: Vector2 = game._world_screen(p)
 	if not get_viewport_rect().has_point(screen) or _near_cell(p,alpha): return {}
 	return {"index":tracked_index,"packet":tracked_packet,"kind":tracked_packet.kind,"screen":screen,"angle":angle,
 		"radius":sim.particle_radius(tracked_packet.kind)*sim.particle_scale(tracked_packet.amount)*game.zoom}
@@ -138,7 +138,7 @@ func _tracked_pose(alpha: float) -> Dictionary:
 func _resident_pose(packet: Dictionary,cursor: Vector2,alpha: float,picking: bool) -> Dictionary:
 	if packet.is_empty() or not packet.alive: return {}
 	var sim=game.world
-	var screen: Vector2=game.camera_screen+sim.Medium.offset(game.render_camera,packet.p)*game.zoom
+	var screen: Vector2=game._world_screen(packet.p)
 	var radius: float=sim.particle_radius(packet.kind)*sim.particle_scale(packet.amount)*game.zoom
 	if not get_viewport_rect().has_point(screen) or _near_cell(packet.p,alpha): return {}
 	if picking and screen.distance_to(cursor)>maxf(radius+3,7): return {}
@@ -182,7 +182,7 @@ func update_lens(dt: float, screen: Vector2, alpha: float, allowed: bool) -> voi
 		var magnification := lerpf(1,MAGNIFICATION,lens_amount)
 		glyph.texture = Art.texture(hovered.kind)
 		glyph.position = lens_center+(hovered.screen-lens_center)*magnification
-		glyph.rotation = hovered.angle
+		glyph.rotation = hovered.angle+game.camera_rotation
 		glyph.scale = Vector2.ONE*hovered.radius*2*magnification/96
 		glyph.modulate.a = lens_amount
 		glyph.material.set_shader_parameter("lens_center",lens_center/get_viewport_rect().size)

@@ -1,6 +1,7 @@
 shader_type canvas_item;
 render_mode unshaded;
 uniform vec2 camera;
+uniform float camera_rotation = 0.0;
 uniform vec2 view_size;
 uniform vec2 screen_center = vec2(0.5,0.52);
 uniform sampler2D acidity_map : filter_linear, repeat_enable;
@@ -26,7 +27,9 @@ float fractal(vec2 uv) {
 		tile_noise(uv,vec2(16,12))*0.13+tile_noise(uv,vec2(32,24))*0.06;
 }
 void fragment() {
-	vec2 p = camera + (UV-screen_center)*view_size;
+	vec2 delta = (UV-screen_center)*view_size;
+	float c = cos(camera_rotation), s = sin(camera_rotation);
+	vec2 p = camera + vec2(c*delta.x+s*delta.y,-s*delta.x+c*delta.y);
 	vec2 habitat_uv = fract(p/vec2(4096.0,2560.0));
 	float light = texture(light_map,habitat_uv).r;
 	float acid = texture(acidity_map,habitat_uv).r;

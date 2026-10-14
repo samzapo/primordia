@@ -391,7 +391,7 @@ func sync(_dt: float) -> void:
 	if not active: return
 	var s: float = game.preferences.hud_scale
 	var size := get_viewport_rect().size
-	var cell_screen: Vector2 = game.camera_screen+interior.position*game.zoom
+	var cell_screen: Vector2 = game.world_layer.to_global(interior.position)
 	message.visible = (game.notice_timer > 3) or game.world.evolution.terminal()
 	message.text = game.notice if Input.is_key_pressed(KEY_ALT) else game.notice.split("\n")[0]
 	message.custom_minimum_size.x = minf(500*s,size.x-48)

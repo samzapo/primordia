@@ -55,6 +55,7 @@ var placement_angle := 0.0
 var placement_keyboard := false
 var camera_offset := Vector2.ZERO
 var camera_zoom := 1.0
+var camera_rotation := 0.0
 var focus_animating := false
 var observation_view: Dictionary = {}
 var scale_bar := preload("res://scripts/scale_bar.gd").new()
@@ -339,6 +340,10 @@ func _track_player_death() -> void:
 		camera_locked = true
 		camera_offset = Vector2.ZERO
 
+func _cell_render_alpha(cell,alpha: float) -> float:
+	# Server activity tiers do not determine the browser's snapshot interpolation.
+	return alpha if cell.activity>0 or world.remote_client else 1.0
+
 func _update_world(alpha: float) -> void:
 	var sync_start := Time.get_ticks_usec() if frame_trace != null else 0
 	var size := get_viewport_rect().size
@@ -350,15 +355,15 @@ func _update_world(alpha: float) -> void:
 	if not diagnostic_zoom: zoom = maxf(zoom,base_zoom*MIN_ZOOM)
 	scale_bar.configure(size,zoom,preferences.hud_scale)
 	camera_screen = size*0.5
-	world.view_half = size/(2*zoom)
+	world.view_half = _camera_bounds(size/(2*zoom))
 	if world.resident!=null:
-		world.resident.detail_half=size/(2*base_zoom*MIN_ZOOM)
+		world.resident.detail_half=_camera_bounds(size/(2*base_zoom*MIN_ZOOM))
 		if world.resident.streaming!=null:
 			zoom=maxf(zoom,world.resident.streaming.minimum_zoom(size))
-			world.view_half=size/(2*zoom)
+			world.view_half=_camera_bounds(size/(2*zoom))
 			scale_bar.configure(size,zoom,preferences.hud_scale)
 	_track_player_death()
-	render_camera = world.player.previous_position+Simulation.Medium.offset(world.player.previous_position,world.player.position)*alpha+camera_offset if camera_locked else free_camera
+	render_camera = world.player.previous_position+Simulation.Medium.offset(world.player.previous_position,world.player.position)*_cell_render_alpha(world.player,alpha)+camera_offset if camera_locked else free_camera
 	if death_focus_age < 1.8:
 		var blend: float = smoothstep(1.15,1.8,death_focus_age)
 		render_camera = Simulation.Medium.wrap_position(death_focus_at+Simulation.Medium.offset(death_focus_at,render_camera)*blend)
@@ -370,14 +375,17 @@ func _update_world(alpha: float) -> void:
 	world.camera_position = render_camera
 	light_layer.material.set_shader_parameter("clock",world.time)
 	light_layer.material.set_shader_parameter("camera",render_camera)
+	light_layer.material.set_shader_parameter("camera_rotation",camera_rotation)
 	light_layer.material.set_shader_parameter("view_size",size/zoom)
 	light_layer.material.set_shader_parameter("screen_center",camera_screen/size)
 	microscope_layer.material.set_shader_parameter("camera",render_camera)
+	microscope_layer.material.set_shader_parameter("camera_rotation",camera_rotation)
 	microscope_layer.material.set_shader_parameter("view_size",size/zoom)
 	microscope_layer.material.set_shader_parameter("screen_center",camera_screen/size)
 	preview.position = Simulation.Medium.offset(render_camera,world.player.position)
 	world_layer.position = camera_screen
 	world_layer.scale = Vector2.ONE*zoom
+	world_layer.rotation = camera_rotation
 	currents.position = Simulation.Medium.offset(render_camera,currents_origin)
 	habitat_view.sync(render_camera,world.view_half)
 	currents.visible = not flow_streamers
@@ -399,7 +407,9 @@ func _update_world(alpha: float) -> void:
 	var alive_ids: Dictionary = {}
 	for cell in world.cells:
 		if cell.dead: continue
-		var offset: Vector2 = Simulation.Medium.offset(render_camera,cell.position)
+		var fraction: float = _cell_render_alpha(cell,alpha)
+		var p: Vector2 = cell.previous_position+Simulation.Medium.offset(cell.previous_position,cell.position)*fraction
+		var offset: Vector2 = Simulation.Medium.offset(render_camera,p)
 		if absf(offset.x) > world.view_half.x+cell.extent()+80 or absf(offset.y) > world.view_half.y+cell.extent()+80: continue
 		alive_ids[cell.id] = true
 		if not views.has(cell.id):
@@ -411,8 +421,6 @@ func _update_world(alpha: float) -> void:
 			views[cell.id] = node
 		if views[cell.id].cell != cell: views[cell.id].seen_revision = -1
 		views[cell.id].cell = cell
-		var fraction: float = alpha if cell.activity > 0 else 1.0
-		var p: Vector2 = cell.previous_position+Simulation.Medium.offset(cell.previous_position,cell.position)*fraction
 		var heading := lerp_angle(cell.previous_angle,cell.angle,fraction)
 		views[cell.id].sync(Simulation.Medium.offset(render_camera,p),heading,zoom,world.activity_for_cell(cell))
 	for identity in views.keys():
@@ -486,7 +494,7 @@ func _visible_particle_position(at: Vector2, alpha: float) -> Vector2:
 	for cell_id in world.cell_index.at(at) if world.spatial_queries else range(world.cells.size()):
 		var cell = world.cells[cell_id]
 		if cell.dead or cell.activity <= 0: continue
-		var fraction: float = alpha if cell.activity > 0 else 1.0
+		var fraction: float = _cell_render_alpha(cell,alpha)
 		var center: Vector2 = cell.previous_position+Simulation.Medium.offset(cell.previous_position,cell.position)*fraction
 		var d := Simulation.Medium.offset(center,at)
 		if d.length_squared() > pow(cell.extent()+8,2): continue
@@ -546,17 +554,44 @@ func _refresh_light_texture() -> void:
 	microscope_layer.material.set_shader_parameter("light_map",light_texture)
 
 func _player_relative(screen: Vector2) -> Vector2:
-	return (screen-camera_screen)/zoom-Simulation.Medium.offset(render_camera,world.player.position)
+	var origin: Vector2=cell_ui.interior.position if views.has(world.player.id) else Simulation.Medium.offset(render_camera,world.player.position)
+	return (screen-camera_screen).rotated(-camera_rotation)/zoom-origin
 
 func _toggle_camera() -> void:
 	if camera_locked: free_camera = Simulation.Medium.wrap_position(render_camera)
 	camera_locked = not camera_locked
-	if camera_locked: camera_offset = Vector2.ZERO
+	if camera_locked: camera_offset = Vector2.ZERO;camera_rotation=0
 	camera_dragging = false
-	world.camera_follows_player = camera_locked
-	world.camera_position = free_camera
+	touch_zoom.cancel()
+	_update_world(1.0 if is_paused() else Engine.get_physics_interpolation_fraction())
+	touch_zoom.layout()
 	currents.queue_redraw()
 	_update_hud()
+
+func _screen_world(screen: Vector2) -> Vector2:
+	return Simulation.Medium.wrap_position(render_camera+(screen-camera_screen).rotated(-camera_rotation)/zoom)
+
+func _world_screen(at: Vector2) -> Vector2:
+	return camera_screen+Simulation.Medium.offset(render_camera,at).rotated(camera_rotation)*zoom
+
+func _camera_bounds(half: Vector2) -> Vector2:
+	var c:=absf(cos(camera_rotation));var s:=absf(sin(camera_rotation))
+	return Vector2(c*half.x+s*half.y,s*half.x+c*half.y).min(Simulation.Medium.WORLD*.5)
+
+func _camera_gesture(anchor_a: Vector2,anchor_b: Vector2,screen_a: Vector2,screen_b: Vector2) -> void:
+	var source:=anchor_b-anchor_a;var target:=screen_b-screen_a
+	if source.length_squared()<.000001 or target.length_squared()<1:return
+	camera_locked=false;camera_offset=Vector2.ZERO;focus_animating=false
+	camera_rotation=wrapf(target.angle()-source.angle(),-PI,PI)
+	var size:=get_viewport_rect().size
+	var base:=minf(size.x/Simulation.VIEW.x,size.y/Simulation.VIEW.y)
+	manual_zoom=clampf(target.length()/source.length()/base,MIN_ZOOM,MAX_ZOOM)
+	# The centroid stays anchored even at a magnification limit.
+	var center: Vector2=(anchor_a+anchor_b)*.5
+	var screen_center: Vector2=(screen_a+screen_b)*.5
+	free_camera=Simulation.Medium.wrap_position(center-(screen_center-size*.5).rotated(-camera_rotation)/(base*manual_zoom))
+	_update_world(1.0 if is_paused() else Engine.get_physics_interpolation_fraction())
+	currents.queue_redraw()
 
 func _toggle_settings() -> void:
 	settings_panel.visible = not settings_panel.visible
@@ -808,12 +843,12 @@ func _place_at(angle: float) -> bool:
 	return placed
 
 func _zoom_at(screen: Vector2, factor: float) -> void:
-	var before: Vector2 = render_camera+(screen-camera_screen)/zoom
+	var before: Vector2 = _screen_world(screen)
 	manual_zoom = clampf(manual_zoom*factor,MIN_ZOOM,MAX_ZOOM)
 	focus_animating = false
 	if camera_locked: camera_offset = Vector2.ZERO
 	_update_world(1.0 if is_paused() else Engine.get_physics_interpolation_fraction())
-	var after: Vector2 = render_camera+(screen-camera_screen)/zoom
+	var after: Vector2 = _screen_world(screen)
 	var correction := Simulation.Medium.offset(after,before)
 	if not camera_locked: free_camera = Simulation.Medium.wrap_position(free_camera+correction)
 	_update_world(1.0 if is_paused() else Engine.get_physics_interpolation_fraction())
@@ -851,6 +886,7 @@ func _restart(profile: int = -1) -> void:
 	views.clear()
 	manual_zoom = 1
 	camera_zoom = 1
+	camera_rotation = 0
 	focus_animating = false
 	camera_offset = Vector2.ZERO
 	observation_view.clear()
@@ -945,8 +981,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not _can_edit_tubules(): tube_start.clear()
 	if settings_panel.visible or world.player.dead or world.evolution.terminal(): return
 	if event is InputEventMouseMotion and camera_dragging:
-		if camera_locked: camera_offset -= event.relative/zoom
-		else: free_camera = Simulation.Medium.wrap_position(free_camera-event.relative/zoom)
+		if camera_locked: camera_offset -= event.relative.rotated(-camera_rotation)/zoom
+		else: free_camera = Simulation.Medium.wrap_position(free_camera-event.relative.rotated(-camera_rotation)/zoom)
 		currents.queue_redraw()
 		return
 	if not event is InputEventMouseButton: return

@@ -72,6 +72,7 @@ var cells_by_id: Dictionary = {}
 var network_particles
 var network_alpha := 1.0
 var paused_snapshot: Dictionary = {}
+var camera_initialized := false
 
 func _ready() -> void:
 	world = Simulation.new(0,0,false)
@@ -166,7 +167,7 @@ func _process(dt: float) -> void:
 		var view:=Vector4(render_camera.x,render_camera.y,world.view_half.x,world.view_half.y)
 		var size:=get_viewport_rect().size
 		var base:=minf(size.x/Simulation.VIEW.x,size.y/Simulation.VIEW.y)
-		var detail:=size/(2*base*MIN_ZOOM)
+		var detail:=_camera_bounds(size/(2*base*MIN_ZOOM))
 		detail=Vector2(minf(2048,detail.x),minf(1280,detail.y))
 		if not view_announced or view!=last_camera or detail!=last_detail:
 			_send({"op":"view","rect":[view.x,view.y,view.z,view.w],"detail":[detail.x,detail.y]})
@@ -198,7 +199,7 @@ func _connect(manual: bool=true) -> void:
 	socket=WebSocketPeer.new();socket.inbound_buffer_size=Protocol.MAX_FRAME;socket.outbound_buffer_size=65536;socket.max_queued_packets=8
 	hello_sent=false;connected=false;connecting=true;attempted=true;retry_enabled=true;reconnect_due=3;inflight.clear();commands.clear()
 	view_announced=false;view_clock=0;keepalive_clock=0;received_usec=0
-	user_paused=false;paused_snapshot={};touch_zoom.cancel()
+	user_paused=false;paused_snapshot={};touch_zoom.cancel();camera_initialized=false
 	connect_started_usec=Time.get_ticks_usec()
 	if OS.has_feature("web"):
 		JavaScriptBridge.eval(BROWSER_SOCKET_ADDRESS % JSON.stringify(server_url))
@@ -269,7 +270,9 @@ func _snapshot(message: Dictionary) -> void:
 		status.text="Preparing detailed water for your camera…";login.show()
 		var initial=Codec.new().restore(message.graph)
 		if initial is Dictionary:
-			world.player=_copy_cell(initial.player);free_camera=world.player.position
+			world.player=_copy_cell(initial.player)
+			if not camera_initialized:
+				camera_locked=true;camera_offset=Vector2.ZERO;free_camera=world.player.position;camera_rotation=0
 		return
 	if login.visible:
 		status.text="Connected to the shared pond.";login.hide()
@@ -281,11 +284,16 @@ func _snapshot(message: Dictionary) -> void:
 	for incoming in data.cells:
 		var cell=_copy_cell(incoming);models.append(cell)
 	world.cells=models
-	world.player=cells_by_id[data.player.id] if models.any(func(c):return c.id==data.player.id) else _copy_cell(data.player)
+	var player_visible: bool=models.any(func(c):return c.id==data.player.id)
+	world.player=cells_by_id[data.player.id] if player_visible else _copy_cell(data.player)
+	# The selected body is already in the snapshot graph; retain it for immediate refocus.
+	if not player_visible:world.cells.append(world.player)
 	world.lineage=data.lineage;world.evolution=data.evolution
-	if previous_player!=world.player.id:
+	if not camera_initialized or previous_player!=world.player.id:
 		cell_ui.close_context();build_open=false;moving_id=-1;selected=-1
-		camera_offset=Vector2.ZERO;free_camera=world.player.position;camera_locked=true
+		touch_zoom.cancel()
+		camera_offset=Vector2.ZERO;free_camera=world.player.position;camera_locked=true;camera_rotation=0
+		camera_initialized=true
 	world.time=message.time;world.revision=message.tick
 	world.fluid.velocity=message.flow;world.acidity.values=message.acid
 	world.sound_events=message.sounds;world.sound_sequence=message.sound_sequence;world.reaction_sparks=message.sparks
