@@ -63,7 +63,7 @@ def launch(report, address):
             time.sleep(2)
             log = subprocess.check_output(["journalctl", "--user", "-u", unit, "-o", "cat", "-n", "40", "--no-pager"], text=True, env=environment)
             candidates = re.findall(r"tcp://([a-zA-Z0-9.-]+):([0-9]+)", log)
-            endpoints = [(host, int(port)) for host, port in candidates if host.endswith((".pinggy.link", ".pinggy.online", ".pinggy.io")) and 1 <= int(port) <= 65535]
+            endpoints = [(host, int(port)) for host, port in candidates if host.endswith((".pinggy.link", ".pinggy.online", ".pinggy.io", ".run.pinggy-free.link")) and 1 <= int(port) <= 65535]
             if endpoints:
                 host, port = endpoints[-1]
                 value = {"ssh_tunnel_ready": True, "hostname": host, "port": port, "account": report["account"],
