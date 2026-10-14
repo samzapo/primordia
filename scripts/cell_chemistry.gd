@@ -17,6 +17,9 @@ var reactor_mass := 0.0
 var next_id := 0
 var next_packet := 0
 var tick := 0
+var accelerator
+var presentation_totals: Dictionary={} # Read-only totals when a wire view omits hidden poses.
+var render_origins: Dictionary={} # Detached network presentation history only.
 var owner: WeakRef
 var water_in := 0.0
 var water_out := 0.0
@@ -90,6 +93,8 @@ func amount(species: String) -> float:
 	return maxf(0,float(totals.get(species,0)))
 
 func material() -> float:
+	if not presentation_totals.is_empty():return float(presentation_totals["material"])
+	if accelerator!=null:return reactor_mass+accelerator.value(64)+_vacuole_material()
 	var total := reactor_mass
 	for packet in particles:
 		if packet.alive: total += packet.amount*float(Catalog.data().species[packet.species].material)
@@ -97,6 +102,8 @@ func material() -> float:
 	return total
 
 func storage_used() -> float:
+	if not presentation_totals.is_empty():return float(presentation_totals["storage"])
+	if accelerator!=null:return accelerator.value(67)
 	var total := 0.0
 	for packet in particles:
 		if packet.alive and packet.species in ["glucose","pyruvate","lactate","precursor","salvage","catalyst_a","catalyst_b"]:
@@ -104,19 +111,26 @@ func storage_used() -> float:
 	return total
 
 func potential() -> float:
+	if not presentation_totals.is_empty():return float(presentation_totals["potential"])
+	if accelerator!=null:return reactor_mass*7.5+accelerator.value(65)
 	var total := reactor_mass*7.5
 	for packet in particles:
 		if packet.alive: total += packet.fuel
 	return total
 
 func _quantum(species: String) -> float:
-	return float(Catalog.data().species[species].get("quantum",0.2))*float(Catalog.data().ecology.get("parcel_scale",1))
+	return float(Catalog.data().species[species].get("quantum",0.2))*float(Catalog.data().ecology.get("parcel_scale",1))*float(Catalog.data().ecology.get("internal_parcel_scale",1))
 
 func emit(species: String, quantity: float, at: Vector2, source: int = -1, compartment: int = -1, fuel: float = -1.0, spread: float = 0.0) -> void:
+	if accelerator!=null:accelerator.command(1,quantity,at,0,-1,source,compartment,fuel,spread,species);return
 	if quantity <= 0: return
 	var definition: Dictionary = Catalog.data().species[species]
 	var left := quantity
-	var quantum := maxf(_quantum(species),quantity/128.0)
+	# Explicit broad initial conditions retain their spatial sampling. Normal
+	# local emissions use the tenfold coarser quantum; this does not move all
+	# initial ATP to a single spot and disable physically distant organs.
+	var resolution: float=float(Catalog.data().ecology.get("internal_parcel_scale",1)) if spread>0 else 1.0
+	var quantum := maxf(_quantum(species)/resolution,quantity/128.0)
 	# Coalescence is local too. Restore particle identity order before the
 	# sequential update so using bins preserves the original finite result.
 	var nearby := _local_packets(species,at,2)
@@ -151,6 +165,9 @@ func _consume(packet: Dictionary, value: float) -> float:
 	return fuel
 
 func assign(species: String, quantity: float) -> void:
+	if accelerator!=null:
+		var cell=owner.get_ref()
+		accelerator.command(6,maxf(0,quantity),cell.local_point(0)*.70 if species=="food" else Vector2.ZERO,0,-1,-1,-1,-1,cell.radius*.65 if species!="food" else 0.0,species);return
 	# Compatibility for explicit initial conditions and legacy fixtures.
 	# Gameplay uptake calls receive() with the physical membrane contact.
 	quantity = maxf(0,quantity)
@@ -171,12 +188,15 @@ func assign(species: String, quantity: float) -> void:
 			if left < 0.0000001: break
 
 func raw_fuel() -> float:
+	if not presentation_totals.is_empty():return float(presentation_totals["raw_fuel"])
+	if accelerator!=null:return accelerator.value(66)
 	var value := 0.0
 	for packet in particles:
 		if packet.alive and packet.species == "food": value += packet.fuel
 	return value
 
 func set_raw_fuel(value: float) -> void:
+	if accelerator!=null:accelerator.command(7,value);return
 	var current := raw_fuel()
 	var count := amount("food")
 	for packet in particles:
@@ -213,11 +233,13 @@ func _local_packets(species: String, center: Vector2, reach: float, node_id: int
 	return result
 
 func _local_amount(species: String, center: Vector2, reach: float, node_id: int = -1) -> float:
+	if accelerator!=null:return accelerator.command(2,0,center,reach,node_id,-1,-1,-1,0,species)
 	var value := 0.0
 	for packet in _local_packets(species,center,reach,node_id): value += packet.amount
 	return value
 
 func _take_local(species: String, value: float, center: Vector2, reach: float, node_id: int = -1) -> float:
+	if accelerator!=null:return accelerator.command(3,value,center,reach,node_id,-1,-1,-1,0,species)
 	var energy := 0.0
 	for packet in _local_packets(species,center,reach,node_id):
 		var taken := minf(value,packet.amount)
@@ -227,6 +249,7 @@ func _take_local(species: String, value: float, center: Vector2, reach: float, n
 	return energy
 
 func spend_atp(value: float, at: Vector2, reach: float) -> float:
+	if accelerator!=null:return accelerator.command(4,value,at,reach) if value>0 and amount("atp")>0 else 0.0
 	var taken := minf(maxf(0,value),_local_amount("atp",at,reach))
 	_take_local("atp",taken,at,reach)
 	emit("adp",taken,at)
@@ -234,12 +257,14 @@ func spend_atp(value: float, at: Vector2, reach: float) -> float:
 	return taken
 
 func produce_atp(value: float, at: Vector2, reach: float) -> float:
+	if accelerator!=null:return accelerator.command(5,value,at,reach) if value>0 and amount("adp")>0 else 0.0
 	var made := minf(maxf(0,value),_local_amount("adp",at,reach))
 	_take_local("adp",made,at,reach)
 	emit("atp",made,at)
 	return made
 
 func reserve_atp(quantity: float, storing: bool) -> void:
+	if accelerator!=null:accelerator.command(8,quantity,Vector2.ZERO,0,-1,1 if storing else 0);return
 	var source := "atp" if storing else "reserved_atp"
 	var destination := "reserved_atp" if storing else "atp"
 	var remaining := minf(maxf(0,quantity),amount(source))
@@ -426,6 +451,9 @@ func _osmosis(cell, h: float, external: float) -> void:
 		cell.death_hint = "Osmotic overload; contractile pumping failed"
 
 func advance(cell, dt: float, external_osmolarity: float = 0.15) -> void:
+	if accelerator!=null:
+		if dt>0 and not cell.dead:accelerator.advance(dt,external_osmolarity)
+		return
 	if dt <= 0 or cell.dead: return
 	frame_dt = dt
 	flux.clear()
@@ -456,6 +484,7 @@ func advance(cell, dt: float, external_osmolarity: float = 0.15) -> void:
 		particles = particles.filter(func(packet): return packet.alive)
 
 func add_module(identity: String, cell) -> int:
+	if accelerator!=null:accelerator.anatomy_dirty=true
 	if Catalog.module(identity).is_empty() or nodes.size() >= MAX_NODES or cell.dead or cell.biomass < REACTOR_COST: return -1
 	var definition := Catalog.module(identity)
 	# These domains are inherent anatomy; their rate is configured in place.
@@ -476,6 +505,7 @@ func add_module(identity: String, cell) -> int:
 	return id
 
 func remove_module(identity: int, cell) -> bool:
+	ensure_cpu()
 	var node := node_at(identity)
 	if node.is_empty() or node.basal: return false
 	var material := REACTOR_COST-0.025-(0.1 if node.module == "autocatalysis" else 0.0)
@@ -494,6 +524,7 @@ func remove_module(identity: int, cell) -> bool:
 	return true
 
 func connect_route(from_id: int, to_id: int, species: String) -> String:
+	if accelerator!=null:accelerator.anatomy_dirty=true
 	var a := node_at(from_id)
 	var b := node_at(to_id)
 	if a.is_empty() or b.is_empty() or from_id == to_id: return "Choose two different installed modules."
@@ -508,9 +539,11 @@ func connect_route(from_id: int, to_id: int, species: String) -> String:
 	return ""
 
 func disconnect_route(from_id: int, to_id: int, species: String) -> void:
+	if accelerator!=null:accelerator.anatomy_dirty=true
 	edges = edges.filter(func(edge): return not (edge.from == from_id and edge.to == to_id and edge.species == species))
 
 func configure(identity: int, allocation: float, active: bool) -> bool:
+	if accelerator!=null:accelerator.anatomy_dirty=true
 	var node := node_at(identity)
 	if node.is_empty() or not is_finite(allocation) or allocation < 0 or allocation > 1: return false
 	node.allocation = allocation
@@ -527,6 +560,7 @@ func configuration() -> Dictionary:
 	return {"version":1,"nodes":saved,"edges":edges.duplicate(true)}
 
 func load_configuration(value: Dictionary) -> String:
+	if accelerator!=null:accelerator.anatomy_dirty=true
 	if value.get("version",0) != 1 or not value.get("nodes") is Array or not value.get("edges") is Array: return "Unsupported pathway blueprint."
 	if value.nodes.size() != nodes.size(): return "Install matching modules before loading this configuration."
 	var checked: Array = []
@@ -572,6 +606,7 @@ func inherit_configuration(parent) -> void:
 		if not node.basal: emit("catalyst",0.025,site(node),node.id,node.id)
 
 func partition(parent, fraction: float) -> float:
+	ensure_cpu();parent.ensure_cpu()
 	var transferred := 0.0
 	var source: Array = parent.particles.duplicate()
 	for packet in source:
@@ -583,6 +618,7 @@ func partition(parent, fraction: float) -> float:
 	return transferred
 
 func anchor_photosynthesis(cell, organ: Dictionary) -> void:
+	ensure_cpu()
 	var node := node_at(find_module("photosynthesis"))
 	if node.is_empty(): return
 	var before := site(node)
@@ -592,6 +628,8 @@ func anchor_photosynthesis(cell, organ: Dictionary) -> void:
 		if packet.alive and packet.species == "catalyst" and packet.source == node.id: packet.p += shift
 
 func photosynthesize(sim, cell, organ: Dictionary, dt: float) -> void:
+	if accelerator!=null:
+		_gpu_photosynthesize(sim,cell,organ,dt);return
 	if not enabled("photosynthesis"): return
 	var node := node_at(find_module("photosynthesis"))
 	var center: Vector2 = cell.local_point(organ.a)*0.85
@@ -620,6 +658,8 @@ func photosynthesize(sim, cell, organ: Dictionary, dt: float) -> void:
 	if cell == sim.player: sim.evolution.record("photo",extent)
 
 func excrete(sim, cell, dt: float) -> void:
+	if accelerator!=null:
+		_gpu_excrete(sim,cell,dt);return
 	var outlet: Vector2 = cell.local_point(cell.excretion_angle())*0.88
 	var waste_budget: float = dt*4*cell.growth_scale()
 	for packet in particles:
@@ -647,6 +687,7 @@ func excrete(sim, cell, dt: float) -> void:
 		if kind == 2: waste_budget -= allowed
 
 func decay_atp(cell, dt: float) -> float:
+	if accelerator!=null:return accelerator.command(9,dt,Vector2.ZERO,cell.ATP_TURNOVER,-1,-1,-1,-1,0,"food",{5:cell.energy_reference()}) if dt>0 and amount("atp")>0 else 0.0
 	var total := amount("atp")
 	if total <= 0 or dt <= 0: return 0
 	var remaining: float = total/(1+cell.ATP_TURNOVER*total/cell.energy_reference()*dt)
@@ -665,10 +706,52 @@ func decay_atp(cell, dt: float) -> float:
 func clone_for(cell):
 	var copy = get_script().new()
 	copy.owner = weakref(cell)
-	for key in ["nodes","edges","particles","totals","vacuoles","flux","limiting"]:
-		copy.set(key,get(key).duplicate(true))
+	for key in ["nodes","edges","particles","totals","vacuoles","flux","limiting","presentation_totals"]:
+		copy.set(key,(particle_snapshots() if key=="particles" else get(key)).duplicate(true))
 	for key in ["reactor_mass","next_id","next_packet","tick","water_in","water_out","water_clock","osmotic_stress","expelled","solar_work","heat","frame_dt","light_flux"]: copy.set(key,get(key))
 	copy.bins.clear()
 	for packet in copy.particles:
 		if packet.alive: copy._index(packet)
 	return copy
+
+func ensure_cpu() -> void:
+	if accelerator!=null:accelerator.release()
+
+func particle_count() -> int:
+	return accelerator.live_count if accelerator!=null else int(presentation_totals.get("packets",particles.size()))
+
+func particle_snapshots(presentation: bool=false) -> Array:
+	return accelerator.snapshot(presentation) if accelerator!=null else particles
+
+func _vacuole_material() -> float:
+	var total:=0.0
+	for vacuole in vacuoles:total+=vacuole.material
+	return total
+
+func _gpu_photosynthesize(sim,cell,organ: Dictionary,dt: float) -> void:
+	if not enabled("photosynthesis"):return
+	var node:=node_at(find_module("photosynthesis"))
+	var center: Vector2=cell.local_point(organ.a)*.85
+	var light: float=sim.light_at(cell.organ_position(organ))
+	var capacity: float=dt*float(Catalog.data().ecology.photosynthesis_rate)*.35*light*organ.scale*organ.scale*organ.hp/organ.max_hp*float(node.allocation)
+	var extent: float=accelerator.command(10,capacity,center,maxf(12,cell.radius*.30))
+	var made: float=accelerator.value(71)
+	if extent<=0:limiting[node.id]="Light and local carbon/catalyst";return
+	cell.report_energy_gain(made,organ);cell.fixed_carbon+=extent;cell.oxygen_produced+=extent*2.5;cell.consumed(organ,extent)
+	light_flux+=extent/dt;flux[node.id]=light_flux;limiting[node.id]="Light and local carbon"
+	if cell==sim.player:sim.evolution.record("photo",extent)
+
+func _gpu_excrete(sim,cell,dt: float) -> void:
+	var budget: float=dt*4*cell.growth_scale()
+	while true:
+		accelerator.command(11,budget,cell.local_point(cell.excretion_angle())*.88,cell.oxygen_capacity()*.8,20 if cell.count("photosynthesis")>0 else 3,-1,-1,-1,0,"food",{6:maxf(4,cell.growth_scale()*6)})
+		if not accelerator.error.is_empty():return
+		budget=accelerator.value(71)
+		var bytes: PackedByteArray=accelerator.transfer
+		for i in bytes.size()/80:
+			var at:=i*80;var kind:=bytes.decode_s32(at+48)
+			var pos:=Vector2(bytes.decode_float(at+16),bytes.decode_float(at+20));var normal:=pos.normalized().rotated(cell.angle)
+			var quantity:=bytes.decode_double(at);var fuel:=bytes.decode_double(at+8)
+			sim.spawn_particle(kind,cell.position+pos.rotated(cell.angle)+normal*9,normal*12,quantity,cell.id)
+			if kind==0:sim.last_spawn.capacity=minf(quantity,fuel/7.5);sim._commit_spawn_metadata()
+		if accelerator.value(72)==0:break

@@ -14,7 +14,7 @@ const TYPES := {
 	"offscreen": preload("res://scripts/offscreen_ecology.gd"),
 	"budget": preload("res://scripts/energy_budget.gd"),
 }
-const TRANSIENT := ["kernels","native","grid","reaction_grid","cell_index","gpu_transport","resident","experimental_fluid","owner","_owner","build_original","build_state","bins","profile_usec","profile_counts","foreground_particle_ids","last_spawn","accelerator","command_sink","interoceptive_cells"]
+const TRANSIENT := ["kernels","native","grid","reaction_grid","cell_index","gpu_transport","resident","experimental_fluid","owner","_owner","build_original","build_state","bins","profile_usec","profile_counts","foreground_particle_ids","last_spawn","accelerator","render_origins","command_sink","interoceptive_cells"]
 const DERIVED_CELL := ["raw_fuel","substrate","oxygen","carbon","energy","waste","brood_energy"]
 var objects: Array = []
 var identities: Dictionary = {}
@@ -34,8 +34,10 @@ func capture(value, field_overrides: Dictionary = {}, compact: bool = false) -> 
 			var key: String = property.name
 			if key in TRANSIENT or (kind == "cell" and key in DERIVED_CELL): continue
 			var field = source.get(key)
+
 			if overrides.has(source.get_instance_id()) and overrides[source.get_instance_id()].has(key):
 				field = overrides[source.get_instance_id()][key]
+			elif kind=="chemistry" and key=="particles":field=source.particle_snapshots()
 			var columns=preload("res://scripts/network/cytoplasm_codec.gd").encode(field) if compact_cytoplasm and kind=="chemistry" and key=="particles" else null
 			fields[key] = columns if columns!=null else _encode(field)
 		objects[index].fields = fields

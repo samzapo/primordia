@@ -79,9 +79,9 @@ func _ready() -> void:
 		particle_resolution=saved.get("particle_resolution",{})
 		var resolution=preload("res://scripts/network/particle_resolution.gd")
 		if saved.get("particle_resolution_version",0)<resolution.VERSION:
-			if not store.retain_latest(): _fatal(store.last_error);return
+			if not store.retain_latest(resolution.VERSION): _fatal(store.last_error);return
 			world.disable_particle_pool()
-			particle_resolution=resolution.apply(world)
+			particle_resolution=resolution.apply(world,int(saved.get("particle_resolution_version",0)))
 	epoch += 1
 	world.server_mode = true; world.camera_views.clear();world.enable_perception_domains();world.external_offscreen=false;world.interoceptive_cells.clear()
 	world.evolution.sandbox = true
@@ -91,6 +91,9 @@ func _ready() -> void:
 	if cpu:
 		world.enable_particle_pool(); _started()
 	else:
+		# Authority time must not be paced by an occluded/idle desktop display.
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+		Engine.max_fps=120
 		# Main-device compute needs a continuously submitted render frame even
 		# when the authority has no cameras or visible world geometry.
 		var beacon:=ColorRect.new();beacon.size=Vector2(2,2)
@@ -139,6 +142,10 @@ func _physics_process(dt: float) -> void:
 	queued.clear()
 	_set_views()
 	world.step(dt)
+	if world.resident!=null:
+		if not world.resident.gpu.cytoplasm_error.is_empty():_fatal(world.resident.gpu.cytoplasm_error);return
+		for cell in world.cells:
+			if cell.chemistry.accelerator!=null and not cell.chemistry.accelerator.error.is_empty():_fatal(cell.chemistry.accelerator.error);return
 	_recover_families(dt)
 	world.events = world.events.slice(maxi(0,world.events.size()-128))
 	for phase in world.profile_usec: tick_phase_peak_usec[phase]=maxi(tick_phase_peak_usec.get(phase,0),int(world.profile_usec[phase]))
@@ -154,7 +161,7 @@ func _set_views() -> void:
 		var v: Vector4=peer.view
 		if peer.get("perception","exteroception")=="interoception":
 			var focus=_focus(peer)
-			if focus!=null:world.interoceptive_cells[focus.id]=true
+			if focus!=null and Sim.Medium.visibility(focus.position,Vector2(v.x,v.y),Vector2(v.z,v.w)+Vector2.ONE*focus.extent())>0:world.interoceptive_cells[focus.id]=true
 		else:world.camera_views.append(Vector4(v.x,v.y,peer.detail.x,peer.detail.y))
 	if world.kernels!=null: world.kernels.set_activity_views(world.camera_views,true)
 	if world.resident!=null: world.resident.gpu.set_activity_views(world.camera_views,true)
@@ -426,8 +433,12 @@ func _frame(peer: Dictionary) -> Dictionary:
 	var view: Vector4=peer.view
 	for cell in world.cells:
 		if Sim.Medium.visibility(cell.position,Vector2(view.x,view.y),Vector2(view.z,view.w)+Vector2.ONE*cell.extent())>0: cells.append(cell)
+	var internal_overrides: Dictionary={}
+	var focus=_focus(peer)
+	for cell in world.cells:
+		if peer.get("perception","exteroception")!="interoception" or cell!=focus:internal_overrides[cell.chemistry.get_instance_id()]={"particles":[],"presentation_totals":{"material":cell.chemistry.material(),"storage":cell.chemistry.storage_used(),"potential":cell.chemistry.potential(),"raw_fuel":cell.chemistry.raw_fuel(),"packets":cell.chemistry.particle_count()}}
 	return {"kind":"snapshot","world_id":world_id,"epoch":epoch,"tick":world.revision,"time":world.time,"edit":account.edit,"sequence":account.sequence,
-		"graph":Codec.new().capture({"cells":cells,"player":_selected(account),"focus":_focus(peer),"lineage":account.lineage,"evolution":account.evolution},{},peer.get("compact_cytoplasm",false)),
+		"graph":Codec.new().capture({"cells":cells,"player":_selected(account),"focus":_focus(peer),"lineage":account.lineage,"evolution":account.evolution},internal_overrides,peer.get("compact_cytoplasm",false)),
 		"particles":PackedByteArray(),"flow":world.fluid.velocity.duplicate(),"acid":world.acidity.values.duplicate(),
 		"sounds":world.sound_events.duplicate(true),"sound_sequence":world.sound_sequence,"sparks":world.reaction_sparks.duplicate(true),"perception":peer.get("perception","exteroception"),"warming":false}
 
@@ -474,6 +485,9 @@ func _write_metrics() -> void:
 		"backend":"gpu" if world.resident!=null else "cpu","gpu":RenderingServer.get_video_adapter_name(),"build":OS.get_environment("PRIMORDIA_BUILD_SHA"),
 		"views":world.camera_views.size(),"peers":peers.size(),"packets":world.particle_count(),"cold_packets":world.resident.stored_count() if world.resident!=null else 0,"accounts":accounts.size(),"stored_packets":world.particle_count()+world.resident.stored_count() if world.resident!=null else world.particle_count(),
 		"sent_bytes":sent_bytes,"skipped_frames":skipped_frames,"publication_readback_bytes":world.resident.gpu._publication.bytes_read if world.resident!=null and world.resident.gpu._publication!=null else 0,"checkpoint_tick":store.last_saved_tick,"checkpoint_ms":checkpoint_total_ms,"checkpoint_write_ms":store.latency_ms,"checkpoint_error":store.last_error,"backend_error":startup_error}
+	metrics["internal_packets"]=world.cells.reduce(func(total,cell):return total+cell.chemistry.particle_count(),0)
+	metrics["resident_internal_cells"]=world.cells.filter(func(cell):return cell.chemistry.accelerator!=null).size()
+	metrics["internal_parcel_scale"]=world.Catalog.data().ecology.get("internal_parcel_scale",1)
 	metrics["particle_resolution"]=particle_resolution
 	metrics["particle_parcel_scale"]=world.Catalog.data().ecology.get("parcel_scale",1)
 	metrics["visible_particle_target"]=world.Catalog.data().ecology.visible_target

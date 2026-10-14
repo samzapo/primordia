@@ -9,6 +9,7 @@ var art_lineage := -2147483648
 var nucleus_lag := Vector2.ZERO
 var last_age := 0.0
 var game
+var cytoplasm=preload("res://scripts/cytoplasm_view.gd").new()
 var seen_revision := -1
 var simple_view := false
 var last_draw_tick := -2
@@ -32,6 +33,7 @@ func _ready() -> void:
 	surface.material = ShaderMaterial.new()
 	surface.material.shader = preload("res://shaders/membrane.gdshader")
 	add_child(surface)
+	add_child(cytoplasm)
 	water_wake.z_index = -1 # Cells are at z=2; all wakes remain below every body.
 	water_wake.material = ShaderMaterial.new()
 	water_wake.material.shader = preload("res://shaders/cell_wake.gdshader")
@@ -66,6 +68,8 @@ func sync(render_position: Vector2, render_angle: float, zoom: float, alpha: flo
 		surface_revision = -1
 		surface.visible = depth_style
 	var internal: bool=game.internal_visible(cell)
+	cytoplasm.visible=internal
+	if internal:cytoplasm.sync(cell.chemistry,alpha)
 	if internal!=was_internal or (internal and last_internal_tick!=cell.chemistry.tick):
 		queue_redraw();last_internal_tick=cell.chemistry.tick;was_internal=internal
 	var reduced: bool = detail_lod and cell.radius*zoom < 18 and not game.build_open and not internal
@@ -160,12 +164,6 @@ func _draw() -> void:
 		draw_line(a,b,hue.lightened(0.45)*Color(1,1,1,(0.5 if game.build_open else 0.16)+link.tension*0.3),1+link.tension*2,true)
 	for junction in ([] if simple_view else cell.membrane.skeleton.junctions.values()): draw_circle(junction.p,3,Color("cce6ee"))
 	if not simple_view and cell != game.world.player and game.internal_visible(cell):
-		for packet in cell.chemistry.particles:
-			if not packet.alive: continue
-			var definition: Dictionary = cell.chemistry.Catalog.data().species[packet.species]
-			var color := Color(definition.color)
-			var radius: float = Visuals.internal_particle_radius(packet)
-			draw_circle(packet.p,radius,color)
 		for vacuole in cell.chemistry.vacuoles:
 			draw_arc(vacuole.p,vacuole.radius,0,TAU,16,Color("8fe3bf").lerp(Color("f497c4"),vacuole.acid),0.8,true)
 	var safe_radius: float = cell.radius

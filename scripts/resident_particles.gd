@@ -605,6 +605,7 @@ func _snapshot_main(values: PackedFloat32Array) -> void:
 	snapshot_ready.emit(values)
 func close() -> void:
 	if _closing: return
+	release_cytoplasms()
 	_closing=true
 	if exchange_inflight>0: return
 	_finish_close()
@@ -653,3 +654,19 @@ func set_activity_views(views: Array,enabled: bool) -> void:
 	RenderingServer.call_on_render_thread(func():
 		_exchange.set_views(views,enabled)
 		if _exposure!=null: _exposure.set_views(views,enabled))
+
+var cytoplasms: Array=[]
+var cytoplasm_error:=""
+func attach_cytoplasm(chem,cell) -> bool:
+	if not _initialized or _closing:return false
+	var component=preload("res://scripts/resident_cytoplasm.gd").new()
+	if not component.attach(self,chem,cell):
+		cytoplasm_error=component.error;push_error(component.error);return false
+	cytoplasms=cytoplasms.filter(func(item):return not item.closed)
+	cytoplasms.append(component)
+	return true
+
+func release_cytoplasms() -> void:
+	for component in cytoplasms:
+		if not component.closed:component.release()
+	cytoplasms.clear()

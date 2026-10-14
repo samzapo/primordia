@@ -1209,6 +1209,10 @@ func _step_internal_chemistry(dt: float) -> void:
 		if chemistry.coarse_due<0:chemistry.coarse_due=maxf(0,phase-chemistry.pending_time)
 		chemistry.pending_time+=dt;chemistry.coarse_due-=dt
 		var detailed: bool=interoceptive_cells.has(cell.id)
+		if resident!=null:
+			if detailed and chemistry.accelerator==null:
+				if not resident.gpu.attach_cytoplasm(chemistry,cell):return
+			elif not detailed:chemistry.ensure_cpu()
 		if not detailed and chemistry.coarse_due>.0000001:continue
 		var elapsed: float=chemistry.pending_time;chemistry.pending_time=0
 		chemistry.advance(cell,elapsed,0.15+acidity.sample(cell.position)*0.1)
@@ -1503,6 +1507,7 @@ func _die(cell, transferred: float = 0.0) -> void:
 	death_bursts.append({"serial":death_serial,"time":time,"at":cell.position,"radius":cell.radius,
 		"angle":cell.angle,"outline":cell.membrane.outline(),"lineage":cell.lineage_id(),"player":cell == player})
 	if death_bursts.size() > 32: death_bursts.pop_front()
+	cell.chemistry.ensure_cpu()
 	cell.dead = true
 	cell.health = 0
 	var total: float = maxf(0,cell.organic_mass()-transferred)

@@ -33,12 +33,14 @@ func run() -> void:
 	var host=preload("res://scripts/network/world_host.gd").new();host.world=sim
 	var account={"selected":cell.id,"current":cell,"lineage":sim.lineage,"root":cell.lineage_id()}
 	host.accounts={"fixture":account}
-	var one={"account":"fixture","view":Vector4(500,500,600,400),"detail":Vector2(700,500),"seen":Time.get_ticks_msec(),"perception":"interoception"}
-	var two={"account":"fixture","view":Vector4(800,900,600,400),"detail":Vector2(700,500),"seen":Time.get_ticks_msec(),"perception":"exteroception"}
+	var one={"account":"fixture","view":Vector4(cell.position.x,cell.position.y,600,400),"detail":Vector2(700,500),"seen":Time.get_ticks_msec(),"perception":"interoception"}
+	var two={"account":"fixture","view":Vector4(cell.position.x+300,cell.position.y+100,600,400),"detail":Vector2(700,500),"seen":Time.get_ticks_msec(),"perception":"exteroception"}
 	host.peers={1:one,2:two};host._set_views()
 	check(sim.camera_views.size()==1 and sim.interoceptive_cells.has(cell.id),"Mixed players independently retain exterior footprint and interior cell detail")
 	two.perception="interoception";host._set_views()
 	check(sim.camera_views.is_empty() and sim.interoceptive_cells.size()==1,"Two inside viewers do not retain external fine simulation or duplicate internal ownership")
+	one.view=Vector4(-10000,-10000,100,100);two.view=one.view;host._set_views()
+	check(sim.interoceptive_cells.is_empty(),"An internal view panned away from its cell retains only the coarse simulation")
 	host.free()
 	var scene=load("res://scenes/pond.tscn").instantiate();scene.use_particle_pool=false;root.add_child(scene)
 	scene.set_process(false);scene.set_physics_process(false);scene.music.enabled=false;scene.music.player.stop()

@@ -6,7 +6,7 @@ import shutil
 def prepare(source: Path) -> Path:
     target = source / "build/web-project"
     target.mkdir(parents=True, exist_ok=True)
-    for name in ("scripts", "shaders", "scenes", "data"):
+    for name in ("scripts", "shaders", "scenes", "data", "web"):
         destination = target / name
         if destination.exists():
             shutil.rmtree(destination)

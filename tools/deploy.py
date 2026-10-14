@@ -11,7 +11,7 @@ import subprocess
 import signal
 import ssl
 import time
-from urllib.request import build_opener, ProxyHandler, HTTPSHandler
+from urllib.request import build_opener, ProxyHandler, HTTPSHandler, Request
 
 from check_capacity import inspect
 from check_wired_route import verify
@@ -60,6 +60,14 @@ def health(build, previous=None, ca_file=None):
             if previous and (value["world_id"] != previous["world_id"] or value["tick"] < previous["tick"] or value["epoch"] <= previous["epoch"]):
                 raise ValueError("World identity/time did not resume")
             if first is not None and value["tick"] > first:
+                with opener.open("https://127.0.0.1:8766/music-bank.json", timeout=3) as response:
+                    music = json.load(response)
+                if not re.fullmatch(r"music-bank-[a-f0-9]{24}\.bin", music["file"]) or not 0 < music["bytes"] < 4 * 1024 * 1024:
+                    raise ValueError("Invalid deployed music manifest")
+                with opener.open(Request("https://127.0.0.1:8766/" + music["file"], method="HEAD"), timeout=3) as response:
+                    if int(response.headers.get("Content-Length", -1)) != music["bytes"]:
+                        raise ValueError("Deployed music bank is unavailable")
+                value["music_delivery"] = {"file": music["file"], "bytes": music["bytes"], "http": 200}
                 print(json.dumps(value, sort_keys=True), flush=True)
                 return value
             first = value["tick"] if first is None else first

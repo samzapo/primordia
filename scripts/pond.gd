@@ -232,7 +232,9 @@ func _physics_process(dt: float) -> void:
 	var started := Time.get_ticks_usec()
 	var identity: int = world.player.id
 	world.interoceptive_cells.clear()
-	if perception=="interoception" and can_follow():world.interoceptive_cells[_follow_cell().id]=true
+	if perception=="interoception" and can_follow():
+		var focus=_follow_cell()
+		if Simulation.Medium.visibility(focus.position,render_camera,world.view_half+Vector2.ONE*focus.extent())>0:world.interoceptive_cells[focus.id]=true
 	world.external_offscreen=perception=="interoception"
 	if world.kernels!=null:world.kernels.set_activity_views([],world.external_offscreen)
 	if world.resident!=null:world.resident.gpu.set_activity_views([],world.external_offscreen)
@@ -806,7 +808,7 @@ func _update_hud() -> void:
 		debug_label.text += "\nDetailed region: %d cells / %d particles\nHabitat total: %d living cells / %d particles" % [world.active_cells,world.active_particles,world.cells.filter(func(c): return not c.dead).size(),world.particle_count()]
 	if show_debug:
 		var census: Dictionary = world.visible_particle_census()
-		debug_label.text += "\nOn screen: %d material packets · %d chemical packets · %d signals\nCytoplasm: %d actual particles · target ~%d chemical packets" % [census.material,census.chemicals,census.signals,world.player.chemistry.particles.size(),world.Catalog.data().ecology.visible_target]
+		debug_label.text += "\nOn screen: %d material packets · %d chemical packets · %d signals\nCytoplasm: %d actual particles · target ~%d chemical packets" % [census.material,census.chemicals,census.signals,world.player.chemistry.particle_count(),world.Catalog.data().ecology.visible_target]
 	if world.resident != null:
 		var p: Dictionary = world.profile_usec
 		debug_label.text += "\nTick: flow %.1f · particles %.1f · biology %.1f · motion %.1f · exposure %.1f ms\nGPU receipts: prepare %.1f · handoff %.1f ms" % [p.get("fluid",0)/1000.0,p.get("particles",0)/1000.0,p.get("biology",0)/1000.0,p.get("motion",0)/1000.0,p.get("ecology",0)/1000.0,p.get("gpu_receipt_prepare",0)/1000.0,p.get("gpu_receipt_wait",0)/1000.0]

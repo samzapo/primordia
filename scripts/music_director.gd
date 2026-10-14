@@ -3,6 +3,9 @@ extends Node
 const Synth = preload("res://scripts/music_synth.gd")
 const Score = preload("res://scripts/music_score.gd")
 var game
+var web_audio
+var web_generation:=-1
+var resume_volume:=.65
 var score := Score.new()
 var mixer
 var player := AudioStreamPlayer.new()
@@ -33,14 +36,16 @@ func _queue_visual_notes(events: Array, start: int) -> void:
 		visual_notes.append(cue)
 
 func _update_waves(dt: float) -> void:
-	if playback == null or game.preferences.music_volume <= 0:
+	if (playback == null and web_audio==null) or game.preferences.music_volume <= 0:
 		visual_notes.clear()
 		waves.clear()
 		return
 	for wave in waves: wave.age += minf(dt,0.1)
 	waves = waves.filter(func(wave): return wave.age < 0.65)
-	var queued := buffer_capacity-playback.get_frames_available()
-	audible_frame = maxi(audible_frame,frame_cursor-queued-roundi(AudioServer.get_output_latency()*Synth.RATE))
+	if web_audio!=null:audible_frame=int(web_audio.cached.get("frame",0))
+	else:
+		var queued := buffer_capacity-playback.get_frames_available()
+		audible_frame = maxi(audible_frame,frame_cursor-queued-roundi(AudioServer.get_output_latency()*Synth.RATE))
 	while not visual_notes.is_empty() and visual_notes[0].at <= audible_frame:
 		var cue: Dictionary = visual_notes.pop_front()
 		var age := float(audible_frame-cue.at)/Synth.RATE
@@ -55,10 +60,13 @@ func initialize(owner_game) -> void:
 	game = owner_game
 	var args := OS.get_cmdline_user_args()
 	enabled = ("--music-benchmark" in args) or (DisplayServer.get_name() != "headless" and not "--benchmark" in args and game.screenshot_path == "")
+	if OS.has_feature("web") and enabled:
+		web_audio=preload("res://scripts/web_music.gd").new();web_audio.initialize(game.preferences.music_volume)
 	add_child(player)
 	if enabled and game.preferences.music_volume > 0: _prepare()
 
 func _prepare() -> void:
+	if web_audio!=null:return
 	if ready_bank or bank_job != null: return
 	bank_started = Time.get_ticks_usec()
 	if not Synth.cached_bank.is_empty():
@@ -82,6 +90,7 @@ func _finish_bank(bank: Array) -> void:
 	ready_bank = true
 
 func reset() -> void:
+	if web_audio!=null:web_audio.reset()
 	player.stop()
 	playback = null
 	frame_cursor = 0
@@ -93,6 +102,8 @@ func reset() -> void:
 	if ready_bank: mixer.configure(Synth.cached_bank)
 
 func update_music(dt: float) -> void:
+	if web_audio!=null:
+		_update_web_music(dt);_update_waves(dt);return
 	_update_waves(dt)
 	if not enabled: return
 	if bank_job != null and not bank_job.is_alive():
@@ -104,7 +115,7 @@ func update_music(dt: float) -> void:
 		return
 	observe_clock -= dt
 	if observe_clock <= 0:
-		score.observe(game.world,game.render_camera,game.get_viewport_rect().size*0.5/game.zoom,game.is_paused())
+		score.observe(game.world,game.render_camera,game.get_viewport_rect().size*0.5/game.zoom,game.is_paused(),game._follow_cell() if game.world.remote_client else game.world.player)
 		observe_clock = 0.10
 	if game.preferences.music_volume <= 0:
 		score.reset_accents(game.world)
@@ -117,6 +128,7 @@ func update_music(dt: float) -> void:
 	refill()
 
 func refill() -> void:
+	if web_audio!=null:return # Browser audio is scheduled independently below.
 	# Catch-up ticks can starve _process for longer than the audio queue. Refill
 	# from the same sample clock between ticks; do not observe or mutate ecology.
 	if not enabled or not ready_bank or (game.preferences.music_volume <= 0 and not player.playing): return
@@ -162,6 +174,7 @@ func refill() -> void:
 	skips = maxi(0,playback.get_skips()-startup_skips)
 
 func _exit_tree() -> void:
+	if web_audio!=null:web_audio.reset()
 	player.stop()
 	playback = null
 	player.stream = null
@@ -169,3 +182,39 @@ func _exit_tree() -> void:
 	if bank_job != null:
 		bank_job.wait_to_finish()
 		bank_job = null
+
+func _update_web_music(dt: float) -> void:
+	observe_clock-=dt
+	if observe_clock>0:return
+	observe_clock=.05
+	var state: Dictionary=web_audio.status();ready_bank=state.get("ready",false)
+	web_audio.volume(game.preferences.music_volume)
+	if not ready_bank or state.get("state","")!="running":return
+	score.observe(game.world,game.render_camera,game.get_viewport_rect().size*.5/game.zoom,game.is_paused(),game._follow_cell() if game.world.remote_client else game.world.player)
+	var now: int=state.get("frame",0)
+	if web_generation!=int(state.get("generation",0)):
+		web_generation=state.get("generation",0);frame_cursor=now;visual_notes.clear();waves.clear();score.reset_accents(game.world)
+	if game.preferences.music_volume<=0:
+		score.reset_accents(game.world);frame_cursor=now;visual_notes.clear();waves.clear();return
+	if frame_cursor<now:
+		if frame_cursor>0:skips+=1
+		frame_cursor=now;score.reset_accents(game.world)
+	var target:=now+roundi(.35*Synth.RATE)
+	if frame_cursor>=target:return
+	var events: Array=score.events(frame_cursor,target-frame_cursor)
+	web_audio.schedule(frame_cursor,events,score.channels,game.preferences.music_volume)
+	_queue_visual_notes(events,frame_cursor);frame_cursor=target
+
+func toggle() -> void:
+	if game.preferences.music_volume>0:
+		resume_volume=game.preferences.music_volume;game.preferences.music_volume=0
+	else:game.preferences.music_volume=resume_volume
+	game.preferences.save_settings()
+	if web_audio!=null:web_audio.volume(game.preferences.music_volume)
+
+func enable_music() -> void:
+	if game.preferences.music_volume<=0:game.preferences.music_volume=resume_volume
+	game.preferences.save_settings()
+	if web_audio!=null:
+		JavaScriptBridge.eval("window.primordiaMusic.unlock()")
+		web_audio.volume(game.preferences.music_volume)

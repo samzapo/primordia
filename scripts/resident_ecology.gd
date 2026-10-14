@@ -222,9 +222,11 @@ func step(dt: float) -> void:
 			var admission:=_receipt([],[],{"feeding":false,"projection":false,"chemistry":false})
 			if admission.has("error") or admission.get("_capacity",false): fallback("Nearby particle capacity reached");return
 	sim.time+=dt;sim.transport_clock+=dt;sim.revision+=1
-	sim._step_internal_chemistry(dt)
 	sim.profile_counts.clear();sim.profile_usec.clear()
 	sim.profile_usec["streaming"]=Time.get_ticks_usec()-start
+	var internal_started:=Time.get_ticks_usec()
+	sim._step_internal_chemistry(dt)
+	sim.profile_usec["internal_chemistry"]=Time.get_ticks_usec()-internal_started
 	for name in ["sensing","feeding","organ_geometry","traction","membrane","contacts","coarse_chemistry","coarse_feeding","coarse_motion","offscreen_biology"]:
 		sim.profile_usec[name]=0
 	var schedule:=_schedule(sim,dt)
@@ -361,6 +363,8 @@ func step(dt: float) -> void:
 		sim.profile_counts["particle_promotions"]=streaming.entered
 		sim.profile_counts["cold_transport_updates"]=streaming.transported
 		sim.profile_counts["stream_queue"]=streaming.queue_depth
+	sim.profile_counts["resident_internal_cells"]=sim.cells.filter(func(cell):return cell.chemistry.accelerator!=null).size()
+	sim.profile_counts["internal_packets"]=sim.cells.reduce(func(total,cell):return total+cell.chemistry.particle_count(),0)
 	sim.profile_counts["coarse_cells"]=coarse_cells
 	sim.profile_counts["coarse_updates"]=sim.offscreen_ecology.visits
 	sim.profile_usec["gpu_receipt_prepare"]=gpu.exchange_prepare_usec

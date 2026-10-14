@@ -57,11 +57,12 @@ static func proximity(offset: Vector2, half: Vector2, radius: float) -> float:
 	var distance := (offset/half).length()/maxf(1,1+radius/minf(half.x,half.y)*0.4)
 	return pow(clampf(1-distance/1.3,0,1),1.65)
 
-func observe(world, camera: Vector2, half: Vector2, editing: bool) -> void:
+func observe(world, camera: Vector2, half: Vector2, editing: bool, focus = null) -> void:
+	var subject=world.player if focus==null else focus
 	var started := Time.get_ticks_usec()
 	paused = editing
-	terminal = world.player.dead or world.evolution.terminal()
-	mass = world.player.organic_mass()
+	terminal = subject.dead or (world.evolution.terminal() and not world.remote_client)
+	mass = subject.organic_mass()
 	var candidates: Array = []
 	cells_considered = 0
 	for cell in world.cells:
@@ -90,7 +91,7 @@ func observe(world, camera: Vector2, half: Vector2, editing: bool) -> void:
 	if candidates.size() > 6:
 		var player_source := {}
 		for source in candidates:
-			if source.id == world.player.id: player_source = source
+			if source.id == subject.id: player_source = source
 		candidates.resize(6)
 		if not player_source.is_empty() and not candidates.has(player_source):
 			candidates[5] = player_source
@@ -113,16 +114,16 @@ func observe(world, camera: Vector2, half: Vector2, editing: bool) -> void:
 
 	intensity = 0.2
 	for source in candidates:
-		channels[source.lane] = {"id":source.id,"gain":source.gain*(0.60 if source.id == world.player.id else 0.09)* (0.65 if editing else 1.0),"pan":source.pan,"light":source.light if source.id == world.player.id else source.light*0.22,"acid":source.acid if source.id == world.player.id else source.acid*0.3}
+		channels[source.lane] = {"id":source.id,"gain":source.gain*(0.60 if source.id == subject.id else 0.09)* (0.65 if editing else 1.0),"pan":source.pan,"light":source.light if source.id == subject.id else source.light*0.22,"acid":source.acid if source.id == subject.id else source.acid*0.3}
 		intensity = maxf(intensity,minf(1,source.gain*(source.counts[2]+source.counts[7])*0.5))
-	channels[0] = {"id":world.player.id,"gain":0.0,"pan":0.0}
+	channels[0] = {"id":subject.id,"gain":0.0,"pan":0.0}
 	for source in candidates:
-		if source.id == world.player.id:
+		if source.id == subject.id:
 			channels[0] = {"id":source.id,"gain":source.gain*(0.22 if editing else 0.42) if not terminal else 0.0,"pan":source.pan,"light":0.35,"acid":0.0}
 	sources = candidates
 	lead_id = sources[0].id if not sources.is_empty() else -1
 	for source in sources:
-		if source.id == world.player.id: lead_id = source.id
+		if source.id == subject.id: lead_id = source.id
 	# Habitat reaction/death accents no longer create source-less backing notes.
 	reset_accents(world)
 	observed_usec = Time.get_ticks_usec()-started

@@ -73,7 +73,7 @@ func _process(_dt: float) -> void:
 	if not visible: return
 	if not _valid(): hide(); return
 	var chemistry = game.world.player.chemistry
-	inspected.text = "Particles %d · glucose %.2f · pyruvate %.2f · ATP %.1f · water %.2f\n%s" % [chemistry.particles.size(),chemistry.amount("glucose"),chemistry.amount("pyruvate"),chemistry.amount("atp"),chemistry.amount("water"),"Live: particles and physiology keep advancing." if game.world.server_mode else "Paused: particles and physiology are frozen."]
+	inspected.text = "Particles %d · glucose %.2f · pyruvate %.2f · ATP %.1f · water %.2f\n%s" % [chemistry.particle_count(),chemistry.amount("glucose"),chemistry.amount("pyruvate"),chemistry.amount("atp"),chemistry.amount("water"),"Live: particles and physiology keep advancing." if game.world.server_mode else "Paused: particles and physiology are frozen."]
 
 func _rebuild() -> void:
 	graph.clear_connections()

@@ -54,9 +54,9 @@ func load_latest() -> Dictionary:
 	sequence = best.sequence; last_saved_tick = best.payload.get("tick",-1); last_error = ""
 	return best.payload
 
-func retain_latest() -> bool:
+func retain_latest(version: int=1) -> bool:
 	# Preserve the validated pre-migration generation outside the rotating pair.
-	var target:=directory.path_join("before-particle-resolution-v1.pworld")
+	var target:=directory.path_join("before-particle-resolution-v%d.pworld" % version)
 	if FileAccess.file_exists(target):
 		var retained:=FileAccess.open(target,FileAccess.READ)
 		if retained==null or retained.get_length()>MAX_BYTES: return _fail("Retained checkpoint is unreadable")

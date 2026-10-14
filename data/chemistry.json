@@ -217,7 +217,8 @@
     "photosynthesis_rate": 16,
     "carbon_capacity": 90,
     "visible_target": 700,
-    "parcel_scale": 10
+    "parcel_scale": 10,
+    "internal_parcel_scale": 10
   },
   "species": {
     "glucose": {

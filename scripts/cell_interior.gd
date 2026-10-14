@@ -63,16 +63,6 @@ func _draw() -> void:
 		draw_arc(at,atp_size*0.72,PI,PI*1.47,12,Color("fff5c7"),maxf(0.8,atp_size*0.13),true)
 	else:
 		draw_arc(at,1.5,0,TAU,12,Color("bc9459"),0.6,true)
-	# Cytoplasmic chemicals are the authoritative moving particles.
-	for packet in (cell.chemistry.particles if game.internal_visible(cell) else []):
-		if not packet.alive: continue
-		var definition: Dictionary = cell.chemistry.Catalog.data().species[packet.species]
-		var color := Color(definition.color)
-		var size: float = preload("res://scripts/visuals.gd").internal_particle_radius(packet)
-		draw_circle(packet.p,size,color)
-		if packet.species not in ["atp","adp","water"]:
-			var tip := Vector2.from_angle(packet.angle)*size*1.7
-			draw_line(packet.p,packet.p+tip,color.lightened(0.25),maxf(0.14,size*0.45),true)
 	for vacuole in (cell.chemistry.vacuoles if game.internal_visible(cell) else []):
 		draw_arc(vacuole.p,vacuole.radius,0,TAU,20,Color("8fe3bf").lerp(Color("f497c4"),vacuole.acid),0.8,true)
 	for parcel in (ecology.parcels if game.internal_visible(cell) else []):

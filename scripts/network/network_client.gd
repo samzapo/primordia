@@ -377,12 +377,15 @@ func _copy_cell(incoming):
 	var cell=cells_by_id.get(incoming.id)
 	if cell==null: cell=incoming;cells_by_id[cell.id]=cell
 	else:
+		var origins: Dictionary={}
+		for packet in cell.chemistry.particles:origins[packet.id]={"p":packet.p,"angle":packet.angle}
 		var previous: Vector2=cell.position;var heading: float=cell.angle
 		for property in incoming.get_property_list():
 			if not (property.usage & PROPERTY_USAGE_SCRIPT_VARIABLE) or property.name in Codec.DERIVED_CELL: continue
 			cell.set(property.name,incoming.get(property.name))
 		cell.previous_position=previous;cell.previous_angle=heading
 		cell.chemistry.owner=weakref(cell)
+		cell.chemistry.render_origins=origins
 	return cell
 
 func _queue_command(action: String,args: Dictionary) -> void:

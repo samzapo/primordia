@@ -122,5 +122,20 @@ func run() -> void:
 	check(reference_world.particle_count()==3760 and is_equal_approx(reference_world.particles[0].amount,0.3),"explicit reference ecology retains its historical finite fixture inventory")
 	if prior_ecology!="": OS.set_environment("PRIMORDIA_ECOLOGY",prior_ecology)
 	else: OS.unset_environment("PRIMORDIA_ECOLOGY")
+
+	var exterior: Array=coarse.particles.duplicate(true)
+	var internal_before: float=chemistry.material();var fuel_before: float=chemistry.potential()
+	var v2: Dictionary=resolution.apply(coarse,1)
+	check(coarse.particles==exterior and v2.external_before==v2.external_after,"v2 changes intracellular resolution only")
+	check(absf(chemistry.material()-internal_before)<.000001 and absf(chemistry.potential()-fuel_before)<.000001,"v2 retains finite species and fuel")
+	var density_packets: Array=[]
+	for i in 1000:density_packets.append({"id":i,"species":"nad","source":-1,"compartment":-1,"amount":.05,"fuel":0.0,"p":Vector2(i%20,i/20)*.1,"previous":Vector2.ZERO,"v":Vector2.ZERO,"angle":0.0,"alive":true})
+	var tenth: Dictionary=resolution._internal_tenth(density_packets,47)
+	check(tenth.particles.size()==100,"dense compatible cytoplasm uses one tenth of the previous particles")
+	var quantity:=0.0
+	for packet in tenth.particles:quantity+=packet.amount
+	check(absf(quantity-50)<.000001,"tenfold resolution retains the full cofactor inventory")
+	var converted: Array=chemistry.particles.duplicate(true)
+	check(resolution.apply(coarse,2).get("already_applied",false) and chemistry.particles==converted,"recorded v2 migration cannot coalesce the saved world twice")
 	print("NETWORK CORRECTNESS: %d assertions, %d failures" % [assertions,failures])
 	quit(0 if failures==0 else 1)

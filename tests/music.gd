@@ -96,6 +96,13 @@ func _observation() -> void:
 	score.events(0,1)
 	check(score.transpose < high,"Growing biomass lowers the tonal register")
 
+	var dead=sim.player;var observer=sim.cells.filter(func(cell):return cell!=dead and not cell.dead)[0]
+	dead.dead=true;sim.remote_client=true
+	var rng_before: int=sim.rng.state
+	score.observe(sim,observer.position,Vector2(800,500),false,observer)
+	check(not score.terminal and score.channels[0].id==observer.id and score.channels[0].gain>0,"Persistent observation hears the focused living cell after the selected lineage ends")
+	check(sim.player==dead and dead.dead and sim.rng.state==rng_before,"Musical focus never adopts, revives or mutates the authority")
+
 func _schedule() -> void:
 	var score := Score.new()
 	var counts := PackedFloat32Array()

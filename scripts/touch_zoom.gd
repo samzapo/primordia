@@ -16,6 +16,8 @@ var plus_button:=Button.new()
 var state_label:=Label.new()
 var follow_button:=Button.new()
 var perception_button:=Button.new()
+var music_button:=Button.new()
+var music_volume:=HSlider.new()
 
 func initialize(owner_game) -> void:
 	game=owner_game
@@ -36,6 +38,14 @@ func initialize(owner_game) -> void:
 	follow_button.pressed.connect(game._toggle_camera)
 	perception_button.z_index=80;game.ui.add_child(perception_button)
 	perception_button.pressed.connect(game._toggle_perception)
+	music_button.z_index=80;music_button.toggle_mode=true;game.ui.add_child(music_button)
+	music_button.pressed.connect(func():
+		if music_button.text=="Enable music":game.music.enable_music()
+		else:game.music.toggle())
+	music_volume.z_index=80;music_volume.max_value=100;music_volume.step=1;music_volume.tooltip_text="Music volume";game.ui.add_child(music_volume)
+	music_volume.value_changed.connect(func(value):
+		game.preferences.music_volume=value/100.0;game.preferences.save_settings()
+		if game.music.web_audio!=null:game.music.web_audio.volume(game.preferences.music_volume))
 	layout()
 
 func layout() -> void:
@@ -67,20 +77,30 @@ func layout() -> void:
 	perception_button.add_theme_font_size_override("font_size",roundi(18*pixels))
 	perception_button.custom_minimum_size=Vector2(208,48)*pixels;perception_button.size=perception_button.custom_minimum_size
 	perception_button.position=Vector2(size.x-220*pixels,120*pixels)
+	music_button.visible=bar.visible;music_volume.visible=bar.visible
+	var sounding: bool=game.preferences.music_volume>0
+	var locked_audio: bool=game.music.web_audio!=null and game.music.web_audio.cached.get("state","")!="running"
+	music_button.text="Music off" if not sounding else "Enable music" if locked_audio else "Music"
+	music_button.set_pressed_no_signal(sounding and not locked_audio)
+	music_button.self_modulate=Color.WHITE if sounding and not locked_audio else Color(1,1,1,.6)
+	music_button.add_theme_font_size_override("font_size",roundi(16*pixels))
+	music_button.custom_minimum_size=Vector2(120,48)*pixels;music_button.size=music_button.custom_minimum_size;music_button.position=Vector2(size.x-220*pixels,174*pixels)
+	music_volume.custom_minimum_size=Vector2(82,48)*pixels;music_volume.size=music_volume.custom_minimum_size;music_volume.position=Vector2(size.x-94*pixels,174*pixels)
+	music_volume.set_value_no_signal(game.preferences.music_volume*100)
 	state_label.visible=bar.visible and (game.user_paused or game.world.player.dead)
 	state_label.text="View paused · world continues" if game.world.remote_client else "Game paused"
 	if not game.user_paused and game.world.player.dead:state_label.text="Observing a living cell" if game.can_follow() else "No living cell to follow"
 	state_label.add_theme_font_size_override("font_size",roundi(14*pixels))
-	state_label.position=Vector2(size.x-220*pixels,174*pixels);state_label.size=Vector2(208,44)*pixels
+	state_label.position=Vector2(size.x-220*pixels,228*pixels);state_label.size=Vector2(208,44)*pixels
 
 
 	if OS.has_feature("web") and enabled:
 		var conversion:=Vector2(float(JavaScriptBridge.eval("window.innerWidth")),float(JavaScriptBridge.eval("window.innerHeight")))/size
 		var bounds: Dictionary={}
-		for pair in [["pause",pause_button],["zoom_out",minus_button],["zoom_in",plus_button],["follow",follow_button],["perception",perception_button]]:
+		for pair in [["pause",pause_button],["zoom_out",minus_button],["zoom_in",plus_button],["follow",follow_button],["perception",perception_button],["music",music_button],["music_volume",music_volume]]:
 			var rect: Rect2=pair[1].get_global_rect()
 			bounds[pair[0]]=[rect.position.x*conversion.x,rect.position.y*conversion.y,rect.size.x*conversion.x,rect.size.y*conversion.y]
-		JavaScriptBridge.eval("window.primordiaTouchControls="+JSON.stringify({"visible":bar.visible,"paused":game.user_paused,"zoom":game.manual_zoom,"editing":game.build_open,"locked":game.camera_locked,"rotation":game.camera_rotation,"camera":[game.render_camera.x,game.render_camera.y],"player_screen":_body_screen(game.world.player,conversion),"focus_screen":_body_screen(game._follow_cell(),conversion),"focus_alive":game.can_follow(),"perception":game.perception,"internal_packets":game._follow_cell().chemistry.particles.size(),"mask_enabled":game.perception_mask.enabled,"bounds":bounds,"buffered_tick":game.paused_snapshot.get("tick",0) if game.world.remote_client else 0}))
+		JavaScriptBridge.eval("window.primordiaTouchControls="+JSON.stringify({"visible":bar.visible,"paused":game.user_paused,"zoom":game.manual_zoom,"editing":game.build_open,"locked":game.camera_locked,"rotation":game.camera_rotation,"camera":[game.render_camera.x,game.render_camera.y],"player_screen":_body_screen(game.world.player,conversion),"focus_screen":_body_screen(game._follow_cell(),conversion),"focus_alive":game.can_follow(),"perception":game.perception,"internal_packets":game._follow_cell().chemistry.particle_count(),"mask_enabled":game.perception_mask.enabled,"bounds":bounds,"buffered_tick":game.paused_snapshot.get("tick",0) if game.world.remote_client else 0}))
 
 func _body_screen(body,conversion: Vector2) -> Array:
 	var view=game.views.get(body.id)
