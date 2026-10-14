@@ -166,9 +166,24 @@ void summarize(){
  for(int s=0;s<SPECIES;s++)c[32+s]=0.0;for(int k=64;k<69;k++)c[k]=0.0;
  uint kept=0u;for(uint i=0;i<n();i++)if(live(i)){int s=species(i);c[32+s]+=a[i].q.x;c[64]+=a[i].q.x*materials[s];c[65]+=a[i].q.y;if(s==FOOD)c[66]+=a[i].q.y;if(stored[s]!=0)c[67]+=a[i].q.x;c[68]+=1.0;if(i!=kept)a[kept]=a[i];kept++;}c[0]=double(kept);
 }
+void coalesce_retired(){
+ if(amount(CATALYST)<=0.0)return;int node=module_node(M_DIGESTION);if(node<0)return;int64_t src=int64_t(p[32+node*8]);
+ for(uint i=0;i<n();i++)if(live(i)&&species(i)==CATALYST&&source_of(i)==src&&compartment_of(i)==-1l&&a[i].motion.w==0.0){
+  vec2 at=a[i].pose.xy;ivec2 low=ivec2(floor((at-vec2(2.0))/20.0)),high=ivec2(floor((at+vec2(2.0))/20.0));
+  uint64_t identity=uint64_t(a[i].identity.x)|(uint64_t(a[i].identity.y)<<32);
+  for(int x=low.x;x<=high.x&&live(i);x++)for(int y=low.y;y<=high.y&&live(i);y++){ivec2 bin=ivec2(x,y);
+   for(int j=g[bucket(CATALYST,bin)];j>=0&&live(i);j=link[j]){
+    uint64_t other=uint64_t(a[j].identity.x)|(uint64_t(a[j].identity.y)<<32);
+    if(other>=identity||!in_bin(uint(j),bin)||!near(uint(j),CATALYST,at,2.0,-1)||source_of(uint(j))!=src||compartment_of(uint(j))!=-1l||a[j].motion.w!=0.0||a[j].q.x>=quanta[CATALYST])continue;
+    double used=min(a[i].q.x,quanta[CATALYST]-a[j].q.x);if(a[i].q.x-used<EPS)used=a[i].q.x;
+    double fuel=consume(i,used);a[j].q+=dvec2(used,fuel);c[32+CATALYST]+=used;
+   }
+  }
+ }
+}
 void step_chemistry(){
  float h=float(op[1]);uint64_t tick=uint64_t(uint(c[4]))|(uint64_t(uint(c[5]))<<32);tick++;c[4]=double(uint(tick));c[5]=double(uint(tick>>32));
- capture_food();digest(h);uint end=n();if(amount(CATALYST)>0.0)for(uint i=0;i<end;i++)if(live(i)&&species(i)==CATALYST)react(i,h);
+ coalesce_retired();capture_food();digest(h);uint end=n();if(amount(CATALYST)>0.0)for(uint i=0;i<end;i++)if(live(i)&&species(i)==CATALYST)react(i,h);
  end=n();if(amount(CATALYST_A)+amount(CATALYST_B)>0.0)for(uint i=0;i<end;i++)if(live(i)&&(species(i)==CATALYST_A||species(i)==CATALYST_B)){double retired=a[i].q.x*op[11];vec2 at=a[i].pose.xy;int64_t src=source_of(i);consume(i,retired);emit(WASTE,retired,at,src,-1,-1.0,0.0);c[20]+=retired*7.5;}osmosis(h);
 }
 void excrete(){

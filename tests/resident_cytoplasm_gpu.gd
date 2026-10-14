@@ -242,3 +242,25 @@ func deeper(gpu) -> void:
 	chem.advance(cell,.01)
 	check(absf(chem.amount("glucose")-digestion_reference.chemistry.amount("glucose"))<.000001 and absf(chem.amount("salvage")-digestion_reference.chemistry.amount("salvage"))<.000001,"spatial bins retain the reference digestive fuel and candidate order")
 	chem.ensure_cpu()
+
+	# Released digestive enzyme is paid material, but no longer an installed
+	# catalyst or an active vacuole. Coalesce it on either owner, locally only.
+	cell=fresh();chem=cell.chemistry;node=chem.node_at(chem.find_module("digestion"))
+	for i in 1000:
+		var retired_packet={"id":i,"species":"catalyst","amount":.0125,"fuel":.09375,"p":Vector2(20,20),"previous":Vector2(20,20),"v":Vector2.ZERO,"angle":0.0,"source":node.id,"compartment":-1,"alive":true}
+		chem.particles.append(retired_packet);chem._index(retired_packet)
+	chem.next_packet=1000;chem.totals.catalyst=12.5
+	chem.emit("catalyst",.025,chem.site(node),node.id,node.id)
+	chem.emit("catalyst",.0125,Vector2(0,25),node.id,1000000)
+	chem.particles[-1]["protected_fact"]=true
+	var retired_reference=Cell.new(19);retired_reference.chemistry=chem.clone_for(retired_reference)
+	retired_reference.chemistry._coalesce_retired_catalysts()
+	var retired_count: int=retired_reference.chemistry.particles.filter(func(packet):return packet.alive).size()
+	material=chem.material();total=chem.potential()
+	check(Cytoplasm.new().attach(gpu,chem,cell),"released digestive catalyst fixture")
+	chem.advance(cell,.00001)
+	check(chem.particle_count()==retired_count and retired_count<20,"released digestive catalysts coalesce on the GPU like finite CPU parcels")
+	check(absf(chem.material()-material)<.000001 and absf(chem.potential()-total)<.000001,"catalyst coalescence preserves all paid material and fuel")
+	var catalyst_export: Array=chem.particle_snapshots()
+	check(catalyst_export.any(func(packet):return packet.compartment==node.id) and catalyst_export.any(func(packet):return packet.get("protected_fact",false)),"installed/active catalyst sites and sparse facts remain separate")
+	chem.ensure_cpu()

@@ -54,9 +54,11 @@ func run() -> void:
 	var retained_v2:=FileAccess.get_file_as_bytes(store.directory.path_join("before-particle-resolution-v2.pworld"))
 	check(retained_v2==FileAccess.get_file_as_bytes(store.directory.path_join("world-1.pworld")) and retained_v2!=retained_bytes,"version-two backup is independent of the older resolution backup")
 	check(store.save({"tick":19,"graph":graph}) and store.retain_latest(2) and FileAccess.get_file_as_bytes(store.directory.path_join("before-particle-resolution-v2.pworld"))==retained_v2,"later checkpoints cannot overwrite the pre-v2 generation")
+	check(store.retain_latest(3),"v3 retained backup uses the exact durable destination")
+	check(FileAccess.get_file_as_bytes(store.directory.path_join("before-particle-resolution-v1.pworld"))==retained_bytes and FileAccess.get_file_as_bytes(store.directory.path_join("before-particle-resolution-v2.pworld"))==retained_v2,"v3 backup preserves both preceding resolution generations")
 	restored.world.grid.rebuild(restored.world.particles)
 	check(restored.world.time==before,"host downtime is not charged during restore")
-	for path in ["world-0.pworld","world-1.pworld","before-particle-resolution-v1.pworld","before-particle-resolution-v2.pworld"]:
+	for path in ["world-0.pworld","world-1.pworld","before-particle-resolution-v1.pworld","before-particle-resolution-v2.pworld","before-particle-resolution-v3.pworld"]:
 		DirAccess.remove_absolute(store.directory.path_join(path))
 	DirAccess.remove_absolute(store.directory)
 
@@ -139,7 +141,16 @@ func run() -> void:
 	var quantity:=0.0
 	for packet in tenth.particles:quantity+=packet.amount
 	check(absf(quantity-50)<.000001,"tenfold resolution retains the full cofactor inventory")
+	var source: int=chemistry.find_module("digestion")
+	for i in 1000:
+		var packet={"id":chemistry.next_packet,"species":"catalyst","source":source,"compartment":-1,"amount":.0125,"fuel":.09375,"p":Vector2(20,20),"previous":Vector2(20,20),"v":Vector2.ZERO,"angle":0.0,"alive":true}
+		chemistry.next_packet+=1;chemistry.particles.append(packet);chemistry._index(packet)
+	chemistry.totals.catalyst=chemistry.amount("catalyst")+12.5
+	var paid: float=chemistry.material();var paid_fuel: float=chemistry.potential();var ordinary: Array=chemistry.particles.filter(func(packet):return packet.species!="catalyst").duplicate(true)
+	var v3: Dictionary=resolution.apply(coarse,2)
+	check(v3.internal_after<v3.internal_before-900 and absf(chemistry.material()-paid)<.000001 and absf(chemistry.potential()-paid_fuel)<.000001,"v3 coalesces released digestive enzyme without losing paid material or fuel")
+	check(chemistry.particles.filter(func(packet):return packet.species!="catalyst")==ordinary,"v3 does not repeat the previous substrate reduction")
 	var converted: Array=chemistry.particles.duplicate(true)
-	check(resolution.apply(coarse,2).get("already_applied",false) and chemistry.particles==converted,"recorded v2 migration cannot coalesce the saved world twice")
+	check(resolution.apply(coarse,resolution.VERSION).get("already_applied",false) and chemistry.particles==converted,"recorded migration cannot coalesce the saved world twice")
 	print("NETWORK CORRECTNESS: %d assertions, %d failures" % [assertions,failures])
 	quit(0 if failures==0 else 1)

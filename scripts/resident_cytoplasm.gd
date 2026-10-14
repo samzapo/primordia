@@ -75,6 +75,7 @@ func _pack(packets: Array) -> PackedByteArray:
 		var facts:=packet.duplicate(true)
 		for key in ["id","species","amount","fuel","p","previous","v","angle","source","compartment","alive"]:facts.erase(key)
 		if not facts.is_empty():metadata[packet.id]=facts
+		bytes.encode_float(at+44,0.0 if facts.is_empty() else 1.0)
 		bytes.encode_double(at,packet.amount);bytes.encode_double(at+8,packet.fuel)
 		for j in 7:bytes.encode_float(at+16+j*4,[packet.p.x,packet.p.y,packet.previous.x,packet.previous.y,packet.v.x,packet.v.y,packet.angle][j])
 		bytes.encode_s32(at+48,species.find(packet.species));bytes.encode_u32(at+52,packet.source&0xffffffff);bytes.encode_u32(at+56,packet.compartment&0xffffffff);bytes.encode_s32(at+60,1 if packet.alive else 0)

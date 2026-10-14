@@ -464,6 +464,7 @@ func advance(cell, dt: float, external_osmolarity: float = 0.15) -> void:
 		var h := minf(left,0.125)
 		left -= h
 		_move(cell,h)
+		_coalesce_retired_catalysts()
 		_capture_food(cell)
 		_digest(cell,h)
 		var enzymes: Array = []
@@ -755,3 +756,29 @@ func _gpu_excrete(sim,cell,dt: float) -> void:
 			sim.spawn_particle(kind,cell.position+pos.rotated(cell.angle)+normal*9,normal*12,quantity,cell.id)
 			if kind==0:sim.last_spawn.capacity=minf(quantity,fuel/7.5);sim._commit_spawn_metadata()
 		if accelerator.value(72)==0:break
+
+func _coalesce_retired_catalysts() -> void:
+	# Empty digestive vacuoles release paid enzyme material, not installed
+	# reaction sites. Index retained candidates only, avoiding an all-pairs scan.
+	var source:=find_module("digestion")
+	if source<0:return
+	var quantum:=_quantum("catalyst");var retained: Dictionary={}
+	for packet in particles:
+		if not packet.alive or packet.amount<=0 or packet.species!="catalyst" or packet.source!=source or packet.compartment!=-1:continue
+		if packet.keys().any(func(key):return key not in ["id","species","amount","fuel","p","previous","v","angle","source","compartment","alive"]):continue
+		var low:=Vector2i(((packet.p-Vector2.ONE*2)/20).floor());var high:=Vector2i(((packet.p+Vector2.ONE*2)/20).floor())
+		for x in range(low.x,high.x+1):
+			if not packet.alive:break
+			for y in range(low.y,high.y+1):
+				if not packet.alive:break
+				for other in retained.get(Vector2i(x,y),[]):
+					if other.id>=packet.id or other.amount>=quantum or other.p.distance_squared_to(packet.p)>4:continue
+					var used: float=minf(packet.amount,quantum-other.amount)
+					if packet.amount-used<.0000001:used=packet.amount
+					var fuel: float=packet.fuel*used/packet.amount
+					other.amount+=used;other.fuel+=fuel;packet.amount-=used;packet.fuel-=fuel
+					if packet.amount<=0:packet.alive=false;break
+		if packet.alive:
+			var key:=Vector2i((packet.p/20).floor())
+			if not retained.has(key):retained[key]=[]
+			retained[key].append(packet)
