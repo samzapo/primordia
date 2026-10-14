@@ -32,8 +32,9 @@ static func selection(saved: Dictionary) -> Dictionary:
 			var current:=fields(account.get("current"),objects)
 			if current.get("id",-2)==selected:body=current;location="retained"
 		var at: Vector2=body.get("position",Vector2.ZERO)
-		records.append({"selected_location":location,"selected_dead":body.get("dead",true),"position":[at.x,at.y],"radius":body.get("radius",0),"dormant_count":ledger.get("dormant",{}).get("$array",[]).size(),"living_family_count":cells.filter(func(reference):return not fields(reference,objects).get("dead",true) and lineage(fields(reference,objects))==account.get("root",-1)).size()})
-	return {"status":"ok","world_id":saved.get("world_id",""),"epoch":saved.get("epoch",0),"tick":saved.get("tick",0),"accounts":records}
+		records.append({"selected_location":location,"selected_dead":body.get("dead",true),"retained_cytoplasm_packets":fields(body.get("chemistry"),objects).get("particles",{}).get("$array",[]).size(),"position":[at.x,at.y],"radius":body.get("radius",0),"dormant_count":ledger.get("dormant",{}).get("$array",[]).size(),"living_family_count":cells.filter(func(reference):return not fields(reference,objects).get("dead",true) and lineage(fields(reference,objects))==account.get("root",-1)).size()})
+	var living_counts: Array=cells.filter(func(reference):return not fields(reference,objects).get("dead",true)).map(func(reference):return fields(fields(reference,objects).get("chemistry"),objects).get("particles",{}).get("$array",[]).size())
+	return {"living_cytoplasm_packets":living_counts.reduce(func(total,value):return total+value,0),"largest_living_cytoplasm_packets":living_counts.max() if not living_counts.is_empty() else 0,"status":"ok","world_id":saved.get("world_id",""),"epoch":saved.get("epoch",0),"tick":saved.get("tick",0),"accounts":records}
 
 static func fields(reference,objects: Array) -> Dictionary:
 	if not reference is Dictionary:return {}
