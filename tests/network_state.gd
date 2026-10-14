@@ -50,9 +50,13 @@ func run() -> void:
 	damaged.store_string("interrupted");damaged.close()
 	check(store.load_latest().tick==17,"corrupt newer generation falls back to valid previous checkpoint")
 	check(store.retain_latest() and FileAccess.get_file_as_bytes(store.directory.path_join("before-particle-resolution-v1.pworld"))==retained_bytes,"repeated retention cannot overwrite the original generation")
+	check(store.retain_latest(2),"version-two backup uses the durable publisher before conversion")
+	var retained_v2:=FileAccess.get_file_as_bytes(store.directory.path_join("before-particle-resolution-v2.pworld"))
+	check(retained_v2==FileAccess.get_file_as_bytes(store.directory.path_join("world-1.pworld")) and retained_v2!=retained_bytes,"version-two backup is independent of the older resolution backup")
+	check(store.save({"tick":19,"graph":graph}) and store.retain_latest(2) and FileAccess.get_file_as_bytes(store.directory.path_join("before-particle-resolution-v2.pworld"))==retained_v2,"later checkpoints cannot overwrite the pre-v2 generation")
 	restored.world.grid.rebuild(restored.world.particles)
 	check(restored.world.time==before,"host downtime is not charged during restore")
-	for path in ["world-0.pworld","world-1.pworld","before-particle-resolution-v1.pworld"]:
+	for path in ["world-0.pworld","world-1.pworld","before-particle-resolution-v1.pworld","before-particle-resolution-v2.pworld"]:
 		DirAccess.remove_absolute(store.directory.path_join(path))
 	DirAccess.remove_absolute(store.directory)
 
