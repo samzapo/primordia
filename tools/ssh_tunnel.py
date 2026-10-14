@@ -62,11 +62,10 @@ def launch(report, address):
         for attempt in range(18):
             time.sleep(2)
             log = subprocess.check_output(["journalctl", "--user", "-u", unit, "-o", "cat", "-n", "40", "--no-pager"], text=True, env=environment)
-            match = re.search(r"tcp://([a-zA-Z0-9.-]+):([0-9]+)", log)
-            if match:
-                host, port = match.group(1), int(match.group(2))
-                if not host.endswith((".pinggy.link", ".pinggy.online", ".pinggy.io")) or not 1 <= port <= 65535:
-                    raise ValueError("Unexpected SSH relay endpoint")
+            candidates = re.findall(r"tcp://([a-zA-Z0-9.-]+):([0-9]+)", log)
+            endpoints = [(host, int(port)) for host, port in candidates if host.endswith((".pinggy.link", ".pinggy.online", ".pinggy.io")) and 1 <= int(port) <= 65535]
+            if endpoints:
+                host, port = endpoints[-1]
                 value = {"ssh_tunnel_ready": True, "hostname": host, "port": port, "account": report["account"],
                          "allowed_client_ipv4": address, "expires_utc": expires, "unit": unit + ".service", "host_keys": report["host_keys"],
                          "private_task_directory": str(task)}
@@ -79,6 +78,7 @@ def launch(report, address):
             if state.stdout.strip() not in {"active", "activating"}:
                 print(log[-3000:], flush=True)
                 raise RuntimeError("SSH relay unit exited before becoming ready")
+        print(json.dumps({"unrecognized_relay_endpoints": candidates}), flush=True)
         raise TimeoutError("SSH relay did not publish an endpoint in 36 seconds")
     except BaseException:
         subprocess.run(["systemctl", "--user", "stop", unit], env=environment, check=False)
