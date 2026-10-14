@@ -1,6 +1,42 @@
 extends "res://scripts/pond.gd"
 const Codec = preload("res://scripts/network/state_codec.gd")
 const Protocol = preload("res://scripts/network/protocol.gd")
+# Godot 4.7.2 EMWSPeer removes IPv6 brackets when reconstructing a web URL.
+# Correct only the registered malformed address at the browser constructor.
+const BROWSER_SOCKET_ADDRESS := """
+((address) => {
+    let parsed;
+    try { parsed = new URL(address); } catch (_) { return; }
+    if (!['ws:', 'wss:'].includes(parsed.protocol) || !parsed.hostname.startsWith('[')) return;
+    const start = address.indexOf('://') + 3;
+    const end = address.indexOf(']', start);
+    const host = address.slice(start + 1, end);
+    let tail = address.slice(end + 1).split('#', 1)[0];
+    const defaultPort = parsed.protocol === 'wss:' ? ':443' : ':80';
+    if (tail === defaultPort || tail.startsWith(defaultPort + '/') || tail.startsWith(defaultPort + '?')) {
+        tail = tail.slice(defaultPort.length);
+    }
+    const scheme = address.slice(0, start);
+    const broken = scheme + host + tail;
+    const corrected = scheme + '[' + host + ']' + tail;
+    let fix = window.primordiaSocketAddress;
+    if (!fix) {
+        fix = { addresses: new Map(), rewrites: 0 };
+        window.primordiaSocketAddress = fix;
+        window.WebSocket = new Proxy(window.WebSocket, {
+            construct(target, args, newTarget) {
+                const replacement = fix.addresses.get(String(args[0]));
+                if (replacement) {
+                    args = [replacement, ...args.slice(1)];
+                    fix.rewrites++;
+                }
+                return Reflect.construct(target, args, newTarget);
+            }
+        });
+    }
+    fix.addresses.set(broken, corrected);
+})(%s);
+"""
 var socket := WebSocketPeer.new()
 var login := PanelContainer.new()
 var url_input := LineEdit.new()
@@ -136,6 +172,8 @@ func _connect(manual: bool=true) -> void:
 	socket=WebSocketPeer.new();socket.inbound_buffer_size=Protocol.MAX_FRAME;socket.outbound_buffer_size=65536;socket.max_queued_packets=8
 	hello_sent=false;connected=false;connecting=true;attempted=true;retry_enabled=true;reconnect_due=3;inflight.clear();commands.clear()
 	connect_started_usec=Time.get_ticks_usec()
+	if OS.has_feature("web"):
+		JavaScriptBridge.eval(BROWSER_SOCKET_ADDRESS % JSON.stringify(server_url))
 	if socket.connect_to_url(server_url)!=OK:
 		connecting=false;retry_enabled=false
 		_show_connection("Cannot connect to this server address. Check it and press Sign in again.")
@@ -160,7 +198,7 @@ func _connection_closed(code: int,reason: String) -> void:
 		transport_failures+=1;retry_enabled=transport_failures<3
 		var text:="Connection lost; the world continues. Reconnecting…" if retry_enabled else "Cannot reach the game server. Check the address and press Sign in to retry."
 		if not hello_sent and server_url.begins_with("wss://"):
-			text="Secure connection failed. If Chrome shows a certificate warning, install the Primordia CA certificate and reload this HTTPS page."
+			text="The game connection could not be opened. Reload this page and press Sign in again."
 			if retry_enabled:text+=" Retrying…"
 		_show_connection(text)
 
