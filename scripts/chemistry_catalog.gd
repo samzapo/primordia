@@ -27,7 +27,7 @@ static func glsl(source: String) -> String:
 		radii.append("%.6f" % item.radius)
 		rates.append("%.6f" % item.decay)
 		materials.append("%.6f" % material(item.id))
-	return source.replace("/*CATALOG_RADII*/",("const float radii[%d]=float[%d]("+",".join(radii)+");") % [radii.size(),radii.size()]).replace("/*CATALOG_DECAY*/",("const float rates[%d]=float[%d]("+",".join(rates)+");") % [rates.size(),rates.size()]).replace("/*CATALOG_MATERIAL*/",("const float materials[%d]=float[%d]("+",".join(materials)+");") % [materials.size(),materials.size()])
+	return source.replace("/*CATALOG_MERGE_LIMIT*/","%.6f" % float(data().ecology.merge_limit)).replace("/*CATALOG_RADII*/",("const float radii[%d]=float[%d]("+",".join(radii)+");") % [radii.size(),radii.size()]).replace("/*CATALOG_DECAY*/",("const float rates[%d]=float[%d]("+",".join(rates)+");") % [rates.size(),rates.size()]).replace("/*CATALOG_MATERIAL*/",("const float materials[%d]=float[%d]("+",".join(materials)+");") % [materials.size(),materials.size()])
 static func validate() -> String:
 	var definitions: Dictionary = data().species
 	for item in data().modules:

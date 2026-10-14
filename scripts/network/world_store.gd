@@ -54,6 +54,27 @@ func load_latest() -> Dictionary:
 	sequence = best.sequence; last_saved_tick = best.payload.get("tick",-1); last_error = ""
 	return best.payload
 
+func retain_latest() -> bool:
+	# Preserve the validated pre-migration generation outside the rotating pair.
+	var target:=directory.path_join("before-particle-resolution-v1.pworld")
+	if FileAccess.file_exists(target):
+		var retained:=FileAccess.open(target,FileAccess.READ)
+		if retained==null or retained.get_length()>MAX_BYTES: return _fail("Retained checkpoint is unreadable")
+		var digest:=retained.get_line()
+		var contents:=retained.get_buffer(retained.get_length()-retained.get_position());retained.close()
+		if _digest(contents)!=digest: return _fail("Retained checkpoint checksum failed")
+		return true
+	var source:=FileAccess.open(directory.path_join("world-%d.pworld" % (sequence%2)),FileAccess.READ)
+	if source==null: return _fail("Cannot retain checkpoint before resolution migration")
+	var bytes:=source.get_buffer(source.get_length());source.close()
+	var temporary:=target+".tmp"
+	var file:=FileAccess.open(temporary,FileAccess.WRITE)
+	if file==null: return _fail("Cannot write retained checkpoint")
+	file.store_buffer(bytes);file.flush();file.close()
+	var output: Array=[]
+	if OS.execute("python3",[ProjectSettings.globalize_path("res://tools/durable_world.py"),temporary,target],output,true)!=0: return _fail("Cannot synchronize retained checkpoint")
+	return true
+
 func _fail(reason: String) -> bool:
 	last_error = reason
 	push_error(reason)

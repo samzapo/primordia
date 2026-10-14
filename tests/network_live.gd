@@ -9,15 +9,22 @@ var sockets: Array=[]
 var messages: Array=[[],[]]
 var deadline:=0
 var keepalive_at:=0
+var camera_reports: Dictionary={}
 func check(value: bool,message: String) -> void:
 	assertions+=1
 	if not value: failures+=1;push_error("FAIL: "+message)
 func _initialize() -> void: run.call_deferred()
 func poll() -> void:
-	if Time.get_ticks_msec()-keepalive_at>=500:
+	if Time.get_ticks_msec()-keepalive_at>=200:
 		keepalive_at=Time.get_ticks_msec()
 		for i in sockets.size():
-			if sockets[i].get_ready_state()==WebSocketPeer.STATE_OPEN and not find_message(i,"welcome").is_empty(): sockets[i].send_text(JSON.stringify({"op":"ping"}))
+			if sockets[i].get_ready_state()==WebSocketPeer.STATE_OPEN and not find_message(i,"welcome").is_empty():
+				if not camera_reports.has(i):
+					var initial:=find_message(i,"snapshot")
+					if not initial.is_empty():
+						var graph=preload("res://scripts/network/state_codec.gd").new().restore(initial.graph)
+						camera_reports[i]={"op":"view","rect":[graph.player.position.x,graph.player.position.y,Sim.VIEW.x/.8/2,Sim.VIEW.y/.8/2]}
+				sockets[i].send_text(JSON.stringify(camera_reports.get(i,{"op":"ping"})))
 	for i in sockets.size():
 		sockets[i].poll()
 		while sockets[i].get_available_packet_count()>0: messages[i].append(Protocol.unpack(sockets[i].get_packet()))
@@ -33,6 +40,7 @@ func find_message(index: int,kind: String,sequence: int=-1) -> Dictionary:
 		if message.get("kind","")==kind and (sequence<0 or message.get("sequence",-2)==sequence):return message
 	return {}
 func run() -> void:
+	if "--slow-observer" in OS.get_cmdline_user_args(): Engine.physics_ticks_per_second=2
 	host=Host.new();host.cpu=not ("--gpu" in OS.get_cmdline_user_args())
 	host.port=18000+OS.get_process_id()%20000
 	host.store.directory=ProjectSettings.globalize_path("res://build/network-live-"+str(OS.get_process_id()))
@@ -89,6 +97,7 @@ func run() -> void:
 	check(host.checkpoint(),"account and world checkpoint completes")
 	var saved: Dictionary=host.store.load_latest()
 	if not host.cpu: check(saved.stream_rng==PackedInt64Array([host.world.resident.streaming.random.seed,host.world.resident.streaming.random.state]),"cold transport random stream is checkpointed")
+	check(saved.particle_resolution_version==preload("res://scripts/network/particle_resolution.gd").VERSION,"checkpoint records resolution so restarts cannot compact again")
 	var restored=preload("res://scripts/network/state_codec.gd").new().restore(saved.graph)
 	check(restored.accounts[welcome0.token.sha256_text()].sequence==1,"idempotency sequence survives restart")
 	check(restored.accounts[welcome0.token.sha256_text()].lineage==restored.world.family_ledgers[0],"ownership ledger references survive checkpoint")

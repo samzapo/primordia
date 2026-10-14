@@ -6,7 +6,7 @@ import sys
 
 def publish(temporary: Path, final: Path) -> None:
     temporary, final = temporary.resolve(), final.resolve()
-    if temporary.parent != final.parent or final.name not in {"world-0.pworld", "world-1.pworld"}:
+    if temporary.parent != final.parent or final.name not in {"world-0.pworld", "world-1.pworld", "before-particle-resolution-v1.pworld"}:
         raise ValueError("Invalid checkpoint destination")
     with temporary.open("rb") as handle:
         os.fsync(handle.fileno())

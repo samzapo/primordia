@@ -12,9 +12,10 @@ for script in network_state network_live; do
   grep -Eq 'NETWORK (LIVE|CORRECTNESS): [0-9]+ assertions, 0 failures' "$report_file"
 done
 if [[ "${1:-}" == gpu ]]; then
-  for scope in fixture full-world; do
+  for scope in fixture full-world slow-observer; do
     extra=()
     [[ "$scope" != full-world ]] || extra=(--full-world)
+    [[ "$scope" != slow-observer ]] || extra=(--slow-observer)
     xvfb-run -a -s '-screen 0 1280x720x24 -nolisten tcp' "$godot_bin" --path "$project_dir" --rendering-method mobile --rendering-driver vulkan --gpu-index 0 --script tests/network_live.gd -- --gpu "${extra[@]}" 2>&1 | tee "$report_file"
     ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:|returned to CPU' "$report_file"
     grep -Eq 'NETWORK LIVE: [0-9]+ assertions, 0 failures' "$report_file"

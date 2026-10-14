@@ -394,3 +394,11 @@ balance until further notice. Preserve their source behind tests/test_policy.gd,
 print explicit skips, and continue conservation, particle/physics, elapsed-time,
 UI and backend correctness checks. Do not use a calibration/playthrough
 harness to assess survival, yields, kill rates or victory during this hold.
+
+Owner correction, October 14, 2026: temporarily reduce the particle population
+to one tenth for multiplayer. The visible density target is approximately 700
+chemicals. Larger finite parcels preserve chemical quantities and fuel; they
+remain the only transport mechanism. This is a coarser spatial resolution,
+not a claim of unchanged reaction distributions or gameplay balance. Existing
+shared worlds migrate once during trusted checkpoint loading and retain an
+independent pre-conversion checkpoint. See docs/deployment.md.

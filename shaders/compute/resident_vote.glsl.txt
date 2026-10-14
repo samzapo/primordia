@@ -36,7 +36,7 @@ bool eligible(float a,float b,vec4 am,vec4 bm,float acid){
  if(a==2.&&b==1.)return bm.y>=am.y*.15&&acid<.8;
  if(a==1.&&b==2.)return am.y>=bm.y*.15&&acid<.8;
  if((a==0.&&b==4.)||(a==4.&&b==0.))return true;
- return a==b&&(a==0.||a==1.||a==2.||a==5.)&&am.y+bm.y<=0.5&&am.y+bm.y>0.;
+ return a==b&&(a==0.||a==1.||a==2.||a==5.)&&am.y+bm.y<=/*CATALOG_MERGE_LIMIT*/&&am.y+bm.y>0.;
 }
 void main(){
  uint i=gl_GlobalInvocationID.x;if(i>=pc.count)return;

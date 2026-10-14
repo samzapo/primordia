@@ -62,7 +62,10 @@ var inflight: Dictionary = {}
 var received_usec := 0
 var interval_usec := 100000.0
 var view_clock := 0.0
+var keepalive_clock := 0.0
 var last_camera: Vector4
+var last_detail: Vector2
+var view_announced := false
 var reconnect_due := 0.0
 var packet_ids: Dictionary = {}
 var cells_by_id: Dictionary = {}
@@ -138,15 +141,19 @@ func _update_world(_alpha: float) -> void:
 func _process(dt: float) -> void:
 	_poll_network()
 	super(dt)
-	view_clock+=dt
+	view_clock+=dt;keepalive_clock+=dt
 	if connected and view_clock>=.2:
 		view_clock=0
 		var view:=Vector4(render_camera.x,render_camera.y,world.view_half.x,world.view_half.y)
-		last_camera=view
 		var size:=get_viewport_rect().size
 		var base:=minf(size.x/Simulation.VIEW.x,size.y/Simulation.VIEW.y)
 		var detail:=size/(2*base*MIN_ZOOM)
-		_send({"op":"view","rect":[view.x,view.y,view.z,view.w],"detail":[minf(2048,detail.x),minf(1280,detail.y)]})
+		detail=Vector2(minf(2048,detail.x),minf(1280,detail.y))
+		if not view_announced or view!=last_camera or detail!=last_detail:
+			_send({"op":"view","rect":[view.x,view.y,view.z,view.w],"detail":[detail.x,detail.y]})
+			last_camera=view;last_detail=detail;view_announced=true;keepalive_clock=0
+		elif keepalive_clock>=2:
+			_send({"op":"ping"});keepalive_clock=0
 	if not connected and attempted and retry_enabled and (token!="" or invitation!="") and socket.get_ready_state()==WebSocketPeer.STATE_CLOSED:
 		reconnect_due-=dt
 		if reconnect_due<=0: reconnect_due=3;_connect(false)
@@ -171,6 +178,7 @@ func _connect(manual: bool=true) -> void:
 	if socket.get_ready_state()!=WebSocketPeer.STATE_CLOSED: socket.close(-1)
 	socket=WebSocketPeer.new();socket.inbound_buffer_size=Protocol.MAX_FRAME;socket.outbound_buffer_size=65536;socket.max_queued_packets=8
 	hello_sent=false;connected=false;connecting=true;attempted=true;retry_enabled=true;reconnect_due=3;inflight.clear();commands.clear()
+	view_announced=false;view_clock=0;keepalive_clock=0
 	connect_started_usec=Time.get_ticks_usec()
 	if OS.has_feature("web"):
 		JavaScriptBridge.eval(BROWSER_SOCKET_ADDRESS % JSON.stringify(server_url))
@@ -240,7 +248,9 @@ func _snapshot(message: Dictionary) -> void:
 		if initial is Dictionary:
 			world.player=_copy_cell(initial.player);free_camera=world.player.position
 		return
-	login.hide()
+	if login.visible:
+		status.text="Connected to the shared pond.";login.hide()
+		_publish_login_geometry.call_deferred()
 	var data=Codec.new().restore(message.graph)
 	if not data is Dictionary: return
 	var previous_player: int=world.player.id

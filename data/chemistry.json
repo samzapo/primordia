@@ -211,12 +211,13 @@
     }
   ],
   "ecology": {
-    "seed_packets": 10,
-    "packet_quantum": 0.18,
-    "merge_limit": 0.5,
+    "seed_packets": 1,
+    "packet_quantum": 1.8,
+    "merge_limit": 5.0,
     "photosynthesis_rate": 16,
     "carbon_capacity": 90,
-    "visible_target": 7000
+    "visible_target": 700,
+    "parcel_scale": 10
   },
   "species": {
     "glucose": {

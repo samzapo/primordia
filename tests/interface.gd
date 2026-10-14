@@ -749,6 +749,6 @@ func _native_pool() -> void:
 	scene.set_particle_collisions(false)
 	scene.use_particle_pool = true
 	scene._restart()
-	expect(scene.world.particle_pool and scene.world.particles.is_empty(),"Ordinary restart enables authoritative ownership by default")
+	expect(scene.world.particle_pool and scene.world.particles.is_empty(),"Explicit CPU-reference restart enables authoritative pool ownership")
 	expect(scene.world.particle_collisions,"Ordinary restart restores collisions after any diagnostic override")
 	scene.set_particle_collisions(false)

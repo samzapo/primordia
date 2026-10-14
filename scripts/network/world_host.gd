@@ -26,6 +26,9 @@ var last_metrics_usec := 0
 var pending_frame: Dictionary = {}
 var started_usec := 0
 var tick_samples: Array = []
+var tick_phase_peak_usec: Dictionary = {}
+var snapshots_sent := 0
+var particle_resolution: Dictionary = {}
 var skipped_frames := 0
 var sent_bytes := 0
 var restored_gpu_tick := 0
@@ -73,6 +76,12 @@ func _ready() -> void:
 		world_id = saved.world_id; epoch = int(saved.epoch)
 		restored_gpu_tick = saved.get("gpu_tick",0)
 		restored_stream_rng = saved.get("stream_rng",PackedInt64Array())
+		particle_resolution=saved.get("particle_resolution",{})
+		var resolution=preload("res://scripts/network/particle_resolution.gd")
+		if saved.get("particle_resolution_version",0)<resolution.VERSION:
+			if not store.retain_latest(): _fatal(store.last_error);return
+			world.disable_particle_pool()
+			particle_resolution=resolution.apply(world)
 	epoch += 1
 	world.server_mode = true; world.camera_views.clear()
 	world.evolution.sandbox = true
@@ -132,6 +141,7 @@ func _physics_process(dt: float) -> void:
 	world.step(dt)
 	_recover_families(dt)
 	world.events = world.events.slice(maxi(0,world.events.size()-128))
+	for phase in world.profile_usec: tick_phase_peak_usec[phase]=maxi(tick_phase_peak_usec.get(phase,0),int(world.profile_usec[phase]))
 	tick_samples.append((Time.get_ticks_usec()-start)/1000.0)
 	if tick_samples.size()>600: tick_samples.pop_front()
 	if (Time.get_ticks_usec()-last_checkpoint_usec)/1000000.0>=save_interval: checkpoint()
@@ -260,12 +270,16 @@ func _view(peer: Dictionary,message: Dictionary) -> void:
 		if not item is float and not item is int or not is_finite(float(item)): return
 	if v[2]<=0 or v[3]<=0 or v[2]>2048 or v[3]>1280: return
 	var at:=Sim.Medium.wrap_position(Vector2(v[0],v[1]))
-	peer.view=Vector4(at.x,at.y,v[2],v[3])
-	peer.view_tick=world.revision
+	var next_view:=Vector4(at.x,at.y,v[2],v[3])
+	var changed: bool=peer.view!=next_view
+	var prior_detail: Vector2=peer.detail
+	peer.view=next_view
 	var detail=message.get("detail",[Sim.VIEW.x/.8/2,Sim.VIEW.y/.8/2])
 	if detail is Array and detail.size()==2 and (detail[0] is float or detail[0] is int) and (detail[1] is float or detail[1] is int):
 		if is_finite(float(detail[0])) and is_finite(float(detail[1])):
 			peer.detail=Vector2(maxf(v[2],clampf(detail[0],Sim.VIEW.x/.8/2,2048)),maxf(v[3],clampf(detail[1],Sim.VIEW.y/.8/2,1280)))
+	# A repeated camera heartbeat must not restart the warm-up gate.
+	if changed or peer.detail!=prior_detail: peer.view_tick=world.revision
 
 func _selected(account: Dictionary):
 	for cell in world.cells:
@@ -337,7 +351,7 @@ func checkpoint() -> bool:
 		gpu_tick=world.resident.gpu.reaction_tick
 	var overrides: Dictionary={world.get_instance_id():{"particles":world.particle_snapshots(),"pheromones":[],"particle_pool":false}}
 	var graph:=Codec.new().capture({"world":world,"accounts":accounts},overrides)
-	var result: bool=store.save({"world_id":world_id,"epoch":epoch,"tick":world.revision,"gpu_tick":gpu_tick,"stream_rng":stream_rng,"build":OS.get_environment("PRIMORDIA_BUILD_SHA"),"graph":graph})
+	var result: bool=store.save({"world_id":world_id,"epoch":epoch,"tick":world.revision,"gpu_tick":gpu_tick,"stream_rng":stream_rng,"particle_resolution_version":preload("res://scripts/network/particle_resolution.gd").VERSION,"particle_resolution":particle_resolution,"build":OS.get_environment("PRIMORDIA_BUILD_SHA"),"graph":graph})
 	checkpoint_total_ms=(Time.get_ticks_usec()-checkpoint_start)/1000.0
 	if result: last_checkpoint_usec=Time.get_ticks_usec()
 	return result
@@ -403,7 +417,9 @@ func _send(peer: Dictionary,value: Dictionary) -> void:
 	value.protocol=Protocol.VERSION
 	var bytes:=Protocol.pack(value)
 	if bytes.size()>Protocol.MAX_FRAME: skipped_frames+=1;return
-	if peer.socket.put_packet(bytes)==OK: sent_bytes+=bytes.size()
+	if peer.socket.put_packet(bytes)==OK:
+		sent_bytes+=bytes.size()
+		if value.get("kind","")=="snapshot" and not value.get("warming",false): snapshots_sent+=1
 
 func _write_metrics() -> void:
 	last_metrics_usec=Time.get_ticks_usec()
@@ -419,6 +435,18 @@ func _write_metrics() -> void:
 		"backend":"gpu" if world.resident!=null else "cpu","gpu":RenderingServer.get_video_adapter_name(),"build":OS.get_environment("PRIMORDIA_BUILD_SHA"),
 		"views":world.camera_views.size(),"peers":peers.size(),"packets":world.particle_count(),"cold_packets":world.resident.stored_count() if world.resident!=null else 0,"accounts":accounts.size(),"stored_packets":world.particle_count()+world.resident.stored_count() if world.resident!=null else world.particle_count(),
 		"sent_bytes":sent_bytes,"skipped_frames":skipped_frames,"publication_readback_bytes":world.resident.gpu._publication.bytes_read if world.resident!=null and world.resident.gpu._publication!=null else 0,"checkpoint_tick":store.last_saved_tick,"checkpoint_ms":checkpoint_total_ms,"checkpoint_write_ms":store.latency_ms,"checkpoint_error":store.last_error,"backend_error":startup_error}
+	metrics["particle_resolution"]=particle_resolution
+	metrics["particle_parcel_scale"]=world.Catalog.data().ecology.get("parcel_scale",1)
+	metrics["visible_particle_target"]=world.Catalog.data().ecology.visible_target
+	metrics["snapshots_sent"]=snapshots_sent
+	metrics["ready_views"]=peers.values().filter(func(peer):return peer.account!="" and peer.view!=null and peer.view_tick<world.revision).size()
+	metrics["publication_pending"]=not pending_frame.is_empty()
+	metrics["tick_phase_peak_ms"]={}
+	for phase in tick_phase_peak_usec: metrics.tick_phase_peak_ms[phase]=tick_phase_peak_usec[phase]/1000.0
+	tick_phase_peak_usec.clear()
+	if world.resident!=null and world.resident.streaming!=null:
+		metrics["stream_queue"]=world.resident.streaming.queue_depth
+		metrics["eviction_deferred"]=world.resident.streaming.eviction_deferred
 	if not samples.is_empty():
 		for pair in [["p50",.5],["p95",.95],["p99",.99]]: metrics["tick_ms_"+pair[0]]=samples[mini(samples.size()-1,int(samples.size()*pair[1]))]
 	var file:=FileAccess.open(store.directory.path_join("health.json.tmp"),FileAccess.WRITE)

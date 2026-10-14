@@ -104,7 +104,7 @@ func potential() -> float:
 	return total
 
 func _quantum(species: String) -> float:
-	return float(Catalog.data().species[species].get("quantum",0.2))
+	return float(Catalog.data().species[species].get("quantum",0.2))*float(Catalog.data().ecology.get("parcel_scale",1))
 
 func emit(species: String, quantity: float, at: Vector2, source: int = -1, compartment: int = -1, fuel: float = -1.0, spread: float = 0.0) -> void:
 	if quantity <= 0: return

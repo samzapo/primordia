@@ -937,12 +937,14 @@ func _photosynthesize(cell, dt: float) -> void:
 			cell.chemistry.photosynthesize(self,cell,organ,dt)
 
 func _seed_cell_products(cell) -> void:
-	var multiplier := 1 if OS.get_environment("PRIMORDIA_ECOLOGY") == "reference" else int(Catalog.data().ecology.seed_packets)
+	var reference := OS.get_environment("PRIMORDIA_ECOLOGY") == "reference"
+	var multiplier := 1 if reference else int(Catalog.data().ecology.seed_packets)
+	var parcel_scale := 1.0 if reference else float(Catalog.data().ecology.get("parcel_scale",1))
 	var food_count := (55 if habitat != 1 else 14)*multiplier
 	# Explicit pre-observation cell-derived inputs. No habitat spawner follows.
 	for i in (food_count+180*multiplier):
 		var kind := NUTRIENT if i < food_count else CARBON if i < food_count+60*multiplier else OXYGEN
-		var amount := 0.3 if kind != CARBON else 0.4
+		var amount: float = (0.3 if kind != CARBON else 0.4)*parcel_scale
 		var at: Vector2 = cell.position+Vector2.from_angle(rng.randf()*TAU)*(cell.radius+12+rng.randf()*160)
 		spawn_particle(kind,at,Vector2.ZERO,amount,cell.id)
 

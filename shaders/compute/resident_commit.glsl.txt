@@ -59,7 +59,7 @@ void main(){
    float amount=um.y;recycled=amount*.6;uv.w=0.;um.z=0.;um.y=amount*.6;vv.w=5.;vm.y=amount*.4;atomicAdd(stats[8],1u);event=true;
   }
   else if(uv.w==0.&&vv.w==4.){uv.w=2.;atomicAdd(stats[9],1u);event=true;}
-  else if(uv.w==vv.w&&(uv.w==0.||uv.w==1.||uv.w==2.||uv.w==5.)&&um.y+vm.y<=0.5&&um.y+vm.y>0.) {
+  else if(uv.w==vv.w&&(uv.w==0.||uv.w==1.||uv.w==2.||uv.w==5.)&&um.y+vm.y<=/*CATALOG_MERGE_LIMIT*/&&um.y+vm.y>0.) {
    float total=um.y+vm.y;uv.xy=mix(uv.xy,vv.xy,vm.y/total);um.y=total;um.z+=vm.z;vv.w=-1.;vm.y=0.;atomicAdd(stats[10],1u);event=true;
   }
 

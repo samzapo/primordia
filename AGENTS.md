@@ -189,3 +189,7 @@ Read docs/REVISION_44.md and docs/deployment.md. The authorized private service 
 ## October 14, 2026 — resident default
 
 Explicit owner direction: normal play now always uses the resident implementation. This supersedes older CPU-default launch instructions. Keep the browser as a WebGL presentation client, require a real hardware GPU for persistent deployment, and retain explicit CPU reference paths for correctness comparisons.
+
+## October 14, 2026 — multiplayer density reduction
+
+Explicit owner correction: lower the particle count to one tenth while bringing multiplayer into operation. The catalog now targets roughly 700 visible chemicals, seeds 3,760 external parcels and uses tenfold parcel quantities rather than deleting material. This supersedes the Revision 43 density increase. Keep the resident hardware GPU and particle-only chemistry. Trusted older checkpoints receive one guarded, conservative resolution conversion with an independently retained original generation; never perform that scan every tick or combine distinct chemical species, owners, pathway sources or compartments. Gameplay balance/objective tests remain held.
