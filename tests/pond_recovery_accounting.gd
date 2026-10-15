@@ -28,11 +28,11 @@ func run() -> void:
 	var identity: int=world.next_id;host._recover_families(.01)
 	check(world.next_id==identity and host.lineage_restarts==1,"Recovery cannot grant a second starter to an already living account")
 	check(var_to_bytes(Codec.new().capture(other))==stock,"A replacement never spends or mutates another living body")
-	# Lysis is the only exterior change; the introduction itself emits no food clouds.
+	# Lysis and explicit introductions retain separately identifiable physical stock.
 	check(var_to_bytes(world.particle_snapshots())!=exterior,"Fixture death releases its actual inventory before replacement")
 	var before_intro: PackedByteArray=var_to_bytes(world.particle_snapshots())
 	Population.introduce(world)
-	check(var_to_bytes(world.particle_snapshots())==before_intro,"A new cell introduces only its own starter inventory, not environmental food")
+	check(var_to_bytes(world.particle_snapshots())!=before_intro,"An explicit introduction includes its finite cell-derived food/gas cloud")
 	var payload={"world_id":"a".repeat(32),"epoch":5,"tick":123,"graph":Codec.new().capture({"world":world,"accounts":host.accounts})}
 	var directory: String=OS.get_environment("PRIMORDIA_RECOVERY_TEST_STATE")
 	check(directory!="","Infrastructure fixture requires an isolated output directory")

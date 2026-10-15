@@ -11,6 +11,12 @@ for script in network_state network_live; do
   ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
   grep -Eq 'NETWORK (LIVE|CORRECTNESS): [0-9]+ assertions, 0 failures' "$report_file"
 done
+"$godot_bin" --headless --path "$project_dir" --script tests/pond_nutrition.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"
+! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
+grep -Eq 'POND NUTRITION: [0-9]+ assertions, 0 failures' "$report_file"
+"$godot_bin" --headless --path "$project_dir" --script tests/death_network.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"
+! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
+grep -Eq 'NETWORK DEATHS: [0-9]+ assertions, 0 failures' "$report_file"
 "$godot_bin" --headless --path "$project_dir" --script tests/reproduction_accounting.gd 2>&1 | tee "$report_file"
 ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
 grep -Eq 'REPRODUCTION ACCOUNTING: [0-9]+ assertions, 0 failures' "$report_file"
@@ -44,6 +50,9 @@ if [[ "${1:-}" == gpu ]]; then
     xvfb-run -a -s '-screen 0 1280x720x24 -nolisten tcp' "$godot_bin" --path "$project_dir" --rendering-method "$renderer" --rendering-driver "$driver" --script tests/membrane_render_gpu.gd 2>&1 | tee "$report_file"
     ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
     grep -Eq 'MEMBRANE RENDER GPU: [0-9]+ assertions, 0 failures' "$report_file"
+    xvfb-run -a -s '-screen 0 1280x720x24 -nolisten tcp' "$godot_bin" --path "$project_dir" --rendering-method "$renderer" --rendering-driver "$driver" --script tests/death_render_gpu.gd 2>&1 | tee "$report_file"
+    ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
+    grep -Eq 'DEATH RENDER GPU: [0-9]+ assertions, 0 failures' "$report_file"
   done
   for scope in fixture full-world slow-observer recovery; do
     extra=()

@@ -42,7 +42,7 @@ static func run(check: Callable) -> void:
 	for i in 1200:
 		cell.age += DT
 		sim._metabolize(cell,DT)
-	check.call(cell.energy == 0 and cell.health < 100 and cell.processed == processed,"Without real fuel the revised economy still exhausts ATP")
+	check.call(cell.energy == 0 and cell.starvation_seconds>10 and cell.health==100 and cell.processed == processed,"Without fuel ATP exhausts, but a short shortage cannot kill a cell")
 	# One unit of fueled food retains .7 tissue and credits 2.25 numeric ATP.
 	var fresh=Cell.new();fresh.energy=0;fresh.substrate=1;fresh.oxygen=1
 	var initial_biomass: float=fresh.biomass

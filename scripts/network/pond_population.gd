@@ -3,6 +3,7 @@ extends RefCounted
 const Sim=preload("res://scripts/simulation.gd")
 const MIN_LIVING := 15
 const RESTART_EXIT := 75
+const FOOD_SUPPLY_VERSION := 1
 
 static func living(world) -> Array:
 	return world.cells.filter(func(cell):return not cell.dead and cell.health>0)
@@ -31,7 +32,17 @@ static func introduce(world,player: bool=false):
 	cell.sense_clock=(cell.id%9)/60.0
 	world.next_id+=1
 	world.cells.append(cell)
+	world._seed_cell_products(cell)
 	return cell
+
+static func enrich_existing(world) -> Dictionary:
+	# Called once by a versioned, archived checkpoint upgrade, before GPU ownership.
+	var report: Dictionary={"version":FOOD_SUPPLY_VERSION,"cells":0,"packets":0,"nutrient":0.0,"carbon":0.0,"oxygen":0.0}
+	for cell in living(world):
+		var stock: Dictionary=world._seed_cell_products(cell)
+		report.cells+=1
+		for key in ["packets","nutrient","carbon","oxygen"]:report[key]+=stock[key]
+	return report
 
 static func enroll(world,account: Dictionary,cell,keep_history: bool=true) -> void:
 	if keep_history and account.has("lineage"):

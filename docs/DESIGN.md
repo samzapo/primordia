@@ -424,3 +424,34 @@ The persistent pond now maintains a floor of fifteen living cells. Exhausted acc
 ## Revision 51 — restored bounded biology and division progression
 
 The owner restores photosynthesis, local oxygen-dependent respiration/fermentation and emergency biomass fuel within the bounded food-vacuole model. ATP and biomass remain numbers. Paid division grants one AP and has a ten percent chance to offer a free mutation; hourly calendar-derived light/current conditions serve the persistent pond. Restore visual contractile vacuoles, shaped ATP/repair feedback and actual-secretion gland bounce. Microtubules are procedural anatomy with faint lines and no editing. Mobile cancellation uses the held organ's top-left circular icon; descriptions occupy a bottom strip and Pause opens settings while freezing only that view. See [Revision 51](REVISION_51.md).
+
+## Persistent pond survival — October 15, 2026
+
+The owner wants players to retain their actual cells across server restarts and
+to lose them to starvation only after a sustained shortage. Service restarts
+restore saved cells, anatomy, age, reserves, lineage, account identity and pond
+time; host downtime does not consume resources. The nutrition upgrade archives
+the predecessor and adds one audited physical food/carbon/oxygen cloud around
+each living cell once, without changing any body or resetting the pond.
+
+Initial cells and explicit minimum-population/new-lineage introductions carry
+the same finite cell-derived exterior inventory. Nutrient parcels contain three
+times the previous food quantity at the same packet count. Paid division,
+login, camera changes and ordinary service restarts do not add these clouds.
+Food/carbon decay is 0.00005/s and oxygen decay is 0.0002/s; other decay rules
+remain unchanged. Transport, ingestion, local photosynthesis/respiration and
+numeric ATP/biomass accounting remain authoritative.
+
+A cell first reclaims uncommitted daughter ATP and mobilizable daughter tissue
+before treating itself as starved. Zero ATP accumulates a saved starvation
+clock; the first 300 seconds do no starvation damage, then health declines at
+0.1/s. Positive ATP reduces that clock four times as quickly as it accumulated.
+These are forgiving game timings, not measured cell starvation kinetics.
+Toxins, combat and membrane damage retain their normal consequences.
+
+Multiplayer snapshots carry bounded recent membrane-rupture facts and the dead
+body ID. Each session starts at the current death serial. Deaths of the
+previously selected/followed body briefly frame the death site before returning
+to the replacement; nearby deaths animate without taking over the camera.
+Local pause freezes existing fragments and resume does not replay paused-world
+deaths. Presentation neither creates lysis material nor delays succession.

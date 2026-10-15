@@ -99,7 +99,7 @@ static func nutrition_summary(world: Dictionary,objects: Array) -> Dictionary:
 			var delta: Vector2=packet.get("p",Vector2.ZERO)-at
 			delta=Vector2(wrapf(delta.x,-2048,2048),wrapf(delta.y,-1280,1280))
 			if delta.length()<=300:near+=minf(float(packet.get("amount",0)),float(packet.get("capacity",packet.get("amount",0))))
-		bodies.append({"id":body.get("id",-1),"age":body.get("age",0),"health":body.get("health",0),"ATP":body.get("energy",0),"biomass":body.get("biomass",0),"stocks":stock,"food_fuel":fuel,"nearby_fueled_food":near})
+		bodies.append({"id":body.get("id",-1),"age":body.get("age",0),"health":body.get("health",0),"ATP":body.get("energy",0),"biomass":body.get("biomass",0),"reserved_ATP":body.get("brood_energy",0),"reserved_biomass":body.get("brood_mass",0),"starvation_seconds":body.get("starvation_seconds",0),"stocks":stock,"food_fuel":fuel,"nearby_fueled_food":near})
 	var causes: Dictionary={};var lifetimes: Array=[]
 	for ref in world.get("family_ledgers",{}).get("$array",[]).slice(-64):
 		for record in fields(ref,objects).get("records",{}).get("$array",[]):

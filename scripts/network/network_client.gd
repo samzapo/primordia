@@ -139,7 +139,10 @@ func _toggle_user_pause() -> void:
 	else:
 		settings_panel.hide()
 		var latest:=paused_snapshot;paused_snapshot={}
-		if not latest.is_empty():_snapshot(latest)
+		if not latest.is_empty():
+			# Resume at the live world; do not replay deaths that happened while paused.
+			latest.deaths=[]
+			_snapshot(latest)
 		for cell in world.cells:cell.previous_position=cell.position;cell.previous_angle=cell.angle
 		for packet in world.particles:packet.previous=packet.p;packet.previous_angle=packet.angle
 		if network_particles!=null:network_particles.prepare(world.particles,world.cells)
@@ -289,6 +292,9 @@ func _poll_network() -> void:
 
 func _welcome(message: Dictionary) -> void:
 	camera_initialized=false;cells_by_id.clear();packet_ids.clear();received_usec=0
+	world.death_bursts.clear();world.death_serial=message.get("death_serial",0)
+	death_world=world;death_seen=world.death_serial;death_focus_age=2.0
+	death_view.reset(world,world.death_serial)
 	token=message.token;epoch=message.epoch;command_sequence=message.sequence;edit_revision=message.edit
 	world.seed_value=message.seed;world.habitat_geometry=Codec.new().restore(message.habitat)
 	habitat_view.configure(world.habitat_geometry)
@@ -352,6 +358,7 @@ func _snapshot(message: Dictionary) -> void:
 	if world.player.dead and can_follow():
 		notice="Your lineage has ended · following a living cell for observation.";notice_timer=12
 	world.time=message.time;world.revision=message.tick
+	world.death_bursts.assign(message.get("deaths",[]));world.death_serial=message.get("death_serial",world.death_serial)
 	world.environment=message.get("environment",{})
 	world.fluid.velocity=message.flow;world.acidity.values=message.acid
 	world.sound_events=message.sounds;world.sound_sequence=message.sound_sequence;world.reaction_sparks=message.sparks

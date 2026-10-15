@@ -32,7 +32,9 @@ func run() -> void:
 	check(parent.brood_mass==tissue and parent.brood_energy==stored,"An empty parent cannot fund additional reserves")
 	prepare(sim,parent);mass=material(sim);energy=adenylate_energy(sim);parent.biomass=0;mass=material(sim)
 	var oxygen: float=parent.oxygen
+	var exterior: int=sim.particle_count()
 	sim._step_reproduction()
+	check(sim.particle_count()==exterior,"Paid cell division cannot add an introduction food cloud")
 	check(sim.cells.size()==2 and sim.player==parent,"Existing fully paid reserves commit without another investment or selection change")
 	check(absf(material(sim)-mass)<.00001 and absf(adenylate_energy(sim)-(energy-20))<.00001 and is_equal_approx(parent.oxygen+sim.cells[-1].oxygen,oxygen),"Automatic paid division conserves tissue/oxygen and spends the existing twenty ATP division cost")
 	var identity: int=sim.next_id;sim._step_reproduction()

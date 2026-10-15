@@ -8,6 +8,10 @@ var bursts: Array[Dictionary] = []
 var camera := Vector2.ZERO
 var zoom := 1.0
 
+func reset(sim, serial: int=0) -> void:
+	source=sim;seen=serial;bursts.clear()
+	queue_redraw()
+
 func sync(sim, at: Vector2, scale: float, dt: float) -> void:
 	if source != sim:
 		source = sim

@@ -35,6 +35,7 @@ var tick_phase_count:=0
 var snapshots_sent := 0
 var chemistry_migration: Dictionary={}
 var particle_resolution: Dictionary = {}
+var food_supply: Dictionary = {}
 var skipped_frames := 0
 var sent_bytes := 0
 var restored_gpu_tick := 0
@@ -103,6 +104,7 @@ func _ready() -> void:
 		restored_stream_rng = saved.get("stream_rng",PackedInt64Array())
 		pond_restarts=int(saved.get("pond_restarts",0));previous_world_id=saved.get("previous_world_id","");pond_archive=saved.get("pond_archive","")
 		introduced_cells=int(saved.get("introduced_cells",0));lineage_restarts=int(saved.get("lineage_restarts",0))
+		food_supply=saved.get("food_supply",{})
 		particle_resolution=saved.get("particle_resolution",{})
 		var resolution=preload("res://scripts/network/particle_resolution.gd")
 		if saved.get("particle_resolution_version",0)<resolution.VERSION:
@@ -116,8 +118,14 @@ func _ready() -> void:
 			if replacement.has("error"):_fatal(replacement.error);return
 			previous_world_id=world_id;world_id=Crypto.new().generate_random_bytes(16).hex_encode()
 			world=replacement.world;pond_restarts+=1;introduced_cells=0;lineage_restarts=0
-			restored_gpu_tick=0;restored_stream_rng=PackedInt64Array();particle_resolution={}
+			restored_gpu_tick=0;restored_stream_rng=PackedInt64Array();particle_resolution={};food_supply={}
 			print("POND_RESTART previous=%s current=%s archive=%s" % [previous_world_id,world_id,pond_archive])
+		elif saved.get("food_supply_version",0)<Population.FOOD_SUPPLY_VERSION:
+			var food_archive:=store.archive_pond(saved)
+			if food_archive=="":_fatal(store.last_error);return
+			world.disable_particle_pool()
+			food_supply=Population.enrich_existing(world);food_supply.archive=food_archive
+			print("FOOD_SUPPLY ",JSON.stringify(food_supply))
 	epoch += 1
 	world.pending_replacements.clear()
 	introduced_cells+=Population.replenish(world)
@@ -330,13 +338,16 @@ func _hello(id: int,message: Dictionary) -> void:
 	peer.snapshot_ack=message.get("snapshot_ack",false)==true;peer.compact_cytoplasm=message.get("compact_cytoplasm",false)==true
 	peer.cytoplasm_version=2 if message.get("cytoplasm_version",1)==2 else 1
 	peer.frame_serial=0;peer.awaiting_snapshot=0
+	# A resumed session starts here; old checkpointed ruptures are never replayed.
+	peer.death_after=world.death_serial
 	var account: Dictionary=accounts[key]
 	var cell=_selected(account)
 	var focus=_focus(peer)
+	peer.followed_cell=focus.id if focus!=null else cell.id;peer.selected_cell=cell.id
 	var center: Vector2=focus.position if focus!=null else cell.position
 	peer.view=Vector4(center.x,center.y,Sim.VIEW.x/.8/2,Sim.VIEW.y/.8/2)
 	peer.view_tick=world.revision
-	_send(peer,{"kind":"welcome","token":token,"world_id":world_id,"epoch":epoch,"sequence":account.sequence,"edit":account.edit,"seed":world.seed_value,"habitat":Codec.new().capture(world.habitat_geometry),"cell":cell.id})
+	_send(peer,{"kind":"welcome","token":token,"world_id":world_id,"epoch":epoch,"sequence":account.sequence,"edit":account.edit,"seed":world.seed_value,"habitat":Codec.new().capture(world.habitat_geometry),"cell":cell.id,"death_serial":world.death_serial})
 	var initial:=_frame(peer)
 	initial.warming=true
 	_send(peer,initial)
@@ -463,7 +474,7 @@ func checkpoint() -> bool:
 		gpu_tick=world.resident.gpu.reaction_tick
 	var overrides: Dictionary={world.get_instance_id():{"particles":world.particle_snapshots(),"pheromones":[],"particle_pool":false}}
 	var graph:=Codec.new().capture({"world":world,"accounts":accounts},overrides)
-	var result: bool=store.save({"world_id":world_id,"epoch":epoch,"tick":world.revision,"gpu_tick":gpu_tick,"stream_rng":stream_rng,"food_vacuole_version":1,"biochemistry_version":1,"chemistry_migration":chemistry_migration,"particle_resolution_version":preload("res://scripts/network/particle_resolution.gd").VERSION,"particle_resolution":particle_resolution,"build":OS.get_environment("PRIMORDIA_BUILD_SHA"),"pond_restarts":pond_restarts,"previous_world_id":previous_world_id,"pond_archive":pond_archive,"introduced_cells":introduced_cells,"lineage_restarts":lineage_restarts,"graph":graph})
+	var result: bool=store.save({"world_id":world_id,"epoch":epoch,"tick":world.revision,"gpu_tick":gpu_tick,"stream_rng":stream_rng,"food_supply_version":Population.FOOD_SUPPLY_VERSION,"food_supply":food_supply,"food_vacuole_version":1,"biochemistry_version":1,"chemistry_migration":chemistry_migration,"particle_resolution_version":preload("res://scripts/network/particle_resolution.gd").VERSION,"particle_resolution":particle_resolution,"build":OS.get_environment("PRIMORDIA_BUILD_SHA"),"pond_restarts":pond_restarts,"previous_world_id":previous_world_id,"pond_archive":pond_archive,"introduced_cells":introduced_cells,"lineage_restarts":lineage_restarts,"graph":graph})
 	checkpoint_total_ms=(Time.get_ticks_usec()-checkpoint_start)/1000.0
 	if result: last_checkpoint_usec=Time.get_ticks_usec()
 	return result
@@ -519,7 +530,21 @@ func _frame(peer: Dictionary) -> Dictionary:
 	return {"kind":"snapshot","world_id":world_id,"epoch":epoch,"tick":world.revision,"time":world.time,"edit":account.edit,"sequence":account.sequence,
 		"family_recovery":_family_recovery(account),"graph":Codec.new().capture({"cells":cells,"player":_selected(account),"focus":_focus(peer),"lineage":account.lineage,"evolution":account.evolution},internal_overrides,peer.get("compact_cytoplasm",false),peer.get("cytoplasm_version",1)),
 		"environment":world.environment.duplicate(true),"particles":PackedByteArray(),"flow":world.fluid.velocity.duplicate(),"acid":world.acidity.values.duplicate(),
-		"sounds":world.sound_events.duplicate(true),"sound_sequence":world.sound_sequence,"sparks":world.reaction_sparks.duplicate(true),"perception":peer.get("perception","exteroception"),"warming":false}
+		"sounds":world.sound_events.duplicate(true),"sound_sequence":world.sound_sequence,"sparks":world.reaction_sparks.duplicate(true),"perception":peer.get("perception","exteroception"),"warming":false,
+		"death_serial":world.death_serial,"deaths":_death_events(peer),"selected_cell":_selected(account).id,"followed_cell":focus.id if focus!=null else -1}
+
+func _death_events(peer: Dictionary) -> Array:
+	var result: Array=[]
+	var view: Vector4=peer.view
+	for event in world.death_bursts:
+		if event.serial<=peer.get("death_after",world.death_serial) or world.time-event.time>1.8:continue
+		var personal: bool=event.get("id",-1) in [peer.get("selected_cell",-2),peer.get("followed_cell",-2)]
+		if not personal and Sim.Medium.visibility(event.at,Vector2(view.x,view.y),Vector2(view.z,view.w)+Vector2.ONE*event.radius*4)<=0:continue
+		var fact: Dictionary=event.duplicate(true)
+		# The managed world.player is not the same body for every account.
+		fact.player=personal
+		result.append(fact)
+	return result
 
 func _send_snapshot(peer: Dictionary,records: PackedByteArray,frame: Dictionary={}) -> void:
 	if peer.view==null or peer.socket.get_ready_state()!=WebSocketPeer.STATE_OPEN or peer.get("awaiting_snapshot",0)>0: return
@@ -534,6 +559,7 @@ func _send_snapshot(peer: Dictionary,records: PackedByteArray,frame: Dictionary=
 	frame.serial=serial
 	if _send(peer,frame):
 		peer.frame_serial=serial
+		peer.death_after=maxi(peer.get("death_after",0),frame.death_serial);peer.selected_cell=frame.selected_cell;peer.followed_cell=frame.followed_cell
 		if peer.get("snapshot_ack",false):peer.awaiting_snapshot=serial
 
 func _send(peer: Dictionary,value: Dictionary) -> bool:
@@ -571,6 +597,8 @@ func _write_metrics() -> void:
 	metrics["automatic_lineage_restart"]=true;metrics["automatic_pond_restart"]=true
 	metrics["pond_restarts"]=pond_restarts;metrics["previous_world_id"]=previous_world_id;metrics["pond_archive"]=pond_archive
 	metrics["introduced_cells"]=introduced_cells;metrics["lineage_restarts"]=lineage_restarts
+	metrics["food_supply_version"]=Population.FOOD_SUPPLY_VERSION
+	metrics["food_supply"]=food_supply
 	metrics["food_vacuole_version"]=1
 	metrics["biochemistry_version"]=1
 	metrics["internal_packet_limit_per_cell"]=world.Cell.Chemistry.MAX_PACKETS

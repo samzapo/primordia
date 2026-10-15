@@ -84,7 +84,7 @@ func decay_and_inventory() -> void:
 		if kind==1: initial_oxygen+=.01
 		else: initial_material+=.01
 		var random:=Fixture.hash32(i^Fixture.hash32(0)^Fixture.hash32(1)^seed)
-		if ((random>>8)+.5)/16777216.0<1-exp(-[.003,.008,.1][i%3]*dt):
+		if ((random>>8)+.5)/16777216.0<1-exp(-preload("res://scripts/chemistry_catalog.gd").decay(kind)*dt):
 			expected_decay+=1;expected_alive-=1
 			if kind==1: oxygen_loss+=.01
 			else: expected_loss+=.01

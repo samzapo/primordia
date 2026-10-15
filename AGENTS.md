@@ -219,3 +219,19 @@ The owner re-enables gameplay and balance tests, including objectives, supersedi
 ## Revision 51 — owner restored features
 
 Read docs/REVISION_51.md. The latest owner request restores bounded oxygen/carbon particle respiration, fermentation, emergency surplus-biomass fuel and photosynthesis; this supersedes the retired-path restrictions only for this small loop. ATP/biomass remain numerical, with shaped cosmetic transaction feedback. Preserve ten-second food/waste carriers, resident visible ownership and real-time budgets. Successful paid division awards 1 AP and independently offers a free mutation with 10% probability. Hourly calendar conditions replace persistent tide progression. Microtubules are procedural-only with faint lines and no handles; reject old edit commands. Mobile selected-icon cancel, bottom descriptions and Pause/settings are required. Existing pond, account graph, keys and enabled gameplay/balance/objective tests remain intact.
+
+## October 15, 2026 — retain cells and forgive transient starvation
+
+Explicit owner direction: preserve players' actual cells across service restarts;
+they are attached to their cells. Do not reset the pond to repair nutrition.
+Read the Persistent pond survival section of docs/DESIGN.md. The archived,
+versioned food-supply upgrade only adds audited exterior particles once. Explicit
+new-cell introductions receive cell-derived stock, while paid divisions/login/
+camera changes/restarts grant none. Keep the richer food quantities at the same
+packet count and longer core food/carbon/oxygen lifetimes across backends.
+Reclaim uncommitted daughter reserves before starvation and preserve the saved
+five-minute starvation grace/gradual damage clock. Keep normal physical feeding,
+photosynthesis, finite accounting and enabled gameplay/balance tests.
+Browser snapshots must deliver bounded recent death facts using the correct
+account's previously selected/followed body, without replay on reconnect or
+resume. Succession and lysis stay immediate and do not wait for animation.

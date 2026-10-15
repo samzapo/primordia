@@ -285,7 +285,7 @@ func _process(dt: float) -> void:
 			perf_wall_seconds = 0;perf_sim_seconds = 0
 	var process_start := Time.get_ticks_usec() if frame_trace != null else 0
 	if not user_paused:ui_time += dt
-	death_frame_dt = dt if not settings_panel.visible and not build_open else 0.0
+	death_frame_dt = dt if not user_paused and not settings_panel.visible and not build_open else 0.0
 	death_focus_age += death_frame_dt
 	if focus_animating:
 		camera_zoom = lerpf(camera_zoom,manual_zoom,1-exp(-dt*10))

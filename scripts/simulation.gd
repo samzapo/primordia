@@ -955,17 +955,21 @@ func _photosynthesize(cell, dt: float) -> void:
 		if organ.kind == "photosynthesis" and organ.hp > 0:
 			cell.chemistry.photosynthesize(self,cell,organ,dt)
 
-func _seed_cell_products(cell) -> void:
+func _seed_cell_products(cell) -> Dictionary:
 	var reference := OS.get_environment("PRIMORDIA_ECOLOGY") == "reference"
 	var multiplier := 1 if reference else int(Catalog.data().ecology.seed_packets)
 	var parcel_scale := 1.0 if reference else float(Catalog.data().ecology.get("parcel_scale",1))
 	var food_count := (55 if habitat != 1 else 14)*multiplier
-	# Explicit pre-observation cell-derived inputs. No habitat spawner follows.
+	var report: Dictionary={"packets":0,"nutrient":0.0,"carbon":0.0,"oxygen":0.0}
+	# Explicit cell introduction stock. Paid divisions never call this source.
 	for i in (food_count+180*multiplier):
 		var kind := NUTRIENT if i < food_count else CARBON if i < food_count+60*multiplier else OXYGEN
 		var amount: float = (0.3 if kind != CARBON else 0.4)*parcel_scale
+		if kind==NUTRIENT and not reference:amount*=float(Catalog.data().ecology.seed_food_scale)
 		var at: Vector2 = cell.position+Vector2.from_angle(rng.randf()*TAU)*(cell.radius+12+rng.randf()*160)
 		spawn_particle(kind,at,Vector2.ZERO,amount,cell.id)
+		report.packets+=1;report[{NUTRIENT:"nutrient",CARBON:"carbon",OXYGEN:"oxygen"}[kind]]+=amount
+	return report
 
 func _suction(dt: float) -> void:
 	for cell in cells:
@@ -1236,6 +1240,12 @@ func _step_internal_chemistry(dt: float) -> void:
 
 func _metabolize(cell, dt: float) -> void:
 	cell.reserve_activity = maxf(0,cell.reserve_activity-dt)
+	# Uncommitted daughter reserves belong to this body until division commits.
+	if cell.energy<10 and cell.brood_energy>0:
+		cell.chemistry.reserve_atp(minf(10-cell.energy,cell.brood_energy),false)
+	if cell.energy<10 and cell.substrate<1 and cell.biomass<12 and cell.brood_mass>0:
+		var reclaimed: float=minf(12-cell.biomass,cell.brood_mass)
+		cell.brood_mass-=reclaimed;cell.biomass+=reclaimed
 	if cell.energy<10 and cell.substrate<1:
 		var mobilized: float=minf(maxf(0,cell.biomass-8),dt*.3*cell.growth_scale())
 		if mobilized>0:
@@ -1247,8 +1257,13 @@ func _metabolize(cell, dt: float) -> void:
 	cell.spend_energy(dt*Cell.BASAL_UPKEEP*cell.growth_scale())
 	for organ in cell.organs: cell.spend_energy(dt*organ.scale*organ.scale*Genes.factor(organ,"upkeep",0.0),organ)
 	if cell.energy <= 0:
-		cell.health = maxf(0,cell.health-dt*2)
-		cell.death_hint = "ATP exhaustion; feeding and repair could not sustain this body"
+		var before: float=cell.starvation_seconds
+		cell.starvation_seconds+=dt
+		var starving_dt: float=maxf(0,cell.starvation_seconds-Cell.STARVATION_GRACE)-maxf(0,before-Cell.STARVATION_GRACE)
+		cell.health = maxf(0,cell.health-starving_dt*Cell.STARVATION_DAMAGE)
+		cell.death_hint = "Prolonged starvation; no usable food or ATP reserves remained"
+	else:
+		cell.starvation_seconds=maxf(0,cell.starvation_seconds-dt*4)
 
 func _secretion_needed(cell, organ: Dictionary, kind: int) -> bool:
 	if kind == BUFFER: return acidity.sample(cell.organ_position(organ)) > 0.02 or cell.acid_stress > 0.03
@@ -1516,7 +1531,7 @@ func _die(cell, transferred: float = 0.0) -> void:
 		for ledger in family_ledgers: ledger.died(cell,self)
 	elif evolution.enabled: lineage.died(cell,self)
 	death_serial += 1
-	death_bursts.append({"serial":death_serial,"time":time,"at":cell.position,"radius":cell.radius,
+	death_bursts.append({"serial":death_serial,"id":cell.id,"time":time,"at":cell.position,"radius":cell.radius,
 		"angle":cell.angle,"outline":cell.membrane.outline(),"lineage":cell.lineage_id(),"player":cell == player})
 	if death_bursts.size() > 32: death_bursts.pop_front()
 	cell.chemistry.ensure_cpu()

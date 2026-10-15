@@ -148,6 +148,7 @@ func run() -> void:
 		check(account.lineage.dormant.is_empty(),"Replacement fixture has no prepaid backup")
 		host.world._die(host._selected(account))
 		check(await until(func():return account.selected!=ended and not account.current.dead),"A disconnected-independent replacement reaches the retained live account")
+		check(await until(func():return messages[0].any(func(frame):return frame.get("deaths",[]).any(func(event):return event.get("id",-1)==ended and event.player))),"Real WebSocket delivers the selected body's rupture after automatic succession")
 		check(host.accounts.has(welcome0.token.sha256_text()) and account.sequence==1 and account.receipts.has(1) and account.root!=ended,"Replacement retains the session and paid receipt while switching lineage")
 		camera_reports[0].perception="interoception"
 		camera_reports[0].rect=[account.current.position.x,account.current.position.y,Sim.VIEW.x/.8/2,Sim.VIEW.y/.8/2]

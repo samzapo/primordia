@@ -121,7 +121,7 @@ func run() -> void:
 	check(coarse.rng.state==state,"resolution conversion draws no simulation randomness")
 	var seeded=Sim.new(81)
 	check(seeded.particle_count()==3760 and seeded.Catalog.data().ecology.visible_target==700,"new worlds use one tenth of the former external packet population")
-	check(is_equal_approx(seeded.particles[0].amount,3),"initial parcel coarsening retains the previously funded starting quantity")
+	check(is_equal_approx(seeded.particles[0].amount,9),"initial stock carries three times the food at unchanged external packet count")
 	var prior_ecology:=OS.get_environment("PRIMORDIA_ECOLOGY")
 	OS.set_environment("PRIMORDIA_ECOLOGY","reference")
 	var reference_world=Sim.new(81)

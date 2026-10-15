@@ -159,7 +159,11 @@ static func _starvation(check: Callable) -> void:
 	cell.health = 1
 	sim.time = 1
 	sim.offscreen_ecology.advance(sim,cell,1)
-	check.call(cell.dead,"Offscreen cells can die from ordinary energy starvation")
+	check.call(not cell.dead and cell.health==1,"A brief offscreen fuel shortage cannot kill a cell")
+	cell.starvation_seconds=Sim.Cell.STARVATION_GRACE
+	sim.time+=12
+	sim.offscreen_ecology.advance(sim,cell,12)
+	check.call(cell.dead,"Prolonged severe offscreen starvation still releases the cell through ordinary lysis")
 
 static func _chemistry(check: Callable) -> void:
 	var sim = fixture()

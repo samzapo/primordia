@@ -444,3 +444,13 @@ The previously cited Paramecium oral/digestive-vacuole observations motivate ret
 ## Revision 51 modeling scope
 
 The existing microbial growth/respiration, oxygenic photosynthesis/phototaxis and contractile-vacuole sources above motivate the restored small loop. Its oxygen contact radius, carbon/food/tissue fractions, ATP yields, emergency biomass floor, division AP/mutation probability and hourly UTC weather are explicit game abstractions. Contractile vacuoles remain decorative anatomy; square-root ATP marks illustrate numerical transactions and do not create physical ATP stocks or molecular transport. The sampled/inherited tension network is a generic cytoskeletal abstraction and is no longer editable by the player.
+
+### Persistent-pond starvation timing (October 15, 2026)
+
+The existing microbial maintenance, respiration and emergency-biomass sources
+motivate needing fuel and using stored material during scarcity. Reclaiming an
+uncommitted game reproduction allocation is an accounting/design choice, not a
+new biological pathway. The five-minute grace, gradual damage, recovery clock,
+richer introduction parcels and longer environmental food/carbon/oxygen
+lifetimes are explicit playability choices; no cited experiment establishes
+these values. Actual physical intake and finite material/fuel costs remain.

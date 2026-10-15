@@ -6,7 +6,7 @@
       "key": "nutrient",
       "name": "Nutrient",
       "radius": 4,
-      "decay": 0.003,
+      "decay": 5e-05,
       "color": "91f04c"
     },
     {
@@ -14,7 +14,7 @@
       "key": "oxygen",
       "name": "Oxygen",
       "radius": 2.5,
-      "decay": 0.008,
+      "decay": 0.0002,
       "color": "22d7f2"
     },
     {
@@ -46,7 +46,7 @@
       "key": "carbon",
       "name": "Carbon",
       "radius": 3,
-      "decay": 0.001,
+      "decay": 5e-05,
       "color": "f4a755"
     },
     {
@@ -218,7 +218,8 @@
     "carbon_capacity": 30,
     "visible_target": 700,
     "parcel_scale": 10,
-    "internal_parcel_scale": 10
+    "internal_parcel_scale": 10,
+    "seed_food_scale": 3
   },
   "species": {
     "glucose": {

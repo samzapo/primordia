@@ -26,6 +26,8 @@ const CILIA_FLOW := 52.0
 const SECRETION_COST := 0.10
 const AEROBIC_ATP := 2.25
 const FERMENT_ATP := 1.0
+const STARVATION_GRACE := 300.0
+const STARVATION_DAMAGE := 0.1
 # In this 2D habitat, enclosed area is the represented cytoplasmic volume.
 const TISSUE_AREA := Membrane.COUNT*0.5*sin(TAU/Membrane.COUNT)*47.0*47.0/78.0
 const ATP_TURNOVER := 0.002
@@ -110,6 +112,7 @@ var eaten := 0.0
 var foreign_intake := 0.0
 var reserve_used := 0.0
 var reserve_activity := 0.0
+var starvation_seconds := 0.0
 var fermented := 0.0
 var fermentation_activity := 0.0
 var acid_stress := 0.0
