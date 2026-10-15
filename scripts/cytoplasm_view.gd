@@ -16,9 +16,9 @@ func _ready() -> void:
 static var cached_atlas: Texture2D
 static func atlas() -> Texture2D:
 	if cached_atlas!=null:return cached_atlas
-	var image:=Image.create(192,96,false,Image.FORMAT_RGBA8)
-	for j in 2:
-		var glyph: Image=preload("res://scripts/particle_art.gd").texture(0 if j==0 else 2).get_image()
+	var image:=Image.create(384,96,false,Image.FORMAT_RGBA8)
+	for j in 4:
+		var glyph: Image=preload("res://scripts/particle_art.gd").texture([0,2,1,5][j]).get_image()
 		glyph.convert(Image.FORMAT_RGBA8);image.blit_rect(glyph,Rect2i(0,0,96,96),Vector2i(j*96,0))
 	image.generate_mipmaps();cached_atlas=ImageTexture.create_from_image(image)
 	return cached_atlas
@@ -52,16 +52,17 @@ func sync(chem,alpha: float,mask: Texture2D,extent: float) -> void:
 		var packet: Dictionary=carriers[i];var origin: Dictionary=chem.render_origins.get(packet.id,{})
 		var previous: Vector2=origin.get("p",packet.p)
 		var at: Vector2=previous.lerp(packet.p,alpha)
-		var angle:=0.0 # A spherical carrier has no physical angular state; illustrations stay in the cell frame.
+		var gas: bool=packet.species in ["oxygen","carbon"]
+		var angle: float=lerp_angle(origin.get("angle",packet.angle),packet.angle,alpha) if gas else 0.0
 		var radius: float=Visuals.internal_particle_radius(packet)
 		var co:=cos(angle)*radius;var si:=sin(angle)*radius;var index:=i*16
 		packet_buffer[index]=co;packet_buffer[index+1]=-si;packet_buffer[index+3]=at.x;packet_buffer[index+4]=si;packet_buffer[index+5]=co;packet_buffer[index+7]=at.y
 		var food:=0.0;var total:=0.0
 		for stock in chem.particles:
-			if stock.compartment!=packet.compartment:continue
+			if stock.compartment!=packet.compartment or stock.species not in ["food","waste"]:continue
 			total+=stock.amount
 			if stock.species=="food":food+=stock.amount
 		packet_buffer[index+8]=1;packet_buffer[index+9]=1;packet_buffer[index+10]=1;packet_buffer[index+11]=1
-		packet_buffer[index+12]=food/maxf(.0000001,total)
+		packet_buffer[index+12]=(-1 if packet.species=="oxygen" else -2) if gas else food/maxf(.0000001,total)
 		packet_buffer[index+13]=at.x;packet_buffer[index+14]=at.y;packet_buffer[index+15]=clampf(ceilf(total/.3),1,7)+clampf(sqrt(total/maxf(1,ceilf(minf(7,total/.3)))/.3),.8,1.7)*.5
 	multimesh.buffer=packet_buffer

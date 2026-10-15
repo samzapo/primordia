@@ -44,6 +44,7 @@ static func enroll(world,account: Dictionary,cell,keep_history: bool=true) -> vo
 	else:record.state="active"
 	var evolution=Sim.Evolution.new(world.seed_value^cell.id);evolution.sandbox=true
 	account.root=cell.lineage_id();account.selected=cell.id;account.current=cell
+	ledger.progression=evolution
 	account.lineage=ledger;account.evolution=evolution;account.edit=int(account.get("edit",0))+1
 	account.erase("restart_at")
 	cell.role="player"

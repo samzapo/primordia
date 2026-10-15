@@ -148,15 +148,15 @@ func _test_metabolism() -> void:
 		preload("res://tests/test_policy.gd").skip("legacy metabolic yields")
 		return
 	var sim=isolated();var cell=sim.player
-	cell.substrate=1;cell.energy=10
+	cell.substrate=1;cell.energy=60;cell.oxygen=1
 	var mass: float=cell.organic_mass();var biomass: float=cell.biomass;var processed: float=cell.processed
-	for i in 10:sim._metabolize(cell,1)
+	sim._metabolize(cell,10)
 	expect(is_zero_approx(cell.substrate) and is_equal_approx(cell.processed-processed,1),"Direct digestion processes finite food over its residence interval")
 	expect(is_equal_approx(cell.biomass-biomass,.7),"Food-vacuole digestion retains the current tissue fraction")
 	expect(is_equal_approx(cell.organic_mass(),mass),"Direct digestion retains tissue and physical waste without losing material")
 	processed=cell.processed;cell.biomass=8
 	sim._metabolize(cell,1)
-	expect(cell.processed==processed,"Construction biomass is never mobilized into free food")
+	expect(cell.processed==processed,"The protected biomass floor is never mobilized as emergency fuel")
 
 func _test_anatomy() -> void:
 	var cell = Cell.new()
@@ -501,7 +501,7 @@ func _test_autonomous_diets() -> void:
 	var before: float=organic(sim)
 	var energy: float=cell.energy
 	sim._photosynthesize(cell,1)
-	expect(cell.fixed_carbon==0 and cell.energy==energy and organic(sim)==before,"Retired photosynthetic chemistry cannot generate hidden resources")
+	expect(cell.fixed_carbon==0 and cell.energy==energy and organic(sim)==before,"Photosynthesis cannot generate resources without a carbon particle")
 
 func _test_habitat_pressures() -> void:
 	var lean = Sim.new(4,1)

@@ -12,16 +12,16 @@ static func run(check: Callable) -> void:
 	cell.chemistry.advance(cell,1)
 	check.call(cell.energy>energy and cell.biomass>18 and cell.waste>0,"Digestion directly credits numeric ATP/biomass and retains waste")
 	check.call(absf(cell.organic_mass()-mass)<.000001,"Digestion conserves represented organic material")
-	check.call(absf(cell.chemistry.potential()+(cell.biomass-18)*7.5+cell.energy-energy-15)<.000001,"Digestion cannot credit ATP beyond its finite fuel after retaining tissue")
-	check.call(cell.chemistry.particles.all(func(p):return p.species in ["food","waste"]),"Only food/waste parcels inhabit cytoplasm")
+	check.call(absf(cell.chemistry.potential()+cell.chemistry.heat+(cell.biomass-18)*7.5+cell.energy-energy-15)<.000001,"Digestion cannot credit ATP beyond its finite fuel after retaining tissue")
+	check.call(cell.chemistry.particles.all(func(p):return p.species in cell.chemistry.ACTIVE_SPECIES),"Cytoplasm contains only bounded food, waste and gas particles")
 	var sim=preload("res://scripts/simulation.gd").new(41,0,false)
 	sim.cells=[cell];sim.player=cell;sim.particles=[]
 	for i in 300:
 		cell.chemistry.advance(cell,.1);cell.chemistry.excrete(sim,cell,.1)
 	var released:=0.0
 	for p in sim.particles:
-		check.call(p.kind==2,"Only waste is expelled by digestion")
-		released+=p.amount
+		check.call(p.kind in [2,5],"Digestion expels only waste and carbon")
+		released+=p.amount*cell.chemistry.Catalog.material(p.kind)
 	check.call(cell.substrate==0 and cell.waste<.000001 and released>0,"A waste-filled vacuole travels to the cytoproct and empties")
 	check.call(absf(cell.organic_mass()+released-mass)<.000001,"Expulsion transfers material once into the external pool")
 	energy=cell.energy;mass=cell.organic_mass()
@@ -30,7 +30,7 @@ static func run(check: Callable) -> void:
 	cell.energy=17;cell.brood_energy=3;cell.reserve(2);cell.reserve(-2)
 	check.call(cell.energy==17 and cell.brood_energy==3,"Numeric reserve transfers neither duplicate nor destroy ATP")
 	for i in 1000:cell.chemistry.emit("food",.01,Vector2.from_angle(i)*25)
-	check.call(cell.chemistry.particle_count()<=24,"Weighted carriers bound parcel count without losing material")
+	check.call(cell.chemistry.particle_count()<=cell.chemistry.MAX_PACKETS,"Weighted carriers bound parcel count without losing material")
 	var copy=Codec.new().restore(Codec.new().capture(cell))
 	check.call(copy.energy==cell.energy and copy.brood_energy==cell.brood_energy and absf(copy.organic_mass()-cell.organic_mass())<.000001,"Numeric resources and finite vacuoles survive checkpoint roundtrip")
 	var graph:=Codec.new().capture(cell)

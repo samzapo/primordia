@@ -5,10 +5,15 @@ import tempfile
 import unittest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "tools"))
-from deploy import retain_model_boundary, restore_model_boundary
+from deploy import model_boundary_prefix, retain_model_boundary, restore_model_boundary
 
 
 class ModelRollback(unittest.TestCase):
+    def test_each_model_boundary_requires_an_independent_backup(self):
+        self.assertEqual(model_boundary_prefix({}), "before-food-vacuoles-v1-")
+        self.assertEqual(model_boundary_prefix({"food_vacuole_version": 1}), "before-biochemistry-v1-")
+        self.assertIsNone(model_boundary_prefix({"food_vacuole_version": 1, "biochemistry_version": 1}))
+
     def test_generations_and_failed_state_survive_without_changing_keys(self):
         with tempfile.TemporaryDirectory() as directory:
             root = pathlib.Path(directory)

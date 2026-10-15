@@ -29,7 +29,7 @@ func initialize(owner_game) -> void:
 	game.ui.add_child(state_label)
 	bar.z_index=80;game.ui.add_child(bar)
 	pause_button.text="Pause";bar.add_child(pause_button)
-	pause_button.pressed.connect(game._toggle_user_pause)
+	pause_button.pressed.connect(game._mobile_pause_menu)
 	minus_button.text="−";bar.add_child(minus_button)
 	plus_button.text="+";bar.add_child(plus_button)
 	minus_button.pressed.connect(func():game._zoom_at(game.camera_screen,1/1.25))
@@ -64,7 +64,7 @@ func layout() -> void:
 	bar.position=Vector2(size.x-220*pixels*.7,12*pixels*.7+tray_offset)
 	pause_button.text="Resume" if game.user_paused else "Pause"
 	pause_button.disabled=not game.pause_control_ready
-	follow_button.visible=bar.visible
+	follow_button.visible=bar.visible and not game.settings_panel.visible
 	follow_button.add_theme_font_size_override("font_size",roundi(18*pixels*.7))
 	follow_button.custom_minimum_size=Vector2(208,48)*pixels*.7
 	follow_button.size=follow_button.custom_minimum_size
@@ -74,12 +74,12 @@ func layout() -> void:
 	follow_button.self_modulate=Color.WHITE if game.camera_locked and game.can_follow() else Color(1,1,1,.60)
 	follow_button.set_pressed_no_signal(game.camera_locked and game.can_follow())
 	follow_button.disabled=not game.can_follow()
-	perception_button.visible=bar.visible
+	perception_button.visible=bar.visible and not game.settings_panel.visible
 	perception_button.text="Interoception" if game.perception=="exteroception" else "Exteroception"
 	perception_button.add_theme_font_size_override("font_size",roundi(18*pixels*.7))
 	perception_button.custom_minimum_size=Vector2(208,48)*pixels*.7;perception_button.size=perception_button.custom_minimum_size
 	perception_button.position=Vector2(size.x-220*pixels*.7,120*pixels*.7+tray_offset)
-	music_button.visible=bar.visible;music_volume.visible=bar.visible
+	music_button.visible=bar.visible and not game.settings_panel.visible;music_volume.visible=music_button.visible
 	var sounding: bool=game.preferences.music_volume>0
 	var locked_audio: bool=game.music.web_audio!=null and game.music.web_audio.cached.get("state","")!="running"
 	music_button.text="Music off" if not sounding else "Enable music" if locked_audio else "Music"
@@ -89,7 +89,7 @@ func layout() -> void:
 	music_button.custom_minimum_size=Vector2(120,48)*pixels*.7;music_button.size=music_button.custom_minimum_size;music_button.position=Vector2(size.x-220*pixels*.7,174*pixels*.7+tray_offset)
 	music_volume.custom_minimum_size=Vector2(82,48)*pixels*.7;music_volume.size=music_volume.custom_minimum_size;music_volume.position=Vector2(size.x-94*pixels*.7,174*pixels*.7+tray_offset)
 	music_volume.set_value_no_signal(game.preferences.music_volume*100)
-	state_label.visible=bar.visible and (game.user_paused or game.world.player.dead)
+	state_label.visible=bar.visible and not game.settings_panel.visible and (game.user_paused or game.world.player.dead)
 	state_label.text="View paused · world continues" if game.world.remote_client else "Game paused"
 	if not game.user_paused and game.world.player.dead:
 		var received_recovery=game.get("family_recovery") if game.world.remote_client else {}

@@ -420,3 +420,7 @@ The persistent pond now maintains a floor of fifteen living cells. Exhausted acc
 ## Revision 49 — owner-authorized simplification
 
 [Revision 49](REVISION_49.md) supersedes the expanded intracellular model above: ATP, biomass and reserved reproductive ATP are numbers. Finite ingested nutrients circulate in food vacuoles, digest directly into resources, then leave as waste via the cytoproct. There is no seeded internal molecular cloud or active pathway/osmosis network. Preserve resident visible transport, coarse hidden transport, actual membrane masking, named shaped-particle inspection, music, paid reproduction, saved identities and the fifteen-cell population floor. Comparable first-cell performance and real-time authority throughput are acceptance requirements.
+
+## Revision 51 — restored bounded biology and division progression
+
+The owner restores photosynthesis, local oxygen-dependent respiration/fermentation and emergency biomass fuel within the bounded food-vacuole model. ATP and biomass remain numbers. Paid division grants one AP and has a ten percent chance to offer a free mutation; hourly calendar-derived light/current conditions serve the persistent pond. Restore visual contractile vacuoles, shaped ATP/repair feedback and actual-secretion gland bounce. Microtubules are procedural anatomy with faint lines and no editing. Mobile cancellation uses the held organ's top-left circular icon; descriptions occupy a bottom strip and Pause opens settings while freezing only that view. See [Revision 51](REVISION_51.md).

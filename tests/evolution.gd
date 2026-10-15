@@ -223,14 +223,14 @@ func run(owner_suite) -> void:
 		starving.oxygen = 10
 		var starving_mass: float = starving.organic_mass()
 		sim._metabolize(starving,1)
-		check(starving.energy == 0 and starving.biomass == 20 and starving.health < 100,"Starvation cannot burn construction biomass or revive retired respiration")
+		check(starving.reserve_used>0 and starving.biomass<20 and starving.substrate>0,"Starvation transfers surplus biomass into finite metabolic fuel")
 		check(is_equal_approx(starving.organic_mass(),starving_mass),"reserve respiration conserves organic material")
 		starving.oxygen = 0
 		var remaining: float = starving.biomass
 		sim._metabolize(starving,1)
-		check(starving.biomass == remaining and starving.oxygen == 0 and starving.fermented == 0,"Absent food cannot trigger retired fermentation")
+		check(starving.biomass<remaining and starving.oxygen==0 and starving.fermented>0,"Mobilized food can ferment without oxygen")
 		starving.oxygen = 10
-		starving.biomass = 8
+		starving.biomass = 8;starving.substrate=0;starving.energy=0
 		sim._metabolize(starving,1)
 		check(starving.biomass == 8,"emergency metabolism protects the last repair reserve")
 	else: preload("res://tests/test_policy.gd").skip("emergency reserve metabolic yields")
@@ -266,7 +266,7 @@ func run(owner_suite) -> void:
 	fermenter.chemistry.advance(fermenter,10)
 	check(fermenter.processed == 1 and fermenter.energy > 0 and fermenter.oxygen == 0,"Finite vacuole food yields ATP without oxygen after residence")
 	check(is_equal_approx(fermenter.organic_mass()+sim.respiration_loss-prior_loss,ferment_mass),"fermentation accounts for unrecoverable end products")
-	check(is_zero_approx(fermenter.raw_fuel) and is_equal_approx(fermenter.energy,2.25),"Spent food and waste cannot close a free-energy loop")
+	check(is_zero_approx(fermenter.raw_fuel) and is_equal_approx(fermenter.energy,Cell.FERMENT_ATP),"Spent food and waste cannot close a free-energy loop")
 	# Live finale integration, distinct from an earned-resource playthrough.
 	# A finite donor supplies known cell-sourced packets to isolate the objective.
 	sim = Sim.new(18)

@@ -20,6 +20,7 @@ static func execute(sim, action: String, args: Dictionary):
 			return sim.remove(cell.organs.find(organ)) if not organ.is_empty() else false
 		"move": return cell.move_organ(identity,float(args.get("angle",0)))
 		"mutate": return sim.mutate_organ(identity,str(args.get("gene","")))
+		"choose_mutation": return sim.evolution.accept_division_offer(str(args.get("gene","")))
 		"restore": return cell.restore_organ(identity)
 		"steering": return cell.set_steering_strength(identity,value)
 		"exploration": return cell.set_exploration(value)
@@ -30,17 +31,8 @@ static func execute(sim, action: String, args: Dictionary):
 		"divide": return sim.divide_lineage(bool(args.get("dormant",false)),false)
 		"follow": return sim.follow_family(identity)
 		"module_add","module_remove","module_config","route_add","route_remove","configuration": return false
-		"tension":
-			if value<0 or value>1: return false
-			cell.membrane.skeleton.set_tension(identity,value); cell.membrane.invalidate(); return true
-		"link_remove":
-			cell.membrane.skeleton.remove_group(identity); cell.membrane.invalidate(); return true
-		"link_add":
-			if cell.membrane.skeleton.links.size()>=128: return -1
-			var start := _anchor(args.get("start",{}),cell)
-			var end := _anchor(args.get("end",{}),cell)
-			if start.is_empty() or end.is_empty(): return -1
-			return cell.membrane.skeleton.connect_points(start,end,value,cell.membrane,cell.radius)
+		"tension","link_remove","link_add": return false # Procedural cell anatomy is not player-editable.
+
 	return false
 
 static func _anchor(value, cell) -> Dictionary:

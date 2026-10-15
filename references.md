@@ -440,3 +440,7 @@ The owner restores the first-cell food-vacuole and cytoproct abstraction, motiva
 ### Revision 50 — timed carriers and illustrated contents
 
 The previously cited Paramecium oral/digestive-vacuole observations motivate retained intracellular food compartments and subsequent waste expulsion. The ten-second minimum, elastic reflections at the membrane/nucleus and direct numerical ATP/biomass credit are explicit game rules, not measured biological residence times or a cytoplasmic fluid solver. Nutrient/waste shapes inside a carrier are illustrations of its finite inventory and have no separate physical trajectories.
+
+## Revision 51 modeling scope
+
+The existing microbial growth/respiration, oxygenic photosynthesis/phototaxis and contractile-vacuole sources above motivate the restored small loop. Its oxygen contact radius, carbon/food/tissue fractions, ATP yields, emergency biomass floor, division AP/mutation probability and hourly UTC weather are explicit game abstractions. Contractile vacuoles remain decorative anatomy; square-root ATP marks illustrate numerical transactions and do not create physical ATP stocks or molecular transport. The sampled/inherited tension network is a generic cytoskeletal abstraction and is no longer editable by the player.

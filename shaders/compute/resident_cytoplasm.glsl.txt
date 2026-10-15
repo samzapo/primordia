@@ -22,12 +22,12 @@ void emit_packet(int s,double q,vec2 at,int source,uint source_hi,int compartmen
  bool anonymous=compartment==-1&&compartment_hi==0xffffffffu;
  int best=-1,count=0;float distance=1e30;
  for(uint i=0u;i<n();i++)if(live(i)&&a[i].facts.x==s){count++;float d=length(a[i].pose.xy-at);if(d<distance){best=int(i);distance=d;}}
- if(best>=0&&(count>=12||((a[best].facts.z==compartment&&a[best].identity.w==compartment_hi||(anonymous&&a[best].clock.x<1.0))&&distance<14.0))){a[best].q+=dvec2(q,fuel);if(anonymous&&a[best].clock.x>=1.0)a[best].clock.x=1.0;return;}
+ if(best>=0&&(count>=(s==FOOD||s==WASTE?12:6)||((a[best].facts.z==compartment&&a[best].identity.w==compartment_hi||(anonymous&&a[best].clock.x<1.0))&&distance<14.0))){a[best].q+=dvec2(q,fuel);if(anonymous&&a[best].clock.x>=1.0)a[best].clock.x=1.0;return;}
  double age=0.0;for(uint j=0u;j<n();j++)if(a[j].facts.z==compartment&&a[j].identity.w==compartment_hi){age=a[j].clock.x;break;}
  uint slot=n();for(uint i=0u;i<n();i++)if(!live(i)){slot=i;break;}
  // A finite receipt never discards overflow. At 24 slots each species has a
  // carrier, so overflow coalesces; no source scan or unbounded allocation.
- if(slot>=24u){if(best>=0)a[best].q+=dvec2(q,fuel);else c[6]=1.0;return;}
+ if(slot>=36u){if(best>=0)a[best].q+=dvec2(q,fuel);else c[6]=1.0;return;}
  if(slot==n())c[0]+=1.0;
  uvec2 id=uvec2(uint(c[2]),uint(c[3]));c[2]+=1.0;if(c[2]>=4294967296.0){c[2]=0.0;c[3]+=1.0;}
  if(anonymous){compartment=int(id.x);compartment_hi=id.y;}
@@ -35,23 +35,35 @@ void emit_packet(int s,double q,vec2 at,int source,uint source_hi,int compartmen
  a[slot].clock=dvec2(age,0);
  a[slot].facts=ivec4(s,source,compartment,1);a[slot].identity=uvec4(id,source_hi,compartment_hi);
 }
-vec2 constrain(vec2 at){
+vec2 constrain(vec2 at,float radius){
  float angle=atan(at.y,at.x);if(angle<0.0)angle+=6.28318530718;
  float f=angle/6.28318530718*28.0;int j=int(f)%28;vec2 edge=mix(vec2(p[200+j*2],p[201+j*2]),vec2(p[200+((j+1)%28)*2],p[201+((j+1)%28)*2]),fract(f));
- float limit=max(1.0,length(edge)-7.0);if(length(at)>limit)at=normalize(at)*limit;
- vec2 center=vec2(-.12,-.10)*p[0],delta=at-center;float nucleus=p[0]*.22+7.0;
+ float limit=max(1.0,length(edge)-radius);if(length(at)>limit)at=normalize(at)*limit;
+ vec2 center=vec2(-.12,-.10)*p[0],delta=at-center;float nucleus=p[0]*.22+radius;
  if(length(delta)<nucleus)at=center+(length(delta)>.001?normalize(delta):vec2(1,0))*nucleus;
  if(length(at)>limit)at=normalize(at)*limit;return at;
 }
 bool has_food(uint i){for(uint j=0u;j<n();j++)if(live(j)&&a[j].facts.x==FOOD&&same_comp(i,j))return true;return false;}
+double near_consume(int s,double q,vec2 at,float reach){
+ double used=0.0;
+ for(uint j=0u;j<n()&&used<q-EPS;j++)if(live(j)&&a[j].facts.x==s&&distance(a[j].pose.xy,at)<=reach){
+  double take=min(q-used,a[j].q.x);consume(j,take);used+=take;
+ }
+ return used;
+}
 void summarize(){
  uint kept=0u;for(uint i=0u;i<n();i++)if(live(i)){if(kept!=i)a[kept]=a[i];kept++;}c[0]=double(kept);c[68]=double(kept);
  for(int s=0;s<SPECIES;s++)c[32+s]=0.0;
  c[64]=0.0;c[65]=0.0;c[66]=0.0;c[7]=0.0;
  for(uint i=0u;i<n();i++){
-  c[32+a[i].facts.x]+=a[i].q.x;c[64]+=a[i].q.x;c[65]+=a[i].q.y;c[66]+=a[i].q.y;
+  c[32+a[i].facts.x]+=a[i].q.x;if(a[i].facts.x!=OXYGEN)c[64]+=a[i].q.x;c[65]+=a[i].q.y;c[66]+=a[i].q.y;
   if(a[i].facts.x!=FOOD&&has_food(i))continue;
   int base=128+int(c[7])*8;c[7]+=1.0;
+  if(a[i].facts.x==OXYGEN||a[i].facts.x==CARBON){
+   c[base]=double(uint(a[i].identity.x));c[base+7]=double(a[i].identity.y);
+   c[base+1]=double(a[i].pose.x);c[base+2]=double(a[i].pose.y);c[base+3]=double(a[i].motion.z);c[base+4]=a[i].facts.x==OXYGEN?-1.0:-2.0;c[base+5]=a[i].q.x;c[base+6]=a[i].clock.x;
+   continue;
+  }
   double food=0.0,waste=0.0;
   for(uint j=0u;j<n();j++)if(live(j)&&same_comp(i,j)){if(a[j].facts.x==FOOD)food+=a[j].q.x;else waste+=a[j].q.x;}
   c[base]=double(uint(a[i].facts.z));c[base+7]=double(a[i].identity.w);
@@ -64,9 +76,15 @@ void advance(){
  for(uint i=0u;i<original;i++)if(live(i)){
   a[i].pose.zw=a[i].pose.xy;
   if(a[i].facts.x==FOOD&&budget>0.0){
-   double duration=max(dt,10.0-a[i].clock.x);double used=min(budget,a[i].q.x*min(1.0,dt/duration)),fuel=a[i].q.y*used/max(EPS,a[i].q.x),tissue=min(used,fuel/7.5)*.7;
-   budget-=used;consume(i,used);c[80]+=tissue;c[82]+=max(0.0,fuel-tissue*7.5);c[83]+=used;
-   emit_packet(WASTE,used-tissue,a[i].pose.xy,a[i].facts.y,a[i].identity.z,a[i].facts.z,a[i].identity.w,0.0);
+   Packet meal=a[i];
+   double duration=max(dt,10.0-meal.clock.x),used=min(budget,meal.q.x*min(1.0,dt/duration)),fuel=meal.q.y*used/max(EPS,meal.q.x);
+   double aerobic=near_consume(OXYGEN,used,meal.pose.xy,20.0),anaerobic=used-aerobic;
+   double fueled=min(used,fuel/7.5),tissue=fueled*(.7*aerobic+.3*anaerobic)/max(0.00000001,used);
+   double work=min(max(0.0,fuel-tissue*7.5),fueled*(2.25*aerobic+1.0*anaerobic)/max(0.00000001,used));
+   budget-=used;consume(i,used);c[80]+=tissue;c[82]+=work;c[83]+=used;c[84]+=anaerobic;
+   c[20]+=max(0.0,fuel-tissue*7.5-work);
+   emit_packet(CARBON,used*.1,meal.pose.xy,-1,0xffffffffu,-1,0xffffffffu,0.0);
+   emit_packet(WASTE,used-tissue-used*.1,meal.pose.xy,meal.facts.y,meal.identity.z,meal.facts.z,meal.identity.w,0.0);
   }
  }
  vec2 outlet=vec2(p[12],p[13]);
@@ -79,7 +97,7 @@ void advance(){
    if(dot(a[i].motion.xy,a[i].motion.xy)<.001){float angle=float(uint(a[i].facts.z))*2.399963+.8;a[i].motion.xy=vec2(cos(angle),sin(angle))*max(6.0,p[0]*.22);}
    int steps=clamp(int(ceil(float(dt)/.05)),1,64);
    for(int step=0;step<steps;step++){
-    vec2 trial=a[i].pose.xy+a[i].motion.xy*float(dt/double(steps)),bounded=constrain(trial);
+    vec2 trial=a[i].pose.xy+a[i].motion.xy*float(dt/double(steps)),bounded=constrain(trial,a[i].facts.x==OXYGEN||a[i].facts.x==CARBON?1.4:7.0);
     if(dot(trial-bounded,trial-bounded)>.000001)a[i].motion.xy=reflect(a[i].motion.xy,normalize(trial-bounded));
     a[i].pose.xy=bounded;
    }
@@ -93,10 +111,12 @@ void advance(){
 void main(){
  uint i=gl_GlobalInvocationID.x;
  if(pc.stage==3u){
-  if(i>=32u)return;vec4 pose=vec4(0,0,0,-1),contents=vec4(0);
+  if(i>=64u)return;vec4 pose=vec4(0,0,0,-1),contents=vec4(0);
   if(i<n()&&live(i)&&!(a[i].facts.x==WASTE&&has_food(i))){
    double food=0.0,waste=0.0;for(uint j=0u;j<n();j++)if(live(j)&&same_comp(i,j)){if(a[j].facts.x==FOOD)food+=a[j].q.x;else waste+=a[j].q.x;}
-   pose=vec4(a[i].pose.xy,0.0,float(a[i].facts.x));
+   pose=vec4(a[i].pose.xy,0.0,0.0);
+   if(a[i].facts.x==OXYGEN||a[i].facts.x==CARBON){pose.z=a[i].motion.z;pose.w=a[i].facts.x==OXYGEN?1.0:2.0;contents=vec4(1.4,0,0,0);}
+   else
    contents=vec4(7.0,float(food/max(EPS,food+waste)),clamp(ceil(float(food+waste)/.3),1.0,7.0),clamp(sqrt(float(food+waste)/clamp(ceil(float(food+waste)/.3),1.0,7.0)/.3),.8,1.7));
   }
   imageStore(presentation,ivec2(int(i)*2,0),pose);imageStore(presentation,ivec2(int(i)*2+1,0),contents);return;
@@ -109,6 +129,25 @@ void main(){
  else if(code==1)emit_packet(s,op[1],at,int(uint(op[13])),uint(op[14]),int(uint(op[15])),uint(op[16]),op[8]<0.0?(s==FOOD?op[1]*7.5:0.0):op[8]);
  else if(code==6){double total=0.0;for(uint j=0u;j<n();j++)if(live(j)&&a[j].facts.x==s)total+=a[j].q.x;double difference=op[1]-total;if(difference>0.0)emit_packet(s,difference,at,-1,0xffffffffu,-1,0xffffffffu,s==FOOD?difference*7.5:0.0);else for(uint j=0u;j<n()&&difference<0.0;j++)if(live(j)&&a[j].facts.x==s){double used=min(a[j].q.x,-difference);consume(j,used);difference+=used;}}
  else if(code==7){double total=0.0;for(uint j=0u;j<n();j++)if(live(j)&&a[j].facts.x==FOOD)total+=a[j].q.x;for(uint j=0u;j<n();j++)if(live(j)&&a[j].facts.x==FOOD)a[j].q.y=max(0.0,op[1])*a[j].q.x/max(EPS,total);}
- else if(code==11){double budget=op[1];for(uint j=0u;j<n()&&budget>0.0;j++)if(live(j)&&a[j].facts.x==WASTE&&a[j].clock.x>=10.0&&!has_food(j)&&distance(a[j].pose.xy,at)<=float(op[4])){double used=min(budget,a[j].q.x);Packet packet=a[j];packet.q=dvec2(used,0);outbox[int(c[70])]=packet;c[70]+=1.0;budget-=used;consume(j,used);}}
+ else if(code==10){
+  double used=near_consume(CARBON,op[1],at,float(op[4]));c[70]=used;
+  if(used>0.0){
+   emit_packet(FOOD,used*.65,at,-1,0xffffffffu,-1,0xffffffffu,used*.65*7.5);
+   emit_packet(OXYGEN,used*2.5,at,-1,0xffffffffu,-1,0xffffffffu,0.0);
+   c[80]+=used*.35;c[82]+=used*4.0;c[21]+=used*11.5;
+  }
+ }
+ else if(code==13){
+  double budget=op[1];
+  for(uint j=0u;j<n()&&budget>0.0;j++)if(live(j)&&(a[j].facts.x==OXYGEN||a[j].facts.x==CARBON)){
+   vec2 location=a[j].pose.xy;float angle=atan(location.y,location.x);if(angle<0.0)angle+=6.28318530718;
+   float f=angle/6.28318530718*28.0;int k=int(f)%28;
+   float edge=length(mix(vec2(p[200+k*2],p[201+k*2]),vec2(p[200+((k+1)%28)*2],p[201+((k+1)%28)*2]),fract(f)));
+   if(a[j].q.x<.3||length(location)<edge-10.0)continue;
+   double used=min(1.8,a[j].q.x);if(used>budget+0.00000001)continue;Packet packet=a[j];packet.q=dvec2(used,0);
+   outbox[int(c[70])]=packet;c[70]+=1.0;budget-=used;consume(j,used);
+  }
+ }
+ else if(code==11){double budget=op[1];for(uint j=0u;j<n()&&budget>0.0;j++)if(live(j)&&a[j].facts.x==WASTE&&a[j].clock.x>=10.0&&!has_food(j)&&distance(a[j].pose.xy,at)<=float(op[4])){double used=min(1.8,a[j].q.x);if(used>budget+0.00000001)continue;Packet packet=a[j];packet.q=dvec2(used,0);outbox[int(c[70])]=packet;c[70]+=1.0;budget-=used;consume(j,used);}}
  summarize();
 }

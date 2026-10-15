@@ -197,7 +197,7 @@ func run(test_host) -> void:
 	scene.cell_ui.sync(0)
 	var upgrade_quote: Dictionary = scene.cell_ui.biomass_view.quote
 	expect(upgrade_quote.show_cost and upgrade_quote.cost == Sim.Genes.price(upgraded) and upgrade_quote.ap_needed == Sim.Genes.adaptation_price(upgraded),"Inspecting a real upgrade displays its tissue and AP costs")
-	expect(upgrade.description.contains("tissue") and upgrade.description.contains("AP"),"Upgrade tooltip retains precise tissue and adaptation prices")
+	expect(upgrade.description.contains("Free mutation"),"Mutation tooltip states that application is free")
 	expect(scene.cell_ui.biomass_view.rate_quote.preview and scene.cell_ui.biomass_view.rate_quote.has_organ and not scene.cell_ui.tip.text.contains("\n"),"Upgrade inspection shows its proposed upkeep before spending")
 	var type_scale: float = scene.preferences.hud_scale
 	scene.preferences.hud_scale = 1.75
@@ -210,7 +210,7 @@ func run(test_host) -> void:
 	cell.biomass = 0
 	scene.world.evolution.points = 0
 	scene.cell_ui.sync(0)
-	expect(not scene.cell_ui.biomass_view.quote.enough and not scene.cell_ui.biomass_view.quote.ap_ready,"Upgrade inspection separately shows both insufficient resources")
+	expect(scene.cell_ui.biomass_view.quote.enough and scene.cell_ui.biomass_view.quote.ap_ready,"Free mutation remains available with empty biomass and AP")
 	cell.biomass = saved_upgrade_tissue
 	scene.world.evolution.points = saved_upgrade_ap
 	scene.cell_ui.close_context()
@@ -263,7 +263,9 @@ func run(test_host) -> void:
 	settle()
 	cell = scene.world.player
 	scene.cell_ui.open_context({"kind":"chemistry"})
-	expect(scene.cell_ui.choices.size() == 5 and scene.cell_ui.choices.any(func(choice):return choice.caption=="Food vacuoles") and scene.cell_ui.choices.any(func(choice):return choice.kind=="regenerative") and not scene.cell_ui.choices.any(func(choice):return choice.kind=="photosynthesis"),"Chemistry factory exposes toxin, acid, buffer/repair, neutralizer and the simple food lifecycle")
+	expect(scene.cell_ui.choices.size() == 5 and scene.cell_ui.choices.any(func(choice):return choice.kind=="regenerative") and scene.cell_ui.choices.any(func(choice):return choice.kind=="photosynthesis"),"Chemistry factory exposes photosynthesis and glands with compact desktop paging")
+	scene.cell_ui.choices[-1].pressed.emit()
+	expect(scene.cell_ui.choices.any(func(choice):return choice.caption=="Food vacuoles") and scene.cell_ui.choices.any(func(choice):return choice.kind=="neutralizing"),"The next chemistry page retains neutralization and food/gas inspection")
 	scene.cell_ui.close_context()
 	key(KEY_BRACKETRIGHT)
 	key(KEY_ENTER)
@@ -333,25 +335,11 @@ func run(test_host) -> void:
 	expect(ends.size() >= 2,"There are unoccupied membrane endpoints for direct editing")
 	click(ends[0])
 	click(ends[1],MOUSE_BUTTON_LEFT,false)
-	expect(cell.membrane.skeleton.next_group == groups+1,"Dragging bare membrane endpoints still places microtubules")
-	var link: Dictionary = cell.membrane.skeleton.links[-1]
-	var hover := Vector2.ZERO
-	for fraction in [0.1,0.2,0.7,0.85]:
-		var point: Vector2 = cell.membrane.skeleton.point(link.a,cell.membrane).lerp(cell.membrane.skeleton.point(link.b,cell.membrane),fraction)
-		if scene.cell_ui.hit(at(point)).is_empty(): hover = at(point); break
-	var link_a: Vector2 = cell.membrane.skeleton.point(link.a,cell.membrane)
-	var link_b: Vector2 = cell.membrane.skeleton.point(link.b,cell.membrane)
-	var mid: Vector2 = link_a.lerp(link_b,0.5)
-	var offset: Vector2 = (link_b-link_a).orthogonal().normalized()*12/scene.zoom
-	var wider: Dictionary = scene._nearest_tubule(mid+offset)
-	expect(not wider.is_empty(),"Microtubule hover reaches 12 screen pixels away, outside the old 8-pixel tolerance")
-	var saved_scale: float = scene.preferences.hud_scale
-	scene.preferences.hud_scale = 1.75
-	expect(not scene._nearest_tubule(mid+offset*2).is_empty(),"Microtubule hit width follows accessibility scaling")
-	scene.preferences.hud_scale = saved_scale
-	var tension: float = link.tension
-	click(hover,MOUSE_BUTTON_WHEEL_UP)
-	expect(link.tension > tension,"Wheel over an unobstructed microtubule still changes tension")
+	expect(cell.membrane.skeleton.next_group == groups,"Dragging bare membrane cannot edit sampled microtubules")
+	var links: Array=cell.membrane.skeleton.links.duplicate(true)
+	click(ends[0],MOUSE_BUTTON_WHEEL_UP)
+	click(ends[0],MOUSE_BUTTON_RIGHT)
+	expect(cell.membrane.skeleton.links==links,"Wheel and right-click preserve procedural anatomy")
 	click(ends[0])
 	key(KEY_TAB)
 	expect(scene.tube_start.is_empty(),"Resuming cancels an unfinished microtubule drag")
@@ -627,7 +615,7 @@ func _lineage() -> void:
 	scene.cell_ui.choices[2].pressed.emit()
 	scene._update_world(1)
 	expect(sim.lineage.births == 1 and sim.cells.size() == 2 and sim.player.id == parent.id,"Release from the bud creates a real autonomous family member")
-	expect(scene.build_open and sim.build_original != null and sim.player.organic_mass() < mass and sim.evolution.points == points,"Birth commits paid anatomy and resumes editing the depleted parent")
+	expect(scene.build_open and sim.build_original != null and sim.player.organic_mass() < mass and sim.evolution.points == points+1,"Birth awards one AP, commits paid anatomy and resumes editing the depleted parent")
 	var child = sim.cells[-1]
 	expect(scene.views.has(child.id) and scene.views[sim.player.id].cell == sim.player,"Parent and offspring drawings update immediately during editing")
 	scene.cell_ui.open_context({"kind":"bud"})
@@ -651,7 +639,7 @@ func _lineage() -> void:
 	scene._physics_process(DT)
 	scene._process(DT)
 	expect(scene.world == sim and sim.player.id != identity and sim.time > time and not sim.evolution.terminal(),"The scene continues the same habitat after fatal damage")
-	expect(sim.evolution.points == points and sim.evolution.learned == learned,"Scene handoff keeps the expedition economy")
+	expect(sim.evolution.points == points+1 and sim.evolution.learned == learned,"Scene handoff keeps the expedition economy")
 	expect(scene.music.frame_cursor >= score_clock,"Succession does not reset the musical transport")
 	var death_at: Vector2 = sim.death_bursts[-1].at
 	expect(scene.death_focus_age < 0.1 and Sim.Medium.offset(scene.render_camera,death_at).length() < 0.001,"The camera holds the original death site after immediate physiological succession")

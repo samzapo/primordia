@@ -87,7 +87,7 @@ def health(build, previous=None, ca_file=None, state=None):
             if first is not None and value["tick"] > first and value.get("uptime_seconds",0)>=10:
                 if value.get("simulation_hz") != 30 or not .98 <= value.get("simulation_wall_ratio",0) <= 1.02 or value.get("tick_ms_p95",float("inf"))>1000/30:
                     raise ValueError("Authority misses its documented real-time 30 Hz budget")
-                if value.get("food_vacuole_version")!=1 or value.get("internal_packets",0)>24*value.get("living_cells",0):
+                if value.get("food_vacuole_version")!=1 or value.get("biochemistry_version")!=1 or value.get("internal_packet_limit_per_cell")!=36 or value.get("internal_packets",0)>36*value.get("living_cells",0):
                     raise ValueError("Unbounded or obsolete internal chemistry")
                 with opener.open("https://127.0.0.1:8766/music-bank.json", timeout=3) as response:
                     music = json.load(response)
@@ -110,6 +110,14 @@ def _sync_directory(path):
         os.fsync(fd)
     finally:
         os.close(fd)
+
+
+def model_boundary_prefix(previous):
+    if previous.get("food_vacuole_version", 0) < 1:
+        return "before-food-vacuoles-v1-"
+    if previous.get("biochemistry_version", 0) < 1:
+        return "before-biochemistry-v1-"
+    return None
 
 
 def retain_model_boundary(state, root, prefix):
@@ -255,8 +263,8 @@ def main():
     subprocess.run(["systemctl", "--user", "stop", UNIT], check=False)
     migration_backup = None
     try:
-        if old and previous and previous.get("food_vacuole_version", 0) < 1:
-            migration_backup = retain_model_boundary(state, root, "before-food-vacuoles-v1-")
+        if old and previous and model_boundary_prefix(previous):
+            migration_backup = retain_model_boundary(state, root, model_boundary_prefix(previous))
         staged_unit = unit.with_suffix(".service.new")
         staged_unit.write_text(unit_text)
         staged_unit.replace(unit)

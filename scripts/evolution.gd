@@ -23,6 +23,8 @@ var tide := 0
 var points := 3
 var offers: Array[String] = []
 var learned: Array[String] = []
+var division_offers: Array[String] = []
+var division_count:=0
 var chosen := false
 var random := RandomNumberGenerator.new()
 var status := "growing"
@@ -62,6 +64,25 @@ func _init(seed_number: int = 0) -> void:
 func terminal() -> bool:
 	if sandbox: return false
 	return status in ["won","lost"]
+
+
+func divided(_cell) -> bool:
+	# Called only at the committed paid birth, never on hatch, follow or login.
+	points+=1;division_count+=1
+	if random.randf()>=0.10:return false
+	var pool: Array=[]
+	for gene in Genes.DATA:
+		if gene not in learned and gene not in division_offers:pool.append(gene)
+	if pool.is_empty():return false
+	# Offers persist until accepted, including across disconnect and restart.
+	division_offers.append(pool[random.randi_range(0,pool.size()-1)])
+	return true
+
+func accept_division_offer(gene: String) -> bool:
+	if terminal() or gene not in division_offers or not Genes.DATA.has(gene):return false
+	division_offers.erase(gene)
+	if gene not in learned:learned.append(gene)
+	return true
 
 func _draft() -> void:
 	offers.clear()

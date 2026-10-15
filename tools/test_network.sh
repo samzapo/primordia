@@ -56,6 +56,10 @@ if [[ "${1:-}" == gpu ]]; then
   fi
 fi
 
+"$godot_bin" --headless --path "$project_dir" --script tests/restored_biology_run.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"
+! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
+grep -Eq 'RESTORED BIOLOGY: [0-9]+ assertions, 0 failures' "$report_file"
+
 "$godot_bin" --headless --path "$project_dir" --script tests/touch_zoom_run.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"
 ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
 grep -Eq 'TOUCH CONTROLS: [0-9]+ assertions, 0 failures' "$report_file"

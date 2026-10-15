@@ -12,7 +12,7 @@ func sync(cell, ap: int) -> void:
 		parcels.clear()
 		clock = 0
 		identity = cell.id
-	var specifications := [{"kind":"ap","amount":float(maxi(0,ap)),"count":maxi(0,ap)}]
+	var specifications := [{"kind":"ap","amount":float(maxi(0,ap)),"count":clampi(ap,0,16)}]
 	var next: Array = []
 	for spec in specifications:
 		for i in spec.count:

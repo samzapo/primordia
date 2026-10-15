@@ -16,7 +16,7 @@ vec4 vacuole_art(vec2 uv,vec3 contents){
   float r=(food?2.0:1.5)*contents.z; // half the external radius at the illustrated dose
   vec2 glyph_uv=(at-center)/(2.0*r)+.5;
   if(all(greaterThanEqual(glyph_uv,vec2(0)))&&all(lessThanEqual(glyph_uv,vec2(1)))){
-   vec4 glyph=texture(glyph_atlas,vec2((glyph_uv.x+(food?0.0:1.0))*.5,glyph_uv.y));
+   vec4 glyph=texture(glyph_atlas,vec2((glyph_uv.x+(food?0.0:1.0))*.25,glyph_uv.y));
    out_color.rgb=mix(out_color.rgb,glyph.rgb,glyph.a);out_color.a=max(out_color.a,glyph.a);
   }
  }

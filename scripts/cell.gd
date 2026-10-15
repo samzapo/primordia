@@ -24,8 +24,8 @@ const CILIA_THRUST := 1800.0
 const CILIA_REACH := 170.0
 const CILIA_FLOW := 52.0
 const SECRETION_COST := 0.10
-const AEROBIC_ATP := 7.0
-const FERMENT_ATP := 3.0
+const AEROBIC_ATP := 2.25
+const FERMENT_ATP := 1.0
 # In this 2D habitat, enclosed area is the represented cytoplasmic volume.
 const TISSUE_AREA := Membrane.COUNT*0.5*sin(TAU/Membrane.COUNT)*47.0*47.0/78.0
 const ATP_TURNOVER := 0.002
@@ -71,8 +71,12 @@ var biomass := 18.0
 var substrate: float:
 	get: return chemistry.amount("food")
 	set(value): chemistry.assign("food",value)
-var oxygen := 0.0
-var carbon := 0.0
+var oxygen: float:
+	get:return chemistry.amount("oxygen")
+	set(value):chemistry.assign("oxygen",value)
+var carbon: float:
+	get:return chemistry.amount("carbon")
+	set(value):chemistry.assign("carbon",value)
 var energy := 72.0
 var health := 100.0
 var radius := 47.0
@@ -261,7 +265,7 @@ func gut_capacity() -> float:
 	return maxf(0,24.0*growth_scale()-chemistry.storage_used())
 
 func oxygen_capacity() -> float:
-	return 0.0 # No intracellular respiration network in the food-vacuole model.
+	return 14.0*growth_scale()
 
 static func tissue_radius(amount: float) -> float:
 	return 47.0*sqrt(maxf(0,amount)/78.0)
@@ -399,6 +403,10 @@ func pore_radius(organ: Dictionary) -> float:
 
 func pore_center(organ: Dictionary) -> Vector2:
 	return organ_position(organ)+organ_normal(organ).rotated(angle)*pore_radius(organ)*0.65
+
+func emitted(organ: Dictionary) -> void:
+	organ["emission_serial"]=int(organ.get("emission_serial",0))+1
+	organ["emission_age"]=age
 
 func consumed(organ: Dictionary, amount: float) -> void:
 	if amount <= 0: return
@@ -575,6 +583,7 @@ static func clone_state(source):
 	for property in source.get_property_list():
 		if not (property.usage & PROPERTY_USAGE_SCRIPT_VARIABLE): continue
 		var key: String = property.name
+		if key in ["raw_fuel","substrate","waste","oxygen","carbon"]:continue
 		var value = source.get(key)
 		if key in ["membrane","skeleton"]: value = clone_state(value)
 		elif key == "chemistry": value = value.clone_for(copy)

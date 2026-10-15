@@ -66,6 +66,16 @@ func _draw() -> void:
 	for parcel in (ecology.parcels if game.internal_visible(cell) else []):
 		if parcel.kind != "ap": continue
 		draw_circle(parcel.p,parcel.radius*preload("res://scripts/visuals.gd").INTERNAL_PARTICLE_SCALE,Color("f8c650"))
+
+	if game.internal_visible(cell):
+		for side in [-1,1]:
+			var center:=Vector2(.02,side*.62)*r
+			var swell:=.35+.65*sin(fposmod(cell.age*.23+(.5 if side<0 else 0),1)*PI)
+			for i in 6:
+				var ray:=Vector2.from_angle(TAU*i/6)
+				draw_line(center+ray*r*.05,center+ray*r*.17,Color(.55,.94,.93,.3),r*.026,true)
+			_ellipse(center,Vector2.ONE*r*.082*swell,Color("75d9df"))
+			_ellipse(center-Vector2.ONE*r*.015,Vector2.ONE*r*.045*swell,Color("bbfff0"))
 	# Small micronucleus beside the macronucleus: the family reserve's landmark.
 	draw_circle(anchors.nucleus+Vector2(-0.23,0.06)*r,r*0.075,Color("a86bd8"))
 	draw_circle(anchors.nucleus+Vector2(-0.25,0.04)*r,r*0.035,Color("edb3ef"))
@@ -106,7 +116,7 @@ func _draw() -> void:
 		_ellipse(anchors.bud+Vector2(-0.12+i*0.10,-0.21)*r,Vector2(0.035,0.045)*r,Color("a6ead4"))
 	if bud_material >= 1 and bud_energy >= 1:
 		draw_arc(at,0.21*r,0,TAU,24,Color(1,0.92,0.61,0.5+0.25*sin(game.ui_time*3)),r*0.025,true)
-	if game.build_open and not game.world.evolution.chosen:
+	if game.build_open and (not game.world.evolution.division_offers.is_empty() or (not game.world.evolution.sandbox and not game.world.evolution.chosen)):
 		draw_circle(anchors.nucleus+Vector2(0.22,-0.20)*r,r*(0.04+0.008*sin(game.ui_time*2)),Color("fff19c"))
 	if game.build_open:
 		for key in ["assembly","chemistry","nucleus","bud"]:
@@ -114,3 +124,19 @@ func _draw() -> void:
 		for scar in cell.lost_organs:
 			var p: Vector2 = cell.local_point(scar.a)
 			draw_arc(p,10*scar.scale,0,TAU,20,Color("ffb6ca"),1.8/game.zoom,true)
+
+	if game.internal_visible(cell):
+		for packet in cell.resource_packets:
+			if packet.delay>0:continue
+			var organ: Dictionary=cell.organ_by_id(packet.organ_id)
+			var destination: Vector2=cell.local_point(packet.a if organ.is_empty() else organ.a)*.96
+			var original: Vector2=Vector2(-.15,-.15)*cell.radius
+			var fraction:=clampf(1-packet.p.distance_to(destination)/maxf(.01,original.distance_to(destination)),0,1)
+			var source: Vector2=anchors.atp if packet.kind=="atp" else anchors.nucleus
+			var target: Vector2=anchors.atp if packet.kind=="gain" else destination
+			if packet.kind=="gain" and not organ.is_empty():source=destination
+			var position: Vector2=source.lerp(target,fraction)
+			if packet.kind in ["atp","gain"]:
+				draw_texture_rect(preload("res://scripts/particle_art.gd").atp_texture(),Rect2(position-Vector2.ONE*2.2,Vector2.ONE*4.4),false)
+			else:
+				draw_polyline(PackedVector2Array([position+Vector2(-1.8,0),position+Vector2(0,-1.8),position+Vector2(1.8,0),position+Vector2(0,1.8),position+Vector2(-1.8,0)]),Color("ffa8bd"),.65,true)

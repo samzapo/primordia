@@ -42,7 +42,7 @@ A failed candidate restores the previous service/release without deleting saves.
 
 `tools/test_network.sh` checks exact state identity/particles/RNG and real two-client CPU authority behavior. `tools/test_network.sh gpu` adds hardware Vulkan fixtures under private Xvfb displays, including a full world and a two-Hz observer stress case, and rejects software rendering or CPU fallback. `tests/test_web_gateway.py` verifies trusted HTTPS, certificate rejection, private key permissions, HTTP bootstrap and encrypted duplex snapshots. Deployment readiness and post-job restart checks use verified HTTPS with the retained CA. `tools/build_web.sh` exports the browser client from an automatically prepared source-only project. `tools/test.sh` retains the broader native physical suite, explicitly selects the CPU reference for headless scene fixtures, and invokes networking checks after it. Normal play and deployment retain the resident GPU default.
 
-Gameplay objective and balance groups stay disabled through `tests/test_policy.gd` until the owner requests restoration. Test harnesses use finite authored fixtures; they do not spawn free material in the product.
+Gameplay, objective and balance groups are enabled through `tests/test_policy.gd` following the owner's October 15 restoration. Test harnesses use finite authored fixtures; they do not spawn free material in the product.
 
 ### IPv6 browser connections
 
@@ -94,4 +94,8 @@ The shared authority maintains fifteen living cells, recovers existing families/
 
 The current food-vacuole model supersedes intracellular pathway/particle-ATP descriptions above. Before loading a legacy checkpoint, the server archives its complete original graph under state/archives/pond-<id>--epoch-<epoch>--tick-<tick>/, then records a one-time numerical ATP/reserve and finite food/waste conversion audit in subsequent checkpoints. Existing keys and account/session references are retained. Rollback requires that archive and the previous source, with the service stopped; retain the current state as evidence before restoring either. Keep access-keys.json unchanged.
 
-Desktop rendering uses tools/test_frame_budget.sh against the first-cell workload on a real display. CD checks mixed-camera hardware authority throughput and live simulation/wall rate with the actual service render surface, independent of full-window Xvfb presentation. It rejects a merely advancing world that runs below 0.98× or exceeds the 16.67 ms p95 tick budget. See REVISION_49.md for the comparable workload, results and phone-validation limitation.
+Desktop rendering uses tools/test_frame_budget.sh against the first-cell workload on a real display. CD checks mixed-camera hardware authority throughput and live simulation/wall rate with the actual service render surface, independent of full-window Xvfb presentation. It rejects a merely advancing world that runs below 0.98× or exceeds the 33.33 ms p95 tick budget at the deployed 30 Hz cadence. See REVISION_49.md for the comparable workload, results and phone-validation limitation.
+
+## Revision 51 model boundary
+
+The small food-vacuole model now also contains bounded oxygen/carbon particles for local respiration, fermentation and photosynthesis. Before the first upgraded checkpoint, the server independently archives the pre-upgrade pond, then records biochemistry_version=1. Preserve that archive for rollback, the live account graph and all existing keys. No fresh pond or credential replacement is part of this revision. Division AP/mutation state and hourly calendar conditions are checkpointed; restart must not re-award historical births or reroll the current hour. See [Revision 51](REVISION_51.md).

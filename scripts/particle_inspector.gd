@@ -91,8 +91,11 @@ func _internal_pose(screen: Vector2,alpha: float,identity: int=-1) -> Dictionary
 			var at: Vector2=game.world_layer.to_global(view.position+v.p.rotated(view.rotation))
 			if not get_viewport_rect().has_point(at):continue
 			var distance:=screen.distance_to(at)
-			if (identity>=0 or distance<=maxf(7*game.zoom+4,12)) and distance<nearest:
+			if (identity>=0 or distance<=maxf(v.radius*game.zoom+4,12)) and distance<nearest:
 				nearest=distance
+				if v.get("species","") in ["oxygen","carbon"]:
+					found={"index":-1,"packet":{"id":v.id,"species":v.species,"amount":v.contents},"internal":true,"gas":true,"cell_id":cell.id,"kind":1 if v.species=="oxygen" else 5,"screen":at,"angle":view.rotation+float(v.get("angle",0)),"radius":v.radius*game.zoom}
+					continue
 				var food: float=v.contents*(1-v.acid);var waste: float=v.contents*v.acid
 				found={"food":food,"waste":waste,"age":v.age,"index":-1,"packet":{"id":v.id,"species":"food" if food>.0000001 else "waste","amount":food if food>.0000001 else waste},"internal":true,"cell_id":cell.id,"kind":0 if food>.0000001 else 2,"screen":at,"angle":view.rotation,"radius":7*game.zoom}
 		return found
@@ -112,9 +115,12 @@ func _internal_pose(screen: Vector2,alpha: float,identity: int=-1) -> Dictionary
 		var distance:=screen.distance_to(position)
 		if (identity>=0 or distance<=maxf(radius+4,12)) and distance<best:
 			best=distance
+			if packet.species in ["oxygen","carbon"]:
+				result={"index":-1,"packet":packet,"internal":true,"gas":true,"cell_id":cell.id,"kind":1 if packet.species=="oxygen" else 5,"screen":position,"angle":view.rotation+packet.angle,"radius":radius}
+				continue
 			var food:=0.0;var waste:=0.0
 			for stock in packets:
-				if stock.compartment==packet.compartment:
+				if stock.compartment==packet.compartment and stock.species in ["food","waste"]:
 					if stock.species=="food":food+=stock.amount
 					else:waste+=stock.amount
 			result={"food":food,"waste":waste,"age":packet.get("age",0),"index":-1,"packet":packet,"internal":true,"cell_id":cell.id,"kind":0 if packet.species=="food" else 2,"screen":position,"angle":view.rotation,"radius":radius}
@@ -239,8 +245,8 @@ func update_lens(dt: float, screen: Vector2, alpha: float, allowed: bool) -> voi
 	glyph.visible = active and lens_amount > 0
 	if glyph.visible:
 		var magnification := lerpf(1,MAGNIFICATION,lens_amount)
-		glyph.material=vacuole_material if hovered.get("internal",false) else particle_material
-		if hovered.get("internal",false):
+		glyph.material=vacuole_material if hovered.get("internal",false) and not hovered.get("gas",false) else particle_material
+		if hovered.get("internal",false) and not hovered.get("gas",false):
 			vacuole_material.set_shader_parameter("contents",Vector3(hovered.food/maxf(.0000001,hovered.food+hovered.waste),clampf(ceilf((hovered.food+hovered.waste)/.3),1,7),game.Simulation.particle_scale((hovered.food+hovered.waste)/clampf(ceilf((hovered.food+hovered.waste)/.3),1,7))))
 			vacuole_material.set_shader_parameter("opacity",lens_amount)
 		glyph.texture = Art.texture(hovered.kind)
@@ -254,15 +260,19 @@ func update_lens(dt: float, screen: Vector2, alpha: float, allowed: bool) -> voi
 	box.visible = active and lens_amount > 0.15
 	if box.visible:
 		var value: String = Art.Catalog.data().external_species[hovered.kind].name+"\n"+(DETAILS[hovered.kind] if hovered.kind < DETAILS.size() else "A finite cell-derived chemical packet.")
-		if hovered.get("internal",false):
-			value=("Food vacuole\nDigests nutrients directly into ATP and biomass." if hovered.kind==0 else "Waste vacuole\nTravels to the cytoproct, then releases waste into the water.")+"\nFood %.2f · Waste %.2f\nResidence %.1f s" % [hovered.food,hovered.waste,hovered.age]
+		if hovered.get("internal",false) and not hovered.get("gas",false):
+			value=("Food vacuole\nLocal oxygen supports respiration; otherwise food ferments. Both produce ATP, biomass, carbon and waste." if hovered.kind==0 else "Waste vacuole\nTravels to the cytoproct, then releases waste into the water.")+"\nFood %.2f · Waste %.2f\nResidence %.1f s" % [hovered.food,hovered.waste,hovered.age]
 		if hovered.kind == game.world.PHEROMONE:
 			var packet: Dictionary = hovered.packet
 			var report: Dictionary = packet.get("report",{})
 			if not report.is_empty():
 				value += "\nDefense: "+("defended" if report.get("defended",true) else "undefended")+" at emission"
 				value += "\nReported size: %.0f μm across · %s\nSignal age: %.1f s" % [report.radius*2*game.scale_bar.MICROMETERS_PER_UNIT,"armed" if report.hostile else "unarmed",maxf(0,game.world.time-report.emitted_at)]
-		label.custom_minimum_size.x = minf(260*game.cell_ui.ui_scale(),get_viewport_rect().size.x-36)
+		if game.cell_ui.mobile():
+			value=value.replace("\n"," · ")
+			if value.length()>220:value=value.left(217)+"…"
+			label.max_lines_visible=3
+		label.custom_minimum_size.x = (get_viewport_rect().size.x-32*game.cell_ui.ui_scale()) if game.cell_ui.mobile() else minf(260*game.cell_ui.ui_scale(),get_viewport_rect().size.x-36)
 		label.add_theme_font_size_override("font_size",roundi(15*game.cell_ui.ui_scale()))
 		if label.text != value:
 			label.text = value
@@ -270,6 +280,9 @@ func update_lens(dt: float, screen: Vector2, alpha: float, allowed: bool) -> voi
 		var magnified_at: Vector2 = lens_center+((hovered.screen-lens_center)*lerpf(1,MAGNIFICATION,lens_amount)).limit_length(RADIUS*0.45*game.cell_ui.ui_scale())
 		var extent := box.get_combined_minimum_size()
 		box.position = (magnified_at+Vector2(18,24)*game.cell_ui.ui_scale()).clamp(Vector2(12,12),get_viewport_rect().size-extent-Vector2(12,12))
+		if game.cell_ui.mobile():
+			var scale: float=game.cell_ui.ui_scale()
+			box.position=Vector2(8*scale,get_viewport_rect().size.y-game.cell_ui.mobile_resources.get_combined_minimum_size().y-extent.y-16*scale)
 	queue_redraw()
 
 func _draw() -> void:

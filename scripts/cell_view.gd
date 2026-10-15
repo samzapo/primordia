@@ -13,6 +13,8 @@ var cytoplasm=preload("res://scripts/cytoplasm_view.gd").new()
 var seen_revision := -1
 var simple_view := false
 var last_draw_tick := -2
+var emission_seen: Dictionary={}
+var emission_started: Dictionary={}
 var last_internal_tick := -1
 var was_internal := false
 var detail_lod := true
@@ -169,8 +171,8 @@ func _draw() -> void:
 	for link in ([] if simple_view else cell.membrane.skeleton.links):
 		var a: Vector2 = cell.membrane.skeleton.point(link.a,cell.membrane)
 		var b: Vector2 = cell.membrane.skeleton.point(link.b,cell.membrane)
-		draw_line(a,b,hue.lightened(0.45)*Color(1,1,1,(0.5 if game.build_open else 0.16)+link.tension*0.3),1+link.tension*2,true)
-	for junction in ([] if simple_view else cell.membrane.skeleton.junctions.values()): draw_circle(junction.p,3,Color("cce6ee"))
+		draw_line(a,b,hue.lightened(0.45)*Color(1,1,1,0.12+link.tension*0.08),0.7+link.tension*0.6,true)
+	# Junctions remain physical but have no visible handles or editing affordances.
 	if not simple_view and cell != game.world.player and game.internal_visible(cell):
 		for vacuole in cell.chemistry.vacuoles:
 			draw_arc(vacuole.p,vacuole.radius,0,TAU,16,Color("8fe3bf").lerp(Color("f497c4"),vacuole.acid),0.8,true)
@@ -211,10 +213,19 @@ func _draw_organs() -> void:
 		var normal: Vector2 = cell.organ_normal(organ)
 		var at: Vector2 = point+normal*5*organ.scale
 		var heading := normal.angle()
+		var serial: int=int(organ.get("emission_serial",0))
+		if not emission_seen.has(organ.id) and cell.age-float(organ.get("emission_age",-100))>.3:emission_seen[organ.id]=serial
+		if serial!=int(emission_seen.get(organ.id,0)):
+			emission_seen[organ.id]=serial
+			if game.ui_time-float(emission_started.get(organ.id,-100))>=.28:emission_started[organ.id]=game.ui_time
+		var elapsed: float=game.ui_time-float(emission_started.get(organ.id,-100))
+		var bounce:=sin(elapsed*TAU*3)*exp(-elapsed*7) if elapsed<.65 else 0.0
+		at+=normal*bounce*5*organ.scale
+		var drawn_scale: float=organ.scale*(1+.12*bounce)
 		var charge: float = organ.charge_flash
 		if organ.kind == "toxin" and cell.target_id >= 0 and cell.threat.length_squared() > 0.01 and cell.energy >= 12 and cell.biomass >= 0.18*organ.scale*organ.scale*cell.Genes.factor(organ,"burst"):
 			charge = maxf(charge,clampf(1-float(organ.get("burst_clock",0))/(0.75*cell.Genes.factor(organ,"cooldown")),0,1))
-		Visuals.icon(appendages,at,organ.kind,heading,organ.scale,cell.age,organ.mode,organ.consume_flash,not simple_view,charge)
+		Visuals.icon(appendages,at,organ.kind,heading,drawn_scale,cell.age,organ.mode,organ.consume_flash,not simple_view,charge)
 		if organ.get("mutation","") != "": appendages.draw_circle(at,3.5*organ.scale,Color("fff2a3"))
 		if organ.blocked > 0:
 			appendages.draw_arc(at,15*organ.scale,-PI/2,-PI/2+TAU*organ.blocked,28,Color("cf92e8"),4*organ.scale,true)

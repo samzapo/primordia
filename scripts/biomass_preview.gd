@@ -67,7 +67,7 @@ func comparison_bounds() -> Rect2:
 	if quote.is_empty() or game == null or not game.build_open: return Rect2()
 	var scale: float = game.preferences.hud_scale
 	var maximum: float = quote.maximum
-	var rows := maxi(1,ceili(float(quote.ap_count)/8))
+	var rows := maxi(1,ceili(float(mini(24,quote.ap_count))/8))
 	var left: float = get_viewport_rect().size.x-68*scale-4*maximum
 	var bottom: float = 76*scale+2*maximum+(214+18*(rows-1))*scale
 	return Rect2(Vector2(left,60*scale),Vector2(get_viewport_rect().size.x-left,bottom-60*scale))
@@ -128,7 +128,7 @@ func _draw_ap(at: Vector2, scale: float, count: int, label: String, enough: bool
 		draw_circle(p+Vector2(-2,-2.5)*scale,1.8*scale,Color("fff4c3"))
 
 func _draw_rates(stock: Vector2, needed: Vector2, scale: float) -> void:
-	var rows := maxi(1,ceili(float(quote.ap_count)/8))
+	var rows := maxi(1,ceili(float(mini(24,quote.ap_count))/8))
 	var top: float = stock.y+quote.maximum+(126+18*(rows-1))*scale
 	var factor: float = rate_quote.factor
 	var rates: Dictionary = rate_quote.rates

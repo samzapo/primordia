@@ -66,6 +66,7 @@ var focus_animating := false
 var observation_view: Dictionary = {}
 var scale_bar := preload("res://scripts/scale_bar.gd").new()
 var settings_panel := PanelContainer.new()
+var settings_help: Label
 var debug_label := Label.new()
 var tube_hint := Label.new()
 var scale_select := OptionButton.new()
@@ -267,7 +268,7 @@ func is_paused() -> bool:
 	return user_paused or resident_starting or build_open or settings_panel.visible or cell_ui.context.get("kind","") in ["lineage","archive","past"] or world.evolution.terminal()
 
 func _can_edit_tubules() -> bool:
-	return build_open and not settings_panel.visible and not world.player.dead and not world.evolution.terminal()
+	return false # Microtubules are sampled anatomy, never edited by a player.
 
 func _process(dt: float) -> void:
 	var now := Time.get_ticks_usec()
@@ -283,7 +284,7 @@ func _process(dt: float) -> void:
 			simulation_rate = perf_sim_seconds/perf_wall_seconds
 			perf_wall_seconds = 0;perf_sim_seconds = 0
 	var process_start := Time.get_ticks_usec() if frame_trace != null else 0
-	ui_time += dt
+	if not user_paused:ui_time += dt
 	death_frame_dt = dt if not settings_panel.visible and not build_open else 0.0
 	death_focus_age += death_frame_dt
 	if focus_animating:
@@ -314,7 +315,7 @@ func _process(dt: float) -> void:
 			if archive_error != "": _message(archive_error+"\nHistory remains in memory for this session; saving will retry.")
 		_update_hud()
 		_layout()
-	cell_ui.interior.animate(dt)
+	cell_ui.interior.animate(0.0 if user_paused else dt)
 	cell_ui.sync(dt)
 	if frame_trace != null: frame_trace.work("ui",Time.get_ticks_usec()-ui_start)
 	var music_start := Time.get_ticks_usec() if frame_trace != null else 0
@@ -599,6 +600,11 @@ func _draw_preview() -> void:
 		contour.append(contour[0])
 		preview.draw_polyline(contour,Color(0.6,1,0.85,0.6) if fits else Color(1,0.6,0.65,0.65),1.5/zoom,true)
 
+func _size_touch_settings(node: Node,height: float) -> void:
+	for child in node.get_children():
+		if child is Button or child is Slider:child.custom_minimum_size.y=height
+		_size_touch_settings(child,height)
+
 func _refresh_light_texture() -> void:
 	var values := PackedFloat32Array()
 	values.resize(64*40)
@@ -752,8 +758,10 @@ func _build_ui() -> void:
 		settings_panel.hide()
 		cell_ui.open_context({"kind":"lineage"}))
 	_button(options,"New expedition [R]",func(): _restart())
-	_label(options,"Tab: enter cell / keep edits and resume\nClick factories, nucleus, bud or installed organs\nNew organs have a fixed size · no Undo\nRight-click: cancel a held organ or close choices\nIn edit: drag microtubules; hover + wheel: tension\nWheel elsewhere: zoom · middle-drag: pan\nSpace: follow/free outside · recenter inside\nM: open / close settings\nI: interoception / exteroception · inside zoom up to 120×\n[ / ]: cycle cell targets · Enter: choose / place\nArrow keys: navigate choices or membrane placement\nHover particles: inspect through a local lens\nNo movement keys: anatomy steers.",MUTED)
-	_button(options,"Close [M]",_toggle_settings)
+	settings_help=_label(options,"Tab: enter cell / keep edits and resume\nClick factories, nucleus, bud or installed organs\nNew organs have a fixed size · no Undo\nRight-click: cancel a held organ or close choices\nMicrotubules are sampled per cell\nWheel elsewhere: zoom · middle-drag: pan\nSpace: follow/free outside · recenter inside\nM: open / close settings\nI: interoception / exteroception · inside zoom up to 120×\n[ / ]: cycle cell targets · Enter: choose / place\nArrow keys: navigate choices or membrane placement\nHover particles: inspect through a local lens\nNo movement keys: anatomy steers.",MUTED)
+	_button(options,"Resume / Close [M]",func():
+		if touch_zoom.enabled and user_paused:_toggle_user_pause()
+		else:_toggle_settings())
 	options.add_child(quit_button)
 	quit_button.text = "Quit game"
 	quit_button.pressed.connect(func(): get_tree().quit())
@@ -798,9 +806,19 @@ func _layout() -> void:
 	touch_zoom.layout()
 	light_layer.size = size
 	microscope_layer.size = size
-	var width := minf(530*preferences.hud_scale,size.x-32)
-	settings_panel.position = Vector2(size.x-width-16,16)
-	settings_panel.size = Vector2(width,size.y-32)
+	var density: float=touch_zoom.pixels if touch_zoom.enabled else 1.0
+	var margin:=16*density
+	var width := minf(530*preferences.hud_scale*density,size.x-margin*2)
+	var top: float=60*density if touch_zoom.enabled else margin
+	settings_panel.position = Vector2(size.x-width-margin,top)
+	settings_panel.size = Vector2(width,size.y-top-margin)
+	if touch_zoom.enabled and ui.theme!=null:
+		var mobile_theme: Theme=ui.theme.duplicate()
+		mobile_theme.default_font_size=roundi(18*preferences.hud_scale*density)
+		settings_panel.theme=mobile_theme
+		if settings_help!=null:settings_help.text="Tap factories, nucleus, bud or organelles.\nTwo fingers drag, twist and pinch the camera.\nTap the held icon at top left to cancel placement.\nTap particles for names and details below.\nPause opens settings; the shared pond continues.\nAnatomy steers the cell."
+		_size_touch_settings(settings_panel,40*preferences.hud_scale*density)
+	else:settings_panel.theme=null
 	preview.queue_redraw()
 
 func set_particle_collisions(on: bool) -> void:
@@ -830,9 +848,10 @@ func _apply_fullscreen() -> void:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if preferences.fullscreen else DisplayServer.WINDOW_MODE_WINDOWED)
 
 func _update_hud() -> void:
-	if absf(world.evolution.light_factor-light_factor_shown) > 0.02:
+	var light: float=float(world.environment.get("light",world.evolution.light_factor))
+	if absf(light-light_factor_shown) > 0.02:
 		_refresh_light_texture()
-		light_factor_shown = world.evolution.light_factor
+		light_factor_shown = light
 	if acidity_texture.get_width() > 0: acidity_texture.update(Image.create_from_data(64,40,false,Image.FORMAT_RF,world.acidity.values.to_byte_array()))
 	debug_label.visible = show_debug and not settings_panel.visible
 	var backend := "Resident GPU + native cells" if world.resident != null and world.kernels != null else "Resident GPU + SCRIPT cells" if world.resident != null else "GPU experiment" if world.gpu_transport != null else "Native CPU" if world.kernels != null else "GDScript"
@@ -875,7 +894,7 @@ func _toggle_build() -> void:
 	tube_start.clear()
 	cell_ui.close_context()
 	cell_ui.keyboard_target.clear()
-	_message("Click a factory · hold Alt for details.")
+	_message("Tap a factory or organelle. Details appear below." if touch_zoom.enabled else "Click a factory · hold Alt for details.")
 	_layout()
 
 func _finish_build() -> void:
@@ -903,7 +922,7 @@ func placement_status() -> String:
 	if world.evolution.points < 1: return "Needs an adaptation point."
 	if world.player.biomass < Simulation.Cell.organ_cost(Simulation.KINDS[selected]): return "Needs usable tissue; structural tissue stays protected."
 	if not world.player.can_fit(Simulation.KINDS[selected],0): return "Needs more membrane area."
-	return "Click the membrane · neighbors make room."
+	return "Tap the membrane · tap the held icon to cancel." if touch_zoom.enabled else "Click the membrane · neighbors make room."
 
 func _place_at(angle: float) -> bool:
 	if moving_id >= 0:
@@ -979,6 +998,19 @@ func _message(value: String) -> void:
 
 func touch_controls_available() -> bool:
 	return true
+
+func _cancel_placement() -> void:
+	selected=-1;moving_id=-1;tube_start.clear()
+	cell_ui.close_context()
+	_message("Placement cancelled.")
+
+func _mobile_pause_menu() -> void:
+	if not pause_control_ready:return
+	if user_paused:
+		_toggle_user_pause()
+	else:
+		_toggle_user_pause()
+		if not settings_panel.visible:_toggle_settings()
 
 func _toggle_user_pause() -> void:
 	if not pause_control_ready:return

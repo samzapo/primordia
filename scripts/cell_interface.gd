@@ -14,6 +14,7 @@ var mobile_resources:=PanelContainer.new()
 var mobile_stocks:=Label.new()
 var mobile_hide:=Button.new()
 var resources_hidden:=false
+var cancel_icon=Action.new()
 const COMIC=preload("res://assets/fonts/ComicNeue-Regular.ttf")
 func mobile() -> bool:return game!=null and game.touch_zoom.enabled
 func ui_scale() -> float:return game.preferences.hud_scale*(game.touch_zoom.pixels if mobile() else 1.0)
@@ -50,6 +51,8 @@ func initialize(owner_game) -> void:
 	var stock_row:=HBoxContainer.new();mobile_resources.add_child(stock_row)
 	stock_row.add_child(mobile_stocks);mobile_stocks.add_theme_font_override("font",COMIC);mobile_stocks.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	stock_row.add_child(mobile_hide);mobile_hide.pressed.connect(func():resources_hidden=not resources_hidden)
+	cancel_icon.z_index=90;cancel_icon.caption="Cancel placement";cancel_icon.description="Tap to cancel";add_child(cancel_icon)
+	cancel_icon.pressed.connect(game._cancel_placement)
 	message.z_index=100
 	message.add_theme_font_override("font",COMIC)
 	add_child(pathways)
@@ -66,6 +69,7 @@ func initialize(owner_game) -> void:
 	tip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	tip_box.add_child(tip)
+	tip.add_theme_font_override("font",COMIC)
 	tip_box.z_index = 20
 	for label in [message,edit_hint]:
 		add_child(label)
@@ -162,12 +166,12 @@ func open_context(target: Dictionary) -> void:
 	var run = sim.evolution
 	match target.kind:
 		"assembly","chemistry":
-			for index in ([0,1,2,3,5,10,11] if target.kind == "assembly" else [7,9,3,8]):
+			for index in ([0,1,2,3,5,10,11] if target.kind == "assembly" else [6,7,9,3,8]):
 				var kind: String = sim.KINDS[index]
 				var cost: float = sim.Cell.organ_cost(kind)
 				_choice(game.TITLES[index],"%.0f tissue · 1 AP\n%s" % [cost,game.HELP[index]],game._select.bind(index),kind,"",cell.biomass >= cost and run.points >= 1,cost,1,{"kind":kind,"scale":1.0,"mutation":""})
 			if target.kind == "chemistry":
-				_choice("Food vacuoles","Inspect digestion, numeric ATP and biomass, and waste expulsion.",func():
+				_choice("Food vacuoles","Inspect oxygen-dependent digestion, fermentation, photosynthesis and waste expulsion.",func():
 					close_context()
 					pathways.open_cell(),"","Food")
 		"organ":
@@ -178,7 +182,7 @@ func open_context(target: Dictionary) -> void:
 					game.moving_id = target.id
 					game.placement_angle = organ.a
 					close_context()
-					game._message("Choose a membrane location · right-click cancels the move."),"","Move")
+					game._message("Tap the membrane to move it. Tap its icon to cancel." if mobile() else "Choose a membrane location · right-click cancels the move."),"","Move")
 				_choice("Recycle","Returns half the tissue as usable biomass; half becomes waste. AP is not refunded.",func():
 					sim.remove(cell.organs.find(organ))
 					close_context()
@@ -188,7 +192,7 @@ func open_context(target: Dictionary) -> void:
 				var label: String = "Off" if strength == 0 else "%d%%" % roundi(strength*100)
 				var details := "Click to cycle Off / 25 / 50 / 100 / 200 / 400%. Changes signal priority and response time versus exploration; flight always wins."
 				if organ.kind == "feeding": details += "\nSuction, digestion and absorption still work even with steering Off."
-				elif organ.kind == "photosynthesis": details += "\nPhotosynthesis is inactive in this simplified revision."
+				elif organ.kind == "photosynthesis": details += "\nLight seeking continues while carbon particles are fixed into food, tissue and oxygen."
 				_choice("Steering "+label,details,func():
 					var steps: Array = sim.Cell.STEERING_STEPS
 					var index: int = steps.find(strength)
@@ -202,8 +206,8 @@ func open_context(target: Dictionary) -> void:
 					var ap: int = sim.Genes.adaptation_price(organ)
 					var rate_model: Dictionary = organ.duplicate(true)
 					rate_model.mutation = gene
-					_choice(data.title,"%s\n%.0f tissue · %d AP" % [data.text,cost,ap],func():
-						game._message("Specialization installed." if sim.mutate_organ(target.id,gene) else "Needs more AP or usable tissue.")
+					_choice(data.title,data.text+"\nFree mutation.",func():
+						game._message("Specialization installed." if sim.mutate_organ(target.id,gene) else "This organ cannot accept that mutation.")
 						open_context(target),organ.kind,"",cell.biomass >= cost and run.points >= ap,cost,ap,rate_model)
 		"scar":
 			for scar in cell.lost_organs:
@@ -212,6 +216,12 @@ func open_context(target: Dictionary) -> void:
 					game._message("Organelle restored." if sim.edit("restore",{"id":target.id}) else "Needs usable tissue and membrane room.")
 					close_context(),scar.kind,"",cell.biomass >= scar.max_material,scar.max_material,0,scar)
 		"nucleus":
+			for gene in run.division_offers:
+				var data: Dictionary=sim.Genes.DATA[gene]
+				_choice("Keep "+data.title,data.text+"\nFree division mutation.",func():
+					sim.edit("choose_mutation",{"gene":gene})
+					game._message("Mutation selected.")
+					close_context(),data.kind)
 			if not run.sandbox and not run.chosen:
 				for gene in run.offers:
 					var data: Dictionary = sim.Genes.DATA[gene]
@@ -332,7 +342,7 @@ func describe(target: Dictionary) -> String:
 	var run = sim.evolution
 	match target.kind:
 		"assembly": return "Assembly factory\nCilia, flagella, armor, chemical glands, repair and receptors."
-		"chemistry": return "Chemistry factory\nToxin, acid, buffer/repair and toxin-neutralizing glands."
+		"chemistry": return "Chemistry factory\nPhotosynthesis, toxin, acid, buffer/repair and toxin-neutralizing glands."
 		"atp":
 			var rates: Dictionary = cell.energy_budget.rates(cell.age)
 			var breakdown := ""
@@ -368,7 +378,10 @@ func describe(target: Dictionary) -> String:
 func _tooltip(value: String, at: Vector2) -> void:
 	tip_box.visible = value != ""
 	if value == "": return
-	if not Input.is_key_pressed(KEY_ALT): value = value.split("\n")[0]
+	if mobile():
+		value=value.replace("\n"," · ").replace("Click","Tap").replace("click","tap")
+		if value.length()>220:value=value.left(217)+"…"
+	elif not Input.is_key_pressed(KEY_ALT): value = value.split("\n")[0]
 	var s: float = ui_scale()
 	tip.custom_minimum_size.x = minf(320*s,get_viewport_rect().size.x-48)
 	tip.add_theme_font_size_override("font_size",roundi(16*s))
@@ -378,6 +391,13 @@ func _tooltip(value: String, at: Vector2) -> void:
 	var extent := tip_box.get_combined_minimum_size()
 	tip_box.size = extent # Shrink after text reflow; stale tall panels otherwise clip at large UI scales.
 	tip_box.position = (at+Vector2(18,18)).clamp(Vector2(12,12),get_viewport_rect().size-extent-Vector2(12,12))
+	if mobile():
+		tip.custom_minimum_size.x=maxf(50,get_viewport_rect().size.x-32*s)
+		tip.max_lines_visible=3
+		tip.add_theme_font_size_override("font_size",roundi((22 if game.notice_timer>3 else 18)*s))
+		tip_box.reset_size();tip_box.size=tip_box.get_combined_minimum_size()
+		tip_box.position=Vector2(8*s,get_viewport_rect().size.y-mobile_resources.get_combined_minimum_size().y-tip_box.size.y-16*s)
+		return
 	var budget_area: Rect2 = biomass_view.comparison_bounds()
 	if game.build_open and Rect2(tip_box.position,extent).intersects(budget_area):
 		var left: float = budget_area.position.x-extent.x-18*s
@@ -453,7 +473,8 @@ func sync(_dt: float) -> void:
 				choice.position=menu_center+Vector2.from_angle(-PI/2+TAU*i/maxi(1,choices.size()))*menu_radius-choice.size*.5
 				choice.queue_redraw()
 	if mobile():
-		message.position=Vector2(12*s,maxf(mobile_menu_height+12*s,size.y-mobile_resources.size.y-110*s))
+		message.visible=false
+
 
 	var cursor := get_global_mouse_position()
 	hovered = hit(cursor)
@@ -491,6 +512,9 @@ func sync(_dt: float) -> void:
 			_tooltip("%s\n%.0f tissue · 1 AP\n%s" % [game.TITLES[game.selected],cost,game.placement_status()],cursor)
 		else:
 			tip_box.hide()
+	if mobile():
+		if game.notice_timer>3:_tooltip(game.notice,Vector2.ZERO)
+		elif game.inspector.box.visible:tip_box.hide()
 	biomass_view.sync()
 	queue_redraw()
 
@@ -500,6 +524,11 @@ func _layout_mobile() -> void:
 	mobile_tray.visible=mobile() and not context.is_empty() and not choices.is_empty()
 	mobile_resources.visible=mobile() and game.touch_controls_available() and not game.world.player.dead
 	mobile_menu_height=0
+	cancel_icon.visible=mobile() and (game.selected>=0 or game.moving_id>=0) and not game.settings_panel.visible
+	if cancel_icon.visible:
+		var organ: Dictionary=game.world.player.organ_by_id(game.moving_id)
+		cancel_icon.kind=game.Simulation.KINDS[game.selected] if game.selected>=0 else organ.get("kind","")
+		cancel_icon.position=Vector2(8,8)*s;cancel_icon.size=Vector2.ONE*54*s;cancel_icon.text_scale=s*.75;cancel_icon.queue_redraw()
 	if mobile_tray.visible:
 		var columns:=maxi(1,int((size.x-64*s)/(65*s)))
 		var height:=minf(size.y*.32,ceilf(float(choices.size())/columns)*65*s+12*s)
@@ -533,6 +562,9 @@ func mobile_diagnostics(conversion: Vector2) -> Dictionary:
 		"factory_visible":interior.is_visible_in_tree(),"factory":[factory.x,factory.y],
 		"chemistry_factory":[chemistry_factory.x,chemistry_factory.y],
 		"tray_visible":mobile_tray.is_visible_in_tree(),"tray_bounds":bounds.call(mobile_tray),
+		"settings_visible":game.settings_panel.visible,
+		"placement_cancel":{"visible":cancel_icon.is_visible_in_tree(),"kind":cancel_icon.kind,"bounds":bounds.call(cancel_icon)},
+		"description":{"visible":tip_box.is_visible_in_tree(),"text":tip.text,"bounds":bounds.call(tip_box)},
 		"choices":choices.map(func(choice):return {"caption":choice.caption,"bounds":bounds.call(choice)})}
 
 func cycle_target(direction: int) -> void:

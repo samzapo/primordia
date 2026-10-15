@@ -24,12 +24,13 @@ static func run(check: Callable) -> void:
 		var amount: float = minf(stock,0.5*DT)
 		stock -= amount
 		cell.substrate += amount
+		cell.oxygen += amount # Finite oxygen accompanies this fixture's finite food stock.
 		cell.age += DT
 		sim._metabolize(cell,DT)
 		for organ in cell.organs:
 			if organ.kind == "propulsion": cell.spend_energy(Cell.MOTION_UPKEEP*DT,organ,"movement")
 			elif organ.kind == "feeding": cell.spend_energy((Cell.PUMP_UPKEEP+0.35*Cell.SECRETION_COST)*DT,organ,"pumping")
-	check.call(cell.energy > 12 and cell.health == 100 and cell.reserve_used == 0,"A finite steady food supply supports two flagella and a pore without burning construction tissue")
+	check.call(cell.energy > 12 and cell.health == 100 and cell.reserve_used == 0,"A finite steady food and oxygen supply supports two flagella and a pore without burning construction tissue")
 	check.call(cell.biomass > 30 and cell.add_organ("photosynthesis",1.2),"Ordinary digestive growth leaves tissue for another paid organ")
 	check.call(absf(cell.organic_mass()+stock+sim.respiration_loss-before) < 0.00001,"Easier ATP yields still conserve finite food and ordinary material losses")
 	# Empty reserves still impose scarcity; there is no passive free ATP.
@@ -43,7 +44,7 @@ static func run(check: Callable) -> void:
 		sim._metabolize(cell,DT)
 	check.call(cell.energy == 0 and cell.health < 100 and cell.processed == processed,"Without real fuel the revised economy still exhausts ATP")
 	# One unit of fueled food retains .7 tissue and credits 2.25 numeric ATP.
-	var fresh=Cell.new();fresh.energy=0;fresh.substrate=1
+	var fresh=Cell.new();fresh.energy=0;fresh.substrate=1;fresh.oxygen=1
 	var initial_biomass: float=fresh.biomass
 	fresh.chemistry.advance(fresh,10)
-	check.call(is_equal_approx(fresh.energy,2.25) and is_equal_approx(fresh.biomass-initial_biomass,.7),"Direct digestion pays the current conservative tissue/ATP yield without oxygen")
+	check.call(is_equal_approx(fresh.energy,2.25) and is_equal_approx(fresh.biomass-initial_biomass,.7),"Respiration pays the conservative tissue/ATP yield with local oxygen")

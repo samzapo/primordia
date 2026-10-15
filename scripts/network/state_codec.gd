@@ -15,7 +15,7 @@ const TYPES := {
 	"budget": preload("res://scripts/energy_budget.gd"),
 }
 const TRANSIENT := ["kernels","native","grid","reaction_grid","cell_index","gpu_transport","resident","experimental_fluid","owner","_owner","build_original","build_state","bins","profile_usec","profile_counts","foreground_particle_ids","last_spawn","accelerator","render_origins","command_sink","interoceptive_cells","resource_effects_enabled","batching"]
-const DERIVED_CELL := ["raw_fuel","substrate","waste"]
+const DERIVED_CELL := ["raw_fuel","substrate","waste","oxygen","carbon"]
 var objects: Array = []
 var identities: Dictionary = {}
 var overrides: Dictionary = {}

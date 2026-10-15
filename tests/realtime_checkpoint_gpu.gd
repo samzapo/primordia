@@ -39,7 +39,7 @@ func run() -> void:
 	var timings: Array=host.tick_samples.duplicate();timings.sort()
 	var p95: float=timings[mini(timings.size()-1,int(timings.size()*.95))]
 	check(ratio>=.98 and ratio<=1.02 and p95<=1000.0/host.physics_hz,"Existing saved pond meets the real-time tick budget under full client cameras")
-	check(host.world.cells.all(func(cell):return cell.chemistry.particle_count()<=24),"Every migrated interior retains its bounded finite carrier population")
+	check(host.world.cells.all(func(cell):return cell.chemistry.particle_count()<=cell.chemistry.MAX_PACKETS),"Every migrated interior retains its bounded finite carrier population")
 	host._write_metrics()
 	var phases=JSON.parse_string(FileAccess.get_file_as_string(host.store.directory.path_join("health.json")))
 	print("AGED_AUTHORITY ",JSON.stringify({"simulation_hz":Engine.physics_ticks_per_second,"tick_budget_ms":1000.0/host.physics_hz,"source_world":saved.world_id,"simulation_wall_ratio":ratio,"tick_p95_ms":p95,"cells":host.world.cells.filter(func(cell):return not cell.dead).size(),"phase_mean_ms":phases.get("tick_phase_mean_ms",{}),"gpu":RenderingServer.get_video_adapter_name()}))

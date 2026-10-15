@@ -18,7 +18,11 @@ func run() -> void:
 	for i in 5:await process_frame
 	var view=scene.views[cell.id]
 	check(view.z_index>scene.views[999].z_index and view.interior_backing.visible,"Focused cell is an opaque foreground above background organisms")
-	check(view.cytoplasm.multimesh.visible_instance_count==1 and cell.chemistry.particles.size()==2,"Mixed food/waste stock has one rendered carrier rather than independently moving contents")
+	check(view.cytoplasm.multimesh.visible_instance_count==2 and cell.chemistry.particles.size()==3,"Mixed food/waste stock shares one carrier; carbon is a separate finite gas particle")
+	var carbon: Dictionary=cell.chemistry.particles.filter(func(stock):return stock.species=="carbon")[0]
+	var carbon_at: Vector2=scene.world_layer.to_global(view.position+carbon.p.rotated(view.rotation))
+	var gas_pick: Dictionary=scene.inspector.pick(carbon_at,1)
+	check(gas_pick.get("gas",false) and gas_pick.kind==5,"Carbon particles support the same shaped inspection as external chemistry")
 	var artwork=preload("res://scripts/visuals.gd")
 	check(artwork.internal_content_radius(0)==scene.world.particle_radius(0)*.5 and artwork.internal_content_radius(2)==scene.world.particle_radius(2)*.5,"Interior nutrient and waste glyphs use half the matching external base radius")
 	for quantity in [.03,.3,3.0]:

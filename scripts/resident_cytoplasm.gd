@@ -7,7 +7,7 @@ const STRIDE:=96
 # chemistry; 32..50 species totals; 64..68 derived inventories; 70..84 current
 # transaction result/body deltas; 96..127 flux/limits; 128..223 vacuoles.
 const CONTROL_BYTES:=4096
-const MAX_CAPACITY:=32
+const MAX_CAPACITY:=64
 var rd: RenderingDevice
 var shader:=RID()
 var pipeline:=RID()
@@ -49,9 +49,9 @@ static func _table(name: String,values: Array,type: String="double") -> String:
 func prepare(chem,cell) -> void:
 	chemistry=weakref(chem);body=weakref(cell)
 	species=Catalog.data().species.keys()
-	var constants:="const int SPECIES=%d;\nconst int FOOD=%d;\nconst int WASTE=%d;\n" % [species.size(),species.find("food"),species.find("waste")]
+	var constants:="const int SPECIES=%d;\nconst int FOOD=%d;\nconst int WASTE=%d;\nconst int OXYGEN=%d;\nconst int CARBON=%d;\n" % [species.size(),species.find("food"),species.find("waste"),species.find("oxygen"),species.find("carbon")]
 	source=FileAccess.get_file_as_string("res://shaders/compute/resident_cytoplasm.glsl.txt").replace("/*CYTOPLASM_CATALOG*/",constants)
-	capacity=32
+	capacity=64
 
 func _pack(packets: Array) -> PackedByteArray:
 	var bytes:=PackedByteArray();bytes.resize(packets.size()*STRIDE)
@@ -105,7 +105,7 @@ func _anatomy(cell,external: float=.15) -> PackedByteArray:
 
 func initialize(device: RenderingDevice,packets: PackedByteArray,control: PackedByteArray,anatomy: PackedByteArray) -> bool:
 	rd=device
-	if packets.size()>capacity*STRIDE or control.decode_double(0)>24:
+	if packets.size()>capacity*STRIDE or control.decode_double(0)>36:
 		error="Food/waste input exceeds bounded allocation";return false
 	if capacity>_capacity_limit:error="Intracellular resident capacity exceeded";return false
 	var code:=RDShaderSource.new();code.source_compute=source
@@ -133,7 +133,7 @@ func _dispatch(stage: int,groups: int=1) -> void:
 	var list:=rd.compute_list_begin();rd.compute_list_bind_compute_pipeline(list,pipeline);rd.compute_list_bind_uniform_set(list,bindings,0);rd.compute_list_set_push_constant(list,push,4);rd.compute_list_dispatch(list,groups,1,1);rd.compute_list_end()
 
 func attach(gpu,chem,cell) -> bool:
-	if chem.particles.size()>chem.MAX_PACKETS or chem.particles.any(func(packet):return packet.species not in ["food","waste"]):
+	if chem.particles.size()>chem.MAX_PACKETS or chem.particles.any(func(packet):return packet.species not in chem.ACTIVE_SPECIES) or chem.ACTIVE_SPECIES.any(func(key):return chem.particles.filter(func(packet):return packet.species==key).size()>(12 if key in ["food","waste"] else 6)):
 		error="Invalid food/waste carrier population; CPU ownership retained";return false
 	prepare(chem,cell)
 	var packets:=_pack(chem.particles);var control:=_control(chem);var anatomy:=_anatomy(cell)
@@ -153,7 +153,7 @@ func command(code: int,q: float=0,at: Vector2=Vector2.ZERO,reach: float=0,dest: 
 	var args:=PackedFloat64Array([code,q,at.x,at.y,reach,dest,source_id,compartment,fuel,spread,species.find(key),0,0,source_id&0xffffffff,(source_id>>32)&0xffffffff,compartment&0xffffffff,(compartment>>32)&0xffffffff,cell.id&0xffffffff,(cell.id>>32)&0xffffffff]);args.resize(32)
 	for index in extra:
 		if index is int:args[index]=extra[index]
-	var anatomy:=_anatomy(cell,float(extra.get("external",.15))) if code in [0,10,11] or anatomy_dirty else PackedByteArray()
+	var anatomy:=_anatomy(cell,float(extra.get("external",.15))) if code in [0,10,11,13] or anatomy_dirty else PackedByteArray()
 	anatomy_dirty=false
 	# This is a scalar deterministic solvent trial, not chemical state or RNG.
 	if code==0:
@@ -191,7 +191,7 @@ func _execute(args: PackedByteArray,anatomy: PackedByteArray,code: int) -> void:
 		var size:=PackedByteArray();size.resize(8);size.encode_double(0,float(capacity));rd.buffer_update(buffers[1],8,8,size);_rebind()
 	count=int(summary.decode_double(0))
 	if code!=2:_dispatch(3,maxi(1,ceili(count/64.0)))
-	if code==11 and summary.decode_double(70*8)>0:transfer=rd.buffer_get_data(buffers[4],0,int(summary.decode_double(70*8))*STRIDE)
+	if code in [11,13] and summary.decode_double(70*8)>0:transfer=rd.buffer_get_data(buffers[4],0,int(summary.decode_double(70*8))*STRIDE)
 	semaphore.post()
 
 func _apply(bytes: PackedByteArray,code: int) -> void:
@@ -206,10 +206,10 @@ func _apply(bytes: PackedByteArray,code: int) -> void:
 	chem.vacuoles.clear()
 	for j in int(bytes.decode_double(7*8)):
 		var base:=128+j*8
-		chem.vacuoles.append({"id":int(bytes.decode_double(base*8))|(int(bytes.decode_double((base+7)*8))<<32),"p":Vector2(bytes.decode_double((base+1)*8),bytes.decode_double((base+2)*8)),"radius":bytes.decode_double((base+3)*8),"acid":bytes.decode_double((base+4)*8),"material":0.0,"contents":bytes.decode_double((base+5)*8),"age":bytes.decode_double((base+6)*8)})
+		chem.vacuoles.append({"species":("oxygen" if bytes.decode_double((base+4)*8)==-1 else "carbon") if bytes.decode_double((base+4)*8)<0 else "carrier","id":int(bytes.decode_double(base*8))|(int(bytes.decode_double((base+7)*8))<<32),"p":Vector2(bytes.decode_double((base+1)*8),bytes.decode_double((base+2)*8)),"angle":bytes.decode_double((base+3)*8) if bytes.decode_double((base+4)*8)<0 else 0.0,"radius":1.4 if bytes.decode_double((base+4)*8)<0 else bytes.decode_double((base+3)*8),"acid":bytes.decode_double((base+4)*8),"material":0.0,"contents":bytes.decode_double((base+5)*8),"age":bytes.decode_double((base+6)*8)})
 	cell.biomass+=bytes.decode_double(80*8);cell.health=maxf(0,cell.health+bytes.decode_double(81*8))
 	var gained:=bytes.decode_double(82*8)
-	if gained>0:cell.gain_energy(gained)
+	if gained>0 and code!=10:cell.gain_energy(gained)
 	cell.processed+=bytes.decode_double(83*8);cell.fermented+=bytes.decode_double(84*8)
 	if bytes.decode_double(84*8)>0:cell.fermentation_activity=2
 	if bytes.decode_double(81*8)<0:cell.death_hint="Osmotic overload; contractile pumping failed"

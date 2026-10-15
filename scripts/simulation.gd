@@ -125,6 +125,7 @@ var pending_replacements: Array = []
 var next_id := 1
 var inherited_lineages: Dictionary = {}
 var time := 0.0
+var environment: Dictionary={}
 var habitat := 0
 var seed_value := 20261004
 var spawn_clock := 0.0
@@ -221,6 +222,7 @@ func _init(seed_number: int = 20261004, profile: int = 0, populate: bool = true)
 	background_rng.seed = seed_number ^ 0x51a7
 	ecology_rng.seed = seed_number ^ 0x719ab
 	evolution = Evolution.new(seed_number)
+	lineage.progression=evolution
 	if not populate: return
 	habitat = clampi(profile,0,2)
 	player.role = "player"
@@ -336,7 +338,6 @@ func local_particle_kind(kind: int) -> Array[int]:
 	return grid.query_kind_rect(particles,player.position if camera_follows_player else camera_position,view_half+Vector2.ONE*(Medium.ACTIVE_PAD+Medium.ACTIVE_FADE),kind)
 
 func install(kind: String, local_angle: float, mode: String = "graze", size: float = 1.0) -> bool:
-	if kind=="photosynthesis":return false # Retired intracellular pathway.
 	if remote_client: return edit("install",{"kind":kind,"angle":local_angle})
 	var cost := Evolution.install_price(size)
 	if evolution.terminal() or (evolution.enabled and evolution.points < cost): return false
@@ -942,7 +943,7 @@ func chance(rate: float, dt: float) -> bool:
 func light_at(at: Vector2) -> float:
 	var p := Medium.wrap_position(at)
 	var field := 0.5+0.28*sin(TAU*p.x/WORLD.x*3+0.4)+0.22*cos(TAU*p.y/WORLD.y*3-0.8)
-	return clampf(field*(0.5 if habitat == 1 else 1.25 if habitat == 2 else 1.0)*evolution.light_factor,0.02,1.0)
+	return clampf(field*(0.5 if habitat == 1 else 1.25 if habitat == 2 else 1.0)*float(environment.get("light",evolution.light_factor)),0.02,1.0)
 
 func light_direction(at: Vector2) -> Vector2:
 	var p := Medium.wrap_position(at)
@@ -1235,6 +1236,11 @@ func _step_internal_chemistry(dt: float) -> void:
 
 func _metabolize(cell, dt: float) -> void:
 	cell.reserve_activity = maxf(0,cell.reserve_activity-dt)
+	if cell.energy<10 and cell.substrate<1:
+		var mobilized: float=minf(maxf(0,cell.biomass-8),dt*.3*cell.growth_scale())
+		if mobilized>0:
+			cell.biomass-=mobilized;cell.reserve_used+=mobilized;cell.reserve_activity=2
+			cell.chemistry.emit("food",mobilized,cell.chemistry.constrain(cell,Vector2(.15,.15)*cell.radius),-1,-1,mobilized*7.5)
 	if not perception_modes_enabled:cell.chemistry.advance(cell,dt,0.15+acidity.sample(cell.position)*0.1)
 	cell.Surface.advance(cell,dt,self)
 	cell.decay_energy(dt)
@@ -1283,6 +1289,7 @@ func _emit_and_attack(cell, dt: float) -> void:
 			last_spawn.capacity = 0.25 if kind in [ACID,BUFFER] else 0.06
 			_commit_spawn_metadata()
 			organ.charge_flash = 1
+			cell.emitted(organ)
 			if cell == player and kind == ACID: evolution.record("acid",0.06)
 	# Cellular stress also releases a material-bearing toxic byproduct.
 	if cell.health < 90 and cell.biomass > 0.08:
@@ -1308,6 +1315,7 @@ func _emit_and_attack(cell, dt: float) -> void:
 			_emit_aimed(TOXIN,cell.organ_position(organ),aim,170,0.15*burst,cell.id)
 		cell.biomass -= 0.18*burst
 		organ.consume_flash = 1
+		cell.emitted(organ)
 		organ.burst_clock = 0.75*Genes.factor(organ,"cooldown")
 
 func _motion(dt: float) -> void:
@@ -1686,6 +1694,7 @@ func make_offspring(parent, quote: Dictionary):
 		organ.consume_clock = 0.0
 		organ.charge_flash = 0.0
 		organ.consumed_total = 0.0
+		organ["emission_serial"]=0;organ["emission_age"]=-100.0
 	for organ in child.organs:
 		if organ.kind == "photosynthesis": child.chemistry.anchor_photosynthesis(child,organ); break
 	child.update_geometry()
@@ -1731,6 +1740,8 @@ func _divide_paid(parent,ledger,dormant: bool=false,follow: bool=false,progress:
 	inherited_lineages[child.id] = child.lineage_id()
 	next_id += 1
 	ledger.births += 1
+	var mutation_offer:=false
+	if ledger.progression!=null:mutation_offer=ledger.progression.divided(parent)
 	ledger.register(child,parent.id,child.generation,"dormant" if dormant else "active" if follow else "living",time)
 	if dormant:
 		ledger.dormant.append(child)
@@ -1745,7 +1756,7 @@ func _divide_paid(parent,ledger,dormant: bool=false,follow: bool=false,progress:
 			evolution.observe_successor(child)
 	if progress:evolution.offspring_id = child.id if not dormant else evolution.offspring_id
 	_record_sound("division",parent.position,parent.id)
-	ledger.notify("Dormant successor funded · family safety costs real tissue and ATP." if dormant else "Successor released · the family now has another living branch.")
+	ledger.notify(("Dormant successor funded." if dormant else "Successor released.")+(" +1 AP." if ledger.progression!=null else "")+(" Free mutation available in the nucleus." if mutation_offer else ""))
 	events.append({"type":"division","id":child.id,"parent":parent.id,"dormant":dormant,"time":time,"material":quote.total_material,"reserve_used":quote.material,"body_transferred":quote.body_transfer,"oxygen_transferred":child.oxygen,"atp_used":20})
 	return true
 
@@ -1788,6 +1799,7 @@ func _family_ledger(cell):
 	for ledger in family_ledgers:
 		if ledger.root_id==cell.lineage_id():return ledger
 	var ledger=Lineage.new();ledger.root_id=cell.lineage_id()
+	ledger.progression=Evolution.new(seed_value^cell.lineage_id());ledger.progression.sandbox=server_mode
 	ledger.register(cell,-1,cell.generation,"living",time);family_ledgers.append(ledger)
 	return ledger
 

@@ -107,7 +107,9 @@ func run(suite) -> void:
 	suite.expect(client.commands.is_empty(),"Paused browser cannot submit edits from a frozen view")
 	client.paused_snapshot={};client.connected=true;client.received_usec=Time.get_ticks_usec()
 	client.world.player.previous_position=client.world.player.position-Vector2(10,0)
+	client.settings_panel.show()
 	client._toggle_user_pause()
+	suite.expect(not client.settings_panel.visible,"Browser Resume closes its settings menu")
 	suite.expect(not client.user_paused and client.received_usec==0,"Quick Resume cannot rewind interpolation before a new snapshot arrives")
 	client.connected=false;client.invitation="accepted-fixture-key";client.invite_input.text=client.invitation
 	client._welcome({"token":"a".repeat(64),"epoch":2,"sequence":0,"edit":0,"seed":9,"habitat":preload("res://scripts/network/state_codec.gd").new().capture(client.world.habitat_geometry)})

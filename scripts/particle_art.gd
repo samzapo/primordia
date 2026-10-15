@@ -69,3 +69,12 @@ static func _svg(glyph: Dictionary, simplified: bool = false) -> String:
 <g stroke="#%s" fill="#%s" stroke-width="16">%s%s</g>
 <path d="%s" fill="none" stroke="#fff4d3" stroke-width="9"/>
 </g></svg>""" % [glyph.shade,glyph.shade,path,lobes,glyph.color,glyph.color,path,lobes,glyph.tips]
+
+
+static var _atp: Texture2D
+static func atp_texture() -> Texture2D:
+	if _atp==null:
+		var image:=Image.new()
+		var error:=image.load_svg_from_string("<svg xmlns='http://www.w3.org/2000/svg' width='96' height='96' viewBox='-48 -48 96 96'><path d='M -29 1 L -16 22 L 2 -24 H 30' fill='none' stroke='#d79725' stroke-width='17' stroke-linecap='round' stroke-linejoin='round'/><path d='M -29 -2 L -16 18 L 2 -27 H 30' fill='none' stroke='#ffe071' stroke-width='12' stroke-linecap='round' stroke-linejoin='round'/></svg>")
+		assert(error==OK);image.generate_mipmaps();_atp=ImageTexture.create_from_image(image)
+	return _atp

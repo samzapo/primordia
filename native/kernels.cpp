@@ -1439,9 +1439,9 @@ public:
       p.set(keys.amount,p.amount()-taken);
       invalidate_particle_render(int64_t(ids[k]));
       if (p.amount() <= .000001) p.set(keys.alive,false);
-      if (kind == 1) oxygen += taken;
+      if (kind == 1) oxygen = body->get("oxygen");
       else if (kind == 5) {
-        carbon += taken;
+        carbon = body->get("carbon");
         if (int(p.get("owner",-1)) != owner) foreign += taken;
       } else {
         substrate = body->get("substrate"); eaten += taken; intake += taken;
@@ -1449,8 +1449,7 @@ public:
         body->call("consumed",mouth,taken);
       }
     }
-    body->set("substrate",substrate); body->set("eaten",eaten);
-    body->set("foreign_intake",foreign); body->set("oxygen",oxygen); body->set("carbon",carbon);
+    body->set("eaten",eaten); body->set("foreign_intake",foreign);
     return intake;
   }
   void feed(Array particles, TypedArray<int64_t> ids, Object *body, Dictionary organ,
@@ -1521,14 +1520,15 @@ public:
         double fuel = kind==0 ? std::min(available_fuel,p.amount())*taken/std::max(.00000001,p.amount()) : taken;
         body->call("receive_particle",kind,taken,fuel,at);
         if (kind==0) substrate=body->get("substrate");
+        else if (kind==1) oxygen=body->get("oxygen");
+        else if (kind==5) carbon=body->get("carbon");
         if (kind==0) p.set(keys.capacity,std::max(0.,available_fuel-fuel));
       }
       if (taken > 0) p.set(keys.amount,p.amount()-taken);
       invalidate_particle_render(int64_t(ids[k]));
       if (p.amount() <= .000001) p.set(keys.alive,false);
     }
-    body->set("substrate",substrate); body->set("eaten",eaten);
-    body->set("foreign_intake",foreign); body->set("oxygen",oxygen); body->set("carbon",carbon);
+    body->set("eaten",eaten); body->set("foreign_intake",foreign);
   }
   void exclude(Array particles, TypedArray<int64_t> ids, Array bodies,
                Vector2 camera, Vector2 half) {

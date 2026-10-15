@@ -9,6 +9,7 @@ var notices: Array[String] = []
 var serial := 0
 var recovery_clock := 0.0
 var founder_material := 0.0
+var progression # Shared with the owning account; checkpoint graph preserves identity.
 var births := 0
 var deaths := 0
 

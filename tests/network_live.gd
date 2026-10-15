@@ -199,7 +199,7 @@ func run() -> void:
 		check(ratio>=.98 and ratio<=1.02,"Shared authority advances at real time with mixed wide cameras")
 		check(Engine.physics_ticks_per_second==30 and host.physics_hz==30,"Dedicated authority uses the documented 30 Hz simulation cadence")
 		check(p95<=1000.0/host.physics_hz,"Authority p95 tick fits its documented simulation cadence")
-		check(host.world.cells.all(func(cell):return cell.chemistry.particle_count()<=24),"Aged interiors stay bounded under sustained finite digestion")
+		check(host.world.cells.all(func(cell):return cell.chemistry.particle_count()<=cell.chemistry.MAX_PACKETS),"Aged interiors stay bounded under sustained finite digestion")
 		host._write_metrics()
 		var phase_report=JSON.parse_string(FileAccess.get_file_as_string(host.store.directory.path_join("health.json")))
 		print("AUTHORITY_PHASES ",JSON.stringify(phase_report.get("tick_phase_mean_ms",{})))

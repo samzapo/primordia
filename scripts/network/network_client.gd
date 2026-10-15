@@ -137,6 +137,7 @@ func _toggle_user_pause() -> void:
 	if user_paused:
 		build_open=false;selected=-1;moving_id=-1;tube_start.clear();cell_ui.close_context()
 	else:
+		settings_panel.hide()
 		var latest:=paused_snapshot;paused_snapshot={}
 		if not latest.is_empty():_snapshot(latest)
 		for cell in world.cells:cell.previous_position=cell.position;cell.previous_angle=cell.angle
@@ -351,6 +352,7 @@ func _snapshot(message: Dictionary) -> void:
 	if world.player.dead and can_follow():
 		notice="Your lineage has ended · following a living cell for observation.";notice_timer=12
 	world.time=message.time;world.revision=message.tick
+	world.environment=message.get("environment",{})
 	world.fluid.velocity=message.flow;world.acidity.values=message.acid
 	world.sound_events=message.sounds;world.sound_sequence=message.sound_sequence;world.reaction_sparks=message.sparks
 	if inflight.is_empty():
