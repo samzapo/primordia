@@ -270,7 +270,7 @@ jobs:
                       measured=json.loads(result.stdout)
                       report["frozen_frame_probe"]["summary"]={key:measured[key] for key in ["fps","wall_p95_ms","phase_mean_ms","render_boundary_mean_ms","engine_render_gpu_mean_ms"]}
                   fixture_env=os.environ.copy();fixture_env["PRIMORDIA_INVITE"]="bounded-infrastructure-fixture"
-                  authority=subprocess.run(["xvfb-run","-a","-s","-screen 0 1280x720x24 -nolisten tcp",str(runtime),"--path",str(candidate),"--rendering-method","mobile","--rendering-driver","vulkan","--gpu-index","0","--audio-driver","Dummy","--script","tests/network_live.gd","--","--gpu","--full-world","--realtime"],env=fixture_env,capture_output=True,text=True,timeout=100)
+                  authority=subprocess.run(["xvfb-run","-a","-s","-screen 0 1280x720x24 -nolisten tcp",str(runtime),"--path",str(candidate),"--rendering-method","mobile","--rendering-driver","vulkan","--gpu-index","0","--audio-driver","Dummy","--resolution","64x64","--script","tests/network_live.gd","--","--gpu","--full-world","--realtime"],env=fixture_env,capture_output=True,text=True,timeout=100)
                   report["authority_probe"]={"returncode":authority.returncode,"output":(authority.stdout+authority.stderr)[-4000:]}
               finally:
                   if active:subprocess.run(["systemctl","--user","start","primordia.service"],check=True,timeout=70)
