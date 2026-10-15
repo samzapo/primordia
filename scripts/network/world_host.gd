@@ -17,6 +17,8 @@ var world_id := ""
 var epoch := 0
 var invite := ""
 var access_hashes: Dictionary = {}
+# Dedicated authority cadence; clients retain their own 60 FPS presentation.
+var physics_hz:=30
 var cpu := false
 var running := false
 var port := 9001
@@ -53,6 +55,7 @@ var population_retry_at := 0.0
 
 func _ready() -> void:
 	get_tree().auto_accept_quit = false
+	Engine.physics_ticks_per_second=physics_hz
 	Engine.max_physics_steps_per_frame = 2
 	if store.directory=="": store.directory = ProjectSettings.globalize_path("user://world")
 	for arg in OS.get_cmdline_user_args():
@@ -555,6 +558,8 @@ func _write_metrics() -> void:
 		"backend":"gpu" if world.resident!=null else "cpu","gpu":RenderingServer.get_video_adapter_name(),"build":OS.get_environment("PRIMORDIA_BUILD_SHA"),
 		"views":world.camera_views.size(),"peers":peers.size(),"packets":world.particle_count(),"cold_packets":world.resident.stored_count() if world.resident!=null else 0,"accounts":accounts.size(),"stored_packets":world.particle_count()+world.resident.stored_count() if world.resident!=null else world.particle_count(),
 		"sent_bytes":sent_bytes,"skipped_frames":skipped_frames,"publication_readback_bytes":world.resident.gpu._publication.bytes_read if world.resident!=null and world.resident.gpu._publication!=null else 0,"checkpoint_tick":store.last_saved_tick,"checkpoint_ms":checkpoint_total_ms,"checkpoint_write_ms":store.latency_ms,"checkpoint_error":store.last_error,"backend_error":startup_error}
+	metrics["simulation_hz"]=Engine.physics_ticks_per_second
+	metrics["tick_budget_ms"]=1000.0/Engine.physics_ticks_per_second
 	metrics["automatic_reproduction"]=world.automatic_reproduction
 	metrics["minimum_living_cells"]=Population.MIN_LIVING
 	metrics["automatic_lineage_restart"]=true;metrics["automatic_pond_restart"]=true

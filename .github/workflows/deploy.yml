@@ -76,6 +76,7 @@ jobs:
               samples.append(value)
               if index<2: time.sleep(6)
           assert samples[-1]['tick']>samples[0]['tick']
+          assert all(value.get('simulation_hz')==30 and .98<=value['simulation_wall_ratio']<=1.02 and value['tick_ms_p95']<=1000/30 for value in samples)
           assert all(value['living_cells']>=15 and value['minimum_living_cells']==15 and value['automatic_pond_restart'] and value['automatic_lineage_restart'] for value in samples)
           before=samples[-1]
           subprocess.run(['systemctl','--user','restart','primordia.service'],check=True)

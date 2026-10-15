@@ -5,11 +5,6 @@ name: Primordia host telemetry
     branches: [samzapo/persistent-multiplayer]
     paths: [.github/workflows/host-telemetry.yml]
   workflow_dispatch:
-    inputs:
-      isolated_frame_probe:
-        description: Briefly stop only Primordia for an isolated candidate frame probe, then restore it
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -28,7 +23,6 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          ISOLATED_FRAME_PROBE: ${{ inputs.isolated_frame_probe }}
         run: |
           test "$RUNNER_NAME" = "samzapo-desktop"
           task_dir="$RUNNER_TEMP/samzapo--persistent-multiplayer--telemetry-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
@@ -247,37 +241,6 @@ jobs:
           if ca.exists():
               report["browser_delivery"]["native_https"] = browser_delivery("127.0.0.1", ssl.create_default_context(cafile=str(ca)))
           report["browser_delivery"]["public_https"] = browser_delivery("2601:19b:401:f7b5:6f5e:e2e9:76e8:8258", ssl.create_default_context())
-          if os.environ.get("ISOLATED_FRAME_PROBE", "").lower() == "true":
-              import fcntl
-              candidate=deployment / "releases/samzapo--persistent-multiplayer--e179945151ee103cf8c69b1ada157821e2b40497"
-              trace=pathlib.Path.cwd() / "isolated-frame.json"
-              lock=(deployment / "deploy.lock").open("a+")
-              fcntl.flock(lock.fileno(),fcntl.LOCK_EX)
-              active=subprocess.run(["systemctl","--user","is-active","--quiet","primordia.service"]).returncode==0
-              keys=hashlib.sha256((deployment/"access-keys.json").read_bytes()).hexdigest()
-              try:
-                  if active: subprocess.run(["systemctl","--user","stop","primordia.service"],check=True,timeout=70)
-                  probe=subprocess.run(["xvfb-run","-a","-s","-screen 0 1440x900x24 -nolisten tcp",str(runtime),"--path",str(candidate),"--rendering-method","mobile","--rendering-driver","vulkan","--gpu-index","0","--audio-driver","Dummy","--resolution","1440x900","--disable-vsync","--max-fps","60","--script","tests/frame_profile.gd","--","--fixture=normal","--fps-limit=60","--seconds=12","--particle-backend=resident","--output="+str(trace)],capture_output=True,text=True,timeout=100)
-                  report["isolated_frame_probe"]={"returncode":probe.returncode,"output":(probe.stdout+probe.stderr)[-2500:]}
-                  if trace.exists():
-                      result=subprocess.run(["python3",str(candidate/"tools/frame_report.py"),str(trace)],capture_output=True,text=True,check=True,timeout=15)
-                      measured=json.loads(result.stdout)
-                      report["isolated_frame_probe"]["summary"]={key:measured[key] for key in ["fps","wall_p95_ms","simulation_seconds","wall_seconds","phase_mean_ms","render_boundary_mean_ms","engine_render_gpu_mean_ms"]}
-                  frozen=subprocess.run(["xvfb-run","-a","-s","-screen 0 1440x900x24 -nolisten tcp",str(runtime),"--path",str(candidate),"--rendering-method","mobile","--rendering-driver","vulkan","--gpu-index","0","--audio-driver","Dummy","--resolution","1440x900","--disable-vsync","--script","tests/frame_profile.gd","--","--fixture=normal","--fps-limit=60","--seconds=8","--mode=frozen","--particle-backend=resident","--output="+str(trace)],capture_output=True,text=True,timeout=100)
-                  report["frozen_frame_probe"]={"returncode":frozen.returncode,"output":(frozen.stdout+frozen.stderr)[-1500:]}
-                  if trace.exists():
-                      result=subprocess.run(["python3",str(candidate/"tools/frame_report.py"),str(trace)],capture_output=True,text=True,check=True,timeout=15)
-                      measured=json.loads(result.stdout)
-                      report["frozen_frame_probe"]["summary"]={key:measured[key] for key in ["fps","wall_p95_ms","phase_mean_ms","render_boundary_mean_ms","engine_render_gpu_mean_ms"]}
-                  fixture_env=os.environ.copy();fixture_env["PRIMORDIA_INVITE"]="bounded-infrastructure-fixture"
-                  authority=subprocess.run(["xvfb-run","-a","-s","-screen 0 1280x720x24 -nolisten tcp",str(runtime),"--path",str(candidate),"--rendering-method","mobile","--rendering-driver","vulkan","--gpu-index","0","--audio-driver","Dummy","--resolution","64x64","--script","tests/network_live.gd","--","--gpu","--full-world","--realtime"],env=fixture_env,capture_output=True,text=True,timeout=100)
-                  report["authority_probe"]={"returncode":authority.returncode,"output":(authority.stdout+authority.stderr)[-4000:]}
-              finally:
-                  if active:subprocess.run(["systemctl","--user","start","primordia.service"],check=True,timeout=70)
-                  report["isolated_frame_probe_restored_service"]=command(["systemctl","--user","is-active","primordia.service"])
-                  assert hashlib.sha256((deployment/"access-keys.json").read_bytes()).hexdigest()==keys
-                  if trace.exists():trace.unlink()
-                  lock.close()
           payload = json.dumps(report, indent=2)
           print(payload)
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:

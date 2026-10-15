@@ -46,8 +46,8 @@ func find_message(index: int,kind: String,sequence: int=-1) -> Dictionary:
 		if message.get("kind","")==kind and (sequence<0 or message.get("sequence",-2)==sequence):return message
 	return {}
 func run() -> void:
-	if "--slow-observer" in OS.get_cmdline_user_args(): Engine.physics_ticks_per_second=2
 	host=Host.new();host.cpu=not ("--gpu" in OS.get_cmdline_user_args())
+	if "--slow-observer" in OS.get_cmdline_user_args():host.physics_hz=2
 	# Match run_service.py: this window submits compute, while client camera
 	# rectangles below still request full widest-view simulation fidelity.
 	if not host.cpu:root.size=Vector2i(64,64)
@@ -127,6 +127,9 @@ func run() -> void:
 	host.world.begin_build()
 	check(host.world.build_original==null,"shared editor never clones or pauses authority")
 	check(await until(func():return host.world.time>before+.05),"clock advances during editor use")
+	var clock_before: float=host.world.time;var revision_before: int=host.world.revision
+	check(await until(func():return host.world.revision>=revision_before+3),"Authority advances three scheduled physics steps")
+	check(absf((host.world.time-clock_before)-(host.world.revision-revision_before)/float(host.physics_hz))<.000001,"Every scheduled authority tick advances exactly its actual fixed interval")
 	check(host.checkpoint(),"account and world checkpoint completes")
 	var saved: Dictionary=host.store.load_latest()
 	if not host.cpu: check(saved.stream_rng==PackedInt64Array([host.world.resident.streaming.random.seed,host.world.resident.streaming.random.state]),"cold transport random stream is checkpointed")
@@ -188,12 +191,13 @@ func run() -> void:
 		var timings: Array=host.tick_samples.duplicate();timings.sort()
 		var p95: float=timings[mini(timings.size()-1,int(timings.size()*.95))]
 		check(ratio>=.98 and ratio<=1.02,"Shared authority advances at real time with mixed wide cameras")
-		check(p95<=16.67,"Authority p95 tick fits the 60 Hz simulation budget")
+		check(Engine.physics_ticks_per_second==30 and host.physics_hz==30,"Dedicated authority uses the documented 30 Hz simulation cadence")
+		check(p95<=1000.0/host.physics_hz,"Authority p95 tick fits its documented simulation cadence")
 		check(host.world.cells.all(func(cell):return cell.chemistry.particle_count()<=24),"Aged interiors stay bounded under sustained finite digestion")
 		host._write_metrics()
 		var phase_report=JSON.parse_string(FileAccess.get_file_as_string(host.store.directory.path_join("health.json")))
 		print("AUTHORITY_PHASES ",JSON.stringify(phase_report.get("tick_phase_mean_ms",{})))
-		print("REALTIME_AUTHORITY ",JSON.stringify({"simulation_wall_ratio":ratio,"tick_p95_ms":p95,"living_cells":host.world.cells.filter(func(cell):return not cell.dead).size(),"interior_packets":host.world.cells.reduce(func(total,cell):return total+cell.chemistry.particle_count(),0),"gpu":RenderingServer.get_video_adapter_name()}))
+		print("REALTIME_AUTHORITY ",JSON.stringify({"simulation_hz":Engine.physics_ticks_per_second,"tick_budget_ms":1000.0/host.physics_hz,"simulation_wall_ratio":ratio,"tick_p95_ms":p95,"living_cells":host.world.cells.filter(func(cell):return not cell.dead).size(),"interior_packets":host.world.cells.reduce(func(total,cell):return total+cell.chemistry.particle_count(),0),"gpu":RenderingServer.get_video_adapter_name()}))
 	for socket in sockets:socket.close(-1)
 	check(await until(func():return host.world.camera_views.is_empty()),"disconnect removes every detailed camera")
 	before=host.world.time

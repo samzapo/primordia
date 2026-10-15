@@ -97,8 +97,14 @@ The authority fixture matches the deployed 64×64 compute-submission surface; it
 client camera rectangles still cover the full widest view. The target Xvfb
 full-window diagnostic spent about 67 ms at its render boundary even with
 biology frozen, so virtual-display native drawing is not the mobile frame gate.
-Live service health also rejects a simulation below 0.98× or a p95 tick over
-16.67 ms. Mere tick advancement no longer qualifies a slow server as healthy.
+The dedicated authority advances at 30 fixed steps per second, each using an
+actual 1/30-second interval. The older Threadripper2990WX/RTX3090 target could
+not sustain 60 authority steps per second even after native fluid optimization.
+This cadence gives it a 33.33 ms tick budget while clients retain 60 FPS rendering
+and timestamp-based presentation interpolation. The desktop standalone physics
+cadence remains unchanged. Live service health requires the documented 30 Hz,
+simulation/wall 0.98–1.02 and p95 ticks within 33.33 ms; merely advancing ticks
+does not qualify a slow server as healthy.
 
 Gameplay/objective/balance tests stay held. Conservation, paid reproduction,
 migration idempotence, checkpoint integrity, external native/reference parity,
