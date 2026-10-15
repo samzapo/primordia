@@ -4,3 +4,6 @@ build/
 *.tmp
 *.log
 __pycache__/
+
+# Deterministic Godot sidecars regenerate during editor import.
+*.import

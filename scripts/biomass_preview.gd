@@ -30,7 +30,7 @@ func _ready() -> void:
 
 func sync() -> void:
 	if game == null: return
-	visible = game.build_open and not game.settings_panel.visible and not game.world.player.dead
+	visible = not game.touch_zoom.enabled and game.build_open and not game.settings_panel.visible and not game.world.player.dead
 	if not visible: return
 	var amount: float = maxf(0,game.world.player.biomass)
 	var price: Dictionary = game.cell_ui.hovered_price

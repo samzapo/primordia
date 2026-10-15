@@ -24,8 +24,10 @@ func run() -> void:
 	check(cell.chemistry.accelerator.exports==0,"Fine digestion uses compact receipts without full exports")
 	var copy=preload("res://scripts/network/state_codec.gd").new().restore(preload("res://scripts/network/state_codec.gd").new().capture(cell))
 	check(absf(copy.organic_mass()-matter)<.000001 and copy.energy==cell.energy,"Detached checkpoint preserves resident resources")
+	cell.chemistry.advance(cell,8)
+	check(cell.substrate>0 and cell.chemistry.vacuoles.size()==1 and cell.chemistry.vacuoles[0].age>8.99,"Resident digestion retains one moving food/waste carrier for at least ten seconds")
 	var sim=preload("res://scripts/simulation.gd").new(41,0,false);sim.cells=[cell];sim.player=cell;sim.particles=[]
-	for i in 120:
+	for i in 300:
 		cell.chemistry.advance(cell,.1);cell.chemistry.excrete(sim,cell,.1)
 	var released:=0.0
 	for packet in sim.particles:released+=packet.amount
@@ -38,9 +40,18 @@ func run() -> void:
 	var transient_cell=Cell.new();transient_cell.chemistry.emit("food",.1,Vector2(30,0))
 	check(Cytoplasm.new().attach(gpu,transient_cell.chemistry,transient_cell),"Inspection topology fixture owns resident material")
 	transient_cell.chemistry.particle_snapshots(true)
-	transient_cell.chemistry.advance(transient_cell,.1)
+	transient_cell.chemistry.advance(transient_cell,10.0)
 	check(transient_cell.chemistry.particle_snapshots(true)[0].species=="waste","A food-to-waste identity change invalidates the optical snapshot immediately")
 	transient_cell.chemistry.ensure_cpu()
+	var wide=Cell.new()
+	var wide_comp: int=(1<<53)+(1<<31)+17
+	var wide_source: int=(1<<53)+5
+	wide.chemistry.emit("food",1,Vector2(30,0),wide_source,wide_comp)
+	check(Cytoplasm.new().attach(gpu,wide.chemistry,wide),"A full-width compartment can enter the resident device")
+	wide.chemistry.advance(wide,1)
+	var wide_packets: Array=wide.chemistry.particle_snapshots()
+	check(wide_packets.all(func(stock):return stock.compartment==wide_comp and stock.source==wide_source) and wide.chemistry.vacuoles.size()==1 and wide.chemistry.vacuoles[0].id==wide_comp,"Food/waste carrier identity and compact picking preserve all 64 bits, including a signed low word")
+	wide.chemistry.ensure_cpu()
 	var invalid=Cell.new()
 	for i in 25:invalid.chemistry.particles.append(cell.chemistry.particles[0].duplicate(true))
 	var rejected=Cytoplasm.new()

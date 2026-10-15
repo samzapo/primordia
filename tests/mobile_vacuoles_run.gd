@@ -1,0 +1,59 @@
+extends SceneTree
+var failures:=0
+var assertions:=0
+func check(ok: bool,text: String) -> void:
+	assertions+=1
+	if not ok:failures+=1;push_error(text)
+func _initialize() -> void:run.call_deferred()
+func run() -> void:
+	var Cell=preload("res://scripts/cell.gd")
+	var cell=Cell.new()
+	cell.chemistry.receive(0,2,2,cell.position+cell.local_point(0))
+	var mass: float=cell.organic_mass()
+	var initial: Vector2=cell.chemistry.particles[0].p
+	for i in 90:cell.chemistry.advance(cell,.1)
+	check(cell.substrate>0 and cell.chemistry.particles[0].p.distance_to(initial)>1,"A finite food vacuole remains moving after nine seconds")
+	var food: Dictionary=cell.chemistry.particles.filter(func(stock):return stock.species=="food")[0]
+	check(cell.chemistry.particles.filter(func(stock):return stock.species=="waste").all(func(stock):return stock.p==food.p and stock.v==food.v),"Food and waste are stocks in exactly one moving carrier")
+	check(absf(cell.organic_mass()-mass)<.000001,"Long residence preserves represented material")
+	cell.chemistry.advance(cell,1.1)
+	check(cell.substrate<.000001 and cell.waste>0,"After residence digestion leaves a finite waste-filled carrier")
+	var restored=preload("res://scripts/network/state_codec.gd").new().restore(preload("res://scripts/network/state_codec.gd").new().capture(cell))
+	check(restored.chemistry.particles[0].age==cell.chemistry.particles[0].age,"Checkpoint recovery retains the carrier residence clock")
+	root.size=Vector2i(1170,2100)
+	var game=load("res://scenes/pond.tscn").instantiate();game.use_particle_pool=false
+	root.add_child(game);game.set_process(false);game.set_physics_process(false);game.music.enabled=false;game.music.player.stop()
+	game.touch_zoom.enabled=true;game.touch_zoom.pixels=3
+	game.world.player.angle=.7;game.world.player.previous_angle=.7
+	game._toggle_perception()
+	check(game.camera_locked and absf(game.camera_rotation+.7)<.001,"Interoception follows both the position and orientation of the rendered cell")
+	game._zoom_at(game.camera_screen,10000)
+	check(game.manual_zoom==game.MAX_ZOOM*10,"Interoception provides ten times the normal closest magnification")
+	game._zoom_at(game.camera_screen,.05)
+	var a:=Vector2(-12,3);var b:=Vector2(12,3);var mid: Vector2=game.camera_screen+Vector2(40,-20)
+	var span:=Vector2(90,0).rotated(.4)
+	game._camera_gesture(a,b,mid-span,mid+span)
+	var error: float=maxf(game._world_screen(game.follow_origin+a.rotated(game.follow_heading)).distance_to(mid-span),game._world_screen(game.follow_origin+b.rotated(game.follow_heading)).distance_to(mid+span))
+	check(error<.02 and game.camera_locked,"Combined internal pan/twist/pinch keeps both cell-frame anchors under the fingers")
+	var offset: Vector2=game.camera_offset;var rotation: float=game.intero_rotation
+	game.world.player.angle=1.2;game.world.player.previous_angle=1.2
+	game.world.player.position+=Vector2(60,-20);game.world.player.previous_position=game.world.player.position
+	game._update_world(1)
+	check(game.camera_locked and game.camera_offset==offset and game.intero_rotation==rotation and absf(game.camera_rotation-(rotation-1.2))<.001,"The manipulated camera stays attached as the cell translates and rotates")
+	game._toggle_build();game.cell_ui.open_context({"kind":"assembly"})
+	await process_frame
+	game.cell_ui.sync(0)
+	check(game.cell_ui.choices.size()==7 and game.cell_ui.choices.all(func(choice):return choice.get_parent()==game.cell_ui.mobile_flow),"Mobile assembly exposes every available organ in the top tray")
+	check(game.touch_zoom.pause_button.get_global_rect().position.y>=game.cell_ui.mobile_menu_height,"Opening a top tray moves the utility controls below it immediately")
+	check(game.cell_ui.mobile_menu_height>0 and game.cell_ui.mobile_tray.position.y<30,"Mobile action menus are attached to the top of the screen")
+	check(game.cell_ui.mobile_resources.visible and game.cell_ui.mobile_stocks.text.contains("AP") and game.cell_ui.mobile_stocks.text.contains("ATP"),"Mobile stock display is visible without hovering")
+	game.cell_ui.mobile_hide.pressed.emit();game.cell_ui.sync(0)
+	check(not game.cell_ui.mobile_stocks.visible and game.cell_ui.mobile_hide.visible,"A small button hides and restores mobile resource readouts")
+	game.cell_ui.mobile_hide.pressed.emit();game.cell_ui.sync(0)
+	check(game.cell_ui.mobile_stocks.visible,"The same resource button restores current numerical stocks")
+	game._message("Needs an adaptation point.");game.cell_ui.sync(0)
+	check(game.cell_ui.message.get_theme_font_size("font_size")>=66 and game.cell_ui.message.get_theme_font("font").get_font_name().contains("Comic"),"Mobile feedback uses readable CSS-sized comic typography")
+	game._toggle_perception()
+	check(game.perception=="exteroception" and game.manual_zoom==game.MAX_ZOOM and game.camera_locked,"Leaving interoception restores the normal closest view")
+	game.queue_free();await process_frame
+	print("MOBILE VACUOLES: %d assertions, %d failures" % [assertions,failures]);quit(0 if failures==0 else 1)

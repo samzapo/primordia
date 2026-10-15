@@ -38,6 +38,7 @@ func run() -> void:
 	host.peers={1:one,2:two};host._set_views()
 	check(sim.camera_views.size()==1 and sim.interoceptive_cells.has(cell.id),"Mixed players independently retain exterior footprint and interior cell detail")
 	two.perception="interoception";host._set_views()
+	check(sim.activity_for_cell(cell)==1.0,"The observed interior retains full membrane/body fidelity while external chemistry is hidden")
 	check(sim.camera_views.is_empty() and sim.interoceptive_cells.size()==1,"Two inside viewers do not retain external fine simulation or duplicate internal ownership")
 	one.view=Vector4(-10000,-10000,100,100);two.view=one.view;host._set_views()
 	check(sim.interoceptive_cells.is_empty(),"An internal view panned away from its cell retains only the coarse simulation")

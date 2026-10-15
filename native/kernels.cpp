@@ -1434,6 +1434,7 @@ public:
       double available_fuel = double(p.get(keys.capacity,p.amount()));
       double fuel = kind==0 ? std::min(available_fuel,p.amount())*taken/std::max(.00000001,p.amount()) : taken;
       body->call("receive_particle",kind,taken,fuel,at);
+        if (kind==0) substrate=body->get("substrate");
       if (kind==0) p.set(keys.capacity,std::max(0.,available_fuel-fuel));
       p.set(keys.amount,p.amount()-taken);
       invalidate_particle_render(int64_t(ids[k]));
@@ -1519,6 +1520,7 @@ public:
         double available_fuel = double(p.get(keys.capacity,p.amount()));
         double fuel = kind==0 ? std::min(available_fuel,p.amount())*taken/std::max(.00000001,p.amount()) : taken;
         body->call("receive_particle",kind,taken,fuel,at);
+        if (kind==0) substrate=body->get("substrate");
         if (kind==0) p.set(keys.capacity,std::max(0.,available_fuel-fuel));
       }
       if (taken > 0) p.set(keys.amount,p.amount()-taken);

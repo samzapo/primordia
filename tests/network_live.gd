@@ -79,7 +79,7 @@ func run() -> void:
 		var socket:=WebSocketPeer.new();socket.inbound_buffer_size=Protocol.MAX_FRAME;socket.outbound_buffer_size=65536
 		sockets.append(socket);socket.connect_to_url("ws://127.0.0.1:"+str(host.port))
 	check(await until(func():return sockets.all(func(s):return s.get_ready_state()==WebSocketPeer.STATE_OPEN)),"two real WebSocket connections")
-	for i in sockets.size():sockets[i].send_text(JSON.stringify({"op":"hello","invite":fixture_keys[i] if personal_keys else OS.get_environment("PRIMORDIA_INVITE"),"snapshot_ack":true,"compact_cytoplasm":true}))
+	for i in sockets.size():sockets[i].send_text(JSON.stringify({"op":"hello","invite":fixture_keys[i] if personal_keys else OS.get_environment("PRIMORDIA_INVITE"),"snapshot_ack":true,"compact_cytoplasm":true,"cytoplasm_version":2}))
 	check(await until(func():return not find_message(0,"welcome").is_empty() and not find_message(1,"welcome").is_empty()),"distinct lineage accounts authenticated")
 	var welcome0:=find_message(0,"welcome")
 	var welcome1:=find_message(1,"welcome")
@@ -102,6 +102,12 @@ func run() -> void:
 	check(await until(func():return camera_reports.has(0) and camera_reports.has(1)),"both fixture cameras are advertised before changing perception")
 	camera_reports[0]["perception"]="interoception"
 	check(await until(func():return host.world.camera_views.size()==1 and host.world.interoceptive_cells.has(welcome0.cell)),"Inside and outside clients retain independent detail interests")
+	var column_peer: Dictionary=host.peers.values().filter(func(peer):return peer.account==welcome0.token.sha256_text())[0]
+	var current_columns: Dictionary=host._frame(column_peer)
+	column_peer.cytoplasm_version=1
+	var legacy_columns: Dictionary=host._frame(column_peer)
+	check(current_columns.graph.objects.any(func(record):return record.kind=="chemistry" and record.fields.particles.get("$cytoplasm",0)==2) and legacy_columns.graph.objects.any(func(record):return record.kind=="chemistry" and record.fields.particles.get("$cytoplasm",0)==1),"Current and already-open older browsers receive their negotiated cytoplasm format")
+	column_peer.cytoplasm_version=2
 	var switch_tick: int=host.world.revision
 	check(await until(func():return messages[0].any(func(m):return m.get("kind","")=="snapshot" and m.get("perception","")=="interoception" and m.get("tick",0)>switch_tick and m.get("particles",PackedByteArray()).is_empty())),"Inside snapshots advance without external pose bytes")
 	camera_reports[1]["perception"]="interoception"

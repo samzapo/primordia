@@ -14,16 +14,17 @@ const TYPES := {
 	"offscreen": preload("res://scripts/offscreen_ecology.gd"),
 	"budget": preload("res://scripts/energy_budget.gd"),
 }
-const TRANSIENT := ["kernels","native","grid","reaction_grid","cell_index","gpu_transport","resident","experimental_fluid","owner","_owner","build_original","build_state","bins","profile_usec","profile_counts","foreground_particle_ids","last_spawn","accelerator","render_origins","command_sink","interoceptive_cells","resource_effects_enabled"]
+const TRANSIENT := ["kernels","native","grid","reaction_grid","cell_index","gpu_transport","resident","experimental_fluid","owner","_owner","build_original","build_state","bins","profile_usec","profile_counts","foreground_particle_ids","last_spawn","accelerator","render_origins","command_sink","interoceptive_cells","resource_effects_enabled","batching"]
 const DERIVED_CELL := ["raw_fuel","substrate","waste"]
 var objects: Array = []
 var identities: Dictionary = {}
 var overrides: Dictionary = {}
 var compact_cytoplasm := false
+var cytoplasm_version:=2
 var migration_audit: Array=[]
 
-func capture(value, field_overrides: Dictionary = {}, compact: bool = false) -> Dictionary:
-	objects.clear(); identities.clear(); overrides = field_overrides;compact_cytoplasm=compact
+func capture(value, field_overrides: Dictionary = {}, compact: bool = false,columns_version: int=2) -> Dictionary:
+	objects.clear(); identities.clear(); overrides = field_overrides;compact_cytoplasm=compact;cytoplasm_version=columns_version
 	var root = _encode(value)
 	var index := 0
 	while index < objects.size():
@@ -39,7 +40,7 @@ func capture(value, field_overrides: Dictionary = {}, compact: bool = false) -> 
 			if overrides.has(source.get_instance_id()) and overrides[source.get_instance_id()].has(key):
 				field = overrides[source.get_instance_id()][key]
 			elif kind=="chemistry" and key=="particles":field=source.particle_snapshots()
-			var columns=preload("res://scripts/network/cytoplasm_codec.gd").encode(field) if compact_cytoplasm and kind=="chemistry" and key=="particles" else null
+			var columns=preload("res://scripts/network/cytoplasm_codec.gd").encode(field,cytoplasm_version) if compact_cytoplasm and kind=="chemistry" and key=="particles" else null
 			fields[key] = columns if columns!=null else _encode(field)
 		objects[index].fields = fields
 		index += 1
@@ -96,6 +97,7 @@ func restore(document: Dictionary):
 				audit["cell_id"]=record.source.id;migration_audit.append(audit)
 			record.source.chemistry.bins.clear()
 			for packet in record.source.chemistry.particles:
+				if not packet.has("age"):packet.age=0.0
 				if packet.alive: record.source.chemistry._index(packet)
 		elif record.kind == "membrane":
 			if record.source.kernels==null:

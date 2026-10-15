@@ -223,12 +223,12 @@ func run(owner_suite) -> void:
 		starving.oxygen = 10
 		var starving_mass: float = starving.organic_mass()
 		sim._metabolize(starving,1)
-		check(starving.energy > 0 and starving.biomass < 20 and starving.oxygen < 10,"emergency respiration spends tissue and oxygen")
+		check(starving.energy == 0 and starving.biomass == 20 and starving.health < 100,"Starvation cannot burn construction biomass or revive retired respiration")
 		check(is_equal_approx(starving.organic_mass(),starving_mass),"reserve respiration conserves organic material")
 		starving.oxygen = 0
 		var remaining: float = starving.biomass
 		sim._metabolize(starving,1)
-		check(starving.biomass < remaining and starving.oxygen == 0 and starving.fermented > 0,"oxygen-poor reserves use lower-yield fermentation without inventing oxygen")
+		check(starving.biomass == remaining and starving.oxygen == 0 and starving.fermented == 0,"Absent food cannot trigger retired fermentation")
 		starving.oxygen = 10
 		starving.biomass = 8
 		sim._metabolize(starving,1)
@@ -260,13 +260,13 @@ func run(owner_suite) -> void:
 	var fermenter = Cell.new()
 	fermenter.substrate = 1
 	fermenter.oxygen = 0
-	fermenter.energy = 30
+	fermenter.energy = 0
 	var ferment_mass: float = fermenter.organic_mass()
 	var prior_loss: float = sim.respiration_loss
-	sim._metabolize(fermenter,1)
-	check(fermenter.fermented == 1 and fermenter.energy > 30 and fermenter.oxygen == 0,"gut food yields ATP without oxygen")
+	fermenter.chemistry.advance(fermenter,10)
+	check(fermenter.processed == 1 and fermenter.energy > 0 and fermenter.oxygen == 0,"Finite vacuole food yields ATP without oxygen after residence")
 	check(is_equal_approx(fermenter.organic_mass()+sim.respiration_loss-prior_loss,ferment_mass),"fermentation accounts for unrecoverable end products")
-	check(fermenter.organic_mass() < ferment_mass,"fermentation and waste recycling cannot close a free-energy loop")
+	check(is_zero_approx(fermenter.raw_fuel) and is_equal_approx(fermenter.energy,2.25),"Spent food and waste cannot close a free-energy loop")
 	# Live finale integration, distinct from an earned-resource playthrough.
 	# A finite donor supplies known cell-sourced packets to isolate the objective.
 	sim = Sim.new(18)

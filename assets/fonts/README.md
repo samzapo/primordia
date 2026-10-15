@@ -1,0 +1,1 @@
+Comic Neue Regular by the Comic Neue Project Authors. Original font input from https://github.com/google/fonts/tree/main/ofl/comicneue under OFL-1.1 (OFL.txt). Used as the portable comic-style notification face on Android/Web, where proprietary Comic Sans MS may be unavailable.

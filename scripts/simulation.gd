@@ -286,6 +286,9 @@ func activity_at(p: Vector2) -> float:
 	return Medium.visibility(p,player.position if camera_follows_player else camera_position,view_half)
 
 func activity_for_cell(cell) -> float:
+	# Viewing an interior still observes its membrane/body at full fidelity.
+	# Only the unrequested external particle domain goes to the cold path.
+	if interoceptive_cells.has(cell.id):return 1.0
 	if external_offscreen:return 0.0
 	if resident != null and resident.full_detail: return 1.0
 	# A visible membrane or appendage must not freeze when its center is outside.

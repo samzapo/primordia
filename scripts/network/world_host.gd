@@ -323,6 +323,7 @@ func _hello(id: int,message: Dictionary) -> void:
 	_close_sessions(key,id)
 	peer.account=key
 	peer.snapshot_ack=message.get("snapshot_ack",false)==true;peer.compact_cytoplasm=message.get("compact_cytoplasm",false)==true
+	peer.cytoplasm_version=2 if message.get("cytoplasm_version",1)==2 else 1
 	peer.frame_serial=0;peer.awaiting_snapshot=0
 	var account: Dictionary=accounts[key]
 	var cell=_selected(account)
@@ -511,7 +512,7 @@ func _frame(peer: Dictionary) -> Dictionary:
 	for cell in world.cells:
 		if peer.get("perception","exteroception")!="interoception" or cell!=focus:internal_overrides[cell.chemistry.get_instance_id()]={"particles":[],"vacuoles":[],"presentation_totals":{"material":cell.chemistry.material(),"storage":cell.chemistry.storage_used(),"potential":cell.chemistry.potential(),"raw_fuel":cell.chemistry.raw_fuel(),"packets":cell.chemistry.particle_count()}}
 	return {"kind":"snapshot","world_id":world_id,"epoch":epoch,"tick":world.revision,"time":world.time,"edit":account.edit,"sequence":account.sequence,
-		"family_recovery":_family_recovery(account),"graph":Codec.new().capture({"cells":cells,"player":_selected(account),"focus":_focus(peer),"lineage":account.lineage,"evolution":account.evolution},internal_overrides,peer.get("compact_cytoplasm",false)),
+		"family_recovery":_family_recovery(account),"graph":Codec.new().capture({"cells":cells,"player":_selected(account),"focus":_focus(peer),"lineage":account.lineage,"evolution":account.evolution},internal_overrides,peer.get("compact_cytoplasm",false),peer.get("cytoplasm_version",1)),
 		"particles":PackedByteArray(),"flow":world.fluid.velocity.duplicate(),"acid":world.acidity.values.duplicate(),
 		"sounds":world.sound_events.duplicate(true),"sound_sequence":world.sound_sequence,"sparks":world.reaction_sparks.duplicate(true),"perception":peer.get("perception","exteroception"),"warming":false}
 

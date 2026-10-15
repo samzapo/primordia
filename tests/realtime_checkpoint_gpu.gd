@@ -26,7 +26,7 @@ func run() -> void:
 		var socket:=WebSocketPeer.new();socket.inbound_buffer_size=Protocol.MAX_FRAME;socket.outbound_buffer_size=65536
 		sockets.append(socket);socket.connect_to_url("ws://127.0.0.1:"+str(host.port))
 	check(await until(func():return sockets.all(func(socket):return socket.get_ready_state()==WebSocketPeer.STATE_OPEN)),"Two isolated saved-world observers connect")
-	for socket in sockets:socket.send_text(JSON.stringify({"op":"hello","invite":"bounded-aged-checkpoint-fixture","snapshot_ack":true,"compact_cytoplasm":true}))
+	for socket in sockets:socket.send_text(JSON.stringify({"op":"hello","invite":"bounded-aged-checkpoint-fixture","snapshot_ack":true,"compact_cytoplasm":true,"cytoplasm_version":2}))
 	check(await until(func():return not find_message(0,"welcome").is_empty() and not find_message(1,"welcome").is_empty()),"Saved-world test observers authenticate with fixture credentials")
 	for i in 2:
 		var welcome:=find_message(i,"welcome")

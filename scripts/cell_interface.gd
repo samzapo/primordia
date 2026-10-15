@@ -5,6 +5,18 @@ const Interior = preload("res://scripts/cell_interior.gd")
 const Action = preload("res://scripts/cell_action.gd")
 const Biomass = preload("res://scripts/biomass_preview.gd")
 var game
+var mobile_menu_height:=0.0
+var mobile_tray:=PanelContainer.new()
+var mobile_scroll:=ScrollContainer.new()
+var mobile_flow:=HFlowContainer.new()
+var mobile_close:=Button.new()
+var mobile_resources:=PanelContainer.new()
+var mobile_stocks:=Label.new()
+var mobile_hide:=Button.new()
+var resources_hidden:=false
+const COMIC=preload("res://assets/fonts/ComicNeue-Regular.ttf")
+func mobile() -> bool:return game!=null and game.touch_zoom.enabled
+func ui_scale() -> float:return game.preferences.hud_scale*(game.touch_zoom.pixels if mobile() else 1.0)
 var interior := Interior.new()
 var biomass_view := Biomass.new()
 var choices: Array[Button] = []
@@ -28,6 +40,18 @@ var last_goal := ""
 
 func initialize(owner_game) -> void:
 	game = owner_game
+	mobile_tray.z_index=90;add_child(mobile_tray)
+	var tray_row:=HBoxContainer.new();mobile_tray.add_child(tray_row)
+	tray_row.add_child(mobile_scroll);mobile_scroll.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	mobile_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+	mobile_scroll.add_child(mobile_flow);mobile_flow.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	tray_row.add_child(mobile_close);mobile_close.text="×";mobile_close.pressed.connect(close_context)
+	mobile_resources.z_index=90;add_child(mobile_resources)
+	var stock_row:=HBoxContainer.new();mobile_resources.add_child(stock_row)
+	stock_row.add_child(mobile_stocks);mobile_stocks.add_theme_font_override("font",COMIC);mobile_stocks.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	stock_row.add_child(mobile_hide);mobile_hide.pressed.connect(func():resources_hidden=not resources_hidden)
+	message.z_index=100
+	message.add_theme_font_override("font",COMIC)
 	add_child(pathways)
 	pathways.initialize(game)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -67,9 +91,11 @@ func reset() -> void:
 func close_context() -> void:
 	pathways.hide()
 	context.clear()
+	mobile_tray.hide();mobile_menu_height=0.0
+	if mobile():game.touch_zoom.layout()
 	hovered_price.clear()
 	for choice in choices:
-		remove_child(choice)
+		choice.get_parent().remove_child(choice)
 		choice.queue_free()
 	choices.clear()
 	tip_box.hide()
@@ -121,7 +147,8 @@ func _choice(title: String, description: String, action: Callable, organ_kind: S
 	node.ap_cost = ap_cost
 	node.rate_model = rate_model
 	node.pressed.connect(action)
-	add_child(node)
+	if mobile():mobile_flow.add_child(node)
+	else:add_child(node)
 	choices.append(node)
 
 func open_context(target: Dictionary) -> void:
@@ -256,14 +283,14 @@ func open_context(target: Dictionary) -> void:
 			if first > 0: _choice("Earlier expeditions","Previous histories.",open_context.bind({"kind":"past","page":page+1}),"","Older")
 			_choice("Current family","Return.",open_context.bind({"kind":"lineage"}),"","Back")
 	# At most four actions plus a next-page node around any structure.
-	if choices.size() > 5:
+	if choices.size() > 5 and not mobile():
 		var all_choices: Array[Button] = choices.duplicate()
 		var page := posmod(int(target.get("menu_page",0)),ceili(all_choices.size()/4.0))
 		choices = []
 		for i in all_choices.size():
 			if i >= page*4 and i < page*4+4: choices.append(all_choices[i])
 			else:
-				remove_child(all_choices[i])
+				all_choices[i].get_parent().remove_child(all_choices[i])
 				all_choices[i].queue_free()
 		var next := target.duplicate()
 		next["menu_page"] = page+1
@@ -342,7 +369,7 @@ func _tooltip(value: String, at: Vector2) -> void:
 	tip_box.visible = value != ""
 	if value == "": return
 	if not Input.is_key_pressed(KEY_ALT): value = value.split("\n")[0]
-	var s: float = game.preferences.hud_scale
+	var s: float = ui_scale()
 	tip.custom_minimum_size.x = minf(320*s,get_viewport_rect().size.x-48)
 	tip.add_theme_font_size_override("font_size",roundi(16*s))
 	if tip.text != value:
@@ -389,16 +416,16 @@ func sync(_dt: float) -> void:
 	var active: bool = not game.settings_panel.visible
 	visible = active
 	if not active: return
-	var s: float = game.preferences.hud_scale
+	var s: float = ui_scale()
 	var size := get_viewport_rect().size
 	var cell_screen: Vector2 = game.world_layer.to_global(interior.position)
 	message.visible = (game.notice_timer > 3) or game.world.evolution.terminal()
 	message.text = game.notice if Input.is_key_pressed(KEY_ALT) else game.notice.split("\n")[0]
 	message.custom_minimum_size.x = minf(500*s,size.x-48)
 	message.size.x = message.custom_minimum_size.x
-	message.add_theme_font_size_override("font_size",roundi(16*s))
+	message.add_theme_font_size_override("font_size",roundi((22 if mobile() else 20)*s))
 	message.position = (cell_screen+Vector2(-message.size.x*0.5,game.world.player.radius*game.zoom+35)).clamp(Vector2(16,16),size-message.size-Vector2(16,16))
-	edit_hint.visible = game.build_open
+	edit_hint.visible = game.build_open and not mobile()
 	edit_hint.text = "Tab · return to habitat" if game.selected < 0 and game.moving_id < 0 else "Place on membrane · right-click cancels"
 	edit_hint.add_theme_font_size_override("font_size",roundi(14*s))
 	edit_hint.size = Vector2(minf(540*s,size.x-32),0)
@@ -409,18 +436,25 @@ func sync(_dt: float) -> void:
 		var funded: bool = sim.player.brood_mass+0.000001 >= sim.offspring_quote().material and sim.player.brood_energy >= 60
 		choices[2].affordable = funded and sim.lineage.active_family(sim).size() < sim.Lineage.MAX_ACTIVE
 		choices[3].affordable = funded and sim.lineage.dormant.size() < sim.Lineage.MAX_DORMANT
+	_layout_mobile()
 	if not context.is_empty():
-		var anchor := screen_at(context)
-		menu_radius = 106*s if choices.size() > 3 else 88*s
-		var margin := Vector2.ONE*(menu_radius+38*s+12)
-		menu_center = anchor.clamp(margin,size-margin)
-		for i in choices.size():
-			var choice = choices[i]
-			choice.text_scale = s
-			choice.size = Vector2.ONE*68*s
-			var a := -PI/2+TAU*i/maxi(1,choices.size())
-			choice.position = menu_center+Vector2.from_angle(a)*menu_radius-choice.size*0.5
-			choice.queue_redraw()
+		if mobile():
+			for choice in choices:
+				choice.text_scale=s*.85
+				choice.custom_minimum_size=Vector2.ONE*60*s
+				choice.queue_redraw()
+		else:
+			var anchor:=screen_at(context)
+			menu_radius=106*s if choices.size()>3 else 88*s
+			var margin:=Vector2.ONE*(menu_radius+38*s+12)
+			menu_center=anchor.clamp(margin,size-margin)
+			for i in choices.size():
+				var choice=choices[i];choice.text_scale=s;choice.size=Vector2.ONE*68*s
+				choice.position=menu_center+Vector2.from_angle(-PI/2+TAU*i/maxi(1,choices.size()))*menu_radius-choice.size*.5
+				choice.queue_redraw()
+	if mobile():
+		message.position=Vector2(12*s,maxf(mobile_menu_height+12*s,size.y-mobile_resources.size.y-110*s))
+
 	var cursor := get_global_mouse_position()
 	hovered = hit(cursor)
 	if hovered.is_empty():
@@ -460,6 +494,34 @@ func sync(_dt: float) -> void:
 	biomass_view.sync()
 	queue_redraw()
 
+func _layout_mobile() -> void:
+	var prior_height:=mobile_menu_height
+	var s:=ui_scale();var size:=get_viewport_rect().size
+	mobile_tray.visible=mobile() and not context.is_empty() and not choices.is_empty()
+	mobile_resources.visible=mobile() and game.touch_controls_available() and not game.world.player.dead
+	mobile_menu_height=0
+	if mobile_tray.visible:
+		var columns:=maxi(1,int((size.x-64*s)/(65*s)))
+		var height:=minf(size.y*.32,ceilf(float(choices.size())/columns)*65*s+12*s)
+		mobile_tray.position=Vector2(6,6)*s;mobile_tray.size=Vector2(size.x-12*s,height)
+		mobile_scroll.custom_minimum_size.y=height-12*s
+		mobile_flow.add_theme_constant_override("h_separation",roundi(5*s))
+		mobile_flow.add_theme_constant_override("v_separation",roundi(5*s))
+		mobile_close.custom_minimum_size=Vector2(32,32)*s;mobile_close.add_theme_font_size_override("font_size",roundi(22*s))
+		mobile_menu_height=height+12*s
+	if mobile_resources.visible:
+		mobile_stocks.custom_minimum_size.x=minf(330*s,size.x-70*s)
+		mobile_stocks.visible=not resources_hidden
+		mobile_stocks.add_theme_font_size_override("font_size",roundi(18*s))
+		mobile_stocks.text="Biomass %.1f   AP %d   ATP %.1f" % [game.world.player.biomass,game.world.evolution.points,game.world.player.energy]
+		if game.selected>=0:mobile_stocks.text+="\nCost %.0f biomass · 1 AP" % game.Simulation.Cell.organ_cost(game.Simulation.KINDS[game.selected])
+		mobile_hide.text="Resources" if resources_hidden else "−"
+		mobile_hide.add_theme_font_size_override("font_size",roundi(16*s))
+		mobile_hide.custom_minimum_size=Vector2(30,30)*s
+		mobile_resources.reset_size()
+		mobile_resources.position=Vector2(8*s,size.y-mobile_resources.get_combined_minimum_size().y-8*s)
+	if mobile() and not is_equal_approx(prior_height,mobile_menu_height):game.touch_zoom.layout()
+
 func cycle_target(direction: int) -> void:
 	close_context()
 	var list := targets()
@@ -479,7 +541,7 @@ func activate_keyboard() -> bool:
 
 func _draw() -> void:
 	if game == null or game.settings_panel.visible: return
-	if not context.is_empty():
+	if not context.is_empty() and not mobile():
 		draw_line(screen_at(context),menu_center,Color(0.5,0.91,0.85,0.35),1.5,true)
 		for choice in choices:
 			var origin := menu_center

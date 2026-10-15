@@ -31,6 +31,8 @@ var box := PanelContainer.new()
 var label := Label.new()
 var candidates_examined := 0
 var glyph := Sprite2D.new()
+var particle_material: ShaderMaterial
+var vacuole_material:=ShaderMaterial.new()
 var touch_position:=Vector2.ZERO
 var touch_until:=0
 func cursor_at(mouse: Vector2) -> Vector2:return touch_position if Time.get_ticks_msec()<touch_until else mouse
@@ -52,12 +54,15 @@ func initialize(owner_game) -> void:
 	glyph.z_index = 1
 	var detail_material := ShaderMaterial.new()
 	detail_material.shader = preload("res://shaders/inspection_particle.gdshader")
+	particle_material=detail_material
+	vacuole_material.shader=preload("res://shaders/inspection_vacuole.gdshader")
+	vacuole_material.set_shader_parameter("glyph_atlas",preload("res://scripts/cytoplasm_view.gd").atlas())
 	glyph.material = detail_material
 	glyph.hide()
 
 func _near_cell(at: Vector2, alpha: float) -> bool:
 	var sim = game.world
-	var padding: float = 24*game.preferences.hud_scale/game.zoom
+	var padding: float = 24*game.cell_ui.ui_scale()/game.zoom
 	for cell in sim.cells:
 		if cell.dead: continue
 		var fraction: float = game._cell_render_alpha(cell,alpha)
@@ -78,9 +83,24 @@ func _internal_pose(screen: Vector2,alpha: float,identity: int=-1) -> Dictionary
 	if identity<0:
 		var local: Vector2=view.to_local(screen)
 		if local.length()>cell.visible_support(local.angle())+12/game.zoom:return {}
+	if cell.chemistry.accelerator!=null:
+		var found: Dictionary={};var nearest:=INF
+		for v in cell.chemistry.vacuoles:
+			if identity>=0 and v.id!=identity:continue
+			candidates_examined+=1
+			var at: Vector2=game.world_layer.to_global(view.position+v.p.rotated(view.rotation))
+			if not get_viewport_rect().has_point(at):continue
+			var distance:=screen.distance_to(at)
+			if (identity>=0 or distance<=maxf(7*game.zoom+4,12)) and distance<nearest:
+				nearest=distance
+				var food: float=v.contents*(1-v.acid);var waste: float=v.contents*v.acid
+				found={"food":food,"waste":waste,"age":v.age,"index":-1,"packet":{"id":v.id,"species":"food" if food>.0000001 else "waste","amount":food if food>.0000001 else waste},"internal":true,"cell_id":cell.id,"kind":0 if food>.0000001 else 2,"screen":at,"angle":view.rotation,"radius":7*game.zoom}
+		return found
 	var best:=INF
 	var result: Dictionary={}
-	for packet in cell.chemistry.particle_snapshots(true):
+	var packets: Array=cell.chemistry.particle_snapshots(true)
+	for packet in packets:
+		if packet.species=="waste" and packets.any(func(food):return food.species=="food" and food.compartment==packet.compartment):continue
 		if not packet.alive or (identity>=0 and packet.id!=identity):continue
 		candidates_examined+=1
 		var origin: Dictionary=cell.chemistry.render_origins.get(packet.id,{})
@@ -92,7 +112,12 @@ func _internal_pose(screen: Vector2,alpha: float,identity: int=-1) -> Dictionary
 		var distance:=screen.distance_to(position)
 		if (identity>=0 or distance<=maxf(radius+4,12)) and distance<best:
 			best=distance
-			result={"index":-1,"packet":packet,"internal":true,"cell_id":cell.id,"kind":0 if packet.species=="food" else 2,"screen":position,"angle":packet.angle+view.rotation,"radius":radius}
+			var food:=0.0;var waste:=0.0
+			for stock in packets:
+				if stock.compartment==packet.compartment:
+					if stock.species=="food":food+=stock.amount
+					else:waste+=stock.amount
+			result={"food":food,"waste":waste,"age":packet.get("age",0),"index":-1,"packet":packet,"internal":true,"cell_id":cell.id,"kind":0 if packet.species=="food" else 2,"screen":position,"angle":view.rotation,"radius":radius}
 	return result
 
 func pick(screen: Vector2, alpha: float) -> Dictionary:
@@ -181,7 +206,7 @@ func update_lens(dt: float, screen: Vector2, alpha: float, allowed: bool) -> voi
 	if Time.get_ticks_msec()<touch_until:screen=touch_position
 	if allowed and game.perception!="interoception" and _near_cell(_world_at(screen),alpha): allowed = false
 	var following := {}
-	if allowed and track_remaining > 0 and screen.distance_to(cursor_anchor) <= CURSOR_RELEASE*game.preferences.hud_scale:
+	if allowed and track_remaining > 0 and screen.distance_to(cursor_anchor) <= CURSOR_RELEASE*game.cell_ui.ui_scale():
 		following = _tracked_pose(alpha)
 		if not following.is_empty():
 			track_remaining = maxf(0,track_remaining-dt)
@@ -209,40 +234,44 @@ func update_lens(dt: float, screen: Vector2, alpha: float, allowed: bool) -> voi
 	var material: ShaderMaterial = game.microscope_layer.material
 	material.set_shader_parameter("lens_center",lens_center/get_viewport_rect().size)
 	material.set_shader_parameter("lens_amount",lens_amount)
-	material.set_shader_parameter("lens_radius",RADIUS*game.preferences.hud_scale/get_viewport_rect().size.x)
+	material.set_shader_parameter("lens_radius",RADIUS*game.cell_ui.ui_scale()/get_viewport_rect().size.x)
 	material.set_shader_parameter("lens_magnification",MAGNIFICATION)
 	glyph.visible = active and lens_amount > 0
 	if glyph.visible:
 		var magnification := lerpf(1,MAGNIFICATION,lens_amount)
+		glyph.material=vacuole_material if hovered.get("internal",false) else particle_material
+		if hovered.get("internal",false):
+			vacuole_material.set_shader_parameter("contents",Vector3(hovered.food/maxf(.0000001,hovered.food+hovered.waste),clampf(ceilf((hovered.food+hovered.waste)/.3),1,7),game.Simulation.particle_scale((hovered.food+hovered.waste)/clampf(ceilf((hovered.food+hovered.waste)/.3),1,7))))
+			vacuole_material.set_shader_parameter("opacity",lens_amount)
 		glyph.texture = Art.texture(hovered.kind)
 		glyph.position = lens_center+(hovered.screen-lens_center)*magnification
 		glyph.rotation = hovered.angle+game.camera_rotation
 		glyph.scale = Vector2.ONE*hovered.radius*2*magnification/96
 		glyph.modulate.a = lens_amount
 		glyph.material.set_shader_parameter("lens_center",lens_center/get_viewport_rect().size)
-		glyph.material.set_shader_parameter("lens_radius",RADIUS*game.preferences.hud_scale/get_viewport_rect().size.x)
+		glyph.material.set_shader_parameter("lens_radius",RADIUS*game.cell_ui.ui_scale()/get_viewport_rect().size.x)
 		glyph.material.set_shader_parameter("canvas_aspect",get_viewport_rect().size.y/get_viewport_rect().size.x)
 	box.visible = active and lens_amount > 0.15
 	if box.visible:
 		var value: String = Art.Catalog.data().external_species[hovered.kind].name+"\n"+(DETAILS[hovered.kind] if hovered.kind < DETAILS.size() else "A finite cell-derived chemical packet.")
 		if hovered.get("internal",false):
-			value=("Food vacuole\nDigests nutrients directly into ATP and biomass." if hovered.kind==0 else "Waste vacuole\nTravels to the cytoproct, then releases waste into the water.")+"\nContents: %.2f" % hovered.packet.amount
+			value=("Food vacuole\nDigests nutrients directly into ATP and biomass." if hovered.kind==0 else "Waste vacuole\nTravels to the cytoproct, then releases waste into the water.")+"\nFood %.2f · Waste %.2f\nResidence %.1f s" % [hovered.food,hovered.waste,hovered.age]
 		if hovered.kind == game.world.PHEROMONE:
 			var packet: Dictionary = hovered.packet
 			var report: Dictionary = packet.get("report",{})
 			if not report.is_empty():
 				value += "\nDefense: "+("defended" if report.get("defended",true) else "undefended")+" at emission"
 				value += "\nReported size: %.0f μm across · %s\nSignal age: %.1f s" % [report.radius*2*game.scale_bar.MICROMETERS_PER_UNIT,"armed" if report.hostile else "unarmed",maxf(0,game.world.time-report.emitted_at)]
-		label.custom_minimum_size.x = minf(260*game.preferences.hud_scale,get_viewport_rect().size.x-36)
-		label.add_theme_font_size_override("font_size",roundi(15*game.preferences.hud_scale))
+		label.custom_minimum_size.x = minf(260*game.cell_ui.ui_scale(),get_viewport_rect().size.x-36)
+		label.add_theme_font_size_override("font_size",roundi(15*game.cell_ui.ui_scale()))
 		if label.text != value:
 			label.text = value
 			box.reset_size()
-		var magnified_at: Vector2 = lens_center+((hovered.screen-lens_center)*lerpf(1,MAGNIFICATION,lens_amount)).limit_length(RADIUS*0.45*game.preferences.hud_scale)
+		var magnified_at: Vector2 = lens_center+((hovered.screen-lens_center)*lerpf(1,MAGNIFICATION,lens_amount)).limit_length(RADIUS*0.45*game.cell_ui.ui_scale())
 		var extent := box.get_combined_minimum_size()
-		box.position = (magnified_at+Vector2(18,24)*game.preferences.hud_scale).clamp(Vector2(12,12),get_viewport_rect().size-extent-Vector2(12,12))
+		box.position = (magnified_at+Vector2(18,24)*game.cell_ui.ui_scale()).clamp(Vector2(12,12),get_viewport_rect().size-extent-Vector2(12,12))
 	queue_redraw()
 
 func _draw() -> void:
 	if lens_amount <= 0: return
-	draw_arc(lens_center,RADIUS*game.preferences.hud_scale,0,TAU,64,Color(0.65,0.96,0.92,lens_amount*0.3),1,true)
+	draw_arc(lens_center,RADIUS*game.cell_ui.ui_scale(),0,TAU,64,Color(0.65,0.96,0.92,lens_amount*0.3),1,true)

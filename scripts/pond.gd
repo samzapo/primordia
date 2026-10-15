@@ -59,6 +59,9 @@ var placement_keyboard := false
 var camera_offset := Vector2.ZERO
 var camera_zoom := 1.0
 var camera_rotation := 0.0
+var intero_rotation:=0.0
+var follow_heading:=0.0
+var follow_origin:=Vector2.ZERO
 var focus_animating := false
 var observation_view: Dictionary = {}
 var scale_bar := preload("res://scripts/scale_bar.gd").new()
@@ -358,16 +361,21 @@ func _follow_cell():
 func internal_visible(cell) -> bool:
 	return perception=="interoception" and cell.id==_follow_cell().id
 
+func _maximum_zoom() -> float:
+	return MAX_ZOOM*10 if perception=="interoception" else MAX_ZOOM
+
 func _toggle_perception() -> void:
 	perception="interoception" if perception=="exteroception" else "exteroception"
-	if perception=="interoception" and can_follow():
-		camera_locked=false;_toggle_camera()
+	camera_locked=true;camera_offset=Vector2.ZERO;intero_rotation=0;camera_rotation=0
+	if perception=="exteroception":manual_zoom=MAX_ZOOM;camera_zoom=manual_zoom;focus_animating=false
+	if build_open:observation_view={"zoom":manual_zoom,"locked":true,"free":_follow_cell().position,"offset":Vector2.ZERO}
+	if perception=="interoception" and world.resident!=null and can_follow() and _follow_cell().chemistry.accelerator==null:
+		world.resident.gpu.attach_cytoplasm(_follow_cell().chemistry,_follow_cell())
 	touch_zoom.cancel()
 	for view in views.values():view.seen_revision=-1;view.queue_redraw()
 	_update_world(1.0 if is_paused() else Engine.get_physics_interpolation_fraction())
-	touch_zoom.layout()
-	_update_perception_menu()
-	_message("Interoception · external chemistry continues offscreen." if perception=="interoception" else "Exteroception · internal chemistry continues offscreen.")
+	touch_zoom.layout();_update_perception_menu()
+	_message("Interoception · camera attached to the cell." if perception=="interoception" else "Exteroception · normal maximum magnification.")
 
 func can_follow() -> bool:
 	return _follow_cell()!=null and not _follow_cell().dead
@@ -380,13 +388,19 @@ func _update_world(alpha: float) -> void:
 	var sync_start := Time.get_ticks_usec() if frame_trace != null else 0
 	var size := get_viewport_rect().size
 	var base_zoom := minf(size.x/Simulation.VIEW.x,size.y/Simulation.VIEW.y)
-	if not diagnostic_zoom: manual_zoom = clampf(manual_zoom,MIN_ZOOM,MAX_ZOOM)
+	if not diagnostic_zoom: manual_zoom = clampf(manual_zoom,MIN_ZOOM,_maximum_zoom())
 	if not focus_animating: camera_zoom = manual_zoom
 	zoom = base_zoom*camera_zoom
 	if diagnostic_zoom: zoom *= minf(1.0,150.0/world.player.radius)
 	if not diagnostic_zoom: zoom = maxf(zoom,base_zoom*MIN_ZOOM)
 	scale_bar.configure(size,zoom,preferences.hud_scale)
 	camera_screen = size*0.5
+	_track_player_death()
+	var followed=_follow_cell()
+	follow_heading=lerp_angle(followed.previous_angle,followed.angle,_cell_render_alpha(followed,alpha))
+	follow_origin=followed.previous_position+Simulation.Medium.offset(followed.previous_position,followed.position)*_cell_render_alpha(followed,alpha)
+	if perception=="interoception":
+		camera_locked=true;camera_rotation=intero_rotation-follow_heading
 	world.view_half = _camera_bounds(size/(2*zoom))
 	if world.resident!=null:
 		world.resident.detail_half=_camera_bounds(size/(2*base_zoom*MIN_ZOOM))
@@ -394,9 +408,9 @@ func _update_world(alpha: float) -> void:
 			zoom=maxf(zoom,world.resident.streaming.minimum_zoom(size))
 			world.view_half=_camera_bounds(size/(2*zoom))
 			scale_bar.configure(size,zoom,preferences.hud_scale)
-	_track_player_death()
-	var followed=_follow_cell()
-	render_camera = followed.previous_position+Simulation.Medium.offset(followed.previous_position,followed.position)*_cell_render_alpha(followed,alpha)+camera_offset if camera_locked else free_camera
+
+	render_camera=follow_origin+(camera_offset.rotated(follow_heading) if perception=="interoception" else camera_offset) if camera_locked else free_camera
+
 	if death_focus_age < 1.8:
 		var blend: float = smoothstep(1.15,1.8,death_focus_age)
 		render_camera = Simulation.Medium.wrap_position(death_focus_at+Simulation.Medium.offset(death_focus_at,render_camera)*blend)
@@ -599,6 +613,9 @@ func _player_relative(screen: Vector2) -> Vector2:
 	return (screen-camera_screen).rotated(-camera_rotation)/zoom-origin
 
 func _toggle_camera() -> void:
+	if perception=="interoception":
+		camera_locked=true;camera_offset=Vector2.ZERO;intero_rotation=0
+		_update_world(1);touch_zoom.layout();return
 	if not camera_locked and not can_follow():
 		_message("There is currently no living cell to follow.");touch_zoom.layout();return
 	if camera_locked: free_camera = Simulation.Medium.wrap_position(render_camera)
@@ -621,18 +638,25 @@ func _camera_bounds(half: Vector2) -> Vector2:
 	var c:=absf(cos(camera_rotation));var s:=absf(sin(camera_rotation))
 	return Vector2(c*half.x+s*half.y,s*half.x+c*half.y).min(Simulation.Medium.WORLD*.5)
 
+func _cell_frame_point(at: Vector2) -> Vector2:
+	return Simulation.Medium.offset(follow_origin,at).rotated(-follow_heading)
+
 func _camera_gesture(anchor_a: Vector2,anchor_b: Vector2,screen_a: Vector2,screen_b: Vector2) -> void:
 	var source:=anchor_b-anchor_a;var target:=screen_b-screen_a
 	if source.length_squared()<.000001 or target.length_squared()<1:return
-	camera_locked=false;camera_offset=Vector2.ZERO;focus_animating=false
-	camera_rotation=wrapf(target.angle()-source.angle(),-PI,PI)
+	focus_animating=false
+	var turn:=wrapf(target.angle()-source.angle(),-PI,PI)
 	var size:=get_viewport_rect().size
 	var base:=minf(size.x/Simulation.VIEW.x,size.y/Simulation.VIEW.y)
-	manual_zoom=clampf(target.length()/source.length()/base,MIN_ZOOM,MAX_ZOOM)
-	# The centroid stays anchored even at a magnification limit.
+	manual_zoom=clampf(target.length()/source.length()/base,MIN_ZOOM,_maximum_zoom())
 	var center: Vector2=(anchor_a+anchor_b)*.5
 	var screen_center: Vector2=(screen_a+screen_b)*.5
-	free_camera=Simulation.Medium.wrap_position(center-(screen_center-size*.5).rotated(-camera_rotation)/(base*manual_zoom))
+	var offset: Vector2=center-(screen_center-size*.5).rotated(-turn)/(base*manual_zoom)
+	if perception=="interoception":
+		camera_locked=true;intero_rotation=turn;camera_offset=offset
+	else:
+		camera_locked=false;camera_offset=Vector2.ZERO;camera_rotation=turn
+		free_camera=Simulation.Medium.wrap_position(offset)
 	_update_world(1.0 if is_paused() else Engine.get_physics_interpolation_fraction())
 	currents.queue_redraw()
 
@@ -728,7 +752,7 @@ func _build_ui() -> void:
 		settings_panel.hide()
 		cell_ui.open_context({"kind":"lineage"}))
 	_button(options,"New expedition [R]",func(): _restart())
-	_label(options,"Tab: enter cell / keep edits and resume\nClick factories, nucleus, bud or installed organs\nNew organs have a fixed size · no Undo\nRight-click: cancel a held organ or close choices\nIn edit: drag microtubules; hover + wheel: tension\nWheel elsewhere: zoom · middle-drag: pan\nSpace: follow / free camera\nM: open / close settings\nI: interoception / exteroception\n[ / ]: cycle cell targets · Enter: choose / place\nArrow keys: navigate choices or membrane placement\nHover particles: inspect through a local lens\nNo movement keys: anatomy steers.",MUTED)
+	_label(options,"Tab: enter cell / keep edits and resume\nClick factories, nucleus, bud or installed organs\nNew organs have a fixed size · no Undo\nRight-click: cancel a held organ or close choices\nIn edit: drag microtubules; hover + wheel: tension\nWheel elsewhere: zoom · middle-drag: pan\nSpace: follow/free outside · recenter inside\nM: open / close settings\nI: interoception / exteroception · inside zoom up to 120×\n[ / ]: cycle cell targets · Enter: choose / place\nArrow keys: navigate choices or membrane placement\nHover particles: inspect through a local lens\nNo movement keys: anatomy steers.",MUTED)
 	_button(options,"Close [M]",_toggle_settings)
 	options.add_child(quit_button)
 	quit_button.text = "Quit game"
@@ -843,7 +867,7 @@ func _toggle_build() -> void:
 	var size := get_viewport_rect().size
 	var fit := minf(size.x/Simulation.VIEW.x,size.y/Simulation.VIEW.y)
 	camera_zoom = zoom/maxf(0.001,fit)
-	manual_zoom = clampf(minf(size.x,size.y)*0.28/(world.player.radius*fit),MIN_ZOOM,MAX_ZOOM)
+	manual_zoom = clampf(minf(size.x,size.y)*0.28/(world.player.radius*fit),MIN_ZOOM,_maximum_zoom())
 	focus_animating = true
 	selected = -1
 	moving_id = -1
@@ -893,14 +917,13 @@ func _place_at(angle: float) -> bool:
 	return placed
 
 func _zoom_at(screen: Vector2, factor: float) -> void:
-	var before: Vector2 = _screen_world(screen)
-	manual_zoom = clampf(manual_zoom*factor,MIN_ZOOM,MAX_ZOOM)
-	focus_animating = false
-	if camera_locked: camera_offset = Vector2.ZERO
+	var before: Vector2=_cell_frame_point(_screen_world(screen)) if perception=="interoception" else _screen_world(screen)
+	manual_zoom=clampf(manual_zoom*factor,MIN_ZOOM,_maximum_zoom());focus_animating=false
+	if camera_locked and perception!="interoception":camera_offset=Vector2.ZERO
 	_update_world(1.0 if is_paused() else Engine.get_physics_interpolation_fraction())
-	var after: Vector2 = _screen_world(screen)
-	var correction := Simulation.Medium.offset(after,before)
-	if not camera_locked: free_camera = Simulation.Medium.wrap_position(free_camera+correction)
+	var after: Vector2=_cell_frame_point(_screen_world(screen)) if perception=="interoception" else _screen_world(screen)
+	if perception=="interoception":camera_offset+=before-after
+	elif not camera_locked:free_camera=Simulation.Medium.wrap_position(free_camera+Simulation.Medium.offset(after,before))
 	_update_world(1.0 if is_paused() else Engine.get_physics_interpolation_fraction())
 	currents.queue_redraw()
 
@@ -1032,7 +1055,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not _can_edit_tubules(): tube_start.clear()
 	if settings_panel.visible or world.evolution.terminal(): return
 	if event is InputEventMouseMotion and camera_dragging:
-		if camera_locked: camera_offset -= event.relative.rotated(-camera_rotation)/zoom
+		if camera_locked: camera_offset -= event.relative.rotated(-intero_rotation if perception=="interoception" else -camera_rotation)/zoom
 		else: free_camera = Simulation.Medium.wrap_position(free_camera-event.relative.rotated(-camera_rotation)/zoom)
 		currents.queue_redraw()
 		return
@@ -1050,7 +1073,7 @@ func _unhandled_input(event: InputEvent) -> void:
 					_message("Microtubule placed · hover and scroll to set tension.")
 			tube_start.clear()
 		return
-	if event.button_index == MOUSE_BUTTON_MIDDLE and (build_open or not camera_locked):
+	if event.button_index == MOUSE_BUTTON_MIDDLE and (build_open or not camera_locked or perception=="interoception"):
 		camera_dragging = true
 		camera_button = event.button_index
 		tube_start.clear()

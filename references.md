@@ -436,3 +436,7 @@ Every pathway and source is qualified in [Revision 43](docs/REVISION_43.md).
 ## Revision 49 — simplified digestive lifecycle
 
 The owner restores the first-cell food-vacuole and cytoproct abstraction, motivated by the previously cited Paramecium oral/digestive-vacuole studies (Revision 42/43 above). This revision deliberately combines digestion and downstream metabolism into a direct numerical ATP/biomass credit, retains finite waste for expulsion, and removes explicit acidification, cofactors, respiratory pathways and osmotic pumping. The 0.7 tissue fraction, fuel-to-ATP conversion, parcel limits and rates are gameplay/model choices; the cited experiments do not establish those values or a literal direct vacuole-to-ATP mechanism.
+
+### Revision 50 — timed carriers and illustrated contents
+
+The previously cited Paramecium oral/digestive-vacuole observations motivate retained intracellular food compartments and subsequent waste expulsion. The ten-second minimum, elastic reflections at the membrane/nucleus and direct numerical ATP/biomass credit are explicit game rules, not measured biological residence times or a cytoplasmic fluid solver. Nutrient/waste shapes inside a carrier are illustrations of its finite inventory and have no separate physical trajectories.

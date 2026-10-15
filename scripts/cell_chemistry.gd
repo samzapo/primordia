@@ -4,8 +4,10 @@ const Catalog = preload("res://scripts/chemistry_catalog.gd")
 const MAX_VACUOLES := 12
 const MAX_PACKETS := MAX_VACUOLES*2
 const DIGESTION_RATE := 1.8
+const RESIDENCE_SECONDS := 10.0
 const BIOMASS_YIELD := 0.7
 var model_version := 1
+var batching:=false
 var particles: Array = []
 var totals: Dictionary = {}
 var vacuoles: Array = []
@@ -54,17 +56,21 @@ func emit(species: String, quantity: float, at: Vector2, source: int=-1, compart
 	var chosen: Dictionary={}
 	var count:=0
 	for packet in particles:
-		if packet.species!=species:continue
+		if packet.species!=species or not packet.alive:continue
 		count+=1
 		if chosen.is_empty() or packet.p.distance_squared_to(at)<chosen.p.distance_squared_to(at):chosen=packet
 	# Coalesce only the same compartment, or bounded overflow into an existing
 	# carrier. This changes parcel resolution, never represented material/fuel.
-	if not chosen.is_empty() and (count>=MAX_VACUOLES or (chosen.compartment==compartment and chosen.p.distance_squared_to(at)<16)):
+	if not chosen.is_empty() and (count>=MAX_VACUOLES or ((chosen.compartment==compartment or (compartment<0 and float(chosen.get("age",0))<1)) and chosen.p.distance_squared_to(at)<196)):
 		chosen.amount+=quantity;chosen.fuel+=fuel
+		if compartment<0 and float(chosen.get("age",0))>=1:chosen.age=1.0
 	else:
-		particles.append({"id":next_packet,"species":species,"amount":quantity,"fuel":fuel,"p":at,"previous":at,"v":Vector2.ZERO,"angle":next_packet*2.399963,"source":source,"compartment":next_packet if compartment<0 else compartment,"alive":true})
+		var parent: Dictionary={}
+		for packet in particles:
+			if packet.compartment==compartment and compartment>=0:parent=packet;break
+		particles.append({"age":float(parent.get("age",0)),"id":next_packet,"species":species,"amount":quantity,"fuel":fuel,"p":at,"previous":at,"v":Vector2.ZERO,"angle":next_packet*2.399963,"source":source,"compartment":next_packet if compartment<0 else compartment,"alive":true})
 		next_packet+=1
-	refresh()
+	if not batching:refresh()
 func _consume(packet: Dictionary, quantity: float) -> float:
 	quantity=minf(quantity,packet.amount)
 	var fuel: float=packet.fuel*quantity/maxf(.00000001,packet.amount)
@@ -96,47 +102,68 @@ func receive(kind: int, quantity: float, capacity: float, world_at: Vector2) -> 
 func refresh() -> void:
 	particles=particles.filter(func(packet):return packet.alive)
 	totals.clear();vacuoles.clear()
+	var carriers: Dictionary={}
 	for packet in particles:
 		totals[packet.species]=amount(packet.species)+packet.amount
-		if packet.species=="food":vacuoles.append({"id":packet.compartment,"p":packet.p,"radius":3.8,"acid":0.0,"material":0.0,"age":0.0})
+		if packet.species!="food":continue
+		var v={"id":packet.compartment,"p":packet.p,"radius":7.0,"acid":0.0,"material":0.0,"contents":packet.amount,"age":float(packet.get("age",0))}
+		carriers[packet.compartment]=v;vacuoles.append(v)
 	for packet in particles:
 		if packet.species!="waste":continue
-		if vacuoles.any(func(v):return v.id==packet.compartment):continue
-		vacuoles.append({"id":packet.compartment,"p":packet.p,"radius":3.8,"acid":1.0,"material":0.0,"age":0.0})
+		if carriers.has(packet.compartment):
+			var v: Dictionary=carriers[packet.compartment]
+			v.contents+=packet.amount;v.acid=packet.amount/maxf(.0000001,v.contents)
+		else:
+			var v={"id":packet.compartment,"p":packet.p,"radius":7.0,"acid":1.0,"material":0.0,"contents":packet.amount,"age":float(packet.get("age",0))}
+			carriers[packet.compartment]=v;vacuoles.append(v)
 func advance(cell, dt: float, _external_osmolarity: float=.15) -> void:
 	if dt<=0 or cell.dead or amount("food")+amount("waste")<=.0000001:return
 	if accelerator!=null:accelerator.advance(dt,.15);return
 	frame_dt=dt;tick+=1
 	var budget: float=DIGESTION_RATE*cell.growth_scale()*dt
-	var original:=particles.duplicate()
+	var original:=particles.duplicate();batching=true
 	for packet in original:
 		packet.previous=packet.p
 		if packet.species=="food" and budget>0:
-			var used: float=minf(packet.amount,budget);budget-=used
+			var duration: float=maxf(dt,RESIDENCE_SECONDS-float(packet.get("age",0)))
+			var used: float=minf(budget,packet.amount*minf(1,dt/duration));budget-=used
 			var fuel:=_consume(packet,used)
 			var tissue:=minf(used,fuel/7.5)*BIOMASS_YIELD
-			var atp:=maxf(0,fuel-tissue*7.5)
-			cell.biomass+=tissue;cell.gain_energy(atp);cell.processed+=used
+			cell.biomass+=tissue;cell.gain_energy(maxf(0,fuel-tissue*7.5));cell.processed+=used
 			emit("waste",used-tissue,packet.p,packet.source,packet.compartment,0)
-	# Bounded analytic circulation, also for a coarse elapsed interval. Waste
-	# follows its food carrier, then travels to the real cytoproct for release.
+	batching=false;particles=particles.filter(func(packet):return packet.alive)
+	var food_by_compartment: Dictionary={}
 	for packet in particles:
-		var carrier: Dictionary={}
-		if packet.species=="waste":
-			for food in particles:
-				if food.species=="food" and food.compartment==packet.compartment:carrier=food;break
-		var outlet: Vector2=cell.local_point(cell.excretion_angle())*.88
-		if not carrier.is_empty():packet.p=carrier.p
-		elif packet.species=="waste":packet.p=packet.p.move_toward(outlet,dt*maxf(6,cell.radius*.3))
-		else:packet.p=packet.p.rotated(dt*.20)
-		packet.p=constrain(cell,packet.p)
+		if packet.species=="food":food_by_compartment[packet.compartment]=packet
+	# Food and waste rows are finite stocks in one carrier, never separate
+	# colliding particles. Integrate only its food row (or waste after digestion).
+	for packet in particles:
+		if packet.species=="waste" and food_by_compartment.has(packet.compartment):continue
+		packet.previous=packet.p
+		packet.age=float(packet.get("age",0))+dt
+		if packet.species=="waste" and packet.age>=RESIDENCE_SECONDS:
+			packet.p=packet.p.move_toward(cell.local_point(cell.excretion_angle())*.88,dt*maxf(10,cell.radius*.4))
+		else:
+			if packet.v.length_squared()<.001:packet.v=Vector2.from_angle(packet.compartment*2.399963+.8)*maxf(6,(cell.radius*.22+7))
+			var steps:=clampi(ceili(dt/.05),1,64)
+			for step in steps:
+				var trial: Vector2=packet.p+packet.v*(dt/steps)
+				var bounded:=constrain(cell,trial)
+				if trial.distance_squared_to(bounded)>.000001:
+					var normal: Vector2=(trial-bounded).normalized()
+					packet.v=packet.v.bounce(normal)
+				packet.p=bounded
+	for packet in particles:
+		if packet.species!="waste":continue
+		var food: Dictionary=food_by_compartment.get(packet.compartment,{})
+		if not food.is_empty():packet.p=food.p;packet.previous=food.previous;packet.v=food.v;packet.age=food.age
 	refresh()
 static func constrain(cell, at: Vector2) -> Vector2:
-	var limit: float=cell.local_point(cell.surface_parameter(at.angle())).length()-4
+	var limit: float=cell.local_point(cell.surface_parameter(at.angle())).length()-7
 	at=at.limit_length(maxf(1,limit))
 	var center: Vector2=Vector2(-.12,-.10)*cell.radius
 	var delta: Vector2=at-center
-	if delta.length()<cell.radius*.22:at=center+delta.normalized()*cell.radius*.22 if delta.length()>.001 else center+Vector2.RIGHT*cell.radius*.22
+	if delta.length()<(cell.radius*.22+7):at=center+delta.normalized()*(cell.radius*.22+7) if delta.length()>.001 else center+Vector2.RIGHT*(cell.radius*.22+7)
 	return at.limit_length(maxf(1,limit))
 func excrete(sim, cell, dt: float) -> void:
 	if amount("waste")<=.0000001:return
@@ -144,14 +171,17 @@ func excrete(sim, cell, dt: float) -> void:
 	if accelerator!=null:
 		# The compact receipt already says whether any waste-only vacuole has
 		# reached the outlet. Avoid an empty render-thread transaction.
-		if not vacuoles.any(func(v):return v.acid>0 and v.p.distance_to(outlet)<=maxf(2,cell.radius*.08)):return
+		if not vacuoles.any(func(v):return v.acid>=.99999999 and v.age>=RESIDENCE_SECONDS and v.p.distance_to(outlet)<=maxf(2,cell.radius*.08)):return
 		accelerator.command(11,dt*4*cell.growth_scale(),outlet,maxf(2,cell.radius*.08))
 		for packet in accelerator._unpack(accelerator.transfer):_expel(sim,cell,packet,packet.amount)
 		return
 	var budget: float=dt*4*cell.growth_scale()
+	var food_by_compartment: Dictionary={}
+	for food in particles:
+		if food.species=="food":food_by_compartment[food.compartment]=true
 	for packet in particles:
-		if packet.species!="waste" or packet.p.distance_to(outlet)>maxf(2,cell.radius*.08):continue
-		if particles.any(func(food):return food.species=="food" and food.compartment==packet.compartment):continue
+		if packet.species!="waste" or float(packet.get("age",0))<RESIDENCE_SECONDS or packet.p.distance_to(outlet)>maxf(2,cell.radius*.08):continue
+		if food_by_compartment.has(packet.compartment):continue
 		var used: float=minf(budget,packet.amount);budget-=used
 		_consume(packet,used);_expel(sim,cell,packet,used)
 	refresh()

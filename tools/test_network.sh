@@ -33,6 +33,11 @@ if [[ "${1:-}" == gpu ]]; then
   xvfb-run -a -s '-screen 0 1440x900x24 -nolisten tcp' "$godot_bin" --path "$project_dir" --rendering-method mobile --rendering-driver vulkan --gpu-index 0 --script tests/food_render_gpu.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"
   ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
   grep -Eq 'FOOD RENDER GPU: [0-9]+ assertions, 0 failures' "$report_file"
+  # Browser presentation uses Compatibility; this is a pixel-correctness
+  # fixture, separate from hardware resident simulation/performance checks.
+  xvfb-run -a -s '-screen 0 1280x720x24 -nolisten tcp' "$godot_bin" --path "$project_dir" --rendering-method gl_compatibility --rendering-driver opengl3 --script tests/vacuole_compatibility_gpu.gd 2>&1 | tee "$report_file"
+  ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
+  grep -Eq 'VACUOLE COMPATIBILITY GPU: [0-9]+ assertions, 0 failures' "$report_file"
   for scope in fixture full-world slow-observer recovery; do
     extra=()
     [[ "$scope" != full-world ]] || extra=(--full-world --realtime)
@@ -54,6 +59,10 @@ fi
 "$godot_bin" --headless --path "$project_dir" --script tests/touch_zoom_run.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"
 ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
 grep -Eq 'TOUCH CONTROLS: [0-9]+ assertions, 0 failures' "$report_file"
+
+"$godot_bin" --headless --path "$project_dir" --script tests/mobile_vacuoles_run.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"
+! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
+grep -Eq 'MOBILE VACUOLES: [0-9]+ assertions, 0 failures' "$report_file"
 
 "$godot_bin" --headless --path "$project_dir" --script tests/world_status_run.gd 2>&1 | tee "$report_file"
 ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"

@@ -265,7 +265,7 @@ func _poll_network() -> void:
 		socket.close(-1);_connection_closed(-1,"");return
 	if socket.get_ready_state()==WebSocketPeer.STATE_OPEN:
 		if not hello_sent:
-			_send({"op":"hello","token":token,"invite":invitation,"snapshot_ack":true,"compact_cytoplasm":true});hello_sent=true
+			_send({"op":"hello","token":token,"invite":invitation,"snapshot_ack":true,"compact_cytoplasm":true,"cytoplasm_version":2});hello_sent=true
 		var polled:=0
 		while socket.get_available_packet_count()>0 and polled<4:
 			polled+=1

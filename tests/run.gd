@@ -147,21 +147,16 @@ func _test_metabolism() -> void:
 	if not preload("res://tests/test_policy.gd").GAMEPLAY_BALANCE_ENABLED:
 		preload("res://tests/test_policy.gd").skip("legacy metabolic yields")
 		return
-	var sim = isolated()
-	var cell = sim.player
-	cell.substrate = 1
-	cell.oxygen = 0.25
-	cell.energy = 10
-	var mass: float = cell.organic_mass()
-	var biomass: float = cell.biomass
+	var sim=isolated();var cell=sim.player
+	cell.substrate=1;cell.energy=10
+	var mass: float=cell.organic_mass();var biomass: float=cell.biomass;var processed: float=cell.processed
+	for i in 10:sim._metabolize(cell,1)
+	expect(is_zero_approx(cell.substrate) and is_equal_approx(cell.processed-processed,1),"Direct digestion processes finite food over its residence interval")
+	expect(is_equal_approx(cell.biomass-biomass,.7),"Food-vacuole digestion retains the current tissue fraction")
+	expect(is_equal_approx(cell.organic_mass(),mass),"Direct digestion retains tissue and physical waste without losing material")
+	processed=cell.processed;cell.biomass=8
 	sim._metabolize(cell,1)
-	expect(cell.substrate == 0 and cell.oxygen == 0 and is_equal_approx(cell.processed-cell.fermented,0.25),"Available oxygen bounds the aerobic share; fermentation processes remaining food")
-	expect(is_equal_approx(cell.biomass-biomass,0.4),"Mixed metabolism uses the appropriate biomass yields")
-	expect(is_equal_approx(cell.organic_mass()+sim.respiration_loss,mass),"Metabolism accounts for biomass, waste and lost end products")
-	var processed: float = cell.processed
-	cell.biomass = 8
-	sim._metabolize(cell,1)
-	expect(cell.processed == processed,"No food or mobilizable reserves means no metabolism")
+	expect(cell.processed==processed,"Construction biomass is never mobilized into free food")
 
 func _test_anatomy() -> void:
 	var cell = Cell.new()
@@ -883,6 +878,8 @@ func _test_autonomous_hunting() -> void:
 	cell.add_organ("poreforming",0.45,"graze",false)
 	cell.add_organ("hunting",0,"hunt",false)
 	cell.add_organ("propulsion",PI,"graze",false)
+	# Explicit finite meal funds sustained chemical predation; no retired emergency tissue burning.
+	cell.chemistry.emit("food",120,cell.local_point(1.3)*.6)
 	var prey = sim._make_cell(cell.position+Vector2(190,0),"grazer")
 	prey.organs.clear()
 	prey.body = 25
@@ -894,5 +891,5 @@ func _test_autonomous_hunting() -> void:
 	# anatomy and require a real kill and ingestion within sixty seconds.
 	for i in 3600: sim.step(DT)
 	print("HUNT: kills=%d eaten=%.2f processed=%.2f health=%.1f" % [sim.kills,cell.eaten,cell.processed,cell.health])
-	expect(sim.kills >= 1 and cell.eaten > 0,"Autonomous spike pursuit kills prey and the grazing pore consumes released food")
+	expect(sim.kills >= 1 and cell.eaten > 0,"Fueled autonomous chemical pursuit kills prey and the grazing pore consumes released food")
 	expect(cell.processed > 0 and cell.health > 0,"Hunting contributes to ordinary metabolism and survival")

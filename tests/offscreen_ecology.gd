@@ -26,6 +26,7 @@ static func organic(sim) -> float:
 static func run(check: Callable) -> void:
 	var sim = fixture()
 	var cell = sim.player
+	cell.chemistry.receive(0,2,2,cell.position+cell.local_point(0))
 	var initial: float = organic(sim)
 	var stored: float = cell.substrate
 	for i in 90: sim.step(DT)

@@ -2,7 +2,7 @@ extends RefCounted
 ## Intracellular component of the main-device resident backend. GPU buffers own
 ## particles; GDScript holds anatomy, derived totals and exactly-once receipts.
 const Catalog=preload("res://scripts/chemistry_catalog.gd")
-const STRIDE:=80
+const STRIDE:=96
 # Control doubles: 0..7 slot/identity/clock/vacuole header; 20..26 cumulative
 # chemistry; 32..50 species totals; 64..68 derived inventories; 70..84 current
 # transaction result/body deltas; 96..127 flux/limits; 128..223 vacuoles.
@@ -58,9 +58,9 @@ func _pack(packets: Array) -> PackedByteArray:
 	for i in packets.size():
 		var packet: Dictionary=packets[i];var at:=i*STRIDE
 		var facts:=packet.duplicate(true)
-		for key in ["id","species","amount","fuel","p","previous","v","angle","source","compartment","alive"]:facts.erase(key)
+		for key in ["id","species","amount","fuel","p","previous","v","angle","source","compartment","alive","age"]:facts.erase(key)
 		if not facts.is_empty():metadata[packet.id]=facts
-		bytes.encode_float(at+44,0.0 if facts.is_empty() else 1.0)
+		bytes.encode_double(at+80,float(packet.get("age",0)))
 		bytes.encode_double(at,packet.amount);bytes.encode_double(at+8,packet.fuel)
 		for j in 7:bytes.encode_float(at+16+j*4,[packet.p.x,packet.p.y,packet.previous.x,packet.previous.y,packet.v.x,packet.v.y,packet.angle][j])
 		bytes.encode_s32(at+48,species.find(packet.species));bytes.encode_u32(at+52,packet.source&0xffffffff);bytes.encode_u32(at+56,packet.compartment&0xffffffff);bytes.encode_s32(at+60,1 if packet.alive else 0)
@@ -72,7 +72,7 @@ func _unpack(bytes: PackedByteArray) -> Array:
 	for i in bytes.size()/STRIDE:
 		var at:=i*STRIDE
 		if bytes.decode_s32(at+60)==0:continue
-		packets.append({"id":bytes.decode_s64(at+64),"species":species[bytes.decode_s32(at+48)],"amount":bytes.decode_double(at),"fuel":bytes.decode_double(at+8),"p":Vector2(bytes.decode_float(at+16),bytes.decode_float(at+20)),"previous":Vector2(bytes.decode_float(at+24),bytes.decode_float(at+28)),"v":Vector2(bytes.decode_float(at+32),bytes.decode_float(at+36)),"angle":bytes.decode_float(at+40),"source":(int(bytes.decode_s32(at+72))<<32)|bytes.decode_u32(at+52),"compartment":(int(bytes.decode_s32(at+76))<<32)|bytes.decode_u32(at+56),"alive":true})
+		packets.append({"age":bytes.decode_double(at+80),"id":bytes.decode_s64(at+64),"species":species[bytes.decode_s32(at+48)],"amount":bytes.decode_double(at),"fuel":bytes.decode_double(at+8),"p":Vector2(bytes.decode_float(at+16),bytes.decode_float(at+20)),"previous":Vector2(bytes.decode_float(at+24),bytes.decode_float(at+28)),"v":Vector2(bytes.decode_float(at+32),bytes.decode_float(at+36)),"angle":bytes.decode_float(at+40),"source":(int(bytes.decode_s32(at+72))<<32)|bytes.decode_u32(at+52),"compartment":(int(bytes.decode_s32(at+76))<<32)|bytes.decode_u32(at+56),"alive":true})
 	for packet in packets:packet.merge(metadata.get(packet.id,{}),false)
 	return packets
 
@@ -81,7 +81,7 @@ func _control(chem) -> PackedByteArray:
 	for pair in [[0,chem.particles.size()],[1,capacity],[2,chem.next_packet&0xffffffff],[3,chem.next_packet>>32],[4,chem.tick&0xffffffff],[5,chem.tick>>32],[7,chem.vacuoles.size()],[20,chem.heat],[21,chem.solar_work],[22,chem.expelled]]:bytes.encode_double(pair[0]*8,float(pair[1]))
 	for j in chem.vacuoles.size():
 		var v: Dictionary=chem.vacuoles[j]
-		var values: Array=[v.id,v.p.x,v.p.y,v.radius,v.acid,v.material,v.age,0]
+		var values: Array=[v.id&0xffffffff,v.p.x,v.p.y,v.radius,v.acid,v.get("contents",0),v.age,v.id>>32]
 		for k in 8:bytes.encode_double((128+j*8+k)*8,float(values[k]))
 	return bytes
 
@@ -206,7 +206,7 @@ func _apply(bytes: PackedByteArray,code: int) -> void:
 	chem.vacuoles.clear()
 	for j in int(bytes.decode_double(7*8)):
 		var base:=128+j*8
-		chem.vacuoles.append({"id":int(bytes.decode_double(base*8)),"p":Vector2(bytes.decode_double((base+1)*8),bytes.decode_double((base+2)*8)),"radius":bytes.decode_double((base+3)*8),"acid":bytes.decode_double((base+4)*8),"material":bytes.decode_double((base+5)*8),"age":bytes.decode_double((base+6)*8)})
+		chem.vacuoles.append({"id":int(bytes.decode_double(base*8))|(int(bytes.decode_double((base+7)*8))<<32),"p":Vector2(bytes.decode_double((base+1)*8),bytes.decode_double((base+2)*8)),"radius":bytes.decode_double((base+3)*8),"acid":bytes.decode_double((base+4)*8),"material":0.0,"contents":bytes.decode_double((base+5)*8),"age":bytes.decode_double((base+6)*8)})
 	cell.biomass+=bytes.decode_double(80*8);cell.health=maxf(0,cell.health+bytes.decode_double(81*8))
 	var gained:=bytes.decode_double(82*8)
 	if gained>0:cell.gain_energy(gained)

@@ -55,37 +55,39 @@ func layout() -> void:
 		cancel();viewport_size=size
 		if OS.has_feature("web"):pixels=size.x/maxf(1,float(JavaScriptBridge.eval("window.innerWidth")))
 	bar.visible=enabled and game.touch_controls_available()
-	bar.add_theme_constant_override("separation",6*pixels)
+	bar.add_theme_constant_override("separation",6*pixels*.7)
 	for button in [pause_button,minus_button,plus_button]:
-		button.add_theme_font_size_override("font_size",roundi(18*pixels))
-		button.custom_minimum_size=Vector2(100 if button==pause_button else 48,48)*pixels
+		button.add_theme_font_size_override("font_size",roundi(18*pixels*.7))
+		button.custom_minimum_size=Vector2(100 if button==pause_button else 48,48)*pixels*.7
 	bar.reset_size()
-	bar.position=Vector2(size.x-220*pixels,12*pixels)
+	var tray_offset: float=game.cell_ui.mobile_menu_height if enabled else 0.0
+	bar.position=Vector2(size.x-220*pixels*.7,12*pixels*.7+tray_offset)
 	pause_button.text="Resume" if game.user_paused else "Pause"
 	pause_button.disabled=not game.pause_control_ready
 	follow_button.visible=bar.visible
-	follow_button.add_theme_font_size_override("font_size",roundi(18*pixels))
-	follow_button.custom_minimum_size=Vector2(208,48)*pixels
+	follow_button.add_theme_font_size_override("font_size",roundi(18*pixels*.7))
+	follow_button.custom_minimum_size=Vector2(208,48)*pixels*.7
 	follow_button.size=follow_button.custom_minimum_size
-	follow_button.position=Vector2(size.x-220*pixels,66*pixels)
+	follow_button.position=Vector2(size.x-220*pixels*.7,66*pixels*.7+tray_offset)
 	follow_button.text="Follow"
+	follow_button.tooltip_text="Recenter the cell-frame view" if game.perception=="interoception" else "Toggle follow / free view"
 	follow_button.self_modulate=Color.WHITE if game.camera_locked and game.can_follow() else Color(1,1,1,.60)
 	follow_button.set_pressed_no_signal(game.camera_locked and game.can_follow())
 	follow_button.disabled=not game.can_follow()
 	perception_button.visible=bar.visible
 	perception_button.text="Interoception" if game.perception=="exteroception" else "Exteroception"
-	perception_button.add_theme_font_size_override("font_size",roundi(18*pixels))
-	perception_button.custom_minimum_size=Vector2(208,48)*pixels;perception_button.size=perception_button.custom_minimum_size
-	perception_button.position=Vector2(size.x-220*pixels,120*pixels)
+	perception_button.add_theme_font_size_override("font_size",roundi(18*pixels*.7))
+	perception_button.custom_minimum_size=Vector2(208,48)*pixels*.7;perception_button.size=perception_button.custom_minimum_size
+	perception_button.position=Vector2(size.x-220*pixels*.7,120*pixels*.7+tray_offset)
 	music_button.visible=bar.visible;music_volume.visible=bar.visible
 	var sounding: bool=game.preferences.music_volume>0
 	var locked_audio: bool=game.music.web_audio!=null and game.music.web_audio.cached.get("state","")!="running"
 	music_button.text="Music off" if not sounding else "Enable music" if locked_audio else "Music"
 	music_button.set_pressed_no_signal(sounding and not locked_audio)
 	music_button.self_modulate=Color.WHITE if sounding and not locked_audio else Color(1,1,1,.6)
-	music_button.add_theme_font_size_override("font_size",roundi(16*pixels))
-	music_button.custom_minimum_size=Vector2(120,48)*pixels;music_button.size=music_button.custom_minimum_size;music_button.position=Vector2(size.x-220*pixels,174*pixels)
-	music_volume.custom_minimum_size=Vector2(82,48)*pixels;music_volume.size=music_volume.custom_minimum_size;music_volume.position=Vector2(size.x-94*pixels,174*pixels)
+	music_button.add_theme_font_size_override("font_size",roundi(16*pixels*.7))
+	music_button.custom_minimum_size=Vector2(120,48)*pixels*.7;music_button.size=music_button.custom_minimum_size;music_button.position=Vector2(size.x-220*pixels*.7,174*pixels*.7+tray_offset)
+	music_volume.custom_minimum_size=Vector2(82,48)*pixels*.7;music_volume.size=music_volume.custom_minimum_size;music_volume.position=Vector2(size.x-94*pixels*.7,174*pixels*.7+tray_offset)
 	music_volume.set_value_no_signal(game.preferences.music_volume*100)
 	state_label.visible=bar.visible and (game.user_paused or game.world.player.dead)
 	state_label.text="View paused · world continues" if game.world.remote_client else "Game paused"
@@ -93,8 +95,8 @@ func layout() -> void:
 		var received_recovery=game.get("family_recovery") if game.world.remote_client else {}
 		var recovery: Dictionary=received_recovery if received_recovery is Dictionary else {}
 		state_label.text="Preparing your new lineage" if recovery.get("state","")=="restarting_lineage" else "Stored successor waiting for space" if recovery.get("state","")=="waiting_for_space" else "Lineage exhausted · observing" if game.can_follow() and recovery.get("state","")=="extinct" else "Lineage exhausted · no stored successor" if recovery.get("state","")=="extinct" else "Observing a living cell" if game.can_follow() else "No living cell to follow"
-	state_label.add_theme_font_size_override("font_size",roundi(14*pixels))
-	state_label.position=Vector2(size.x-220*pixels,228*pixels);state_label.size=Vector2(208,44)*pixels
+	state_label.add_theme_font_size_override("font_size",roundi(14*pixels*.7))
+	state_label.position=Vector2(size.x-220*pixels*.7,228*pixels*.7+tray_offset);state_label.size=Vector2(208,44)*pixels*.7
 
 
 	if OS.has_feature("web") and enabled:
@@ -167,5 +169,7 @@ func _anchor_pair() -> void:
 	anchor_a=game._screen_world(points[0])
 	# Retain the unwrapped separation: a gesture may straddle a torus seam.
 	anchor_b=anchor_a+(points[1]-points[0]).rotated(-game.camera_rotation)/game.zoom
+	if game.perception=="interoception":
+		anchor_a=game._cell_frame_point(anchor_a);anchor_b=game._cell_frame_point(anchor_b)
 	game.camera_dragging=true
 	game._camera_gesture(anchor_a,anchor_b,points[0],points[1])

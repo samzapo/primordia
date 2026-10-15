@@ -17,4 +17,4 @@ func _process(_dt: float) -> void:
 	if not visible:return
 	if not game.build_open:hide();return
 	var cell=game.world.player
-	inspected.text="Nutrients enter through the oral groove and circulate in food vacuoles. Digestion makes ATP and biomass directly. Remaining waste travels to the cytoproct and is expelled.\n\nFood %.2f · waste %.2f\nATP %.1f · biomass %.1f\nReproduction: %.1f ATP · %.1f tissue reserved" % [cell.substrate,cell.waste,cell.energy,cell.biomass,cell.brood_energy,cell.brood_mass]
+	inspected.text="Nutrients enter through the oral groove. Food vacuoles circulate and bounce inside the cell for at least ten seconds. Their pictured contents share one moving carrier. Digestion makes ATP and biomass directly. Remaining waste travels to the cytoproct and is expelled.\n\nFood %.2f · waste %.2f\nATP %.1f · biomass %.1f\nReproduction: %.1f ATP · %.1f tissue reserved" % [cell.substrate,cell.waste,cell.energy,cell.biomass,cell.brood_energy,cell.brood_mass]

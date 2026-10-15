@@ -31,7 +31,7 @@ func run(suite) -> void:
 	var reserved:=InputEventKey.new();reserved.keycode=KEY_ESCAPE;reserved.pressed=true;game._input(reserved)
 	suite.expect(not game.settings_panel.visible,"Escape is reserved for the browser rather than opening the game menu")
 	game.preferences.fullscreen=false
-	game.touch_zoom.enabled=true;game.touch_zoom.layout();game._update_world(1)
+	game.touch_zoom.enabled=true;game.manual_zoom=2;game.touch_zoom.layout();game._update_world(1)
 	var original_time: float=game.world.time
 	var random: int=game.world.rng.state
 	var organ_scales: Array=game.world.player.organs.map(func(organ):return organ.scale)
@@ -79,7 +79,7 @@ func run(suite) -> void:
 	camera=game.render_camera;touch(4,middle,true);drag(4,middle+Vector2(80,20));touch(4,middle+Vector2(80,20),false)
 	suite.expect(game.camera_locked and game.render_camera==camera,"One-finger dragging cannot pan the camera")
 	game.touch_zoom.pixels=3;game.touch_zoom.layout()
-	suite.expect(game.touch_zoom.plus_button.custom_minimum_size.y>=144 and game.touch_zoom.minus_button.custom_minimum_size.y>=144,"Zoom targets retain 48 CSS-pixel height at a scaled canvas")
+	suite.expect(game.touch_zoom.plus_button.custom_minimum_size.y>=100.7 and game.touch_zoom.minus_button.custom_minimum_size.y>=100.7,"Zoom targets use the requested 70% size at a scaled canvas")
 	var gui: Vector2=game.touch_zoom.plus_button.get_global_rect().get_center()
 	var event:=InputEventScreenTouch.new();event.index=0;event.position=gui;event.pressed=true
 	suite.expect(not game.touch_zoom.handle(event),"A touch button retains ordinary GUI event routing")

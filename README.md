@@ -28,7 +28,7 @@ These launchers find Steam Godot and use the same Mobile renderer. **F3 shows th
 
 Resident now runs nearby particles on the GPU and stores distant particles in sparse CPU chunks, with bounded transfers and large-step cold transport. F3 separates GPU nearby packets (including the transition buffer) from CPU stored slots. Zoom does not change feeding; rapid camera travel waits for prepared water. [Revision 41](docs/REVISION_41.md) records correctness checks, performance tradeoffs and limits: the normal workstation run remains at 60 FPS, but the dense hybrid still costs more than whole-GPU simulation in the current small habitat. The habitat's fluid grid and cell scheduler are not yet unbounded, and the owner's Threadripper/RTX 3090 needs a fresh comparison. Use `./tools/profile_playtest.sh resident` for the Steam-compatible trace. The ordinary launcher defaults to resident; CPU launch modes remain explicit correctness and diagnostic comparisons.
 
-## Food vacuoles and current test policy
+## Food vacuoles and mobile controls
 
 Current intracellular chemistry is deliberately simple: ingested nutrient
 parcels circulate in food vacuoles, digestion credits numeric ATP and biomass,
@@ -45,10 +45,11 @@ server advances actual time at 30 fixed steps per second; clients interpolate
 updates while rendering at their own frame rate. The desktop render target is
 60 FPS. Opening an editor or settings keeps the shared world running.
 
-Gameplay, objective and balance tests remain on the owner's hold. Conservation,
-paid actions, physics, UI, persistence, networking and performance checks remain
-active. See [Revision 49](docs/REVISION_49.md) for the current model, archived
-checkpoint migration and measured performance.
+Gameplay, objective and balance tests are enabled again, alongside conservation,
+paid actions, physics, UI, persistence, networking and performance checks. See [Revision 49](docs/REVISION_49.md) for the current model, archived
+checkpoint migration and measured performance. [Revision 50](docs/REVISION_50.md)
+adds ten-second vacuole residence, illustrated half-size contents, cell-attached
+interoception with up to 120x zoom, mobile top menus and hideable resource stocks.
 
 ## Paramecium anatomy
 
