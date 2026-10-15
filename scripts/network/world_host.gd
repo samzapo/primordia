@@ -29,6 +29,7 @@ var started_usec := 0
 var tick_samples: Array = []
 var tick_phase_peak_usec: Dictionary = {}
 var snapshots_sent := 0
+var chemistry_migration: Dictionary={}
 var particle_resolution: Dictionary = {}
 var skipped_frames := 0
 var sent_bytes := 0
@@ -77,7 +78,17 @@ func _ready() -> void:
 		if world==null: world = Sim.new()
 		world_id = Crypto.new().generate_random_bytes(16).hex_encode()
 	else:
-		var graph = Codec.new().restore(saved.get("graph",{}))
+		var archived:=""
+		if saved.get("food_vacuole_version",0)<1:
+			archived=store.archive_pond(saved)
+			if archived=="":_fatal(store.last_error);return
+			print("CHEMISTRY_MIGRATION archive=%s version=food-vacuoles-v1" % archived)
+		var codec:=Codec.new()
+		var graph = codec.restore(saved.get("graph",{}))
+		chemistry_migration=saved.get("chemistry_migration",{})
+		if not codec.migration_audit.is_empty():
+			chemistry_migration={"version":1,"cells":codec.migration_audit,"archive":archived}
+			print("CHEMISTRY_MIGRATION cells=%d before_packets=%d after_packets=%d" % [codec.migration_audit.size(),codec.migration_audit.reduce(func(total,item):return total+item.before_packets,0),codec.migration_audit.reduce(func(total,item):return total+item.after_packets,0)])
 		if not graph is Dictionary or not graph.get("world") is Sim: _fatal("Invalid checkpoint graph"); return
 		world = graph.world; accounts = graph.accounts
 		world_id = saved.world_id; epoch = int(saved.epoch)
@@ -429,7 +440,7 @@ func checkpoint() -> bool:
 		gpu_tick=world.resident.gpu.reaction_tick
 	var overrides: Dictionary={world.get_instance_id():{"particles":world.particle_snapshots(),"pheromones":[],"particle_pool":false}}
 	var graph:=Codec.new().capture({"world":world,"accounts":accounts},overrides)
-	var result: bool=store.save({"world_id":world_id,"epoch":epoch,"tick":world.revision,"gpu_tick":gpu_tick,"stream_rng":stream_rng,"particle_resolution_version":preload("res://scripts/network/particle_resolution.gd").VERSION,"particle_resolution":particle_resolution,"build":OS.get_environment("PRIMORDIA_BUILD_SHA"),"pond_restarts":pond_restarts,"previous_world_id":previous_world_id,"pond_archive":pond_archive,"introduced_cells":introduced_cells,"lineage_restarts":lineage_restarts,"graph":graph})
+	var result: bool=store.save({"world_id":world_id,"epoch":epoch,"tick":world.revision,"gpu_tick":gpu_tick,"stream_rng":stream_rng,"food_vacuole_version":1,"chemistry_migration":chemistry_migration,"particle_resolution_version":preload("res://scripts/network/particle_resolution.gd").VERSION,"particle_resolution":particle_resolution,"build":OS.get_environment("PRIMORDIA_BUILD_SHA"),"pond_restarts":pond_restarts,"previous_world_id":previous_world_id,"pond_archive":pond_archive,"introduced_cells":introduced_cells,"lineage_restarts":lineage_restarts,"graph":graph})
 	checkpoint_total_ms=(Time.get_ticks_usec()-checkpoint_start)/1000.0
 	if result: last_checkpoint_usec=Time.get_ticks_usec()
 	return result
@@ -481,7 +492,7 @@ func _frame(peer: Dictionary) -> Dictionary:
 	var internal_overrides: Dictionary={}
 	var focus=_focus(peer)
 	for cell in world.cells:
-		if peer.get("perception","exteroception")!="interoception" or cell!=focus:internal_overrides[cell.chemistry.get_instance_id()]={"particles":[],"presentation_totals":{"material":cell.chemistry.material(),"storage":cell.chemistry.storage_used(),"potential":cell.chemistry.potential(),"raw_fuel":cell.chemistry.raw_fuel(),"packets":cell.chemistry.particle_count()}}
+		if peer.get("perception","exteroception")!="interoception" or cell!=focus:internal_overrides[cell.chemistry.get_instance_id()]={"particles":[],"vacuoles":[],"presentation_totals":{"material":cell.chemistry.material(),"storage":cell.chemistry.storage_used(),"potential":cell.chemistry.potential(),"raw_fuel":cell.chemistry.raw_fuel(),"packets":cell.chemistry.particle_count()}}
 	return {"kind":"snapshot","world_id":world_id,"epoch":epoch,"tick":world.revision,"time":world.time,"edit":account.edit,"sequence":account.sequence,
 		"family_recovery":_family_recovery(account),"graph":Codec.new().capture({"cells":cells,"player":_selected(account),"focus":_focus(peer),"lineage":account.lineage,"evolution":account.evolution},internal_overrides,peer.get("compact_cytoplasm",false)),
 		"particles":PackedByteArray(),"flow":world.fluid.velocity.duplicate(),"acid":world.acidity.values.duplicate(),
@@ -535,6 +546,8 @@ func _write_metrics() -> void:
 	metrics["automatic_lineage_restart"]=true;metrics["automatic_pond_restart"]=true
 	metrics["pond_restarts"]=pond_restarts;metrics["previous_world_id"]=previous_world_id;metrics["pond_archive"]=pond_archive
 	metrics["introduced_cells"]=introduced_cells;metrics["lineage_restarts"]=lineage_restarts
+	metrics["food_vacuole_version"]=1
+	metrics["internal_packet_limit_per_cell"]=24
 	metrics["internal_packets"]=world.cells.reduce(func(total,cell):return total+cell.chemistry.particle_count(),0)
 	metrics["resident_internal_cells"]=world.cells.filter(func(cell):return cell.chemistry.accelerator!=null).size()
 	metrics["internal_parcel_scale"]=world.Catalog.data().ecology.get("internal_parcel_scale",1)

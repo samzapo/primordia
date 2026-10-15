@@ -416,3 +416,7 @@ The owner requests automatic reproductive investment and splitting from existing
 ## Revision 48 — owner-authorized persistent introductions
 
 The persistent pond now maintains a floor of fifteen living cells. Exhausted accounts receive a new starter cell in a new lineage, keeping their access keys and sign-ins. If all cells die, archive the complete old pond and start a new seeded population automatically. These explicit introductions supersede the previous no-reseed policy; automatic reproduction still consumes real particle reserves. Preserve safe placement, resident capacity, bounded retry and archive-before-reset durability. See [Revision 48](REVISION_48.md).
+
+## Revision 49 — owner-authorized simplification
+
+[Revision 49](REVISION_49.md) supersedes the expanded intracellular model above: ATP, biomass and reserved reproductive ATP are numbers. Finite ingested nutrients circulate in food vacuoles, digest directly into resources, then leave as waste via the cytoproct. There is no seeded internal molecular cloud or active pathway/osmosis network. Preserve resident visible transport, coarse hidden transport, actual membrane masking, named shaped-particle inspection, music, paid reproduction, saved identities and the fifteen-cell population floor. Comparable first-cell performance and real-time authority throughput are acceptance requirements.

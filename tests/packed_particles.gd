@@ -129,7 +129,7 @@ static func mutation_checks(check: Callable) -> void:
 				cell.membrane.maximum_radius = cell.radius*1.16
 				cell.membrane.invalidate()
 				sim._exclude_particles()
-			check.call((not packet.alive if kind!=Sim.WASTE else packet.p!=at) and render_matches(sim),"Render snapshots refresh after real feeding, toxin, decoy and deformed exclusion %d" % kind)
+			check.call((packet.alive if kind==Sim.OXYGEN else not packet.alive if kind!=Sim.WASTE else packet.p!=at) and render_matches(sim),"Render snapshots refresh after real feeding, toxin, decoy and deformed exclusion %d" % kind)
 			sim.spawn_particle(Sim.OXYGEN,cell.position+Vector2(160,0),Vector2.ZERO,0.2,900)
 			sim.kernels.particle_render_ready(sim.particles,sim.revision)
 			check.call(render_matches(sim),"Render snapshots include appended packets without a new tick")

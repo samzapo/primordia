@@ -124,6 +124,7 @@ func cancel() -> void:
 	if game!=null:game.tube_start.clear();game.camera_dragging=false
 
 func _tap(at: Vector2) -> void:
+	game.inspector.inspect_touch(at)
 	if game.user_paused:return
 	if game.cell_ui.hit(at).is_empty() and game.selected<0 and game.moving_id<0:
 		game.cell_ui.close_context();return
@@ -139,8 +140,10 @@ func handle(event: InputEvent) -> bool:
 		if event.pressed:
 			if _over_gui(game.ui,event.position):return false
 			fingers[event.index]=event.position
-			if fingers.size()==1:start=event.position;moved=false
+			if fingers.size()==1:
+				start=event.position;moved=false;game.inspector.inspect_touch(event.position)
 			elif fingers.size()==2:
+				game.inspector.touch_until=0
 				moved=true;game.tube_start.clear();game.camera_dragging=false
 				_anchor_pair()
 			return true

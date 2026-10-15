@@ -41,8 +41,6 @@ static func run(check: Callable) -> void:
 	check.call(absf(area(cell)/original_area-(original_volume+40)/original_volume) < 0.0001,"Added biomass maps one-to-one to enclosed area, including groove displacement")
 	check.call(Geometry2D.triangulate_polygon(cell.membrane.outline()).size() > 0,"Indented anatomy remains renderable")
 	cell.energy = cell.energy_reference()
-	cell.chemistry.assign("adp",0)
-	cell.chemistry.emit("adp",cell.energy_reference()*9,cell.chemistry.site(cell.chemistry.node_at(cell.chemistry.find_module("respiration"))))
 	cell.gain_energy(cell.energy_reference()*9)
 	check.call(cell.energy > cell.energy_reference()*9,"ATP has no old storage ceiling")
 	var full_rate: float = cell.atp_decay_rate()

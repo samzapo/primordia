@@ -25,7 +25,7 @@ static func run(check: Callable) -> void:
 
 	var empty = Cell.new()
 	empty.energy = 0
-	empty.chemistry.emit("atp",0.4,Vector2(0.32,-0.10)*empty.radius)
+	empty.energy=0.4
 	empty.age = 1
 	empty.spend_energy(10,{},"combat",{2:1.0,3:3.0})
 	var limited: Dictionary = empty.energy_budget.rates(1)

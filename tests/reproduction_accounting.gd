@@ -25,7 +25,7 @@ func run() -> void:
 	var mass: float=material(sim);var energy: float=adenylate_energy(sim)
 	sim._fund_reproduction(parent,.5)
 	check(absf(material(sim)-mass)<.000001 and absf(adenylate_energy(sim)-energy)<.000001,"Automatic investment transfers existing tissue and ATP without creating inventory")
-	check(parent.chemistry.amount("reserved_atp")>0 and parent.energy>=sim.REPRODUCTION_ATP_FLOOR and parent.biomass>=sim.REPRODUCTION_TISSUE_FLOOR,"Investment uses real reserved particles and retains the operating inventories")
+	check(parent.brood_energy>0 and parent.energy>=sim.REPRODUCTION_ATP_FLOOR and parent.biomass>=sim.REPRODUCTION_TISSUE_FLOOR,"Investment uses paid numeric ATP reserves and retains the operating inventories")
 	parent.biomass=0;parent.energy=0
 	var tissue: float=parent.brood_mass;var stored: float=parent.brood_energy
 	sim._fund_reproduction(parent,1)

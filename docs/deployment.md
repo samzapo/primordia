@@ -89,3 +89,9 @@ For negotiated clients, at most one complete world snapshot awaits processing ac
 ## Automatic population continuity
 
 The shared authority maintains fifteen living cells, recovers existing families/backups first, then introduces a new lineage for an exhausted account. No camera or sign-in action is required. An empty pond exits after a durable checkpoint; the existing systemd restart policy launches a fresh population only after retaining two independently checksummed copies of the predecessor under `state/archives/pond-<world-id>--epoch-<epoch>--tick-<tick>/`. The access-key registry stays at the deployment root, outside pond storage. Existing session grants carry forward to living founders. Healthy saved-world restarts keep the current identity and simulated time. Health exposes `minimum_living_cells`, `introduced_cells`, `lineage_restarts`, `pond_restarts`, `previous_world_id` and `pond_archive`. See [Revision 48](REVISION_48.md) for the explicit starter-inventory and capacity rules.
+
+## Revision 49 chemistry migration and performance gate
+
+The current food-vacuole model supersedes intracellular pathway/particle-ATP descriptions above. Before loading a legacy checkpoint, the server archives its complete original graph under state/archives/pond-<id>--epoch-<epoch>--tick-<tick>/, then records a one-time numerical ATP/reserve and finite food/waste conversion audit in subsequent checkpoints. Existing keys and account/session references are retained. Rollback requires that archive and the previous source, with the service stopped; retain the current state as evidence before restoring either. Keep access-keys.json unchanged.
+
+CD now checks actual hardware rendered frames, mixed-camera authority throughput and live simulation/wall rate. It rejects a merely advancing world that runs below 0.98× or exceeds the 16.67 ms p95 tick budget. See REVISION_49.md for the comparable workload, results and phone-validation limitation.

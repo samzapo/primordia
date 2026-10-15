@@ -333,6 +333,7 @@ func local_particle_kind(kind: int) -> Array[int]:
 	return grid.query_kind_rect(particles,player.position if camera_follows_player else camera_position,view_half+Vector2.ONE*(Medium.ACTIVE_PAD+Medium.ACTIVE_FADE),kind)
 
 func install(kind: String, local_angle: float, mode: String = "graze", size: float = 1.0) -> bool:
+	if kind=="photosynthesis":return false # Retired intracellular pathway.
 	if remote_client: return edit("install",{"kind":kind,"angle":local_angle})
 	var cost := Evolution.install_price(size)
 	if evolution.terminal() or (evolution.enabled and evolution.points < cost): return false
@@ -1231,13 +1232,6 @@ func _step_internal_chemistry(dt: float) -> void:
 
 func _metabolize(cell, dt: float) -> void:
 	cell.reserve_activity = maxf(0,cell.reserve_activity-dt)
-	if cell.energy < 10 and cell.substrate+cell.chemistry.storage_used() < 1:
-		var mobilized: float = minf(maxf(0,cell.biomass-8),dt*0.3*cell.growth_scale())
-		cell.biomass -= mobilized
-		cell.substrate += mobilized
-		cell.reserve_used += mobilized
-		if mobilized > 0: cell.reserve_activity = 2
-	cell.fermentation_activity = maxf(0,cell.fermentation_activity-dt)
 	if not perception_modes_enabled:cell.chemistry.advance(cell,dt,0.15+acidity.sample(cell.position)*0.1)
 	cell.Surface.advance(cell,dt,self)
 	cell.decay_energy(dt)
@@ -1653,7 +1647,7 @@ func offspring_quote(subject = null) -> Dictionary:
 	var radius := maxf(34,parent.occupied()/(TAU*0.8))
 	var body := maxf(30,pow(radius/47.0,2)*78-12)
 	var inherited_body := minf(body,maxf(0,parent.body-30))
-	return {"body":body,"body_transfer":inherited_body,"biomass":12.0,"material":body+12+6+8+tissue-inherited_body,"total_material":body+12+6+8+tissue,"energy":60.0,"oxygen":12.0}
+	return {"body":body,"body_transfer":inherited_body,"biomass":12.0,"material":body+12+tissue-inherited_body,"total_material":body+12+tissue,"energy":60.0,"oxygen":0.0}
 
 func safe_birth_position(at: Vector2, radius: float) -> bool:
 	if not habitat_geometry.clear_at(at,radius): return false
@@ -1668,11 +1662,10 @@ func make_offspring(parent, quote: Dictionary):
 	child.lineage = parent.lineage_id()
 	child.body = quote.body
 	child.biomass = quote.biomass
-	child.substrate = 6
-	child.carbon = 8
-	child.oxygen = minf(parent.oxygen,quote.oxygen)
+	child.substrate = 0
+	child.carbon = 0
+	child.oxygen = 0
 	child.energy = 40
-	child.body -= 0.25
 	child.chemistry.inherit_configuration(parent.chemistry)
 	child.organs = parent.organs.duplicate(true)
 	child.next_organ_id = parent.next_organ_id

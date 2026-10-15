@@ -19,6 +19,7 @@ var detail_lod := true
 var label := Label.new()
 var appendages := Node2D.new()
 var surface := MeshInstance2D.new()
+var interior_backing:=MeshInstance2D.new()
 var water_wake := MeshInstance2D.new()
 var surface_revision := -1
 var depth_style := false
@@ -32,9 +33,14 @@ func _ready() -> void:
 	surface.show_behind_parent = true
 	surface.material = ShaderMaterial.new()
 	surface.material.shader = preload("res://shaders/membrane.gdshader")
+	interior_backing.show_behind_parent=true
+	interior_backing.material=ShaderMaterial.new()
+	interior_backing.material.shader=preload("res://shaders/interior_backing.gdshader")
+	add_child(interior_backing)
 	add_child(surface)
 	add_child(cytoplasm)
-	water_wake.z_index = -1 # Cells are at z=2; all wakes remain below every body.
+	water_wake.z_as_relative=false
+	water_wake.z_index = 1 # Cells are at z=2; all wakes remain below every body.
 	water_wake.material = ShaderMaterial.new()
 	water_wake.material.shader = preload("res://shaders/cell_wake.gdshader")
 	add_child(water_wake)
@@ -68,8 +74,10 @@ func sync(render_position: Vector2, render_angle: float, zoom: float, alpha: flo
 		surface_revision = -1
 		surface.visible = depth_style
 	var internal: bool=game.internal_visible(cell)
+	interior_backing.visible=internal
+	interior_backing.mesh=surface.mesh if surface.mesh!=null else Surface.mesh(cell.membrane.outline(),game.native_geometry)
 	cytoplasm.visible=internal
-	if internal:cytoplasm.sync(cell.chemistry,alpha)
+	if internal:cytoplasm.sync(cell.chemistry,alpha,game.perception_mask.viewport.get_texture(),maxf(1,cell.extent()*1.05))
 	if internal!=was_internal or (internal and last_internal_tick!=cell.chemistry.tick):
 		queue_redraw();last_internal_tick=cell.chemistry.tick;was_internal=internal
 	var reduced: bool = detail_lod and cell.radius*zoom < 18 and not game.build_open and not internal

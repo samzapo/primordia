@@ -29,19 +29,7 @@ static func execute(sim, action: String, args: Dictionary):
 			cell.reserve(value,sim.offspring_quote().material); return true
 		"divide": return sim.divide_lineage(bool(args.get("dormant",false)),false)
 		"follow": return sim.follow_family(identity)
-		"module_add":
-			if sim.evolution.points<1: return -1
-			var node: int = cell.chemistry.add_module(str(args.get("module","")),cell)
-			if node>=0: sim.evolution.spend(1,"Add chemistry module")
-			return node
-		"module_remove": return cell.chemistry.remove_module(identity,cell)
-		"module_config": return cell.chemistry.configure(identity,value,bool(args.get("active",true)))
-		"route_add": return cell.chemistry.connect_route(identity,int(args.get("to",-1)),str(args.get("species","")))
-		"route_remove":
-			cell.chemistry.disconnect_route(identity,int(args.get("to",-1)),str(args.get("species",""))); return true
-		"configuration":
-			if not args.get("configuration") is Dictionary: return "Invalid configuration"
-			return cell.chemistry.load_configuration(args.configuration)
+		"module_add","module_remove","module_config","route_add","route_remove","configuration": return false
 		"tension":
 			if value<0 or value>1: return false
 			cell.membrane.skeleton.set_tension(identity,value); cell.membrane.invalidate(); return true

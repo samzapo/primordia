@@ -135,14 +135,14 @@ func open_context(target: Dictionary) -> void:
 	var run = sim.evolution
 	match target.kind:
 		"assembly","chemistry":
-			for index in ([0,1,2,3,5,10,11] if target.kind == "assembly" else range(6,10)):
+			for index in ([0,1,2,3,5,10,11] if target.kind == "assembly" else [7,8,9]):
 				var kind: String = sim.KINDS[index]
 				var cost: float = sim.Cell.organ_cost(kind)
 				_choice(game.TITLES[index],"%.0f tissue · 1 AP\n%s" % [cost,game.HELP[index]],game._select.bind(index),kind,"",cell.biomass >= cost and run.points >= 1,cost,1,{"kind":kind,"scale":1.0,"mutation":""})
 			if target.kind == "chemistry":
-				_choice("Pathways","Configure local catalysts. Chemical transport happens through real cytoplasmic particles.",func():
+				_choice("Food vacuoles","Inspect digestion, numeric ATP and biomass, and waste expulsion.",func():
 					close_context()
-					pathways.open_cell(),"","Paths")
+					pathways.open_cell(),"","Food")
 		"organ":
 			var organ: Dictionary = cell.organ_by_id(target.id)
 			if organ.is_empty(): close_context(); return
@@ -161,7 +161,7 @@ func open_context(target: Dictionary) -> void:
 				var label: String = "Off" if strength == 0 else "%d%%" % roundi(strength*100)
 				var details := "Click to cycle Off / 25 / 50 / 100 / 200 / 400%. Changes signal priority and response time versus exploration; flight always wins."
 				if organ.kind == "feeding": details += "\nSuction, digestion and absorption still work even with steering Off."
-				elif organ.kind == "photosynthesis": details += "\nPhotosynthesis still works with steering Off."
+				elif organ.kind == "photosynthesis": details += "\nPhotosynthesis is inactive in this simplified revision."
 				_choice("Steering "+label,details,func():
 					var steps: Array = sim.Cell.STEERING_STEPS
 					var index: int = steps.find(strength)

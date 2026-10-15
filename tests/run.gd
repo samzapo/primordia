@@ -323,12 +323,12 @@ func _test_wrap_and_dormancy() -> void:
 	expect(sim.player.eaten == 1,"Feeding uses wrapped spatial queries")
 	var distant = sim._make_cell(Vector2(1900,1200),"grazer")
 	var location: Vector2 = distant.position
-	var reserve: float = distant.biomass
+	var reserve: float = distant.energy
 	sim.spawn_particle(Sim.WASTE,distant.position,Vector2(25,0),2)
 	var dormant_packet: Dictionary = sim.particles[-1]
 	var stored = dormant_packet.duplicate(true)
 	for i in 120: sim.step(DT)
-	expect(distant.position != location and distant.biomass != reserve and distant.age > 0,"Offscreen organisms move and metabolize on their coarse clock")
+	expect(distant.position != location and distant.energy != reserve and distant.age > 0,"Offscreen organisms move and metabolize on their coarse clock")
 	expect(absf(distant.age+distant.coarse_elapsed-sim.time) < 0.0001,"Coarse scheduling retains all elapsed biology time")
 	expect(dormant_packet.p != stored.p and dormant_packet.age > 0,"Offscreen resources continue coarse transport")
 	expect(dormant_packet.get("chemical_at",0) > 0,"Chemistry near a hidden cell advances on its coarse clock")
@@ -498,24 +498,13 @@ func _test_crowded_ecology() -> void:
 	expect(largest_step < 15,"Crowded lower-inertia motion stays continuous without teleporting")
 
 func _test_autonomous_diets() -> void:
-	var sim = isolated()
-	var cell = sim.player
-	cell.organs.clear()
-	cell.add_organ("photosynthesis",0,"graze",false)
-	cell.carbon = 0
-	cell.chemistry.emit("carbon",20,cell.local_point(cell.organs[0].a)*0.85)
-	var before: float = organic(sim)
-	for i in 600: sim._photosynthesize(cell,DT)
-	expect(cell.fixed_carbon > 0 and cell.oxygen_produced > 0,"Photosynthesis fixes carbon and releases oxygen under light")
-	expect(absf(organic(sim)-before) < 0.001,"Photosynthesis transfers carbon to food and biomass without inventing organic material")
-	for particle in sim.particles: expect(particle.owner == cell.id,"Photosynthetic particles retain their source cell")
-	sim._sense(cell,1)
-	for i in 60: sim._sense(cell,DT)
-	expect(cell.target_mode == "light" and cell.target.dot(sim.light_direction(cell.position)) > 0.9,"Photosynthetic organelle steers toward brighter habitat")
-	cell.carbon = 0
-	var count: int = sim.particles.size()
-	for i in 60: sim._photosynthesize(cell,DT)
-	expect(sim.particles.size() == count,"Photosynthesis needs carbon as well as light")
+	var sim=isolated()
+	var cell=sim.player
+	cell.organs.clear();cell.add_organ("photosynthesis",0,"graze",false)
+	var before: float=organic(sim)
+	var energy: float=cell.energy
+	sim._photosynthesize(cell,1)
+	expect(cell.fixed_carbon==0 and cell.energy==energy and organic(sim)==before,"Retired photosynthetic chemistry cannot generate hidden resources")
 
 func _test_habitat_pressures() -> void:
 	var lean = Sim.new(4,1)

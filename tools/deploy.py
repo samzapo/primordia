@@ -11,6 +11,8 @@ import secrets
 import subprocess
 import signal
 import ssl
+import shutil
+import tempfile
 import time
 from urllib.request import build_opener, ProxyHandler, HTTPSHandler, Request
 
@@ -82,7 +84,11 @@ def health(build, previous=None, ca_file=None, state=None):
                     raise ValueError("New pond is missing its retained predecessor")
             if value.get("automatic_pond_restart") and value.get("living_cells", 0) < value.get("minimum_living_cells", 15):
                 raise ValueError("Pond population is below its configured floor")
-            if first is not None and value["tick"] > first:
+            if first is not None and value["tick"] > first and value.get("uptime_seconds",0)>=10:
+                if not .98 <= value.get("simulation_wall_ratio",0) <= 1.02 or value.get("tick_ms_p95",float("inf"))>16.67:
+                    raise ValueError("Authority misses its real-time 60 Hz budget")
+                if value.get("food_vacuole_version")!=1 or value.get("internal_packets",0)>24*value.get("living_cells",0):
+                    raise ValueError("Unbounded or obsolete internal chemistry")
                 with opener.open("https://127.0.0.1:8766/music-bank.json", timeout=3) as response:
                     music = json.load(response)
                 if not re.fullmatch(r"music-bank-[a-f0-9]{24}\.bin", music["file"]) or not 0 < music["bytes"] < 4 * 1024 * 1024:
@@ -97,6 +103,55 @@ def health(build, previous=None, ca_file=None, state=None):
         except (OSError, ValueError, KeyError): pass
         time.sleep(2)
     raise RuntimeError("Candidate did not pass live GPU and checkpoint health checks")
+
+def _sync_directory(path):
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def retain_model_boundary(state, root, prefix):
+    """Retain exact stopped-service generations before crossing model formats."""
+    target = Path(tempfile.mkdtemp(prefix=prefix, dir=root))
+    manifest = {}
+    for name in ("world-0.pworld", "world-1.pworld"):
+        source = state / name
+        if source.exists():
+            destination = target / name
+            shutil.copyfile(source, destination)
+            destination.chmod(0o600)
+            with destination.open("rb") as saved:
+                os.fsync(saved.fileno())
+            manifest[name] = hashlib.sha256(destination.read_bytes()).hexdigest()
+    if not manifest:
+        raise RuntimeError("No stopped world generations to retain before migration")
+    (target / "manifest.json").write_text(json.dumps(manifest, sort_keys=True))
+    with (target / "manifest.json").open("rb") as saved:
+        os.fsync(saved.fileno())
+    _sync_directory(target)
+    _sync_directory(root)
+    return target
+
+
+def restore_model_boundary(state, backup, root):
+    manifest = json.loads((backup / "manifest.json").read_text())
+    for name, digest in manifest.items():
+        if name not in ("world-0.pworld", "world-1.pworld") or hashlib.sha256((backup / name).read_bytes()).hexdigest() != digest:
+            raise RuntimeError("Model rollback archive failed validation; service remains stopped")
+    # Retain the failed new-model world before restoring the old format. Keys and
+    # the other source/evidence archives are never replaced or removed.
+    retain_model_boundary(state, root, "failed-food-vacuoles-v1-")
+    for name in manifest:
+        temporary = state / (name + ".rollback")
+        shutil.copyfile(backup / name, temporary)
+        temporary.chmod(0o600)
+        with temporary.open("rb") as saved:
+            os.fsync(saved.fileno())
+        temporary.replace(state / name)
+    _sync_directory(state)
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -196,11 +251,14 @@ def main():
     if validation.returncode or str(validation_unit) in validation.stderr:
         raise RuntimeError("Candidate systemd unit did not validate: " + validation.stderr)
     subprocess.run(["systemctl", "--user", "stop", UNIT], check=False)
-    staged_unit = unit.with_suffix(".service.new")
-    staged_unit.write_text(unit_text)
-    staged_unit.replace(unit)
-    switch(current, candidate)
+    migration_backup = None
     try:
+        if old and previous and previous.get("food_vacuole_version", 0) < 1:
+            migration_backup = retain_model_boundary(state, root, "before-food-vacuoles-v1-")
+        staged_unit = unit.with_suffix(".service.new")
+        staged_unit.write_text(unit_text)
+        staged_unit.replace(unit)
+        switch(current, candidate)
         run("systemctl", "--user", "daemon-reload")
         run("systemctl", "--user", "enable", "--now", UNIT)
         report = health(sha, previous, root / "tls/authority/ca.pem", state)
@@ -211,6 +269,8 @@ def main():
     except BaseException:
         subprocess.run(["systemctl", "--user", "stop", UNIT], check=False)
         if old and old_unit:
+            if migration_backup is not None:
+                restore_model_boundary(state, migration_backup, root)
             unit.write_text(old_unit)
             switch(current, old)
             run("systemctl", "--user", "daemon-reload")

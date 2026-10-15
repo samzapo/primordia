@@ -95,10 +95,10 @@ func run() -> void:
 	var original=coarse.particles.duplicate(true)
 	var chemistry=coarse.player.chemistry
 	chemistry.particles.clear();chemistry.totals.clear();chemistry.bins.clear()
-	for i in 20: chemistry.emit("glucose",0.2,Vector2(1+i*0.25,1),-1,-1,0.8)
-	chemistry.emit("glucose",0.2,Vector2(80,1),-1,-1,0.8)
-	chemistry.emit("glucose",0.2,Vector2(1,1),3,4,0.8)
-	var glucose: float=chemistry.amount("glucose")
+	for i in 20: chemistry.emit("food",0.2,Vector2(1+i*0.25,1),-1,-1,0.8)
+	chemistry.emit("food",0.2,Vector2(80,1),-1,-1,0.8)
+	chemistry.emit("food",0.2,Vector2(1,1),3,4,0.8)
+	var glucose: float=chemistry.amount("food")
 	var fuel: float=chemistry.potential()
 	var state: int=coarse.rng.state
 	var resolution_report: Dictionary=resolution.apply(coarse)
@@ -116,8 +116,8 @@ func run() -> void:
 	var retained_amount:=0.0
 	for packet in chemistry.particles: retained_amount+=packet.amount
 	check(is_equal_approx(retained_amount,glucose) and is_equal_approx(chemistry.potential(),fuel),"local cytoplasm coalescence retains species quantities and exact fuel")
-	check(chemistry.particles.any(func(packet):return packet.source==3 and packet.compartment==4 and packet.amount==0.2),"migration preserves pathway source and compartment isolation")
-	check(chemistry._local_amount("glucose",Vector2(80,1),2)==0.2,"distant intracellular material remains a distant physical particle")
+	check(chemistry.particle_count()<=24,"The current model retains its bounded food/waste carriers")
+	check(chemistry.particles.all(func(packet):return packet.species=="food"),"Density conversion cannot restore retired intracellular pathways")
 	check(coarse.rng.state==state,"resolution conversion draws no simulation randomness")
 	var seeded=Sim.new(81)
 	check(seeded.particle_count()==3760 and seeded.Catalog.data().ecology.visible_target==700,"new worlds use one tenth of the former external packet population")
@@ -141,15 +141,9 @@ func run() -> void:
 	var quantity:=0.0
 	for packet in tenth.particles:quantity+=packet.amount
 	check(absf(quantity-50)<.000001,"tenfold resolution retains the full cofactor inventory")
-	var source: int=chemistry.find_module("digestion")
-	for i in 1000:
-		var packet={"id":chemistry.next_packet,"species":"catalyst","source":source,"compartment":-1,"amount":.0125,"fuel":.09375,"p":Vector2(20,20),"previous":Vector2(20,20),"v":Vector2.ZERO,"angle":0.0,"alive":true}
-		chemistry.next_packet+=1;chemistry.particles.append(packet);chemistry._index(packet)
-	chemistry.totals.catalyst=chemistry.amount("catalyst")+12.5
-	var paid: float=chemistry.material();var paid_fuel: float=chemistry.potential();var ordinary: Array=chemistry.particles.filter(func(packet):return packet.species!="catalyst").duplicate(true)
+	var current: Array=chemistry.particles.duplicate(true)
 	var v3: Dictionary=resolution.apply(coarse,2)
-	check(v3.internal_after<v3.internal_before-900 and absf(chemistry.material()-paid)<.000001 and absf(chemistry.potential()-paid_fuel)<.000001,"v3 coalesces released digestive enzyme without losing paid material or fuel")
-	check(chemistry.particles.filter(func(packet):return packet.species!="catalyst")==ordinary,"v3 does not repeat the previous substrate reduction")
+	check(chemistry.particles==current,"A historical density marker cannot repeat migration on the current food model")
 	var converted: Array=chemistry.particles.duplicate(true)
 	check(resolution.apply(coarse,resolution.VERSION).get("already_applied",false) and chemistry.particles==converted,"recorded migration cannot coalesce the saved world twice")
 	print("NETWORK CORRECTNESS: %d assertions, %d failures" % [assertions,failures])

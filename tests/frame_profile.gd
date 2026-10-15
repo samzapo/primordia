@@ -193,6 +193,7 @@ func run() -> void:
 	# initial finite clouds immediately after presentation/audio warmup.
 	if int(packet_text)==0:
 		for i in 60: sim.step(1.0/60)
+	if option("--perception","exteroception")=="interoception":scene._toggle_perception()
 	var sim_started: float = sim.time
 	# Frozen biology keeps identical initial conditions while bank generation
 	# completes. Startup work must not seed the measured catch-up spiral.

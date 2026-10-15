@@ -70,15 +70,9 @@ var biomass := 18.0
 var substrate: float:
 	get: return chemistry.amount("food")
 	set(value): chemistry.assign("food",value)
-var oxygen: float:
-	get: return chemistry.amount("oxygen")
-	set(value): chemistry.assign("oxygen",value)
-var carbon: float:
-	get: return chemistry.amount("carbon")
-	set(value): chemistry.assign("carbon",value)
-var energy: float:
-	get: return chemistry.amount("atp")
-	set(value): chemistry.assign("atp",value)
+var oxygen := 0.0
+var carbon := 0.0
+var energy := 72.0
 var health := 100.0
 var radius := 47.0
 var mass := 100.0
@@ -90,9 +84,7 @@ var lost_organs: Array = []
 var brood_mass := 0.0
 var reproduction_elapsed := 0.0
 var reproduction_retry_at := 0.0
-var brood_energy: float:
-	get: return chemistry.amount("reserved_atp")
-	set(value): chemistry.assign("reserved_atp",value)
+var brood_energy := 0.0
 var holes: Array = []
 var leaks: Array = []
 var signals: Array = []
@@ -268,7 +260,7 @@ func gut_capacity() -> float:
 	return maxf(0,24.0*growth_scale()-chemistry.storage_used())
 
 func oxygen_capacity() -> float:
-	return 30.0*growth_scale()
+	return 0.0 # No intracellular respiration network in the food-vacuole model.
 
 static func tissue_radius(amount: float) -> float:
 	return 47.0*sqrt(maxf(0,amount)/78.0)
@@ -284,7 +276,9 @@ func atp_decay_rate() -> float:
 	return ATP_TURNOVER*energy*energy/energy_reference()
 
 func decay_energy(dt: float) -> void:
-	var spent := chemistry.decay_atp(self,dt)
+	var before := energy
+	energy=energy/(1+ATP_TURNOVER*energy/energy_reference()*maxf(0,dt))
+	var spent := before-energy
 	energy_budget.record(age,0,0,spent,-1,"turnover")
 
 static func organ_cost(kind: String, size: float = 1.0) -> float:
@@ -414,25 +408,24 @@ func consumed(organ: Dictionary, amount: float) -> void:
 	reaction_flash = 1.0
 
 func spend_energy(amount: float, organ: Dictionary = {}, category: String = "upkeep", shares: Dictionary = {}) -> float:
-	var at := local_point(organ.a)*0.88 if not organ.is_empty() else Vector2(0.32,-0.10)*radius
-	var spent := chemistry.spend_atp(amount,at,maxf(18,radius*0.65))
+	var spent := minf(energy,maxf(0,amount))
+	energy-=spent
 	energy_budget.record(age,0,0,maxf(0,spent),organ.get("id",-1),category,shares)
 	if spent > 0: resource_effect("atp",organ.a if not organ.is_empty() else last_wound,spent,organ.get("id",-1))
 	return spent
 
-func available_energy(organ: Dictionary = {}) -> float:
-	var at := local_point(organ.a)*0.88 if not organ.is_empty() else Vector2(0.32,-0.10)*radius
-	return chemistry._local_amount("atp",at,maxf(18,radius*0.65))
+func available_energy(_organ: Dictionary = {}) -> float:
+	return energy
 
-func spend_energy_at(amount: float, at: Vector2, reach: float, category: String) -> float:
-	var spent := chemistry.spend_atp(amount,at,reach)
+func spend_energy_at(amount: float, _at: Vector2, _reach: float, category: String) -> float:
+	var spent := minf(energy,maxf(0,amount))
+	energy-=spent
 	energy_budget.record(age,0,0,spent,-1,category)
 	return spent
 
 func gain_energy(amount: float, organ: Dictionary = {}) -> void:
-	var at := local_point(organ.a)*0.85 if not organ.is_empty() else chemistry.site(chemistry.node_at(chemistry.find_module("respiration")))
-	var produced := chemistry.produce_atp(amount,at,maxf(18,radius*0.65))
-	report_energy_gain(produced,organ)
+	energy+=maxf(0,amount)
+	report_energy_gain(maxf(0,amount),organ)
 
 func report_energy_gain(amount: float, organ: Dictionary = {}) -> void:
 	energy_budget.record(age,maxf(0,amount),maxf(0,amount),0,organ.get("id",-1),"production")

@@ -169,6 +169,24 @@ func run() -> void:
 		check(durable.accounts.has(resumed.token.sha256_text()) and not durable.accounts.has(welcome0.token.sha256_text()) and durable.accounts[resumed.token.sha256_text()].sequence==1,"rotated account and receipts are durable before welcome")
 		check(await until(func():return sockets[0].get_ready_state()==WebSocketPeer.STATE_CLOSED),"previous browser is disconnected on key resume")
 		check(sockets[0].get_close_reason()=="Session resumed elsewhere","resume tells the old browser why it disconnected")
+	if "--realtime" in OS.get_cmdline_user_args():
+		camera_reports[1].perception="interoception"
+		check(await until(func():return not host.world.interoceptive_cells.is_empty()),"Mixed clients request exterior and resident interior detail together")
+		# Finite authored stress input, not a food source in normal gameplay.
+		for cell in host.world.cells:
+			if cell.dead:continue
+			for j in 12:cell.chemistry.emit("food",4,Vector2.from_angle(j*TAU/12)*cell.radius*.65)
+		var wall_start:=Time.get_ticks_usec()
+		var sim_start: float=host.world.time
+		while Time.get_ticks_usec()-wall_start<12000000:
+			poll();await process_frame
+		var ratio: float=(host.world.time-sim_start)/((Time.get_ticks_usec()-wall_start)/1000000.0)
+		var timings: Array=host.tick_samples.duplicate();timings.sort()
+		var p95: float=timings[mini(timings.size()-1,int(timings.size()*.95))]
+		check(ratio>=.98 and ratio<=1.02,"Shared authority advances at real time with mixed wide cameras")
+		check(p95<=16.67,"Authority p95 tick fits the 60 Hz simulation budget")
+		check(host.world.cells.all(func(cell):return cell.chemistry.particle_count()<=24),"Aged interiors stay bounded under sustained finite digestion")
+		print("REALTIME_AUTHORITY ",JSON.stringify({"simulation_wall_ratio":ratio,"tick_p95_ms":p95,"living_cells":host.world.cells.filter(func(cell):return not cell.dead).size(),"interior_packets":host.world.cells.reduce(func(total,cell):return total+cell.chemistry.particle_count(),0),"gpu":RenderingServer.get_video_adapter_name()}))
 	for socket in sockets:socket.close(-1)
 	check(await until(func():return host.world.camera_views.is_empty()),"disconnect removes every detailed camera")
 	before=host.world.time

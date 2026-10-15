@@ -76,8 +76,8 @@ static func _feeding(check: Callable) -> void:
 				c.membrane.maximum_radius = c.radius*1.18
 				c.membrane.invalidate()
 				c.substrate = c.gut_capacity()-(0 if full else 0.17)
-				c.oxygen = c.oxygen_capacity()-(0 if full else 0.27)
-				c.carbon = 30*c.growth_scale()-(0 if full else 0.37)
+				c.oxygen = 0
+				c.carbon = 0
 				sim.particles.clear()
 				sim.grid.rebuild(sim.particles)
 				sim.view_half = Vector2(3000,2000)

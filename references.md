@@ -432,3 +432,7 @@ The Revision 42 food/waste pool animation and illustrative osmosis descriptions
 above are historical and superseded by these functional particle rules. Tissue
 incorporation is stationary structure, and AP is nonphysical editing currency.
 Every pathway and source is qualified in [Revision 43](docs/REVISION_43.md).
+
+## Revision 49 — simplified digestive lifecycle
+
+The owner restores the first-cell food-vacuole and cytoproct abstraction, motivated by the previously cited Paramecium oral/digestive-vacuole studies (Revision 42/43 above). This revision deliberately combines digestion and downstream metabolism into a direct numerical ATP/biomass credit, retains finite waste for expulsion, and removes explicit acidification, cofactors, respiratory pathways and osmotic pumping. The 0.7 tissue fraction, fuel-to-ATP conversion, parcel limits and rates are gameplay/model choices; the cited experiments do not establish those values or a literal direct vacuole-to-ATP mechanism.

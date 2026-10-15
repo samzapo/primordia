@@ -68,15 +68,6 @@ func _draw() -> void:
 	for parcel in (ecology.parcels if game.internal_visible(cell) else []):
 		if parcel.kind != "ap": continue
 		draw_circle(parcel.p,parcel.radius*preload("res://scripts/visuals.gd").INTERNAL_PARTICLE_SCALE,Color("f8c650"))
-	# Contractile vacuole fill follows actual transported water and expulsion.
-	for side in [-1,1]:
-		var center := Vector2(0.02,side*0.62)*r
-		var swell := 0.35+0.65*clampf(cell.chemistry.amount("water")/maxf(0.1,cell.growth_scale()),0,1)
-		for i in 6:
-			var ray := Vector2.from_angle(TAU*i/6)
-			draw_line(center+ray*r*0.05,center+ray*r*0.17,Color(0.55,0.94,0.93,0.30),r*0.026,true)
-		_ellipse(center,Vector2.ONE*r*0.082*swell,Color("75d9df"))
-		_ellipse(center-Vector2.ONE*r*0.015,Vector2.ONE*r*0.045*swell,Color("bbfff0"))
 	# Small micronucleus beside the macronucleus: the family reserve's landmark.
 	draw_circle(anchors.nucleus+Vector2(-0.23,0.06)*r,r*0.075,Color("a86bd8"))
 	draw_circle(anchors.nucleus+Vector2(-0.25,0.04)*r,r*0.035,Color("edb3ef"))
@@ -90,12 +81,6 @@ func _draw() -> void:
 		draw_polyline(points,Color("bc557d"),r*0.068,true)
 		draw_polyline(points,Color("ffa96a"),r*0.040,true)
 	draw_circle(at+Vector2(0.18,0.06)*r,r*0.047,Color("ffd267"))
-	# Template compartments are local catalyst domains with permeable outputs.
-	for node in cell.chemistry.nodes:
-		if node.compartment in ["digestive","contractile","membrane"]: continue
-		var site: Vector2 = cell.chemistry.site(node)
-		var shade := Color("6dceeb") if node.compartment == "mitochondrial" else Color("87e79e") if node.compartment == "photosynthetic" else Color("d9a5eb")
-		draw_arc(site,r*0.15,0,TAU,20,shade*Color(1,1,1,0.5),0.7,true)
 
 	at = anchors.bud
 	_ellipse(at,Vector2(0.17,0.145)*r,Color("9363ac"))

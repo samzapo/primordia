@@ -1441,7 +1441,7 @@ public:
         carbon += taken;
         if (int(p.get("owner",-1)) != owner) foreign += taken;
       } else {
-        substrate += taken; eaten += taken; intake += taken;
+        substrate = body->get("substrate"); eaten += taken; intake += taken;
         if (int(p.get("owner",-1)) != owner) foreign += taken;
         body->call("consumed",mouth,taken);
       }

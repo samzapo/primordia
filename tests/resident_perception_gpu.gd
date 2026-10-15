@@ -163,6 +163,7 @@ func cpu_behavior() -> void:
 		check(sim.enable_particle_pool(),"Enable native ownership for perception oracle")
 		sim._sense(pooled,0.15)
 		check(pooled.target_id==cell.target_id and pooled.target_mode==cell.target_mode and pooled.target_position.distance_to(cell.target_position)<0.001,"Native authoritative perception agrees with resident receipt")
+	cell.receive_particle(0,1,1,cell.position+cell.local_point(0))
 	var saved: float=cell.energy
 	sim._metabolize(cell,0.1)
 	check(cell.processed>0 and cell.energy!=saved,"Real CPU physiology runs after GPU handoff")

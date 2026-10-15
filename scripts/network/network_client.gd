@@ -62,6 +62,7 @@ var commands: Array = []
 var inflight: Dictionary = {}
 var received_usec := 0
 var interval_usec := 100000.0
+var last_snapshot_time := -1.0
 var view_clock := 0.0
 var keepalive_clock := 0.0
 var last_camera: Vector4
@@ -222,7 +223,7 @@ func _connect(manual: bool=true) -> void:
 	socket=WebSocketPeer.new();socket.inbound_buffer_size=Protocol.MAX_FRAME;socket.outbound_buffer_size=65536;socket.max_queued_packets=8
 	hello_sent=false;connected=false;connecting=true;attempted=true;retry_enabled=true;reconnect_due=3;inflight.clear();commands.clear()
 	view_announced=false;view_clock=0;keepalive_clock=0;received_usec=0
-	user_paused=false;paused_snapshot={};touch_zoom.cancel();camera_initialized=false
+	last_snapshot_time=-1;user_paused=false;paused_snapshot={};touch_zoom.cancel();camera_initialized=false
 	connect_started_usec=Time.get_ticks_usec()
 	if OS.has_feature("web"):
 		JavaScriptBridge.eval(BROWSER_SOCKET_ADDRESS % JSON.stringify(server_url))
@@ -356,7 +357,9 @@ func _snapshot(message: Dictionary) -> void:
 		command_sequence=maxi(command_sequence,message.sequence)
 		edit_revision=maxi(edit_revision,message.edit)
 	var now:=Time.get_ticks_usec()
-	if received_usec>0: interval_usec=clampf(now-received_usec,50000,1000000)
+	if last_snapshot_time>=0 and float(message.time)>last_snapshot_time:
+		interval_usec=lerpf(interval_usec,clampf((float(message.time)-last_snapshot_time)*1000000,50000,250000),.25)
+	last_snapshot_time=float(message.time)
 	received_usec=now
 	var bytes: PackedByteArray=message.particles
 	var next: Dictionary={};var packets: Array=[]
@@ -365,7 +368,7 @@ func _snapshot(message: Dictionary) -> void:
 		var packet: Dictionary=packet_ids.get(identity,{})
 		var position:=Vector2(bytes.decode_float(at),bytes.decode_float(at+4))
 		var angle:=bytes.decode_float(at+8)
-		packet.previous=packet.get("p",position);packet.previous_angle=packet.get("angle",angle)
+		packet.previous=packet.get("previous",position)+Simulation.Medium.offset(packet.get("previous",position),packet.get("p",position))*network_alpha;packet.previous_angle=lerp_angle(packet.get("previous_angle",angle),packet.get("angle",angle),network_alpha)
 		packet.p=position;packet.angle=angle;packet.kind=int(bytes.decode_float(at+12));packet.amount=bytes.decode_float(at+16)
 		packet.alive=true;packet.updated=world.revision;packet.owner=-1;packet.v=Vector2.ZERO
 		packet._handle=(int(identity.y)&0xffffffff)*4294967296+(int(identity.x)&0xffffffff);packet._index=packets.size()
@@ -385,8 +388,10 @@ func _copy_cell(incoming):
 	if cell==null: cell=incoming;cells_by_id[cell.id]=cell
 	else:
 		var origins: Dictionary={}
-		for packet in cell.chemistry.particles:origins[packet.id]={"p":packet.p,"angle":packet.angle}
-		var previous: Vector2=cell.position;var heading: float=cell.angle
+		for packet in cell.chemistry.particles:
+			var origin: Dictionary=cell.chemistry.render_origins.get(packet.id,{})
+			origins[packet.id]={"p":origin.get("p",packet.p).lerp(packet.p,network_alpha),"angle":lerp_angle(origin.get("angle",packet.angle),packet.angle,network_alpha)}
+		var previous: Vector2=cell.previous_position+Simulation.Medium.offset(cell.previous_position,cell.position)*network_alpha;var heading: float=lerp_angle(cell.previous_angle,cell.angle,network_alpha)
 		for property in incoming.get_property_list():
 			if not (property.usage & PROPERTY_USAGE_SCRIPT_VARIABLE) or property.name in Codec.DERIVED_CELL: continue
 			cell.set(property.name,incoming.get(property.name))

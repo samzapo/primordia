@@ -31,6 +31,11 @@ var box := PanelContainer.new()
 var label := Label.new()
 var candidates_examined := 0
 var glyph := Sprite2D.new()
+var touch_position:=Vector2.ZERO
+var touch_until:=0
+func cursor_at(mouse: Vector2) -> Vector2:return touch_position if Time.get_ticks_msec()<touch_until else mouse
+func inspect_touch(at: Vector2) -> void:
+	touch_position=at;touch_until=Time.get_ticks_msec()+2500
 
 func initialize(owner_game) -> void:
 	game = owner_game
@@ -66,10 +71,31 @@ func _near_cell(at: Vector2, alpha: float) -> bool:
 func _world_at(screen: Vector2) -> Vector2:
 	return game._screen_world(screen)
 
+func _internal_pose(screen: Vector2,alpha: float,identity: int=-1) -> Dictionary:
+	var cell=game._follow_cell()
+	if not game.internal_visible(cell) or not game.views.has(cell.id):return {}
+	var view=game.views[cell.id]
+	var best:=INF
+	var result: Dictionary={}
+	for packet in cell.chemistry.particle_snapshots(true):
+		if not packet.alive or (identity>=0 and packet.id!=identity):continue
+		candidates_examined+=1
+		var origin: Dictionary=cell.chemistry.render_origins.get(packet.id,{})
+		var at: Vector2=origin.get("p",packet.p).lerp(packet.p,alpha)
+		if at.length()>cell.visible_support(at.angle()):continue
+		var position: Vector2=game.world_layer.to_global(view.position+at.rotated(view.rotation))
+		var radius: float=preload("res://scripts/visuals.gd").internal_particle_radius(packet)*game.zoom
+		var distance:=screen.distance_to(position)
+		if (identity>=0 or distance<=maxf(radius+4,12)) and distance<best:
+			best=distance
+			result={"index":-1,"packet":packet,"internal":true,"cell_id":cell.id,"kind":0 if packet.species=="food" else 2,"screen":position,"angle":packet.angle+view.rotation,"radius":radius}
+	return result
+
 func pick(screen: Vector2, alpha: float) -> Dictionary:
 	var sim = game.world
 	var at: Vector2 = game._screen_world(screen)
 	candidates_examined = 0
+	if game.perception=="interoception":return _internal_pose(screen,alpha)
 	# Keep anatomy and feeding clouds visually quiet, including pheromones.
 	if _near_cell(at,alpha): return {}
 	if sim.resident!=null:
@@ -105,6 +131,9 @@ func pick(screen: Vector2, alpha: float) -> Dictionary:
 
 func _tracked_pose(alpha: float) -> Dictionary:
 	var sim = game.world
+	if game.perception=="interoception":
+		if tracked_packet.is_empty() or tracked_world!=sim:return {}
+		return _internal_pose(cursor_anchor,alpha,tracked_packet.get("id",-1))
 	if tracked_world==sim and sim.resident!=null and not tracked_packet.is_empty():
 		tracked_packet=sim.resident.inspect(Vector2.ZERO,1,tracked_packet.get("_resident_handle",Vector2i(-1,-1)))
 		return _resident_pose(tracked_packet,Vector2.ZERO,alpha,false)
@@ -145,7 +174,8 @@ func _resident_pose(packet: Dictionary,cursor: Vector2,alpha: float,picking: boo
 	return {"index":packet._index,"packet":packet,"kind":packet.kind,"screen":screen,"angle":packet.angle,"radius":radius}
 
 func update_lens(dt: float, screen: Vector2, alpha: float, allowed: bool) -> void:
-	if allowed and _near_cell(_world_at(screen),alpha): allowed = false
+	if Time.get_ticks_msec()<touch_until:screen=touch_position
+	if allowed and game.perception!="interoception" and _near_cell(_world_at(screen),alpha): allowed = false
 	var following := {}
 	if allowed and track_remaining > 0 and screen.distance_to(cursor_anchor) <= CURSOR_RELEASE*game.preferences.hud_scale:
 		following = _tracked_pose(alpha)
@@ -171,7 +201,7 @@ func update_lens(dt: float, screen: Vector2, alpha: float, allowed: bool) -> voi
 		tracked_index = -1
 		track_remaining = 0
 	lens_amount = move_toward(lens_amount,1.0 if active else 0.0,dt*9)
-	if not allowed or (not active and lens_amount > 0 and _near_cell(_world_at(lens_center),alpha)): lens_amount = 0
+	if not allowed or (game.perception!="interoception" and not active and lens_amount > 0 and _near_cell(_world_at(lens_center),alpha)): lens_amount = 0
 	var material: ShaderMaterial = game.microscope_layer.material
 	material.set_shader_parameter("lens_center",lens_center/get_viewport_rect().size)
 	material.set_shader_parameter("lens_amount",lens_amount)
@@ -191,6 +221,8 @@ func update_lens(dt: float, screen: Vector2, alpha: float, allowed: bool) -> voi
 	box.visible = active and lens_amount > 0.15
 	if box.visible:
 		var value: String = Art.Catalog.data().external_species[hovered.kind].name+"\n"+(DETAILS[hovered.kind] if hovered.kind < DETAILS.size() else "A finite cell-derived chemical packet.")
+		if hovered.get("internal",false):
+			value=("Food vacuole\nDigests nutrients directly into ATP and biomass." if hovered.kind==0 else "Waste vacuole\nTravels to the cytoproct, then releases waste into the water.")+"\nContents: %.2f" % hovered.packet.amount
 		if hovered.kind == game.world.PHEROMONE:
 			var packet: Dictionary = hovered.packet
 			var report: Dictionary = packet.get("report",{})

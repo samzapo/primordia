@@ -28,25 +28,28 @@ These launchers find Steam Godot and use the same Mobile renderer. **F3 shows th
 
 Resident now runs nearby particles on the GPU and stores distant particles in sparse CPU chunks, with bounded transfers and large-step cold transport. F3 separates GPU nearby packets (including the transition buffer) from CPU stored slots. Zoom does not change feeding; rapid camera travel waits for prepared water. [Revision 41](docs/REVISION_41.md) records correctness checks, performance tradeoffs and limits: the normal workstation run remains at 60 FPS, but the dense hybrid still costs more than whole-GPU simulation in the current small habitat. The habitat's fluid grid and cell scheduler are not yet unbounded, and the owner's Threadripper/RTX 3090 needs a fresh comparison. Use `./tools/profile_playtest.sh resident` for the Steam-compatible trace. The ordinary launcher defaults to resident; CPU launch modes remain explicit correctness and diagnostic comparisons.
 
-## Cell pathways and current test policy
+## Food vacuoles and current test policy
 
-Press Tab, open the Chemistry factory and select Pathways. Connect compatible
-metabolite ports, change catalyst allocation and install additional paid
-capacity. Molecules travel through the cytoplasm before local reactions can
-use them. Designs save configuration only; they do not save resources.
-See [Revision 43](docs/REVISION_43.md) for the toolkit, costs and scientific limits.
+Current intracellular chemistry is deliberately simple: ingested nutrient
+parcels circulate in food vacuoles, digestion credits numeric ATP and biomass,
+and waste vacuoles travel to the cytoproct and release finite waste particles.
+There is no seeded molecular cloud, glycolysis/respiration graph, cofactor pool,
+autocatalysis or osmotic simulation. The cell-local Food vacuoles action explains
+the lifecycle and shows current resources. Visible food/waste uses the resident
+GPU; hidden interiors use the existing coarse clock.
 
-Gameplay-balance tests are disabled until the owner requests restoration.
-tests/test_policy.gd gates yield tuning, survival/viability campaigns and
-economy playtests; skipped groups are reported explicitly. Particle, conservation,
-physics, UI and backend correctness checks continue through tools/test.sh.
-Use PRIMORDIA_ECOLOGY=reference for the smaller previous-density correctness
-fixtures. The richer default remains the normal game; neither test mode changes
-the balance-test hold.
+Press **I** to switch interoception/exteroception and **M** for settings and the
+control guide. Phone taps inspect food/waste; two fingers move, twist and zoom
+the camera. Pause freezes only your multiplayer view.
+
+Gameplay, objective and balance tests remain on the owner's hold. Conservation,
+paid actions, physics, UI, persistence, networking and performance checks remain
+active. See [Revision 49](docs/REVISION_49.md) for the current model, archived
+checkpoint migration and measured performance.
 
 ## Paramecium anatomy
 
-[Revision 43](docs/REVISION_43.md) makes chemistry a cell-local particle sandbox: food vacuoles, glycolysis, respiration, fermentation, synthesis, salvage, osmosis and an experimental autocatalytic domain consume and produce actual cytoplasmic particles. Pore-forming chemical glands replace hunting spikes, and the default finite packet population is ten times larger. Build mode pauses intracellular chemistry as well as the habitat.
+[Revision 43](docs/REVISION_43.md) records the historical expanded intracellular sandbox. [Revision 49](docs/REVISION_49.md) supersedes it with direct food-vacuole digestion and numeric ATP/biomass. External chemical glands and the particle transport backend remain available.
 
 ## Controls
 

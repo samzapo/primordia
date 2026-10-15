@@ -319,8 +319,8 @@ func _process(dt: float) -> void:
 	if frame_trace != null: frame_trace.work("music",Time.get_ticks_usec()-music_start)
 
 	var inspection_start := Time.get_ticks_usec() if frame_trace != null else 0
-	var cursor := get_global_mouse_position()
-	var inspect_allowed := perception=="exteroception" and death_focus_age >= 1.8 and get_viewport_rect().has_point(cursor) and not settings_panel.visible and not camera_dragging and selected < 0 and moving_id < 0 and tube_start.is_empty() and cell_ui.context.is_empty() and get_viewport().gui_get_hovered_control() == null
+	var cursor := inspector.cursor_at(get_global_mouse_position())
+	var inspect_allowed := death_focus_age >= 1.8 and get_viewport_rect().has_point(cursor) and not settings_panel.visible and not camera_dragging and selected < 0 and moving_id < 0 and tube_start.is_empty() and cell_ui.context.is_empty() and get_viewport().gui_get_hovered_control() == null
 	inspector.update_lens(dt,cursor,alpha,inspect_allowed)
 	preview.queue_redraw()
 	var hover := _nearest_tubule(_player_relative(get_global_mouse_position()).rotated(-world.player.angle)) if _can_edit_tubules() and selected < 0 and moving_id < 0 and cell_ui.hit(get_global_mouse_position()).is_empty() else {}
@@ -453,6 +453,7 @@ func _update_world(alpha: float) -> void:
 			node.z_index = 2
 			views[cell.id] = node
 		if views[cell.id].cell != cell: views[cell.id].seen_revision = -1
+		views[cell.id].z_index=5 if internal_visible(cell) else 2
 		views[cell.id].cell = cell
 		var heading := lerp_angle(cell.previous_angle,cell.angle,fraction)
 		views[cell.id].sync(Simulation.Medium.offset(render_camera,p),heading,zoom,world.activity_for_cell(cell))
@@ -460,6 +461,7 @@ func _update_world(alpha: float) -> void:
 		if not alive_ids.has(identity):
 			views[identity].queue_free()
 			views.erase(identity)
+	cell_ui.interior.z_index=6 if perception=="interoception" else 3
 	cell_ui.interior.sync()
 	perception_mask.sync()
 	if frame_trace != null: frame_trace.work("cell_sync",Time.get_ticks_usec()-cells_start)

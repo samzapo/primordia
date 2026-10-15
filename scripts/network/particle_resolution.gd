@@ -102,17 +102,7 @@ static func apply(world,from_version: int=0) -> Dictionary:
 	report.version=VERSION;report.internal_before=0;report.internal_after=0;report.max_internal_displacement=0.0
 	for cell in world.cells:
 		var chem=cell.chemistry;report.internal_before+=chem.particles.size()
-		if from_version<2:
-			var reduced:=_internal_tenth(chem.particles,cell.radius)
-			chem.particles=reduced.particles
-			report.max_internal_displacement=maxf(report.max_internal_displacement,reduced.max_displacement)
-		chem.bins.clear()
-		for packet in chem.particles:chem._index(packet)
-		# Version 3 only coalesces released digestive enzyme parcels. It never
-		# repeats the v2 reduction of ordinary substrates or changes site count.
-		chem._coalesce_retired_catalysts()
-		chem.particles=chem.particles.filter(func(packet):return packet.alive)
-		chem.bins.clear()
-		for packet in chem.particles:chem._index(packet)
+		# The archived chemistry migration already bounds food/waste carriers.
+		# Never apply the retired catalyst/substrate reducers to this new model.
 		report.internal_after+=chem.particles.size()
 	return report

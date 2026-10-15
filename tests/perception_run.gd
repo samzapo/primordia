@@ -11,7 +11,7 @@ func run() -> void:
 	var cell=sim.player
 	cell.chemistry.particles.clear();cell.chemistry.bins.clear();cell.chemistry.totals.clear();cell.chemistry.vacuoles.clear()
 	for node in cell.chemistry.nodes:node.enabled=false
-	cell.chemistry.emit("salvage",1,Vector2(10,0))
+	cell.chemistry.emit("waste",1,Vector2(10,0))
 	var mass: float=cell.organic_mass()
 	cell.coarse_elapsed=.25;sim.enable_perception_domains();sim.enable_perception_domains()
 	check(is_equal_approx(cell.chemistry.pending_time,.25),"Legacy unresolved chemistry time migrates once")

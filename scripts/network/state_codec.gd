@@ -15,11 +15,12 @@ const TYPES := {
 	"budget": preload("res://scripts/energy_budget.gd"),
 }
 const TRANSIENT := ["kernels","native","grid","reaction_grid","cell_index","gpu_transport","resident","experimental_fluid","owner","_owner","build_original","build_state","bins","profile_usec","profile_counts","foreground_particle_ids","last_spawn","accelerator","render_origins","command_sink","interoceptive_cells"]
-const DERIVED_CELL := ["raw_fuel","substrate","oxygen","carbon","energy","waste","brood_energy"]
+const DERIVED_CELL := ["raw_fuel","substrate","waste"]
 var objects: Array = []
 var identities: Dictionary = {}
 var overrides: Dictionary = {}
 var compact_cytoplasm := false
+var migration_audit: Array=[]
 
 func capture(value, field_overrides: Dictionary = {}, compact: bool = false) -> Dictionary:
 	objects.clear(); identities.clear(); overrides = field_overrides;compact_cytoplasm=compact
@@ -72,7 +73,7 @@ func _encode(value):
 
 func restore(document: Dictionary):
 	if document.get("format",0) != 1 or not document.get("objects",[]) is Array: return null
-	objects.clear()
+	objects.clear();migration_audit.clear()
 	for record in document.objects:
 		if not record is Dictionary or not TYPES.has(record.get("kind","")): return null
 		var object
@@ -84,9 +85,15 @@ func restore(document: Dictionary):
 		for key in document.objects[i].fields:
 			if key in TRANSIENT: continue
 			object.set(key,_decode(document.objects[i].fields[key]))
-	for record in objects:
+	for i in objects.size():
+		var record: Dictionary=objects[i]
 		if record.kind == "cell":
 			record.source.chemistry.owner = weakref(record.source)
+			var ref: Dictionary=document.objects[i].fields.get("chemistry",{})
+			var old: bool=ref.has("$ref") and not document.objects[int(ref["$ref"])].fields.has("model_version")
+			if old:
+				var audit: Dictionary=preload("res://scripts/network/vacuole_migration.gd").apply(record.source)
+				audit["cell_id"]=record.source.id;migration_audit.append(audit)
 			record.source.chemistry.bins.clear()
 			for packet in record.source.chemistry.particles:
 				if packet.alive: record.source.chemistry._index(packet)

@@ -37,6 +37,7 @@ func _lineage_and_events() -> void:
 	score.observe(world,parent.position,Vector2(600,380),false)
 	check(score.sources.size() == 6 and score.lead_id == parent.id,"Crowded giant neighbors cannot displace the visible player's family theme")
 	world.cells = [parent]
+	parent.substrate=1 # A real food vacuole supplies its anatomical instrument.
 	score.observe(world,parent.position,Vector2(600,380),false)
 	check(original == Score.lineage_motif(73,parent.lineage_id()),"Observed melody uses the inherited lineage signature")
 	var melody_before: Array = []

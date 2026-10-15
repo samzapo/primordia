@@ -1,8 +1,7 @@
 #version 450
 #extension GL_ARB_gpu_shader_fp64 : require
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
-// A cell's finite particles have exactly one owner. Only compact transaction
-// receipts leave these buffers; presentation/checkpoint exports are detached.
+// Bounded authoritative food/waste parcels, matching CellChemistry's rules.
 layout(local_size_x=64) in;
 struct Packet { dvec2 q; vec4 pose; vec4 motion; ivec4 facts; uvec4 identity; };
 layout(set=0,binding=0,std430) buffer State { Packet a[]; };
@@ -11,210 +10,81 @@ layout(set=0,binding=2,std430) readonly buffer Anatomy { float p[]; };
 layout(set=0,binding=3,std430) readonly buffer Command { double op[]; };
 layout(set=0,binding=4,std430) buffer Transfers { Packet outbox[]; };
 layout(set=0,binding=5,rgba32f) uniform writeonly image2D presentation;
-layout(set=0,binding=6,std430) buffer Grid { int g[]; };
-layout(set=0,binding=7,std430) buffer Links { int link[]; };
 layout(push_constant,std430) uniform Push { uint stage; } pc;
 /*CYTOPLASM_CATALOG*/
-const int HASH_BINS=256, GRID=HASH_BINS*SPECIES;
 const double EPS=0.0000001;
-const float TAU=6.283185307179586;
-uint n(){ return uint(c[0]); }
-int ni(int id){ for(int j=0;j<int(p[10]);j++)if(int(p[32+j*8])==id)return j; return -1; }
-vec2 site(int j){ return vec2(p[36+j*8],p[37+j*8]); }
-bool live(uint i){ return a[i].facts.w!=0; }
-int species(uint i){ return a[i].facts.x; }
-int64_t source_of(uint i){return int64_t(uint64_t(uint(a[i].facts.y))|(uint64_t(a[i].identity.z)<<32));}
-int64_t compartment_of(uint i){return int64_t(uint64_t(uint(a[i].facts.z))|(uint64_t(a[i].identity.w)<<32));}
-int source_node(uint i){int64_t id=source_of(i);return id>=0l&&id<2147483647l?ni(int(id)):-1;}
-bool enabled(int j){ return j>=0 && p[35+j*8]>0.0 && p[34+j*8]>0.0; }
-int module_node(int kind){ for(int j=0;j<int(p[10]);j++)if(int(p[33+j*8])==kind)return j; return -1; }
-bool compatible(uint i,int dest,int s){
- int64_t source=source_of(i);
- if(dest<0 || source<0 || source==dest || s==OXYGEN || s==CARBON || s==ATP || s==ADP || s==NAD || s==NADH || s==CATALYST_A || s==CATALYST_B)return true;
- int from=(source>=0&&source<2147483647l)?ni(int(source)):-1, to=ni(dest);
- return from>=0 && to>=0 && (uint(p[512+from*16+to])&(1u<<uint(s)))!=0u;
-}
-bool near(uint i,int s,vec2 at,float reach,int dest){vec2 delta=a[i].pose.xy-at;return live(i)&&species(i)==s&&dot(delta,delta)<=reach*reach&&compatible(i,dest,s);}
-int bucket(int s,ivec2 bin){return ((bin.x&15)*16+(bin.y&15))*SPECIES+s;}
-bool in_bin(uint i,ivec2 bin){return all(equal(ivec2(floor(a[i].pose.xy/20.0)),bin));}
-void index_packet(uint i){int key=bucket(species(i),ivec2(floor(a[i].pose.xy/20.0)));link[i]=-1;if(g[key]<0)g[key]=int(i);else link[g[GRID+key]]=int(i);g[GRID+key]=int(i);}
-double local_amount(int s,vec2 at,float reach,int dest){
- if(c[32+s]<=0.0)return 0.0;double q=0.0;
- ivec2 low=ivec2(floor((at-vec2(reach))/20.0)),high=ivec2(floor((at+vec2(reach))/20.0));
- for(int x=low.x;x<=high.x;x++)for(int y=low.y;y<=high.y;y++){ivec2 bin=ivec2(x,y);for(int j=g[bucket(s,bin)];j>=0;j=link[j])if(in_bin(uint(j),bin)&&near(uint(j),s,at,reach,dest))q+=a[j].q.x;}
- return q;
-}
-int local_first(int s,vec2 at,float reach,int64_t compartment){
- ivec2 low=ivec2(floor((at-vec2(reach))/20.0)),high=ivec2(floor((at+vec2(reach))/20.0));
- for(int x=low.x;x<=high.x;x++)for(int y=low.y;y<=high.y;y++){ivec2 bin=ivec2(x,y);for(int j=g[bucket(s,bin)];j>=0;j=link[j])if(in_bin(uint(j),bin)&&near(uint(j),s,at,reach,-1)&&compartment_of(uint(j))==compartment)return j;}
- return -1;
-}
-double amount(int s){return max(0.0,c[32+s]);}
-double consume(uint i,double q){q=min(q,a[i].q.x);double fuel=a[i].q.y*q/max(0.00000001,a[i].q.x);c[32+species(i)]=max(0.0,c[32+species(i)]-q);a[i].q-=dvec2(q,fuel);if(a[i].q.x<EPS)a[i].facts.w=0;return fuel;}
-double take(int s,double q,vec2 at,float reach,int dest){
- double fuel=0.0;ivec2 low=ivec2(floor((at-vec2(reach))/20.0)),high=ivec2(floor((at+vec2(reach))/20.0));
- // Ordered x/y bins and stable slot links preserve finite consumption order.
- for(int x=low.x;x<=high.x&&q>=EPS;x++)for(int y=low.y;y<=high.y&&q>=EPS;y++){ivec2 bin=ivec2(x,y);for(int j=g[bucket(s,bin)];j>=0&&q>=EPS;j=link[j])if(in_bin(uint(j),bin)&&near(uint(j),s,at,reach,dest)){double used=min(q,a[j].q.x);fuel+=consume(uint(j),used);q-=used;}}
- return fuel;
-}
-void emit(int s,double q,vec2 at,int64_t source,int64_t compartment,double fuel,float spread){
+uint n(){return uint(c[0]);}
+bool live(uint i){return a[i].facts.w!=0&&a[i].q.x>EPS;}
+bool same_comp(uint i,uint j){return a[i].facts.z==a[j].facts.z&&a[i].identity.w==a[j].identity.w;}
+void consume(uint i,double q){q=min(q,a[i].q.x);a[i].q.y*=1.0-q/max(EPS,a[i].q.x);a[i].q.x-=q;if(a[i].q.x<EPS)a[i].facts.w=0;}
+void emit_packet(int s,double q,vec2 at,int source,uint source_hi,int compartment,uint compartment_hi,double fuel){
  if(q<=0.0)return;
- double left=q, quantum=max(spread>0.0?seed_quanta[s]:quanta[s],q/128.0);
- ivec2 low=ivec2(floor((at-vec2(2.0))/20.0)),high=ivec2(floor((at+vec2(2.0))/20.0));
- while(left>EPS){
-  int best=-1;int64_t identity=0l;
-  for(int x=low.x;x<=high.x;x++)for(int y=low.y;y<=high.y;y++){ivec2 bin=ivec2(x,y);for(int j=g[bucket(s,bin)];j>=0;j=link[j]){
-   if(!in_bin(uint(j),bin)||!near(uint(j),s,at,2.0,-1)||source_of(uint(j))!=source||compartment_of(uint(j))!=compartment||a[j].q.x>=quantum)continue;
-   int64_t id=int64_t(uint64_t(a[j].identity.x)|(uint64_t(a[j].identity.y)<<32));if(best<0||id<identity){best=j;identity=id;}
-  }}
-  if(best<0)break;double added=min(left,quantum-a[best].q.x);a[best].q+=dvec2(added,fuel<0.0?added*potentials[s]:fuel*added/q);c[32+s]+=added;left-=added;
- }
- while(left>EPS){
-  uint slot=n(); // Append in identity order; compact stably after the transaction.
-  if(slot>=uint(c[1])){c[6]=1.0;return;}
-  double value=min(left,quantum);
-  uint64_t id=uint64_t(uint(c[2]))|(uint64_t(uint(c[3]))<<32);
-  float phase=float(mod(double(id)*2.399963,6.283185307179586));
-  vec2 pos=at+vec2(cos(phase),sin(phase))*(spread>0.0?spread*sqrt(clamp(float((q-left+value*0.5)/q),0.0,1.0)):1.5);
-  a[slot].q=dvec2(value,fuel<0.0?value*potentials[s]:fuel*value/q);
-  a[slot].pose=vec4(pos,pos);a[slot].motion=vec4(0.0,0.0,phase,0.0);
-  a[slot].facts=ivec4(s,int(source),int(compartment),1);a[slot].identity=uvec4(uint(id),uint(id>>32),uint(uint64_t(source)>>32),uint(uint64_t(compartment)>>32));
-  index_packet(slot);if(slot==n())c[0]+=1.0;
-  c[32+s]+=value;id++;c[2]=double(uint(id));c[3]=double(uint(id>>32));left-=value;
- }
+ int best=-1,count=0;float distance=1e30;
+ for(uint i=0u;i<n();i++)if(live(i)&&a[i].facts.x==s){count++;float d=length(a[i].pose.xy-at);if(d<distance){best=int(i);distance=d;}}
+ if(best>=0&&(count>=12||(a[best].facts.z==compartment&&a[best].identity.w==compartment_hi&&distance<4.0))){a[best].q+=dvec2(q,fuel);return;}
+ uint slot=n();for(uint i=0u;i<n();i++)if(!live(i)){slot=i;break;}
+ // A finite receipt never discards overflow. At 24 slots each species has a
+ // carrier, so overflow coalesces; no source scan or unbounded allocation.
+ if(slot>=24u){if(best>=0)a[best].q+=dvec2(q,fuel);else c[6]=1.0;return;}
+ if(slot==n())c[0]+=1.0;
+ uvec2 id=uvec2(uint(c[2]),uint(c[3]));c[2]+=1.0;if(c[2]>=4294967296.0){c[2]=0.0;c[3]+=1.0;}
+ if(compartment<0){compartment=int(id.x);compartment_hi=id.y;}
+ a[slot].q=dvec2(q,fuel);a[slot].pose=vec4(at,at);a[slot].motion=vec4(0,0,float(id.x)*2.399963,0);
+ a[slot].facts=ivec4(s,source,compartment,1);a[slot].identity=uvec4(id,source_hi,compartment_hi);
 }
-double convert_atp(double q,vec2 at,float reach,bool producing){int src=producing?ADP:ATP, dst=producing?ATP:ADP;double value=min(max(0.0,q),local_amount(src,at,reach,-1));take(src,value,at,reach,-1);emit(dst,value,at,-1,-1,-1.0,0.0);if(!producing)c[20]+=value;return value;}
-float cross2(vec2 a,vec2 b){return a.x*b.y-a.y*b.x;}
-float boundary(vec2 ray){float distance_to=1e20;for(int j=0;j<28;j++){vec2 at=vec2(p[200+j*2],p[201+j*2]), edge=vec2(p[200+((j+1)%28)*2],p[201+((j+1)%28)*2])-at;float den=cross2(ray,edge);if(abs(den)<0.000001)continue;float t=cross2(at,ray)/den,d=cross2(at,edge)/den;if(t>=0.0&&t<=1.0&&d>=0.0)distance_to=min(distance_to,d);}return distance_to<1e19?distance_to:p[0];}
-vec2 limited(vec2 v,float r){float len=length(v);return len>r?v*(r/len):v;}
-vec2 membrane_point(float angle){float turn=mod(angle,TAU)/TAU*28.0;int j=int(floor(turn));return mix(vec2(p[200+j*2],p[201+j*2]),vec2(p[200+((j+1)%28)*2],p[201+((j+1)%28)*2]),fract(turn));}
-void move_packet(uint i){
- if(i>=n()||!live(i))return;
- float h=float(op[1]),r=p[0];vec2 at=a[i].pose.xy;a[i].pose.zw=at;
- uint64_t id=uint64_t(a[i].identity.x)|(uint64_t(a[i].identity.y)<<32);
- uint64_t tick=uint64_t(uint(c[4]))|(uint64_t(uint(c[5]))<<32);
- uint64_t body=uint64_t(uint(op[17]))|(uint64_t(uint(op[18]))<<32);
- int64_t bits=int64_t((id*73856093ul)^(tick*19349663ul)^(body*83492791ul));double noise=double(bits);
- vec2 walk=vec2(sin(float(mod(noise*0.000017,6.283185307179586))),cos(float(mod(noise*0.000023,6.283185307179586))))*sqrt(40.0*h);
- a[i].motion.z=mod(a[i].motion.z+sin(float(mod(noise*0.000013,6.283185307179586)))*sqrt(h)*1.4+3.14159265,TAU)-3.14159265;
- vec2 pos=at+vec2(-at.y,at.x)*0.18*h+walk;
- int64_t compartment=compartment_of(i);
- if(species(i)==CATALYST&&compartment<1000000){int j=source_node(i);if(j>=0)pos=site(j)+limited(pos-site(j),r*0.08);}
- for(int j=0;j<int(c[7]);j++)if(compartment==int64_t(c[128+j*8])){vec2 center=vec2(c[129+j*8],c[130+j*8]);pos=center+limited(pos-center,float(c[131+j*8])-1.0);}
- if(compartment>=0&&compartment<1000000&&(species(i)==CATALYST_A||species(i)==CATALYST_B)){int j=ni(int(compartment));if(j>=0)pos=site(j)+limited(pos-site(j),r*0.20);}
- vec2 ray=length(pos)>0.0?normalize(pos):vec2(1,0);pos=limited(pos,max(2.0,boundary(ray)-2.0));
- vec2 nucleus=vec2(-0.12,-0.10)*r, off=pos-nucleus;if(length(off)<r*0.24)pos=nucleus+(length(off)>0.0?normalize(off):vec2(0))*r*0.24;
- a[i].pose.xy=pos;
+vec2 constrain(vec2 at){
+ float angle=atan(at.y,at.x);if(angle<0.0)angle+=6.28318530718;
+ float f=angle/6.28318530718*28.0;int j=int(f)%28;vec2 edge=mix(vec2(p[200+j*2],p[201+j*2]),vec2(p[200+((j+1)%28)*2],p[201+((j+1)%28)*2]),fract(f));
+ float limit=max(1.0,length(edge)-4.0);if(length(at)>limit)at=normalize(at)*limit;
+ vec2 center=vec2(-.12,-.10)*p[0],delta=at-center;float nucleus=p[0]*.22;
+ if(length(delta)<nucleus)at=center+(length(delta)>.001?normalize(delta):vec2(1,0))*nucleus;
+ if(length(at)>limit)at=normalize(at)*limit;return at;
 }
-void capture_food(){
- if(c[7]>=12.0||amount(FOOD)<=0.0)return;
- for(uint i=0;i<n();i++)if(live(i)&&species(i)==FOOD&&compartment_of(i)==-1l){
-  if(double(p[3])+c[80]<0.025)return;c[80]-=0.025;
-  int j=int(c[7]);int64_t id=int64_t(uint64_t(uint(c[2]))|(uint64_t(uint(c[3]))<<32))+1000000l;vec2 center=a[i].pose.xy;
-  c[128+j*8]=double(id);c[129+j*8]=double(center.x);c[130+j*8]=double(center.y);c[131+j*8]=8.0;c[132+j*8]=0.0;c[133+j*8]=0.0125;c[134+j*8]=0.0;c[7]+=1.0;
-  for(uint k=0;k<n();k++)if(near(k,FOOD,center,8.0,-1)){a[k].facts.z=int(id);a[k].identity.w=uint(uint64_t(id)>>32);}
-  int node=module_node(M_DIGESTION);emit(CATALYST,0.0125,center,int(p[32+node*8]),id,-1.0,0.0);return;
- }
-}
-void digest(float h){
- int j=module_node(M_DIGESTION);if(!enabled(j))return;int dest=int(p[32+j*8]);
- for(int v=0;v<int(c[7]);v++){
-  int base=128+v*8;c[base+6]+=double(h);vec2 center=vec2(c[base+1],c[base+2]);double pump=min(1.0-c[base+4],double(h)*0.55),paid=convert_atp(pump*0.025,center,18.0,false);
-  if(pump>0.0)c[base+4]+=pump*min(1.0,paid/max(0.000001,pump*0.025));if(c[base+4]<0.35)continue;
-  int enzyme=local_first(CATALYST,center,9.0,int64_t(c[base]));if(enzyme<0)continue;
-  vec2 at=a[enzyme].pose.xy;
-  for(int candidate=local_first(FOOD,at,9.0,int64_t(c[base]));candidate>=0;candidate=-1){uint i=uint(candidate);
-   double extent=min(a[i].q.x,double(h)*rates[M_DIGESTION]*double(p[1])*double(p[34+j*8]));extent=min(extent,local_amount(ATP,at,18.0,-1)/0.08);
-   if(extent<=0.0){c[112+j]=double(ATP+1);break;}
-   double fuel=consume(i,extent),rich=clamp(fuel/7.5,0.0,extent);convert_atp(extent*0.08,at,18.0,false);
-   emit(GLUCOSE,rich*0.85,at,dest,-1,-1.0,0.0);emit(PRECURSOR,rich*0.10,at,dest,-1,-1.0,0.0);emit(WASTE,rich*0.05,at,dest,-1,-1.0,0.0);emit(SALVAGE,extent-rich,at,dest,-1,-1.0,0.0);
-   c[20]+=max(0.0,fuel-rich*7.125);c[96+j]+=extent/max(0.000001,op[2]);break;
-  }
- }
- for(int v=0;v<int(c[7]);){int base=128+v*8;int64_t id=int64_t(c[base]);double food=0.0;for(uint i=0;i<n();i++)if(live(i)&&compartment_of(i)==int64_t(id)&&species(i)==FOOD)food+=a[i].q.x;
-  if(food>0.000001){v++;continue;}c[80]+=c[base+5];for(uint i=0;i<n();i++)if(live(i)&&compartment_of(i)==int64_t(id)){a[i].facts.z=-1;a[i].identity.w=0xffffffffu;}
-  for(int k=v+1;k<int(c[7]);k++)for(int x=0;x<8;x++)c[128+(k-1)*8+x]=c[128+k*8+x];c[7]-=1.0;
- }
-}
-void react(uint enzyme,float h){
- int j=source_node(enzyme);if(!enabled(j))return;int kind=int(p[33+j*8]),dest=int(p[32+j*8]);vec2 at=a[enzyme].pose.xy;
- if(kind==M_AUTOCATALYSIS){float reach=max(10.0,p[0]*0.22);double aq=local_amount(CATALYST_A,at,reach,-1),bq=local_amount(CATALYST_B,at,reach,-1);double extent=min(local_amount(PRECURSOR,at,reach,dest),double(h)*0.25*(aq+bq)*double(p[34+j*8]));extent=min(extent,local_amount(ATP,at,reach,-1)/0.25);if(aq<=0.0||bq<=0.0)extent=0.0;
-  if(extent>0.0){take(PRECURSOR,extent,at,reach,dest);convert_atp(extent*0.25,at,reach,false);emit(CATALYST_A,extent*bq/(aq+bq),at,dest,dest,-1.0,0.0);emit(CATALYST_B,extent*aq/(aq+bq),at,dest,dest,-1.0,0.0);}c[96+j]+=extent/max(0.000001,op[2]);c[112+j]=-1.0;return;
- }
- if(actions[kind]!=0)return;
- float reach=max(10.0,p[0]*0.28);double extent=rates[kind]*double(h)*double(p[1])*double(p[34+j*8]);c[112+j]=0.0;
- for(int s=0;s<SPECIES;s++)if(inputs[kind*SPECIES+s]>0.0){double possible=local_amount(s,at,reach,dest)/inputs[kind*SPECIES+s];if(possible<extent){extent=possible;c[112+j]=double(s+1);if(extent<=0.00000001)return;}}
- double cost=max(0.0,-atp_rates[kind]),gain=max(0.0,atp_rates[kind]);if(cost>0.0)extent=min(extent,local_amount(ATP,at,reach,-1)/cost);if(gain>0.0)extent=min(extent,local_amount(ADP,at,reach,-1)/gain);if(extent<=0.00000001)return;
- double fuel=0.0,output_fuel=0.0;for(int s=0;s<SPECIES;s++)if(inputs[kind*SPECIES+s]>0.0)fuel+=take(s,extent*inputs[kind*SPECIES+s],at,reach,dest);
- if(cost>0.0)convert_atp(extent*cost,at,reach,false);
- for(int s=0;s<SPECIES;s++)if(outputs[kind*SPECIES+s]>0.0){double q=extent*outputs[kind*SPECIES+s];output_fuel+=q*potentials[s];if(s==BIOMASS)c[80]+=q;else emit(s,q,at,dest,-1,-1.0,0.0);}
- if(gain>0.0)c[82]+=convert_atp(extent*gain,at,reach,true);
- c[20]+=max(0.0,fuel-output_fuel-extent*gain);c[96+j]+=extent/max(0.000001,op[2]);if(kind==M_GLYCOLYSIS)c[83]+=extent;if(kind==M_FERMENTATION)c[84]+=extent;
-}
-void osmosis(float h){
- double storage=0.0;for(int s=0;s<SPECIES;s++)if(stored[s]!=0)storage+=amount(s);
- double concentration=(amount(FOOD)+storage+amount(WASTE))/max(1.0,double(p[1])*24.0);
- double incoming=max(0.0,concentration+0.22-double(p[7]))*(0.18+double(p[2])*0.04)*double(h);
- double tick=c[4]+c[5]*4294967296.0;vec2 at=membrane_point(float(mod(tick*2.399963,6.283185307179586)))*0.92;
- double trials=incoming/0.04;int entries=int(floor(trials));double phase=op[12];if(phase<trials-double(entries))entries++;
- emit(WATER,double(entries)*0.04,at,-1,-1,-1.0,0.0);c[24]=double(entries)*0.04/double(h);double pumped=0.0;int j=module_node(M_OSMOSIS);
- if(enabled(j))for(int side=-1;side<=1;side+=2){vec2 center=vec2(0.02,float(side)*0.62)*p[0];double used=min(local_amount(WATER,center,p[0]*0.22,-1),0.16*double(p[1])*double(h));used=min(used,local_amount(ATP,center,p[0]*0.35,-1)/0.15);take(WATER,used,center,p[0]*0.22,-1);convert_atp(used*0.15,center,p[0]*0.35,false);pumped+=used;}
- c[22]+=pumped;c[25]=pumped/double(h);c[23]+=pumped/max(0.02,double(p[1])*0.12);double load=amount(WATER)/max(0.1,double(p[1])*2.0);c[26]=clamp(load,0.0,1.0);if(load>1.0)c[81]-=(load-1.0)*2.0*double(h);
-}
+bool has_food(uint i){for(uint j=0u;j<n();j++)if(live(j)&&a[j].facts.x==FOOD&&same_comp(i,j))return true;return false;}
 void summarize(){
- 
- for(int s=0;s<SPECIES;s++)c[32+s]=0.0;for(int k=64;k<69;k++)c[k]=0.0;
- uint kept=0u;for(uint i=0;i<n();i++)if(live(i)){int s=species(i);c[32+s]+=a[i].q.x;c[64]+=a[i].q.x*materials[s];c[65]+=a[i].q.y;if(s==FOOD)c[66]+=a[i].q.y;if(stored[s]!=0)c[67]+=a[i].q.x;c[68]+=1.0;if(i!=kept)a[kept]=a[i];kept++;}c[0]=double(kept);
+ uint kept=0u;for(uint i=0u;i<n();i++)if(live(i)){if(kept!=i)a[kept]=a[i];kept++;}c[0]=double(kept);c[68]=double(kept);
+ for(int s=0;s<SPECIES;s++)c[32+s]=0.0;
+ c[64]=0.0;c[65]=0.0;c[66]=0.0;c[7]=0.0;
+ for(uint i=0u;i<n();i++){
+  c[32+a[i].facts.x]+=a[i].q.x;c[64]+=a[i].q.x;c[65]+=a[i].q.y;c[66]+=a[i].q.y;
+  if(a[i].facts.x!=FOOD&&has_food(i))continue;
+  int base=128+int(c[7])*8;c[7]+=1.0;
+  c[base]=double(uint64_t(uint(a[i].facts.z))|(uint64_t(a[i].identity.w)<<32));c[base+1]=double(a[i].pose.x);c[base+2]=double(a[i].pose.y);c[base+3]=3.8;c[base+4]=a[i].facts.x==WASTE?1.0:0.0;c[base+5]=0.0;c[base+6]=0.0;
+ }
 }
-void coalesce_retired(){
- if(amount(CATALYST)<=0.0)return;int node=module_node(M_DIGESTION);if(node<0)return;int64_t src=int64_t(p[32+node*8]);
- for(uint i=0;i<n();i++)if(live(i)&&species(i)==CATALYST&&source_of(i)==src&&compartment_of(i)==-1l&&a[i].motion.w==0.0){
-  vec2 at=a[i].pose.xy;ivec2 low=ivec2(floor((at-vec2(2.0))/20.0)),high=ivec2(floor((at+vec2(2.0))/20.0));
-  uint64_t identity=uint64_t(a[i].identity.x)|(uint64_t(a[i].identity.y)<<32);
-  for(int x=low.x;x<=high.x&&live(i);x++)for(int y=low.y;y<=high.y&&live(i);y++){ivec2 bin=ivec2(x,y);
-   for(int j=g[bucket(CATALYST,bin)];j>=0&&live(i);j=link[j]){
-    uint64_t other=uint64_t(a[j].identity.x)|(uint64_t(a[j].identity.y)<<32);
-    if(other>=identity||!in_bin(uint(j),bin)||!near(uint(j),CATALYST,at,2.0,-1)||source_of(uint(j))!=src||compartment_of(uint(j))!=-1l||a[j].motion.w!=0.0||a[j].q.x>=quanta[CATALYST])continue;
-    double used=min(a[i].q.x,quanta[CATALYST]-a[j].q.x);if(a[i].q.x-used<EPS)used=a[i].q.x;
-    double fuel=consume(i,used);a[j].q+=dvec2(used,fuel);c[32+CATALYST]+=used;
-   }
+void advance(){
+ double dt=op[1],budget=dt*1.8*double(p[1]);uint original=n();
+ for(uint i=0u;i<original;i++)if(live(i)){
+  a[i].pose.zw=a[i].pose.xy;
+  if(a[i].facts.x==FOOD&&budget>0.0){
+   double used=min(a[i].q.x,budget),fuel=a[i].q.y*used/max(EPS,a[i].q.x),tissue=min(used,fuel/7.5)*.7;
+   budget-=used;consume(i,used);c[80]+=tissue;c[82]+=max(0.0,fuel-tissue*7.5);c[83]+=used;
+   emit_packet(WASTE,used-tissue,a[i].pose.xy,a[i].facts.y,a[i].identity.z,a[i].facts.z,a[i].identity.w,0.0);
   }
  }
-}
-void step_chemistry(){
- float h=float(op[1]);uint64_t tick=uint64_t(uint(c[4]))|(uint64_t(uint(c[5]))<<32);tick++;c[4]=double(uint(tick));c[5]=double(uint(tick>>32));
- coalesce_retired();capture_food();digest(h);uint end=n();if(amount(CATALYST)>0.0)for(uint i=0;i<end;i++)if(live(i)&&species(i)==CATALYST)react(i,h);
- end=n();if(amount(CATALYST_A)+amount(CATALYST_B)>0.0)for(uint i=0;i<end;i++)if(live(i)&&(species(i)==CATALYST_A||species(i)==CATALYST_B)){double retired=a[i].q.x*op[11];vec2 at=a[i].pose.xy;int64_t src=source_of(i);consume(i,retired);emit(WASTE,retired,at,src,-1,-1.0,0.0);c[20]+=retired*7.5;}osmosis(h);
-}
-void excrete(){
- vec2 outlet=vec2(op[2],op[3]);double budget=op[1];int sent=0;bool deferred=false;
- for(uint i=0;i<n();i++)if(live(i)){
-  int s=species(i),kind=-1;double q=0.0;vec2 at=a[i].pose.xy;
-  if(s==WASTE&&distance(at,outlet)<=max(12.0,p[0]*0.25)){kind=2;q=min(a[i].q.x,budget);}
-  else if(s==OXYGEN||s==CARBON||s==GLUCOSE){vec2 ray=length(at)>0.0?normalize(at):vec2(1,0);if(length(at)<boundary(ray)-7.0)continue;double threshold=s==OXYGEN?op[4]:(s==CARBON?op[5]:op[6]);if(amount(s)<=threshold)continue;kind=s==OXYGEN?1:(s==CARBON?5:0);q=a[i].q.x;}
-  if(kind<0||q<=0.0)continue;if(sent>=256){deferred=true;break;}
-  Packet packet=a[i];packet.q=dvec2(q,consume(i,q));packet.facts.x=kind;outbox[sent++]=packet;if(kind==2)budget-=q;
+ vec2 outlet=vec2(p[12],p[13]);
+ for(uint i=0u;i<n();i++)if(live(i)){
+  bool carrier=false;
+  if(a[i].facts.x==WASTE)for(uint j=0u;j<n();j++)if(live(j)&&a[j].facts.x==FOOD&&same_comp(i,j)){a[i].pose.xy=a[j].pose.xy;carrier=true;break;}
+  if(!carrier){
+   if(a[i].facts.x==WASTE){vec2 d=outlet-a[i].pose.xy;float travel=float(dt)*max(6.0,p[0]*.3);a[i].pose.xy+=length(d)>travel?normalize(d)*travel:d;}
+   else{float t=float(dt)*.2;mat2 r=mat2(cos(t),sin(t),-sin(t),cos(t));a[i].pose.xy=r*a[i].pose.xy;}
+  }
+  a[i].pose.xy=constrain(a[i].pose.xy);
  }
- c[70]=double(sent);c[71]=budget;c[72]=deferred?1.0:0.0;
+ c[4]+=1.0;
 }
 void main(){
- uint i=gl_GlobalInvocationID.x;int code=int(op[0]);
- if(pc.stage==5u){if(i<uint(GRID)){g[i]=-1;g[GRID+i]=-1;}return;}
- if(pc.stage==4u){if(i==0u)for(uint j=0;j<n();j++)if(live(j))index_packet(j);return;}
- if(pc.stage==3u){if(i<n()){ivec2 pixel=ivec2((i%256u)*2u,i/256u);float radius=0.2*(species(i)==CATALYST?3.2:1.4+min(2.0,sqrt(float(a[i].q.x))*1.5));imageStore(presentation,pixel,vec4(a[i].pose.xy,a[i].motion.z,float(species(i))));imageStore(presentation,pixel+ivec2(1,0),vec4(radius,0,0,0));}return;}
- if(pc.stage==1u){if(code==0)move_packet(i);return;}if(i!=0u)return;
- if(pc.stage==0u){c[6]=0.0;for(int k=70;k<85;k++)c[k]=0.0;if(code==0)for(int j=0;j<int(c[7]);j++){int base=128+j*8;dvec2 at=dvec2(c[base+1],c[base+2]);at+=dvec2(-at.y,at.x)*0.18*op[1];c[base+1]=at.x;c[base+2]=at.y;}return;}
- vec2 at=vec2(op[2],op[3]);float reach=float(op[4]);int s=int(op[10]),dest=int(op[5]);double q=op[1];
- if(code==0)step_chemistry();
- else if(code==1)emit(s,q,at,int64_t(uint64_t(uint(op[13]))|(uint64_t(uint(op[14]))<<32)),int64_t(uint64_t(uint(op[15]))|(uint64_t(uint(op[16]))<<32)),op[8],float(op[9]));
- else if(code==2){c[70]=local_amount(s,at,reach,dest);return;}
- else if(code==3)c[70]=take(s,q,at,reach,dest);
- else if(code==4||code==5)c[70]=convert_atp(q,at,reach,code==5);
- else if(code==6){double diff=q-amount(s);if(diff>0.0)emit(s,diff,at,-1,-1,-1.0,float(op[9]));else for(uint j=0;j<n()&&diff<-EPS;j++)if(live(j)&&species(j)==s){double used=min(-diff,a[j].q.x);consume(j,used);diff+=used;}}
- else if(code==7){double current=0.0,count=0.0;for(uint j=0;j<n();j++)if(live(j)&&species(j)==FOOD){current+=a[j].q.y;count+=a[j].q.x;}for(uint j=0;j<n();j++)if(live(j)&&species(j)==FOOD)a[j].q.y=current>EPS?max(0.0,q)*a[j].q.y/current:max(0.0,q)*a[j].q.x/max(EPS,count);}
- else if(code==8){int source=op[6]>0.0?ATP:RESERVED_ATP,target=op[6]>0.0?RESERVED_ATP:ATP;double remaining=min(max(0.0,q),amount(source));uint end=n();for(uint j=0;j<end&&remaining>EPS;j++)if(live(j)&&species(j)==source){double used=min(remaining,a[j].q.x);vec2 pos=a[j].pose.xy;double fuel=consume(j,used);emit(target,used,pos,-1,-1,fuel,0.0);remaining-=used;}}
- else if(code==9){double total=amount(ATP),fraction=total>0.0?clamp(1.0-1.0/(1.0+op[4]*total/op[5]*q),0.0,1.0):0.0;uint end=n();for(uint j=0;j<end;j++)if(live(j)&&species(j)==ATP){double used=a[j].q.x*fraction;vec2 pos=a[j].pose.xy;consume(j,used);emit(ADP,used,pos,-1,-1,-1.0,0.0);c[70]+=used;}c[20]+=c[70];}
- else if(code==10){int node=module_node(M_PHOTOSYNTHESIS);bool catalyst=false;if(enabled(node)){for(uint j=0;j<n();j++)if(near(j,CATALYST,at,reach,-1)&&source_of(j)==int64_t(p[32+node*8])){catalyst=true;break;}}if(catalyst){double extent=min(local_amount(CARBON,at,reach,-1),q);if(extent>0.0){int src=int(p[32+node*8]);take(CARBON,extent,at,reach,-1);emit(GLUCOSE,extent*0.65,at,src,-1,-1.0,0.0);emit(OXYGEN,extent*2.5,at,src,-1,-1.0,0.0);c[80]+=extent*0.35;c[71]=convert_atp(extent*4.0,at,reach,true);c[70]=extent;c[21]+=extent*7.5+c[71];}}}
- else if(code==11)excrete();
+ uint i=gl_GlobalInvocationID.x;
+ if(pc.stage==3u){if(i>=32u)return;vec4 pose=vec4(0,0,0,-1);float r=0.0;if(i<n()&&live(i)){pose=vec4(a[i].pose.xy,a[i].motion.z,float(a[i].facts.x));r=.20*(1.4+min(2.0,sqrt(float(a[i].q.x))*1.5));}imageStore(presentation,ivec2(int(i)*2,0),pose);imageStore(presentation,ivec2(int(i)*2+1,0),vec4(r));return;}
+ if(i!=0u)return;
+ if(pc.stage==0u){for(int j=80;j<=84;j++)c[j]=0.0;c[70]=0.0;c[6]=0.0;return;}
+ if(pc.stage!=2u)return;
+ int code=int(op[0]),s=int(op[10]);vec2 at=vec2(op[2],op[3]);
+ if(code==0)advance();
+ else if(code==1)emit_packet(s,op[1],at,int(uint(op[13])),uint(op[14]),int(uint(op[15])),uint(op[16]),op[8]<0.0?(s==FOOD?op[1]*7.5:0.0):op[8]);
+ else if(code==6){double total=0.0;for(uint j=0u;j<n();j++)if(live(j)&&a[j].facts.x==s)total+=a[j].q.x;double difference=op[1]-total;if(difference>0.0)emit_packet(s,difference,at,-1,0xffffffffu,-1,0xffffffffu,s==FOOD?difference*7.5:0.0);else for(uint j=0u;j<n()&&difference<0.0;j++)if(live(j)&&a[j].facts.x==s){double used=min(a[j].q.x,-difference);consume(j,used);difference+=used;}}
+ else if(code==7){double total=0.0;for(uint j=0u;j<n();j++)if(live(j)&&a[j].facts.x==FOOD)total+=a[j].q.x;for(uint j=0u;j<n();j++)if(live(j)&&a[j].facts.x==FOOD)a[j].q.y=max(0.0,op[1])*a[j].q.x/max(EPS,total);}
+ else if(code==11){double budget=op[1];for(uint j=0u;j<n()&&budget>0.0;j++)if(live(j)&&a[j].facts.x==WASTE&&!has_food(j)&&distance(a[j].pose.xy,at)<=float(op[4])){double used=min(budget,a[j].q.x);Packet packet=a[j];packet.q=dvec2(used,0);outbox[int(c[70])]=packet;c[70]+=1.0;budget-=used;consume(j,used);}}
  summarize();
 }

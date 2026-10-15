@@ -21,7 +21,7 @@ func initialize(sim) -> void:
 	reserve.generation = 0
 	reserve.position = sim.player.position
 	reserve.previous_position = reserve.position
-	reserve.oxygen = 12
+	reserve.oxygen = 0
 	dormant.append(reserve)
 	founder_material = reserve.organic_mass()
 	sim.inherited_lineages[reserve.id] = reserve.lineage_id()

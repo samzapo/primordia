@@ -6,8 +6,8 @@ const STRIDE:=80
 # Control doubles: 0..7 slot/identity/clock/vacuole header; 20..26 cumulative
 # chemistry; 32..50 species totals; 64..68 derived inventories; 70..84 current
 # transaction result/body deltas; 96..127 flux/limits; 128..223 vacuoles.
-const CONTROL_BYTES:=2048
-const MAX_CAPACITY:=262144
+const CONTROL_BYTES:=4096
+const MAX_CAPACITY:=32
 var rd: RenderingDevice
 var shader:=RID()
 var pipeline:=RID()
@@ -49,24 +49,9 @@ static func _table(name: String,values: Array,type: String="double") -> String:
 func prepare(chem,cell) -> void:
 	chemistry=weakref(chem);body=weakref(cell)
 	species=Catalog.data().species.keys()
-	for item in Catalog.data().modules:modules.append(item.id)
-	var constants:="const int SPECIES=%d;\n" % species.size()
-	var potentials: Array=[];var materials: Array=[];var quanta: Array=[];var seed_quanta: Array=[];var stored: Array=[]
-	for i in species.size():
-		var key: String=species[i];var item: Dictionary=Catalog.data().species[key]
-		constants+="const int %s=%d;\n" % [key.to_upper(),i]
-		potentials.append(float(item.potential));materials.append(float(item.material));quanta.append(chem._quantum(key));seed_quanta.append(chem._quantum(key)/float(Catalog.data().ecology.get("internal_parcel_scale",1)))
-		stored.append(1 if key in ["glucose","pyruvate","lactate","precursor","salvage","catalyst_a","catalyst_b"] else 0)
-	constants+=_table("potentials",potentials)+_table("materials",materials)+_table("quanta",quanta)+_table("seed_quanta",seed_quanta)+_table("stored",stored,"int")
-	var rates: Array=[];var atp: Array=[];var actions: Array=[];var inputs: Array=[];var outputs: Array=[]
-	for i in modules.size():
-		var item:=Catalog.module(modules[i]);constants+="const int M_%s=%d;\n" % [modules[i].to_upper(),i]
-		rates.append(float(item.rate));atp.append(float(item.atp));actions.append(1 if item.has("action") else 0)
-		for key in species:inputs.append(float(item.inputs.get(key,0)));outputs.append(float(item.outputs.get(key,0)))
-	constants+=_table("rates",rates)+_table("atp_rates",atp)+_table("actions",actions,"int")+_table("inputs",inputs)+_table("outputs",outputs)
+	var constants:="const int SPECIES=%d;\nconst int FOOD=%d;\nconst int WASTE=%d;\n" % [species.size(),species.find("food"),species.find("waste")]
 	source=FileAccess.get_file_as_string("res://shaders/compute/resident_cytoplasm.glsl.txt").replace("/*CYTOPLASM_CATALOG*/",constants)
-	capacity=4096
-	while capacity<chem.particles.size()*2+1024:capacity*=2
+	capacity=32
 
 func _pack(packets: Array) -> PackedByteArray:
 	var bytes:=PackedByteArray();bytes.resize(packets.size()*STRIDE)
@@ -93,7 +78,7 @@ func _unpack(bytes: PackedByteArray) -> Array:
 
 func _control(chem) -> PackedByteArray:
 	var bytes:=PackedByteArray();bytes.resize(CONTROL_BYTES)
-	for pair in [[0,chem.particles.size()],[1,capacity],[2,chem.next_packet&0xffffffff],[3,chem.next_packet>>32],[4,chem.tick&0xffffffff],[5,chem.tick>>32],[7,chem.vacuoles.size()],[20,chem.heat],[21,chem.solar_work],[22,chem.expelled],[23,chem.water_clock],[24,chem.water_in],[25,chem.water_out],[26,chem.osmotic_stress]]:bytes.encode_double(pair[0]*8,float(pair[1]))
+	for pair in [[0,chem.particles.size()],[1,capacity],[2,chem.next_packet&0xffffffff],[3,chem.next_packet>>32],[4,chem.tick&0xffffffff],[5,chem.tick>>32],[7,chem.vacuoles.size()],[20,chem.heat],[21,chem.solar_work],[22,chem.expelled]]:bytes.encode_double(pair[0]*8,float(pair[1]))
 	for j in chem.vacuoles.size():
 		var v: Dictionary=chem.vacuoles[j]
 		var values: Array=[v.id,v.p.x,v.p.y,v.radius,v.acid,v.material,v.age,0]
@@ -103,7 +88,9 @@ func _control(chem) -> PackedByteArray:
 func _anatomy(cell,external: float=.15) -> PackedByteArray:
 	var chem=chemistry.get_ref();var values:=PackedFloat32Array();values.resize(768)
 	values[0]=cell.radius;values[1]=cell.growth_scale();values[2]=cell.holes.size();values[3]=cell.biomass;values[7]=external
-	values[8]=cell.id&0xffffffff;values[9]=cell.id>>32;values[10]=chem.nodes.size()
+	values[8]=cell.id&0xffffffff;values[9]=cell.id>>32;values[10]=0
+	var outlet: Vector2=cell.local_point(cell.excretion_angle())*.88
+	values[12]=outlet.x;values[13]=outlet.y
 	for j in chem.nodes.size():
 		var node: Dictionary=chem.nodes[j];var at: Vector2=chem.site(node)
 		for k in 6:values[32+j*8+k]=[node.id,modules.find(node.module),node.allocation,1 if node.enabled else 0,at.x,at.y][k]
@@ -118,6 +105,8 @@ func _anatomy(cell,external: float=.15) -> PackedByteArray:
 
 func initialize(device: RenderingDevice,packets: PackedByteArray,control: PackedByteArray,anatomy: PackedByteArray) -> bool:
 	rd=device
+	if packets.size()>capacity*STRIDE or control.decode_double(0)>24:
+		error="Food/waste input exceeds bounded allocation";return false
 	if capacity>_capacity_limit:error="Intracellular resident capacity exceeded";return false
 	var code:=RDShaderSource.new();code.source_compute=source
 	var spirv:=rd.shader_compile_spirv_from_source(code)
@@ -126,7 +115,7 @@ func initialize(device: RenderingDevice,packets: PackedByteArray,control: Packed
 	var initial:=packets.duplicate();initial.resize(capacity*STRIDE)
 	buffers=[rd.storage_buffer_create(initial.size(),initial),rd.storage_buffer_create(CONTROL_BYTES,control),rd.storage_buffer_create(anatomy.size(),anatomy),rd.storage_buffer_create(256),rd.storage_buffer_create(256*STRIDE),rd.storage_buffer_create(256*species.size()*8),rd.storage_buffer_create(capacity*4)]
 	backup=[rd.storage_buffer_create(capacity*STRIDE),rd.storage_buffer_create(CONTROL_BYTES)]
-	var format:=RDTextureFormat.new();format.width=512;format.height=MAX_CAPACITY/256;format.format=RenderingDevice.DATA_FORMAT_R32G32B32A32_SFLOAT;format.usage_bits=RenderingDevice.TEXTURE_USAGE_STORAGE_BIT|RenderingDevice.TEXTURE_USAGE_SAMPLING_BIT
+	var format:=RDTextureFormat.new();format.width=512;format.height=1;format.format=RenderingDevice.DATA_FORMAT_R32G32B32A32_SFLOAT;format.usage_bits=RenderingDevice.TEXTURE_USAGE_STORAGE_BIT|RenderingDevice.TEXTURE_USAGE_SAMPLING_BIT
 	image=rd.texture_create(format,RDTextureView.new())
 	_rebind()
 	return pipeline.is_valid() and bindings.is_valid()
@@ -144,6 +133,8 @@ func _dispatch(stage: int,groups: int=1) -> void:
 	var list:=rd.compute_list_begin();rd.compute_list_bind_compute_pipeline(list,pipeline);rd.compute_list_bind_uniform_set(list,bindings,0);rd.compute_list_set_push_constant(list,push,4);rd.compute_list_dispatch(list,groups,1,1);rd.compute_list_end()
 
 func attach(gpu,chem,cell) -> bool:
+	if chem.particles.size()>chem.MAX_PACKETS or chem.particles.any(func(packet):return packet.species not in ["food","waste"]):
+		error="Invalid food/waste carrier population; CPU ownership retained";return false
 	prepare(chem,cell)
 	var packets:=_pack(chem.particles);var control:=_control(chem);var anatomy:=_anatomy(cell)
 	var ok: Array=[false]
@@ -187,17 +178,12 @@ func _execute(args: PackedByteArray,anatomy: PackedByteArray,code: int) -> void:
 	while true:
 		rd.buffer_copy(buffers[0],backup[0],0,0,capacity*STRIDE);rd.buffer_copy(buffers[1],backup[1],0,0,CONTROL_BYTES)
 		_dispatch(0)
-		if code==0:
-			_dispatch(1,maxi(1,ceili(count/64.0)));_index_ready=false
-		if not _index_ready:_rebuild_index()
 		_dispatch(2)
-		if code!=2:_rebuild_index()
 		summary=rd.buffer_get_data(buffers[1])
 		if summary.decode_double(6*8)==0:break
 		rd.buffer_copy(backup[0],buffers[0],0,0,capacity*STRIDE);rd.buffer_copy(backup[1],buffers[1],0,0,CONTROL_BYTES)
-		_index_ready=false
 		if capacity>=_capacity_limit:
-			summary=rd.buffer_get_data(buffers[1]);_rebuild_index()
+			summary=rd.buffer_get_data(buffers[1])
 			error="Intracellular resident capacity exhausted; transaction rolled back";semaphore.post();return
 		var larger:=mini(_capacity_limit,capacity*2);var state:=rd.storage_buffer_create(larger*STRIDE)
 		rd.buffer_copy(buffers[0],state,0,0,capacity*STRIDE);rd.free_rid(buffers[0]);rd.free_rid(backup[0]);buffers[0]=state;backup[0]=rd.storage_buffer_create(larger*STRIDE);capacity=larger;grows+=1
@@ -213,34 +199,21 @@ func _apply(bytes: PackedByteArray,code: int) -> void:
 	live_count=int(bytes.decode_double(68*8));count=int(bytes.decode_double(0))
 	chem.next_packet=int(bytes.decode_double(2*8))|(int(bytes.decode_double(3*8))<<32);chem.tick=int(bytes.decode_double(4*8))|(int(bytes.decode_double(5*8))<<32)
 	for j in species.size():chem.totals[species[j]]=bytes.decode_double((32+j)*8)
-	for pair in [["heat",20],["solar_work",21],["expelled",22],["water_clock",23],["water_in",24],["water_out",25],["osmotic_stress",26]]:chem.set(pair[0],bytes.decode_double(pair[1]*8))
+	for pair in [["heat",20],["solar_work",21]]:chem.set(pair[0],bytes.decode_double(pair[1]*8))
 	chem.vacuoles.clear()
 	for j in int(bytes.decode_double(7*8)):
 		var base:=128+j*8
 		chem.vacuoles.append({"id":int(bytes.decode_double(base*8)),"p":Vector2(bytes.decode_double((base+1)*8),bytes.decode_double((base+2)*8)),"radius":bytes.decode_double((base+3)*8),"acid":bytes.decode_double((base+4)*8),"material":bytes.decode_double((base+5)*8),"age":bytes.decode_double((base+6)*8)})
 	cell.biomass+=bytes.decode_double(80*8);cell.health=maxf(0,cell.health+bytes.decode_double(81*8))
 	var gained:=bytes.decode_double(82*8)
-	if gained>0:cell.report_energy_gain(gained)
+	if gained>0:cell.gain_energy(gained)
 	cell.processed+=bytes.decode_double(83*8);cell.fermented+=bytes.decode_double(84*8)
 	if bytes.decode_double(84*8)>0:cell.fermentation_activity=2
 	if bytes.decode_double(81*8)<0:cell.death_hint="Osmotic overload; contractile pumping failed"
-	if code==0:
-		for j in chem.nodes.size():
-			chem.flux[chem.nodes[j].id]=bytes.decode_double((96+j)*8)
-			var limit:=int(bytes.decode_double((112+j)*8))
-			chem.limiting[chem.nodes[j].id]="Capacity" if limit==0 else "Local precursor and catalysts" if limit<0 else Catalog.data().species[species[limit-1]].name
 
 func advance(dt: float,external: float) -> void:
-	var chem=chemistry.get_ref();chem.frame_dt=dt;chem.flux.clear();chem.limiting.clear()
-	# Reset flux once per elapsed interval, including multi-substep catch-up.
-	RenderingServer.call_on_render_thread(func():
-		var zeros:=PackedByteArray();zeros.resize(32*8);rd.buffer_update(buffers[1],96*8,zeros.size(),zeros);semaphore.post())
-	semaphore.wait()
-	var left:=dt
-	while left>.000001:
-		var h:=minf(left,.125);left-=h
-		command(0,h,Vector2(dt,0),0,-1,-1,-1,-1,0,"food",{2:dt,"external":external})
-	chem.flux[chem.find_module("photosynthesis")]=chem.light_flux
+	var chem=chemistry.get_ref();chem.frame_dt=dt
+	command(0,dt,Vector2.ZERO,0,-1,-1,-1,-1,0,"food",{"external":external})
 
 func value(index: int) -> float:return summary.decode_double(index*8) if not summary.is_empty() else 0.0
 

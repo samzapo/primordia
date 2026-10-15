@@ -68,7 +68,7 @@ func run(test_host) -> void:
 	scene._update_world(1)
 	expect(scene.light_layer.material.get_shader_parameter("clock") == scene.world.time,"Broad water shimmer pauses with simulation time")
 	for view in scene.views.values():
-		expect(view.water_wake.z_index+view.z_index < 2 and view.water_wake.mesh == view.surface.mesh,"Stronger cell wakes share the deformed outline and draw behind all cell bodies")
+		expect(not view.water_wake.z_as_relative and view.water_wake.z_index < min(2,view.z_index) and view.water_wake.mesh == view.surface.mesh,"Stronger cell wakes share the deformed outline and draw behind all cell bodies")
 	# Wakes depend on external water/body slip, never absolute world speed.
 	var body = Sim.Cell.new()
 	var medium = Sim.Medium.new()
@@ -263,7 +263,7 @@ func run(test_host) -> void:
 	settle()
 	cell = scene.world.player
 	scene.cell_ui.open_context({"kind":"chemistry"})
-	expect(scene.cell_ui.choices.size() >= 5,"Chemistry factory retains the existing organs and exposes the pathway editor")
+	expect(scene.cell_ui.choices.size() == 4 and scene.cell_ui.choices.any(func(choice):return choice.caption=="Food vacuoles"),"Chemistry factory exposes the simple food lifecycle and removes inactive photosynthesis")
 	scene.cell_ui.close_context()
 	key(KEY_BRACKETRIGHT)
 	key(KEY_ENTER)
