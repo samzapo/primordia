@@ -103,7 +103,7 @@ func run(test_host) -> void:
 		if node is PanelContainer: panes += 1
 	expect(panes == 1 and not scene.settings_panel.visible,"No top, bottom or assembly panes remain")
 	expect(scene.batches.size() == Sim.SPECIES_COUNT,"Renderer retains all chemistry species")
-	key(KEY_ESCAPE)
+	key(KEY_M)
 	var identity = scene.world.player
 	key(KEY_TAB)
 	expect(scene.settings_panel.visible and not scene.build_open and scene.world.player == identity,"Settings pauses and prevents edits behind the modal")
@@ -115,7 +115,7 @@ func run(test_host) -> void:
 	expect(not scene.preferences.water_ripples and scene.light_layer.material.get_shader_parameter("water_ripples") == false,"Water shimmer can be disabled without changing anatomy or the screen-copy pass")
 	scene.ripple_check.toggled.emit(true)
 	expect(scene.world.particle_collisions,"Ordinary gameplay restores particle collisions without consulting the old trial preference")
-	key(KEY_ESCAPE)
+	key(KEY_M)
 	key(KEY_SPACE)
 	expect(not scene.camera_locked and not scene.is_paused(),"Space unlocks view without pausing")
 	key(KEY_SPACE)
@@ -249,9 +249,9 @@ func run(test_host) -> void:
 	var energy: float = cell.energy
 	scene._process(DT)
 	expect(cell.membrane.points != geometry and cell.age == age and cell.energy == energy and scene.world.time == clock,"Paused geometry responds without biological progress")
-	key(KEY_ESCAPE)
+	key(KEY_M)
 	expect(scene.settings_panel.visible and scene.build_open and scene.world.player == cell,"Settings preserves current paid edits")
-	key(KEY_ESCAPE)
+	key(KEY_M)
 	expect(scene.build_open and scene.world.evolution.points == points,"Closing settings returns to the same paused cell")
 	key(KEY_TAB)
 	expect(not scene.cell_ui.biomass_view.visible,"Biomass comparison disappears during ordinary play")

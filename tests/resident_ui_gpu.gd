@@ -40,7 +40,7 @@ func run() -> void:
 	scene._physics_process(1.0/60)
 	check(scene.world.revision==before+1,"First resumed frame advances exactly once")
 	scene._toggle_settings()
-	check(scene.is_paused(),"Escape settings pauses GPU biology")
+	check(scene.is_paused(),"Settings menu pauses GPU biology")
 	scene._toggle_settings()
 	var old=scene.world.resident.gpu
 	scene._restart()

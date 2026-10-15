@@ -48,6 +48,7 @@ var ui := Control.new()
 var touch_zoom := preload("res://scripts/touch_zoom.gd").new()
 var user_paused := false
 var perception := "exteroception"
+var perception_menu_button: Button
 var perception_mask:=preload("res://scripts/perception_mask.gd").new()
 var pause_control_ready := true
 var cell_ui := preload("res://scripts/cell_interface.gd").new()
@@ -365,6 +366,7 @@ func _toggle_perception() -> void:
 	for view in views.values():view.seen_revision=-1;view.queue_redraw()
 	_update_world(1.0 if is_paused() else Engine.get_physics_interpolation_fraction())
 	touch_zoom.layout()
+	_update_perception_menu()
 	_message("Interoception · external chemistry continues offscreen." if perception=="interoception" else "Exteroception · internal chemistry continues offscreen.")
 
 func can_follow() -> bool:
@@ -632,7 +634,12 @@ func _camera_gesture(anchor_a: Vector2,anchor_b: Vector2,screen_a: Vector2,scree
 	_update_world(1.0 if is_paused() else Engine.get_physics_interpolation_fraction())
 	currents.queue_redraw()
 
+func _update_perception_menu() -> void:
+	if perception_menu_button!=null:
+		perception_menu_button.text=("Interoception" if perception=="exteroception" else "Exteroception")+" [I]"
+
 func _toggle_settings() -> void:
+	_update_perception_menu()
 	settings_panel.visible = not settings_panel.visible
 	tube_start.clear()
 	camera_dragging = false
@@ -685,7 +692,7 @@ func _build_ui() -> void:
 	options.add_theme_constant_override("separation",12)
 	options.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	settings_scroll.add_child(options)
-	_label(options,"SETTINGS",MINT)
+	_label(options,"SETTINGS [M]",MINT)
 	_label(options,"Text and interaction size")
 	options.add_child(scale_select)
 	for scale_value in Preferences.SCALES: scale_select.add_item("%d%%" % roundi(scale_value*100))
@@ -710,6 +717,8 @@ func _build_ui() -> void:
 		preferences.music_volume = value/100
 		music_label.text = "Music volume · %d%%" % roundi(value)
 		preferences.save_settings())
+	perception_menu_button=_button(options,"Interoception [I]",_toggle_perception)
+	perception_menu_button.tooltip_text="Switch between the cell interior and the surrounding water"
 	_button(options,"Sense view [S]",func(): show_senses = not show_senses)
 	_button(options,"Performance overlay [F3]",func(): show_debug = not show_debug)
 	_button(options,"Next habitat [H]",func(): _restart((world.habitat+1)%3))
@@ -717,8 +726,8 @@ func _build_ui() -> void:
 		settings_panel.hide()
 		cell_ui.open_context({"kind":"lineage"}))
 	_button(options,"New expedition [R]",func(): _restart())
-	_label(options,"Tab: enter cell / keep edits and resume\nClick factories, nucleus, bud or installed organs\nNew organs have a fixed size · no Undo\nRight-click: cancel a held organ or close choices\nIn edit: drag microtubules; hover + wheel: tension\nWheel elsewhere: zoom · middle-drag: pan\nSpace: follow / free camera\n[ / ]: cycle cell targets · Enter: choose / place\nArrow keys: navigate choices or membrane placement\nHover particles: inspect through a local lens\nNo movement keys: anatomy steers.",MUTED)
-	_button(options,"Close [Esc]",_toggle_settings)
+	_label(options,"Tab: enter cell / keep edits and resume\nClick factories, nucleus, bud or installed organs\nNew organs have a fixed size · no Undo\nRight-click: cancel a held organ or close choices\nIn edit: drag microtubules; hover + wheel: tension\nWheel elsewhere: zoom · middle-drag: pan\nSpace: follow / free camera\nM: open / close settings\nI: interoception / exteroception\n[ / ]: cycle cell targets · Enter: choose / place\nArrow keys: navigate choices or membrane placement\nHover particles: inspect through a local lens\nNo movement keys: anatomy steers.",MUTED)
+	_button(options,"Close [M]",_toggle_settings)
 	options.add_child(quit_button)
 	quit_button.text = "Quit game"
 	quit_button.pressed.connect(func(): get_tree().quit())
@@ -979,7 +988,7 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 	if event is InputEventKey and event.pressed and not event.echo:
-		if settings_panel.visible and event.keycode not in [KEY_ESCAPE,KEY_F11,KEY_F3]: return
+		if settings_panel.visible and event.keycode not in [KEY_M,KEY_F11,KEY_F3,KEY_I]: return
 		match event.keycode:
 			KEY_TAB: _toggle_build()
 			KEY_ENTER,KEY_KP_ENTER:
@@ -998,7 +1007,7 @@ func _input(event: InputEvent) -> void:
 			KEY_P: _toggle_user_pause()
 			KEY_I: _toggle_perception()
 			KEY_SPACE: _toggle_camera()
-			KEY_ESCAPE: _toggle_settings()
+			KEY_M: _toggle_settings()
 			KEY_F11: set_fullscreen(not preferences.fullscreen)
 			KEY_F3: show_debug = not show_debug; _update_hud()
 			KEY_S: show_senses = not show_senses

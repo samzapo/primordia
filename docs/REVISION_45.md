@@ -8,7 +8,7 @@ Exteroception shows external particles and hides all intracellular chemical pack
 
 Internal chemical glyphs render at one fifth of their former diameter (one twenty-fifth of the filled area), using the same size rule for owned and observed cells. Their orientation marks, signal glyphs and cosmetic AP parcels use the same visual reduction. Physical packet amounts, contact radii and transport are unchanged; organelles and vacuole boundaries retain their size.
 
-The touch button names the destination view: Interoception while outside, Exteroception while inside. Desktop I switches views. Entering Interoception returns to cell follow if the camera was free. Two-finger manipulation and the local view Pause remain available in either mode. A paused browser keeps its latest full snapshot while the authority continues.
+The touch button names the destination view: Interoception while outside, Exteroception while inside. Desktop I switches views, including while the M menu is open. Browsers retain Escape for exiting fullscreen; M opens and closes settings. Desktop retains no perception overlay; the M menu contains the destination action with [I], and its controls guide lists the shortcut. Entering Interoception returns to cell follow if the camera was free. Two-finger manipulation and the local view Pause remain available in either mode. A paused browser keeps its latest full snapshot while the authority continues.
 
 ## Independent simulation interests
 
