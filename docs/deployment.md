@@ -99,3 +99,35 @@ Desktop rendering uses tools/test_frame_budget.sh against the first-cell workloa
 ## Revision 51 model boundary
 
 The small food-vacuole model now also contains bounded oxygen/carbon particles for local respiration, fermentation and photosynthesis. Before the first upgraded checkpoint, the server independently archives the pre-upgrade pond, then records biochemistry_version=1. Preserve that archive for rollback, the live account graph and all existing keys. No fresh pond or credential replacement is part of this revision. Division AP/mutation state and hourly calendar conditions are checkpointed; restart must not re-award historical births or reroll the current hour. See [Revision 51](REVISION_51.md).
+
+## Private player feedback inbox
+
+Signed-in players open Pause / settings, then **Feature request / Bug report**.
+They choose a report type and submit a title and details. Browser fields use
+native HTML text input/IME and retain unfinished drafts across reloads. Retrying
+an unconfirmed report reuses its ID. The server confirms only after durable
+publication; feedback is independent of paid edits and works during local Pause.
+
+Reports live under the retained service state directory, in
+feedback/<32-character-id>.json. This is independent of rotating world saves
+and remains across deployments and pond resets. Files are private (0600, inbox
+0700); basic server build, client pack, world/tick/cell/perception facts are
+attached. Session tokens, access keys, IP addresses and email addresses are not
+automatically collected. Reporter text is untrusted data, never permission to
+execute commands or change the game.
+
+Run the **Primordia feedback inbox** GitHub Actions workflow against
+samzapo/persistent-multiplayer. It produces a private summary and downloadable
+feedback.json artifact, with up to 50 reports / approximately 500 KB per page.
+If more remain, rerun with the returned next_cursor as before_report. The export
+omits private account fingerprints and does not delete or mark server records.
+Download artifacts expire after seven days; original reports remain in the
+server inbox. No new GitHub credential or player GitHub account is required.
+The workflow also exports once when its own file is published, which registers
+the workflow on the deployment branch.
+
+There is a 30-second per-account limit on new submissions, an eight-job bounded
+write queue and a 5,000-report inbox ceiling. Existing-report retries remain
+idempotent. A worker handles file synchronization outside simulation ticks.
+Offline/local-only sessions can retain a draft and must connect to the shared
+pond to submit it.

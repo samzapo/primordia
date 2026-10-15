@@ -53,6 +53,12 @@ var pond_archive := ""
 var introduced_cells := 0
 var lineage_restarts := 0
 var population_retry_at := 0.0
+var feedback_store=preload("res://scripts/network/feedback_store.gd").new()
+var feedback_queue: Array=[]
+var feedback_job: Dictionary={}
+var feedback_thread: Thread
+var feedback_recent: Dictionary={}
+
 
 func _ready() -> void:
 	get_tree().auto_accept_quit = false
@@ -65,6 +71,7 @@ func _ready() -> void:
 		elif arg.begins_with("--bind="): bind_address = arg.trim_prefix("--bind=")
 		elif arg == "--cpu": cpu = true
 		elif arg.begins_with("--shutdown-after="): shutdown_after = float(arg.trim_prefix("--shutdown-after="))
+	feedback_store.directory=store.directory.path_join("feedback")
 	invite = OS.get_environment("PRIMORDIA_INVITE")
 	var key_path:=OS.get_environment("PRIMORDIA_ACCESS_KEYS_FILE")
 	if key_path!="":
@@ -174,6 +181,7 @@ func _process(_dt: float) -> void:
 	if FileAccess.file_exists(store.directory.path_join("stop.request")):
 		DirAccess.remove_absolute(store.directory.path_join("stop.request"));stop();return
 	_poll()
+	_poll_feedback()
 	var now:=Time.get_ticks_usec()
 	if now-last_publication_usec>=100000:
 		last_publication_usec=now;_publish()
@@ -259,6 +267,7 @@ func _poll() -> void:
 			peer.seen=now
 			if message.get("op","")=="hello": _hello(id,message)
 			elif peer.account=="" : socket.close(1008,"Authenticate first")
+			elif message.get("op","")=="feedback":_feedback(peer,message)
 			elif message.get("op","")=="ping": pass
 			elif message.get("op","")=="snapshot_ack":
 				if message.get("serial") is float or message.get("serial") is int:
@@ -273,6 +282,40 @@ func _poll() -> void:
 				if valid: queued.append({"peer":id,"message":message})
 				else: socket.close(1008,"Invalid command")
 
+
+func _feedback(peer: Dictionary,message: Dictionary) -> void:
+	var id=message.get("id","")
+	var recent: Dictionary=feedback_recent.get(peer.account,{})
+	if feedback_queue.size()>=8 or (recent.get("id","")!=id and Time.get_ticks_msec()-int(recent.get("at",-60000))<30000):
+		_send(peer,{"kind":"feedback_result","id":id if id is String else "","ok":false,"message":"Please wait 30 seconds before sending another report. Your draft is kept."});return
+	feedback_recent[peer.account]={"id":id,"at":Time.get_ticks_msec()}
+	var account: Dictionary=accounts[peer.account]
+	var pack: String=str(message.get("client_pack",""))
+	var pack_pattern:=RegEx.new();pack_pattern.compile("^index-[a-f0-9]{24}\\.pck$")
+	if pack_pattern.search(pack)==null:pack=""
+	feedback_queue.append({"peer":peer.socket.get_instance_id(),"report":message.duplicate(true),"author":str(account.get("access_hash",peer.account)),
+		"context":{"server_build":OS.get_environment("PRIMORDIA_BUILD_SHA"),"client_pack":pack,"world_id":world_id,"tick":world.revision,"simulation_time":world.time,"cell":account.selected,"perception":peer.get("perception","exteroception")}})
+
+func _poll_feedback() -> void:
+	if feedback_thread!=null:
+		if feedback_thread.is_alive():return
+		var receipt: Dictionary=feedback_thread.wait_to_finish()
+		feedback_thread=null
+		if peers.has(feedback_job.peer):_send(peers[feedback_job.peer],receipt)
+		feedback_job={}
+	if feedback_queue.is_empty():return
+	feedback_job=feedback_queue.pop_front();feedback_thread=Thread.new()
+	if feedback_thread.start(feedback_store.submit.bind(feedback_job.report,feedback_job.author,feedback_job.context))!=OK:
+		if peers.has(feedback_job.peer):_send(peers[feedback_job.peer],{"kind":"feedback_result","id":feedback_job.report.get("id",""),"ok":false,"message":"Cannot save right now. Your draft is kept."})
+		feedback_thread=null;feedback_job={}
+
+func _finish_feedback() -> void:
+	if feedback_thread!=null:
+		feedback_thread.wait_to_finish();feedback_thread=null
+	feedback_queue.clear()
+
+func _exit_tree() -> void:
+	_finish_feedback()
 
 func _close_sessions(key: String,except_id: int) -> void:
 	for other_id in peers:
@@ -635,6 +678,7 @@ func _write_metrics() -> void:
 func stop(exit_status: int=0) -> void:
 	if not running: return
 	running=false
+	_finish_feedback()
 	if not checkpoint():_fatal(store.last_error);return
 	listener.stop()
 	for peer in peers.values(): peer.socket.close(1001,"World service restarting")

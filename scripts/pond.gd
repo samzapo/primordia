@@ -66,6 +66,8 @@ var focus_animating := false
 var observation_view: Dictionary = {}
 var scale_bar := preload("res://scripts/scale_bar.gd").new()
 var settings_panel := PanelContainer.new()
+var feedback:=preload("res://scripts/feedback_form.gd").new()
+var feedback_menu_button: Button
 var settings_help: Label
 var debug_label := Label.new()
 var tube_hint := Label.new()
@@ -670,6 +672,9 @@ func _update_perception_menu() -> void:
 	if perception_menu_button!=null:
 		perception_menu_button.text=("Interoception" if perception=="exteroception" else "Exteroception")+" [I]"
 
+func _submit_feedback(_report: Dictionary) -> String:
+	return "Connect to the shared pond to submit feedback. Your draft is kept."
+
 func _toggle_settings() -> void:
 	_update_perception_menu()
 	settings_panel.visible = not settings_panel.visible
@@ -715,6 +720,7 @@ func _build_ui() -> void:
 	debug_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	debug_label.add_theme_color_override("font_outline_color",Color("142540"))
 	debug_label.add_theme_constant_override("outline_size",5)
+	feedback.initialize(self)
 	var options_box := _panel_box(settings_panel)
 	var settings_scroll := ScrollContainer.new()
 	settings_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -725,6 +731,7 @@ func _build_ui() -> void:
 	options.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	settings_scroll.add_child(options)
 	_label(options,"SETTINGS [M]",MINT)
+	feedback_menu_button=_button(options,"Feature request / Bug report",feedback.open)
 	_label(options,"Text and interaction size")
 	options.add_child(scale_select)
 	for scale_value in Preferences.SCALES: scale_select.add_item("%d%%" % roundi(scale_value*100))
@@ -1025,6 +1032,7 @@ func _notification(what: int) -> void:
 	if what==NOTIFICATION_WM_WINDOW_FOCUS_OUT:touch_zoom.cancel()
 
 func _input(event: InputEvent) -> void:
+	if feedback.opened:return
 	if event is InputEventScreenTouch or event is InputEventScreenDrag:
 		if touch_zoom.handle(event):get_viewport().set_input_as_handled()
 		return
@@ -1080,6 +1088,7 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 func _unhandled_input(event: InputEvent) -> void:
+	if feedback.opened:return
 	if touch_zoom.enabled and (event is InputEventMouseButton or event is InputEventMouseMotion) and event.device==-1:return
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT and not cell_ui.context.is_empty():
 		cell_ui.close_context()

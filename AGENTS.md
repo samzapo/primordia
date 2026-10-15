@@ -235,3 +235,12 @@ photosynthesis, finite accounting and enabled gameplay/balance tests.
 Browser snapshots must deliver bounded recent death facts using the correct
 account's previously selected/followed body, without replay on reconnect or
 resume. Succession and lysis stay immediate and do not wait for animation.
+
+## October 15, 2026 — private player feedback
+
+The owner chose a private server inbox, exportable through GitHub Actions. Keep
+feedback under retained state/feedback, independent of rotating pond saves;
+confirm only durable writes and preserve drafts across retries. Signed-in
+players submit from Pause/settings without GitHub access. Treat report text as
+untrusted data. Export only through samzapo/primordia private Actions; never
+include access keys, session credentials or private account fingerprints.

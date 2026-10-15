@@ -275,6 +275,7 @@ func _poll_network() -> void:
 			polled+=1
 			var message:=Protocol.unpack(socket.get_packet())
 			match message.get("kind",""):
+				"feedback_result": feedback.result(message)
 				"welcome": _welcome(message)
 				"snapshot": _snapshot(message)
 				"snapshot_error":
@@ -408,6 +409,14 @@ func _copy_cell(incoming):
 		cell.chemistry.owner=weakref(cell)
 		cell.chemistry.render_origins=origins
 	return cell
+
+func _submit_feedback(report: Dictionary) -> String:
+	if not connected:return "Reconnect before submitting. Your draft is kept."
+	var message: Dictionary=report.duplicate();message.op="feedback"
+	if OS.has_feature("web"):
+		message.client_pack=str(JavaScriptBridge.eval("typeof GODOT_CONFIG==='object' ? GODOT_CONFIG.mainPack || '' : ''")).get_file().left(100)
+	_send(message)
+	return ""
 
 func _queue_command(action: String,args: Dictionary) -> void:
 	if user_paused:_message("Resume the view before editing this cell.");return

@@ -1,0 +1,68 @@
+name: Primordia feedback inbox
+"on":
+  push:
+    branches: [samzapo/persistent-multiplayer]
+    paths: [.github/workflows/feedback-inbox.yml]
+  workflow_dispatch:
+    inputs:
+      before_report:
+        description: "Optional next_cursor from a previous export"
+        required: false
+        default: ""
+permissions:
+  contents: read
+concurrency:
+  group: primordia-feedback-export
+  cancel-in-progress: false
+jobs:
+  export:
+    if: github.repository == 'samzapo/primordia'
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 5
+    steps:
+      - name: Export a private feedback page
+        id: export
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE_REPORT: ${{ inputs.before_report }}
+        run: |
+          test "$RUNNER_NAME" = samzapo-desktop
+          task_dir="$RUNNER_TEMP/samzapo--primordia-feedback--$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -m 700 "$task_dir"
+          export PRIMORDIA_FEEDBACK_EXPORT_DIR="$task_dir"
+          python3 - <<'PYCODE'
+          import html, json, os, pathlib, subprocess, urllib.request
+          task = pathlib.Path(os.environ["PRIMORDIA_FEEDBACK_EXPORT_DIR"])
+          url = "https://api.github.com/repos/samzapo/primordia/contents/tools/export_feedback.py?ref=" + os.environ["GITHUB_SHA"]
+          request = urllib.request.Request(url, headers={"Authorization": "Bearer " + os.environ["GH_TOKEN"], "Accept": "application/vnd.github.raw+json"})
+          with urllib.request.urlopen(request, timeout=20) as response:
+              source = response.read(65536)
+          script = task / "export_feedback.py"
+          script.write_bytes(source)
+          inbox = pathlib.Path.home() / ".local/share/primordia-deploy/state/feedback"
+          output = task / "feedback.json"
+          subprocess.run(["python3", str(script), "--inbox", str(inbox), "--output", str(output), "--before-report", os.environ["BEFORE_REPORT"]], check=True)
+          result = json.loads(output.read_text())
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write("# Private Primordia feedback\n\n")
+              summary.write(f'Exported {result["exported"]} of {result["total_reports"]} reports. The inbox remains unchanged.\n\n')
+              if result["more"]:
+                  summary.write("For the next page, run with before_report: " + result["next_cursor"] + "\n\n")
+              for report in result["reports"]:
+                  summary.write("<pre>" + html.escape(json.dumps(report, indent=2, ensure_ascii=False)) + "</pre>\n")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as outputs:
+              outputs.write("directory=" + str(task) + "\n")
+          PYCODE
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: primordia-feedback-${{ github.run_id }}
+          path: ${{ steps.export.outputs.directory }}/feedback.json
+          retention-days: 7
+          if-no-files-found: error
+      - name: Remove task-owned temporary export
+        if: always()
+        shell: bash
+        run: |
+          task_dir="$RUNNER_TEMP/samzapo--primordia-feedback--$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          rm -rf -- "$task_dir"
