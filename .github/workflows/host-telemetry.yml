@@ -263,6 +263,15 @@ jobs:
                       result=subprocess.run(["python3",str(candidate/"tools/frame_report.py"),str(trace)],capture_output=True,text=True,check=True,timeout=15)
                       measured=json.loads(result.stdout)
                       report["isolated_frame_probe"]["summary"]={key:measured[key] for key in ["fps","wall_p95_ms","simulation_seconds","wall_seconds","phase_mean_ms","render_boundary_mean_ms","engine_render_gpu_mean_ms"]}
+                  frozen=subprocess.run(["xvfb-run","-a","-s","-screen 0 1440x900x24 -nolisten tcp",str(runtime),"--path",str(candidate),"--rendering-method","mobile","--rendering-driver","vulkan","--gpu-index","0","--audio-driver","Dummy","--resolution","1440x900","--disable-vsync","--script","tests/frame_profile.gd","--","--fixture=normal","--fps-limit=60","--seconds=8","--mode=frozen","--particle-backend=resident","--output="+str(trace)],capture_output=True,text=True,timeout=100)
+                  report["frozen_frame_probe"]={"returncode":frozen.returncode,"output":(frozen.stdout+frozen.stderr)[-1500:]}
+                  if trace.exists():
+                      result=subprocess.run(["python3",str(candidate/"tools/frame_report.py"),str(trace)],capture_output=True,text=True,check=True,timeout=15)
+                      measured=json.loads(result.stdout)
+                      report["frozen_frame_probe"]["summary"]={key:measured[key] for key in ["fps","wall_p95_ms","phase_mean_ms","render_boundary_mean_ms","engine_render_gpu_mean_ms"]}
+                  fixture_env=os.environ.copy();fixture_env["PRIMORDIA_INVITE"]="bounded-infrastructure-fixture"
+                  authority=subprocess.run(["xvfb-run","-a","-s","-screen 0 1280x720x24 -nolisten tcp",str(runtime),"--path",str(candidate),"--rendering-method","mobile","--rendering-driver","vulkan","--gpu-index","0","--audio-driver","Dummy","--script","tests/network_live.gd","--","--gpu","--full-world","--realtime"],env=fixture_env,capture_output=True,text=True,timeout=100)
+                  report["authority_probe"]={"returncode":authority.returncode,"output":(authority.stdout+authority.stderr)[-4000:]}
               finally:
                   if active:subprocess.run(["systemctl","--user","start","primordia.service"],check=True,timeout=70)
                   report["isolated_frame_probe_restored_service"]=command(["systemctl","--user","is-active","primordia.service"])
