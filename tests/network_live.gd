@@ -48,6 +48,9 @@ func find_message(index: int,kind: String,sequence: int=-1) -> Dictionary:
 func run() -> void:
 	if "--slow-observer" in OS.get_cmdline_user_args(): Engine.physics_ticks_per_second=2
 	host=Host.new();host.cpu=not ("--gpu" in OS.get_cmdline_user_args())
+	# Match run_service.py: this window submits compute, while client camera
+	# rectangles below still request full widest-view simulation fidelity.
+	if not host.cpu:root.size=Vector2i(64,64)
 	host.port=18000+OS.get_process_id()%20000
 	host.store.directory=ProjectSettings.globalize_path("res://build/network-live-"+str(OS.get_process_id()))
 	var full_world:= "--full-world" in OS.get_cmdline_user_args()
@@ -186,6 +189,9 @@ func run() -> void:
 		check(ratio>=.98 and ratio<=1.02,"Shared authority advances at real time with mixed wide cameras")
 		check(p95<=16.67,"Authority p95 tick fits the 60 Hz simulation budget")
 		check(host.world.cells.all(func(cell):return cell.chemistry.particle_count()<=24),"Aged interiors stay bounded under sustained finite digestion")
+		host._write_metrics()
+		var phase_report=JSON.parse_string(FileAccess.get_file_as_string(host.store.directory.path_join("health.json")))
+		print("AUTHORITY_PHASES ",JSON.stringify(phase_report.get("tick_phase_mean_ms",{})))
 		print("REALTIME_AUTHORITY ",JSON.stringify({"simulation_wall_ratio":ratio,"tick_p95_ms":p95,"living_cells":host.world.cells.filter(func(cell):return not cell.dead).size(),"interior_packets":host.world.cells.reduce(func(total,cell):return total+cell.chemistry.particle_count(),0),"gpu":RenderingServer.get_video_adapter_name()}))
 	for socket in sockets:socket.close(-1)
 	check(await until(func():return host.world.camera_views.is_empty()),"disconnect removes every detailed camera")

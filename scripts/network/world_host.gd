@@ -28,6 +28,8 @@ var pending_frame: Dictionary = {}
 var started_usec := 0
 var tick_samples: Array = []
 var tick_phase_peak_usec: Dictionary = {}
+var tick_phase_total_usec: Dictionary={}
+var tick_phase_count:=0
 var snapshots_sent := 0
 var chemistry_migration: Dictionary={}
 var particle_resolution: Dictionary = {}
@@ -185,7 +187,10 @@ func _physics_process(dt: float) -> void:
 		introduced_cells+=Population.replenish(world)
 		population_retry_at=world.time+.5 if Population.living(world).size()<Population.MIN_LIVING else world.time
 	world.events = world.events.slice(maxi(0,world.events.size()-128))
-	for phase in world.profile_usec: tick_phase_peak_usec[phase]=maxi(tick_phase_peak_usec.get(phase,0),int(world.profile_usec[phase]))
+	tick_phase_count+=1
+	for phase in world.profile_usec:
+		tick_phase_peak_usec[phase]=maxi(tick_phase_peak_usec.get(phase,0),int(world.profile_usec[phase]))
+		tick_phase_total_usec[phase]=tick_phase_total_usec.get(phase,0)+int(world.profile_usec[phase])
 	tick_samples.append((Time.get_ticks_usec()-start)/1000.0)
 	if tick_samples.size()>600: tick_samples.pop_front()
 	if (Time.get_ticks_usec()-last_checkpoint_usec)/1000000.0>=save_interval: checkpoint()
@@ -563,7 +568,10 @@ func _write_metrics() -> void:
 	metrics["snapshots_awaiting_ack"]=peers.values().filter(func(peer):return peer.get("awaiting_snapshot",0)>0).size()
 	metrics["tick_phase_peak_ms"]={}
 	for phase in tick_phase_peak_usec: metrics.tick_phase_peak_ms[phase]=tick_phase_peak_usec[phase]/1000.0
-	tick_phase_peak_usec.clear()
+	metrics["tick_phase_mean_ms"]={}
+	for phase in tick_phase_total_usec:metrics.tick_phase_mean_ms[phase]=tick_phase_total_usec[phase]/maxf(1,tick_phase_count)/1000.0
+	metrics["tick_phase_samples"]=tick_phase_count
+	tick_phase_peak_usec.clear();tick_phase_total_usec.clear();tick_phase_count=0
 	if world.resident!=null and world.resident.streaming!=null:
 		metrics["stream_queue"]=world.resident.streaming.queue_depth
 		metrics["eviction_deferred"]=world.resident.streaming.eviction_deferred

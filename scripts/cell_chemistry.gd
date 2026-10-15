@@ -104,7 +104,7 @@ func refresh() -> void:
 		if vacuoles.any(func(v):return v.id==packet.compartment):continue
 		vacuoles.append({"id":packet.compartment,"p":packet.p,"radius":3.8,"acid":1.0,"material":0.0,"age":0.0})
 func advance(cell, dt: float, _external_osmolarity: float=.15) -> void:
-	if dt<=0 or cell.dead:return
+	if dt<=0 or cell.dead or amount("food")+amount("waste")<=.0000001:return
 	if accelerator!=null:accelerator.advance(dt,.15);return
 	frame_dt=dt;tick+=1
 	var budget: float=DIGESTION_RATE*cell.growth_scale()*dt
@@ -139,8 +139,12 @@ static func constrain(cell, at: Vector2) -> Vector2:
 	if delta.length()<cell.radius*.22:at=center+delta.normalized()*cell.radius*.22 if delta.length()>.001 else center+Vector2.RIGHT*cell.radius*.22
 	return at.limit_length(maxf(1,limit))
 func excrete(sim, cell, dt: float) -> void:
+	if amount("waste")<=.0000001:return
 	var outlet: Vector2=cell.local_point(cell.excretion_angle())*.88
 	if accelerator!=null:
+		# The compact receipt already says whether any waste-only vacuole has
+		# reached the outlet. Avoid an empty render-thread transaction.
+		if not vacuoles.any(func(v):return v.acid>0 and v.p.distance_to(outlet)<=maxf(2,cell.radius*.08)):return
 		accelerator.command(11,dt*4*cell.growth_scale(),outlet,maxf(2,cell.radius*.08))
 		for packet in accelerator._unpack(accelerator.transfer):_expel(sim,cell,packet,packet.amount)
 		return

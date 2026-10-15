@@ -81,9 +81,14 @@ These runs contain 16–17 cells. The separate mixed-client GPU authority fixtur
 with finite loaded food vacuoles, measured 1.001× simulation and 7.88 ms p95 ticks
 with 17 living cells. Workstation evidence does not establish phone frame rate.
 
-CD checks hardware GPU ownership, actual rendered frame pacing (59 FPS minimum,
-20.5 ms p95 maximum with modest display-jitter allowance), simulation/wall
+Desktop tools/test_frame_budget.sh checks actual rendered frame pacing (59 FPS
+minimum, 20.5 ms p95 maximum with modest display-jitter allowance) using a real
+hardware desktop display. CD checks hardware GPU ownership, simulation/wall
 0.98–1.02, mixed wide cameras, bounded interior population and saved restart.
+The authority fixture matches the deployed 64×64 compute-submission surface; its
+client camera rectangles still cover the full widest view. The target Xvfb
+full-window diagnostic spent about 67 ms at its render boundary even with
+biology frozen, so virtual-display native drawing is not the mobile frame gate.
 Live service health also rejects a simulation below 0.98× or a p95 tick over
 16.67 ms. Mere tick advancement no longer qualifies a slow server as healthy.
 

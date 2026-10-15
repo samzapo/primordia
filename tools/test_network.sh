@@ -33,12 +33,6 @@ if [[ "${1:-}" == gpu ]]; then
   xvfb-run -a -s '-screen 0 1440x900x24 -nolisten tcp' "$godot_bin" --path "$project_dir" --rendering-method mobile --rendering-driver vulkan --gpu-index 0 --script tests/food_render_gpu.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"
   ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
   grep -Eq 'FOOD RENDER GPU: [0-9]+ assertions, 0 failures' "$report_file"
-  for perception in exteroception interoception; do
-    frame_trace="$project_dir/build/frame-budget-$perception.json"
-    xvfb-run -a -s '-screen 0 1440x900x24 -nolisten tcp' "$godot_bin" --path "$project_dir" --rendering-method mobile --rendering-driver vulkan --gpu-index 0 --audio-driver Dummy --resolution 1440x900 --script tests/frame_profile.gd -- --fixture=normal --fps-limit=60 --seconds=12 --particle-backend=resident --perception="$perception" --output="$frame_trace" 2>&1 | tee "$report_file"
-    ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
-    python3 "$project_dir/tools/check_frame_budget.py" "$frame_trace"
-  done
   for scope in fixture full-world slow-observer recovery; do
     extra=()
     [[ "$scope" != full-world ]] || extra=(--full-world --realtime)

@@ -24,6 +24,13 @@ func run() -> void:
 	check(cell.chemistry.accelerator.exports==0,"Fine digestion uses compact receipts without full exports")
 	var copy=preload("res://scripts/network/state_codec.gd").new().restore(preload("res://scripts/network/state_codec.gd").new().capture(cell))
 	check(absf(copy.organic_mass()-matter)<.000001 and copy.energy==cell.energy,"Detached checkpoint preserves resident resources")
+	var sim=preload("res://scripts/simulation.gd").new(41,0,false);sim.cells=[cell];sim.player=cell;sim.particles=[]
+	for i in 120:
+		cell.chemistry.advance(cell,.1);cell.chemistry.excrete(sim,cell,.1)
+	var released:=0.0
+	for packet in sim.particles:released+=packet.amount
+	check(cell.chemistry.particle_count()==0 and released>0 and sim.particles.all(func(packet):return packet.kind==2),"Resident food finishes as waste and exits through the cytoproct")
+	check(absf(cell.organic_mass()+released-matter)<.000001,"Resident expulsion transfers every represented material unit exactly once")
 	for i in 100:cell.chemistry.emit("food",.1,Vector2.from_angle(i)*30)
 	check(cell.chemistry.particle_count()<=24,"Resident carrier count remains bounded under dense intake")
 	check(cell.chemistry.particles.is_empty(),"Intake never creates a CPU mirror")
