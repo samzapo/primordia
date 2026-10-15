@@ -40,7 +40,10 @@ GPU; hidden interiors use the existing coarse clock.
 
 Press **I** to switch interoception/exteroception and **M** for settings and the
 control guide. Phone taps inspect food/waste; two fingers move, twist and zoom
-the camera. Pause freezes only your multiplayer view.
+the camera. Pause freezes only your multiplayer view. The dedicated persistent
+server advances actual time at 30 fixed steps per second; clients interpolate
+updates while rendering at their own frame rate. The desktop render target is
+60 FPS. Opening an editor or settings keeps the shared world running.
 
 Gameplay, objective and balance tests remain on the owner's hold. Conservation,
 paid actions, physics, UI, persistence, networking and performance checks remain
@@ -61,7 +64,7 @@ On a phone, use two fingers to pan, twist and zoom with fixed world anchors. **F
 - **Click the nucleus:** choose a blueprint and accept an optional challenge. Hover it for the next objective, crisis progress and forecasts; its family tree also offers known blueprints. **Click the offspring bud:** fund/reclaim reserves, release a juvenile, store a dormant successor or follow a living relative.
 - **In edit mode, drag on bare cell surface:** place a microtubule between membrane, interior or existing-link points. Hover within 16 screen pixels of an unobstructed tube (scaled with text size) and scroll to adjust tension; right-click it to remove it. Factories and organ controls take precedence. **Right-click** cancels a held organ/move or closes local choices.
 - **Wheel:** zoom around the cell in locked follow mode, or around the cursor in free view, from the 80% widest view to 12×. It never resizes organs. **Middle-drag** pans while editing or in free view. **Space** toggles position-follow without pausing or rotating the world. Leaving edit restores the previous observation view.
-- **Hover particles:** a temporary local lens magnifies the surrounding scene and shows the particle's name and role. The sharp enlarged glyph follows its actual orientation. Moving away dismisses the effect; simulation continues. Cell interiors and a UI-scaled 24-pixel margin around every living membrane suppress the lens, including already tracked particles.
+- **Hover particles:** a temporary local lens magnifies the scene and shows the particle’s name and role. In interoception it identifies food and waste carriers inside the focused cell. Phone taps open the same inspection. Moving away dismisses the effect; simulation continues.
 - **Keyboard editing:** **[ / ]** cycles cell targets, **Enter** opens/activates a choice, and arrow keys navigate the local choices or position a held organ around the membrane. Microtubules retain their direct mouse gestures.
 - **M:** settings with Quit, fullscreen, bloom, and persistent **85–175% text/interaction size**. **F11:** fullscreen. **I:** interoception/exteroception. **S:** sensing ranges. **F3:** optional backend/FPS/timing diagnostics, without a zoom percentage. **H:** next habitat. **R:** new expedition, retaining family history and discovered blueprints. Settings also opens **Family history**, including after defeat.
 

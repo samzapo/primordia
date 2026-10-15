@@ -82,12 +82,30 @@ Current equivalent X11 hardware runs:
 
 | View | FPS | p95 frame ms | Simulation/frame ms | Simulation/wall |
 | --- | ---: | ---: | ---: | ---: |
-| Exteroception | 59.96 | 18.34 | 5.56 | 0.9994 |
-| Interoception | 59.97 | 19.54 | 4.22 | 0.9996 |
+| Exteroception | 59.97 | 18.34 | 5.37 | 0.9995 |
+| Interoception | 59.98 | 19.83 | 4.36 | 0.9996 |
 
-These runs contain 16–17 cells. The separate mixed-client GPU authority fixture,
-with finite loaded food vacuoles, measured 1.001× simulation and 7.88 ms p95 ticks
-with 17 living cells. Workstation evidence does not establish phone frame rate.
+These runs contain 16–17 cells. They use the same native desktop render setup
+as the recorded first-cell baseline. Workstation evidence does not establish
+phone frame rate.
+
+The deployed Threadripper2990WX/RTX3090 passed both full-width mixed-client
+fixtures at the documented 30 Hz authority cadence:
+
+| Authority workload | Living cells | Simulation/wall | p95 tick ms |
+| --- | ---: | ---: | ---: |
+| Fresh pond with finite loaded interiors | 17 | 0.9997 | 28.06 |
+| Migrated copy of the actual saved pond | 16 | 0.9996 | 25.93 |
+
+The live migration retained the existing pond and account, archived its original
+epoch-38 checkpoint, and converted 39,673 old molecular packets in fifteen
+bodies into thirty finite carriers. Subsequent live health samples retained
+five keys and one account, with fifteen living cells, 0.989–0.991× simulation
+speed and 19.65–20.33 ms p95 ticks. An independent service restart resumed the
+same pond at a later tick and epoch; the key-registry checksum was unchanged.
+[Deployment and restart verification](https://github.com/samzapo/primordia/actions/runs/38672966639)
+records the target checks. Live carrier counts change naturally as food is
+consumed and waste is expelled.
 
 Desktop tools/test_frame_budget.sh checks actual rendered frame pacing (59 FPS
 minimum, 20.5 ms p95 maximum with modest display-jitter allowance) using a real

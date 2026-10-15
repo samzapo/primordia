@@ -248,29 +248,3 @@ jobs:
           PY
           cd "$RUNNER_TEMP"
           rmdir "$task_dir"
-
-      - name: Preview retained populated checkpoint density without changing the world
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          test "$RUNNER_NAME" = "samzapo-desktop"
-          python3 - <<'PYCODE'
-          import base64, json, os, pathlib, subprocess, tempfile
-          from urllib.request import Request, urlopen
-          root = pathlib.Path.home() / ".local/share/primordia-deploy"
-          checkpoint = root / "state/before-particle-resolution-v2.pworld"
-          if not checkpoint.is_file():
-              print("No retained v2 input is available for read-only density preview")
-              raise SystemExit(0)
-          runtime = root / "runtime/Godot_v4.7.2-stable_linux.x86_64"
-          if not runtime.is_file():
-              runtime = next((root / "runtime").glob("**/Godot_v4.7.2-stable_linux.x86_64"))
-          request = Request("https://api.github.com/repos/samzapo/primordia/contents/tools/density_preview.gd?ref=" + os.environ["GITHUB_SHA"], headers={"Authorization": "Bearer " + os.environ["GH_TOKEN"], "Accept": "application/vnd.github+json"})
-          with urlopen(request, timeout=10) as response:
-              source = base64.b64decode(json.load(response)["content"])
-          with tempfile.TemporaryDirectory(prefix="samzapo--density-preview--", dir=os.environ["RUNNER_TEMP"]) as directory:
-              script = pathlib.Path(directory) / "preview.gd"
-              script.write_bytes(source)
-              subprocess.run([str(runtime), "--headless", "--path", str(root / "current"), "--script", str(script), "--", "--checkpoint=" + str(checkpoint)], check=True, timeout=60)
-          PYCODE
