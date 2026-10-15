@@ -143,6 +143,16 @@ jobs:
           # Inspect checksummed saved selection without restoring a world, joining,
           # rotating credentials, or writing the live state directory.
           deployment = pathlib.Path.home() / ".local/share/primordia-deploy"
+          report["candidate_frame_profiles"] = []
+          import statistics
+          profiles = sorted((deployment / "releases").glob("*/build/frame-budget-*.json"), key=lambda path:path.stat().st_mtime, reverse=True)[:3]
+          for profile in profiles:
+              if profile.stat().st_size > 32*1024*1024: continue
+              trace=json.loads(profile.read_text());rows=trace.get("rows",[])[1:]
+              if not rows: continue
+              wall=sum(row["wall_ms"] for row in rows)
+              phases=sorted({key for row in rows for key in row["phases_ms"]})
+              report["candidate_frame_profiles"].append({"release":profile.parent.parent.name,"scope":profile.name,"fps":1000*len(rows)/wall,"sim_wall":sum(row["sim_dt"] for row in rows)/(wall/1000),"phase_mean_ms":{key:statistics.mean(row["phases_ms"].get(key,0) for row in rows) for key in phases},"render_boundary_ms":statistics.mean(row["render_boundary_ms"] for row in rows),"gpu_ms":statistics.mean(row["render_gpu_ms"] for row in rows),"cpu_ms":statistics.mean(row["render_cpu_ms"] for row in rows),"gpu":trace.get("gpu"),"display":trace.get("display")})
           current = deployment / "current"
           if current.is_dir():
               runtime = deployment / "runtime/Godot_v4.7.2-stable_linux.x86_64"
