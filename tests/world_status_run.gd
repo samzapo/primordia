@@ -22,5 +22,9 @@ func _initialize() -> void:
 	fixture.graph.objects[5].fields.points=points
 	result=inspector.selection(fixture)
 	assert(result.membranes[0].folded and result.membranes[0].points.size()==28,"A folded saved membrane retains decisive bounded reproduction geometry")
-	print("WORLD SELECTION: 6 assertions, 0 failures")
+	fixture.graph.objects[0].fields.particles={"$array":[{"alive":true,"kind":0,"amount":4.0,"capacity":2.0,"p":Vector2(25,35)},{"alive":false,"kind":0,"amount":100.0}]}
+	result=inspector.selection(fixture)
+	assert(result.nutrition.external["0"].amount==4 and result.nutrition.external["0"].fuel==15 and result.nutrition.bodies[0].nearby_fueled_food==2,"Nutrition telemetry separates real fueled food from spent material and dead packets")
+	assert(not JSON.stringify(result).contains("fixture-private-key"),"Nutrition diagnostics retain account privacy")
+	print("WORLD SELECTION: 8 assertions, 0 failures")
 	quit(0)

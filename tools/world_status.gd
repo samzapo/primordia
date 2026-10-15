@@ -38,7 +38,7 @@ static func selection(saved: Dictionary) -> Dictionary:
 	for reference in cells.slice(0,8):
 		var body:=fields(reference,objects)
 		if not body.get("dead",true):details.append(chemistry_summary(body,objects))
-	return {"living_cytoplasm_packets":living_counts.reduce(func(total,value):return total+value,0),"largest_living_cytoplasm_packets":living_counts.max() if not living_counts.is_empty() else 0,"status":"ok","world_id":saved.get("world_id",""),"epoch":saved.get("epoch",0),"tick":saved.get("tick",0),"accounts":records,"living_chemistry":details,"membranes":cells.slice(0,64).map(func(reference):return membrane_summary(fields(reference,objects),objects))}
+	return {"living_cytoplasm_packets":living_counts.reduce(func(total,value):return total+value,0),"largest_living_cytoplasm_packets":living_counts.max() if not living_counts.is_empty() else 0,"status":"ok","world_id":saved.get("world_id",""),"epoch":saved.get("epoch",0),"tick":saved.get("tick",0),"accounts":records,"living_chemistry":details,"nutrition":nutrition_summary(world,objects),"membranes":cells.slice(0,64).map(func(reference):return membrane_summary(fields(reference,objects),objects))}
 
 static func fields(reference,objects: Array) -> Dictionary:
 	if not reference is Dictionary:return {}
@@ -72,3 +72,38 @@ static func membrane_summary(body: Dictionary,objects: Array) -> Dictionary:
 	var result: Dictionary={"id":body.get("id",-1),"radius":body.get("radius",0),"nodes":points.size(),"min_radius":smallest if points.size()>0 else 0,"max_radius":largest,"turn":turn,"max_step":max_step,"folded":folded}
 	if folded:result["points"]=Array(points).map(func(at):return [at.x,at.y])
 	return result
+
+
+static func nutrition_summary(world: Dictionary,objects: Array) -> Dictionary:
+	var packets: Array=world.get("particles",{}).get("$array",[])
+	var external: Dictionary={};var food: Array=[]
+	for packet in packets:
+		if not packet.get("alive",false):continue
+		var kind: String=str(packet.get("kind",-1))
+		if not external.has(kind):external[kind]={"packets":0,"amount":0.0,"fuel":0.0}
+		external[kind].packets+=1;external[kind].amount+=float(packet.get("amount",0))
+		if kind=="0":
+			external[kind].fuel+=clampf(float(packet.get("capacity",packet.get("amount",0))),0,float(packet.get("amount",0)))*7.5
+			food.append(packet)
+	var bodies: Array=[]
+	for ref in world.get("cells",{}).get("$array",[]).slice(0,64):
+		var body:=fields(ref,objects)
+		if body.get("dead",true):continue
+		var stock: Dictionary={};var fuel:=0.0
+		for packet in fields(body.get("chemistry"),objects).get("particles",{}).get("$array",[]):
+			if not packet.get("alive",true):continue
+			var key: String=packet.get("species","");stock[key]=float(stock.get(key,0))+float(packet.get("amount",0))
+			if key=="food":fuel+=float(packet.get("fuel",0))
+		var near:=0.0;var at: Vector2=body.get("position",Vector2.ZERO)
+		for packet in food:
+			var delta: Vector2=packet.get("p",Vector2.ZERO)-at
+			delta=Vector2(wrapf(delta.x,-2048,2048),wrapf(delta.y,-1280,1280))
+			if delta.length()<=300:near+=minf(float(packet.get("amount",0)),float(packet.get("capacity",packet.get("amount",0))))
+		bodies.append({"id":body.get("id",-1),"age":body.get("age",0),"health":body.get("health",0),"ATP":body.get("energy",0),"biomass":body.get("biomass",0),"stocks":stock,"food_fuel":fuel,"nearby_fueled_food":near})
+	var causes: Dictionary={};var lifetimes: Array=[]
+	for ref in world.get("family_ledgers",{}).get("$array",[]).slice(-64):
+		for record in fields(ref,objects).get("records",{}).get("$array",[]):
+			if record.get("state","")!="dead":continue
+			var cause: String=record.get("cause","");causes[cause]=int(causes.get(cause,0))+1
+			lifetimes.append(float(record.get("ended",0))-float(record.get("born",0)))
+	return {"external":external,"bodies":bodies,"recent_lineage_death_causes":causes,"mean_recorded_lifetime":lifetimes.reduce(func(total,value):return total+value,0.0)/maxi(1,lifetimes.size()),"sampled_deaths":lifetimes.size(),"lost_organic_material":world.get("respiration_loss",0)}
