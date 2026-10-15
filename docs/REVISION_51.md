@@ -103,3 +103,14 @@ Decorative AP parcels are capped at sixteen representative marks; numerical AP r
 Membrane/cytoproct release uses bounded elapsed-rate credits and up to 1.8 units per finite parcel, matching the existing external resolution. Sub-0.3 gas remainders stay inside; waste vacuoles release their complete remaining stock when capacity permits. Capacity credits carry no chemical material and survive checkpoints/ownership changes. There is no exterior merge shortcut or pose teleport to meet the density target.
 
 Mobile settings use device-density-scaled text and touch targets, start below the Pause/zoom row and temporarily hide duplicate utility controls. Browser Resume explicitly closes settings before applying its buffered snapshot. The view's presentation clock freezes with local Pause. Mobile instructions describe taps and the held-icon cancel action; desktop keyboard/mouse hints remain available.
+
+
+## Membrane contour artifact repair
+A reversed neighboring pair in a transient contour previously made the positive
+angle wrap take almost a complete revolution. Its four spline samples formed a
+box-shaped inner membrane lip. Native and browser outline generation now validate
+a single ordered revolution; malformed input uses the physics solver's bounded
+polar sectors for presentation while preserving radii. Healthy outlines retain
+their existing geometry. This does not modify saved physical nodes, resources,
+collision rules or simulation timing. Raster regressions cover the ordinary
+contour and reversed pairs on both sides of the signed-angle seam.

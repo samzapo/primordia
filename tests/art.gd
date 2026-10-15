@@ -42,6 +42,25 @@ static func run(check: Callable) -> void:
 		for i in indices: finite = finite and i >= 0 and i < vertices.size()
 		check.call(finite and indices.size()%3 == 0,"Membrane shading mesh stays finite and indexed under compression and growth")
 		check.call(matches,"Shaded boundary exactly matches the deformed membrane, rather than a circle proxy")
+	# Reversed neighbors used to take a nearly full revolution in four samples,
+	# drawing a second square lip inside the true cell body.
+	for swapped in [3,14]:
+		var folded=preload("res://scripts/membrane.gd").new(47)
+		var point: Vector2=folded.points[swapped]
+		folded.points[swapped]=folded.points[swapped+1];folded.points[swapped+1]=point
+		var original: PackedVector2Array=folded.points.duplicate()
+		folded.native_outline=false
+		var curve: PackedVector2Array=folded.outline()
+		var turn:=0.0;var max_step:=0.0
+		for i in curve.size():
+			var step:=fposmod(curve[(i+1)%curve.size()].angle()-curve[i].angle(),TAU)
+			turn+=step;max_step=maxf(max_step,step)
+		check.call(absf(turn-TAU)<.001 and max_step<.2 and folded.points==original,"Malformed neighbors render one bounded contour without changing physical nodes")
+		if folded.kernels!=null:
+			var fast: PackedVector2Array=folded.kernels.membrane_outline(original)
+			var error:=0.0
+			for i in curve.size():error=maxf(error,fast[i].distance_to(curve[i]))
+			check.call(error<.0001,"Native and reference reject the same full-revolution membrane artifact")
 	var Flow = preload("res://scripts/flow_view.gd")
 	var camera := Vector2(4030,2510)
 	for half in [Vector2(632,395),Vector2(1264,395),Vector2(4000,2500)]:

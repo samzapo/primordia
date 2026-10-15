@@ -38,6 +38,13 @@ if [[ "${1:-}" == gpu ]]; then
   xvfb-run -a -s '-screen 0 1280x720x24 -nolisten tcp' "$godot_bin" --path "$project_dir" --rendering-method gl_compatibility --rendering-driver opengl3 --script tests/vacuole_compatibility_gpu.gd 2>&1 | tee "$report_file"
   ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
   grep -Eq 'VACUOLE COMPATIBILITY GPU: [0-9]+ assertions, 0 failures' "$report_file"
+  for renderer in mobile gl_compatibility; do
+    driver=vulkan
+    [[ "$renderer" != gl_compatibility ]] || driver=opengl3
+    xvfb-run -a -s '-screen 0 1280x720x24 -nolisten tcp' "$godot_bin" --path "$project_dir" --rendering-method "$renderer" --rendering-driver "$driver" --script tests/membrane_render_gpu.gd 2>&1 | tee "$report_file"
+    ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
+    grep -Eq 'MEMBRANE RENDER GPU: [0-9]+ assertions, 0 failures' "$report_file"
+  done
   for scope in fixture full-world slow-observer recovery; do
     extra=()
     [[ "$scope" != full-world ]] || extra=(--full-world --realtime)

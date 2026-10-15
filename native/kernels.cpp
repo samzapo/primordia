@@ -2172,11 +2172,28 @@ public:
     const int n=points.size();
     if (n<3) return curve;
     curve.resize(n*4); Vector2 *out=curve.ptrw();
+    std::vector<double> angles(n);
+    for (int i=0;i<n;++i) angles[i]=points[i].angle();
+    double turn=0; bool ordered=true;
+    for (int i=0;i<n;++i) {
+      double step=wrap(angles[(i+1)%n]-angles[i],TAU);
+      turn+=step;
+      if (step<.000001 || step>PI) ordered=false;
+    }
+    if (!ordered || std::abs(turn-TAU)>=.001) {
+      // Match the reference's presentation-only polar-sector guard. A reversed
+      // neighbor must never be interpolated as a four-corner full revolution.
+      const double sector=TAU/n;
+      for (int i=0;i<n;++i) {
+        double nominal=sector*i;
+        angles[i]=nominal+std::clamp(wrap(angles[i]-nominal+PI,TAU)-PI,-sector*.38,sector*.38);
+      }
+    }
     for (int i=0;i<n;++i) {
       double before=points[(i+n-1)%n].length(), start=points[i].length(),
              end=points[(i+1)%n].length(), after=points[(i+2)%n].length();
-      double angle=points[i].angle();
-      double angle_delta=wrap(double(points[(i+1)%n].angle())-angle,TAU);
+      double angle=angles[i];
+      double angle_delta=wrap(angles[(i+1)%n]-angle,TAU);
       for (int j=0;j<4;++j) {
         double t=j/4.;
         double radius=.5*((2*start)+(-before+end)*t+

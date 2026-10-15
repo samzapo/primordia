@@ -177,6 +177,7 @@ func outline() -> PackedVector2Array:
 		outline_dirty = false
 		return cached_outline
 	var curve := PackedVector2Array()
+	var angles:=ordered_angles(points)
 	# Interpolate positive radii across ordered angles. Cartesian Catmull-Rom
 	# can loop after contact compression and trigger CanvasItem triangulation
 	# failures; this radial spline cannot cross itself or cross the nucleus.
@@ -185,8 +186,8 @@ func outline() -> PackedVector2Array:
 		var start := points[i].length()
 		var end := points[(i+1)%COUNT].length()
 		var after := points[(i+2)%COUNT].length()
-		var angle := points[i].angle()
-		var angle_delta := fposmod(points[(i+1)%COUNT].angle()-angle,TAU)
+		var angle: float=angles[i]
+		var angle_delta := fposmod(angles[(i+1)%COUNT]-angle,TAU)
 		for j in 4:
 			var t := j/4.0
 			var radius := 0.5*((2*start)+(-before+end)*t+(2*before-5*start+4*end-after)*t*t+(-before+3*start-3*end+after)*t*t*t)
@@ -195,3 +196,22 @@ func outline() -> PackedVector2Array:
 	cached_outline = curve
 	outline_dirty = false
 	return cached_outline
+
+
+static func ordered_angles(nodes: PackedVector2Array) -> PackedFloat64Array:
+	var angles:=PackedFloat64Array()
+	for point in nodes:angles.append(point.angle())
+	var turn:=0.0;var ordered:=true
+	for i in angles.size():
+		var step:=fposmod(angles[(i+1)%angles.size()]-angles[i],TAU)
+		turn+=step
+		if step<.000001 or step>PI:ordered=false
+	if ordered and absf(turn-TAU)<.001:return angles
+	# A reversed adjacent pair must not become an almost-full revolution sampled
+	# by four corners. Reuse the physics solver's bounded polar sectors only for
+	# malformed presentation input; retain node radii and never mutate the body.
+	var sector:=TAU/maxi(1,nodes.size())
+	for i in angles.size():
+		var nominal:=sector*i
+		angles[i]=nominal+clampf(wrapf(angles[i]-nominal,-PI,PI),-sector*.38,sector*.38)
+	return angles
