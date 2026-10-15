@@ -162,7 +162,7 @@ func open_context(target: Dictionary) -> void:
 	var run = sim.evolution
 	match target.kind:
 		"assembly","chemistry":
-			for index in ([0,1,2,3,5,10,11] if target.kind == "assembly" else [7,8,9]):
+			for index in ([0,1,2,3,5,10,11] if target.kind == "assembly" else [7,9,3,8]):
 				var kind: String = sim.KINDS[index]
 				var cost: float = sim.Cell.organ_cost(kind)
 				_choice(game.TITLES[index],"%.0f tissue · 1 AP\n%s" % [cost,game.HELP[index]],game._select.bind(index),kind,"",cell.biomass >= cost and run.points >= 1,cost,1,{"kind":kind,"scale":1.0,"mutation":""})
@@ -332,7 +332,7 @@ func describe(target: Dictionary) -> String:
 	var run = sim.evolution
 	match target.kind:
 		"assembly": return "Assembly factory\nCilia, flagella, armor, chemical glands, repair and receptors."
-		"chemistry": return "Chemistry factory\nPhotosynthesis, toxins, neutralizers and acid."
+		"chemistry": return "Chemistry factory\nToxin, acid, buffer/repair and toxin-neutralizing glands."
 		"atp":
 			var rates: Dictionary = cell.energy_budget.rates(cell.age)
 			var breakdown := ""
@@ -527,9 +527,11 @@ func mobile_diagnostics(conversion: Vector2) -> Dictionary:
 		var rect:=node.get_global_rect()
 		return [rect.position.x*conversion.x,rect.position.y*conversion.y,rect.size.x*conversion.x,rect.size.y*conversion.y]
 	var factory:=screen_at({"kind":"assembly"})*conversion
+	var chemistry_factory:=screen_at({"kind":"chemistry"})*conversion
 	return {"resources_visible":mobile_resources.is_visible_in_tree(),"stocks_visible":mobile_stocks.is_visible_in_tree(),
 		"stocks":mobile_stocks.text,"resources_bounds":bounds.call(mobile_resources),"hide_bounds":bounds.call(mobile_hide),
 		"factory_visible":interior.is_visible_in_tree(),"factory":[factory.x,factory.y],
+		"chemistry_factory":[chemistry_factory.x,chemistry_factory.y],
 		"tray_visible":mobile_tray.is_visible_in_tree(),"tray_bounds":bounds.call(mobile_tray),
 		"choices":choices.map(func(choice):return {"caption":choice.caption,"bounds":bounds.call(choice)})}
 

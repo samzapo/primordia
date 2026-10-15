@@ -263,7 +263,7 @@ func run(test_host) -> void:
 	settle()
 	cell = scene.world.player
 	scene.cell_ui.open_context({"kind":"chemistry"})
-	expect(scene.cell_ui.choices.size() == 4 and scene.cell_ui.choices.any(func(choice):return choice.caption=="Food vacuoles"),"Chemistry factory exposes the simple food lifecycle and removes inactive photosynthesis")
+	expect(scene.cell_ui.choices.size() == 5 and scene.cell_ui.choices.any(func(choice):return choice.caption=="Food vacuoles") and scene.cell_ui.choices.any(func(choice):return choice.kind=="regenerative") and not scene.cell_ui.choices.any(func(choice):return choice.kind=="photosynthesis"),"Chemistry factory exposes toxin, acid, buffer/repair, neutralizer and the simple food lifecycle")
 	scene.cell_ui.close_context()
 	key(KEY_BRACKETRIGHT)
 	key(KEY_ENTER)

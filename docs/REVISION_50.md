@@ -47,3 +47,15 @@ assets and zero-exit engine errors; they run with network/deployment checks.
 Read-only browser control diagnostics include resource, factory and tray geometry
 so acceptance checks exercise the exported multiplayer UI rather than only the
 local Pond scene.
+
+## Chemical factory access
+
+Restore the three teal chemistry-factory chambers as a visible cell-local
+entry point. The chemistry menu offers Toxin gland, Acid gland, Buffer / repair
+gland, Toxin neutralizer and Food vacuoles on desktop and in the mobile top tray.
+Buffer / repair gland is the existing regenerative organ: it still repairs
+and secretes finite buffering particles under the established acidity/stress
+conditions. It has the same saved kind, biomass/AP prices and operating rules;
+there is no second organ kind or resource migration. The existing assembly
+repair entry remains available. Toxin targeting, external acid/buffer transport,
+resident ownership and direct food-vacuole digestion are unchanged.

@@ -57,6 +57,21 @@ func run() -> void:
 	check(not game.cell_ui.mobile_stocks.visible and game.cell_ui.mobile_hide.visible,"A small button hides and restores mobile resource readouts")
 	game.cell_ui.mobile_hide.pressed.emit();game.cell_ui.sync(0)
 	check(game.cell_ui.mobile_stocks.visible,"The same resource button restores current numerical stocks")
+	game.cell_ui.open_context({"kind":"chemistry"});await process_frame;game.cell_ui.sync(0)
+	check(game.cell_ui.choices.size()==5 and game.cell_ui.choices.all(func(choice):return choice.get_parent()==game.cell_ui.mobile_flow),"Mobile chemistry factory exposes all glands and food inspection in the top tray")
+	check(game.cell_ui.describe({"kind":"chemistry"}).contains("buffer/repair") and not game.cell_ui.describe({"kind":"chemistry"}).contains("Photosynthesis"),"Factory description matches the active simplified chemistry")
+	game.world.player.biomass=100;game.world.player.update_geometry();game.world.evolution.points=8
+	for index in [7,9,3,8]:
+		game.cell_ui.open_context({"kind":"chemistry"});game.cell_ui.sync(0)
+		var options: Array=game.cell_ui.choices.filter(func(choice):return choice.kind==game.Simulation.KINDS[index])
+		check(options.size()==1,"Each requested chemical gland has one unambiguous factory choice")
+		var before_biomass: float=game.world.player.biomass;var before_ap: int=game.world.evolution.points
+		options[0].pressed.emit();game.cell_ui.sync(0)
+		check(game.selected==index and not game.cell_ui.mobile_tray.visible and game.cell_ui.mobile_stocks.text.contains("Cost"),"Choosing each gland enters the existing placement flow with visible resource cost")
+		var price: float=game.Simulation.Cell.organ_cost(game.Simulation.KINDS[index])
+		check(game._place_at(1.0+[7,9,3,8].find(index)),"Each restored gland can be placed on the membrane")
+		check(is_equal_approx(before_biomass-game.world.player.biomass,price) and before_ap-game.world.evolution.points==1,"Restored gland placement charges the ordinary biomass and AP exactly once")
+	game.cell_ui.close_context()
 	game._message("Needs an adaptation point.");game.cell_ui.sync(0)
 	check(game.cell_ui.message.get_theme_font_size("font_size")>=66 and game.cell_ui.message.get_theme_font("font").get_font_name().contains("Comic"),"Mobile feedback uses readable CSS-sized comic typography")
 	game._toggle_perception()

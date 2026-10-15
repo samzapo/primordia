@@ -45,6 +45,19 @@ func run() -> void:
 	scene.manual_zoom=8;scene._update_world(1)
 	var new_at: Vector2=scene.world_layer.to_global(view.position+packet.p.rotated(view.rotation))
 	check(scene.inspector.pick(new_at,1).radius>radius*1.9,"Internal glyphs scale with camera zoom")
+	# Render only the interior on a transparent surface to detect an invisible factory.
+	var factory_viewport:=SubViewport.new();factory_viewport.size=Vector2i(512,512)
+	factory_viewport.disable_3d=true;factory_viewport.transparent_bg=true;factory_viewport.world_2d=World2D.new()
+	factory_viewport.render_target_update_mode=SubViewport.UPDATE_ALWAYS;scene.add_child(factory_viewport)
+	var factory_art=preload("res://scripts/cell_interior.gd").new();factory_art.game=scene
+	factory_viewport.add_child(factory_art);factory_art.sync();factory_art.position=Vector2(256,256);factory_art.rotation=0;factory_art.scale=Vector2.ONE*5
+	for i in 4:await process_frame
+	var factory_image: Image=factory_viewport.get_texture().get_image()
+	for i in 3:
+		var chamber: Vector2=factory_art.anchors.chemistry+Vector2((i-1)*.10,abs(i-1)*.07)*factory_art.anchors.radius
+		var pixel: Color=factory_image.get_pixelv(Vector2i(Vector2(256,256)+chamber*5))
+		check(pixel.a>.9 and pixel.g>.7 and pixel.b>.6 and pixel.r<.5,"All three teal chemical-factory chambers remain visibly rendered")
+	factory_viewport.queue_free()
 	var resident=preload("res://scripts/resident_particles.gd").new();resident.rd=RenderingServer.get_rendering_device()
 	check(preload("res://scripts/resident_cytoplasm.gd").new().attach(resident,cell.chemistry,cell),"The same illustrated vacuole can transfer into the main resident device")
 	view.seen_revision=-1;scene._update_world(1)

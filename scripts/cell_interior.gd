@@ -80,6 +80,15 @@ func _draw() -> void:
 		draw_polyline(points,Color("ffa96a"),r*0.040,true)
 	draw_circle(at+Vector2(0.18,0.06)*r,r*0.047,Color("ffd267"))
 
+
+	# Cell-local chemistry factory: a visible entry point, independent of metabolism.
+	at = anchors.chemistry
+	for i in 3:
+		var chamber := at+Vector2((i-1)*0.10,abs(i-1)*0.07)*r
+		_ellipse(chamber,Vector2(0.063,0.13)*r,Color("235981"))
+		_ellipse(chamber-Vector2(0,r*0.02),Vector2(0.047,0.10)*r,Color("46dfcb"))
+		draw_circle(chamber-Vector2(0,r*0.055),r*0.025,Color("c8ffe1"))
+
 	at = anchors.bud
 	_ellipse(at,Vector2(0.17,0.145)*r,Color("9363ac"))
 	_ellipse(at,Vector2(0.15,0.125)*r,Color("4b3979"))
