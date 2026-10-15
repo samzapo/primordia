@@ -6,12 +6,12 @@ import shutil
 def prepare(source: Path) -> Path:
     target = source / "build/web-project"
     target.mkdir(parents=True, exist_ok=True)
-    for name in ("scripts", "shaders", "scenes", "data", "web"):
+    for name in ("scripts", "shaders", "scenes", "data", "web", "assets"):
         destination = target / name
         if destination.exists():
             shutil.rmtree(destination)
         shutil.copytree(source / name, destination,
-                        ignore=shutil.ignore_patterns("*.tmp", "*.log", "__pycache__"))
+                        ignore=shutil.ignore_patterns("*.tmp", "*.log", "*.import", "__pycache__"))
     for name in ("project.godot", "export_presets.cfg"):
         shutil.copyfile(source / name, target / name)
     # The authority/local game use resident GPU rendering. Browsers present the

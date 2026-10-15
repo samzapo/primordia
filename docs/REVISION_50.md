@@ -35,3 +35,15 @@ Conservation, ten-second residence, shared carrier motion, checkpoint clocks, na
 Native core: 84,999 assertions passed with gameplay/balance/objective suites enabled. GDScript reference core: 3,606 passed. Both include a funded chemical hunt and a 90-second ecosystem run; these are seeded fixtures rather than a broad difficulty calibration.
 
 On the RTX5080 workstation, real 1440×900, widest 80% view with music: exterior59.97FPS/p9518.48ms/.9994simulation-wall; interior59.97FPS/p9518.89ms/.9996. The existing20.5ms p95 and real-time gates remain unchanged. Native resident inventory, rendering/inspection, mobile camera/menu/resources and compatibility-renderer pixels have separate checks. These measurements do not establish physical phone frame rate.
+
+## Mobile web packaging correction
+
+The first release omitted the new font directory from the staged web project.
+Godot reported the missing preload during export while returning success, leaving
+the browser cell interface incomplete. Web staging now includes authored assets
+and the font license, regenerates import sidecars, and fails on Godot script,
+compile or resource errors in every build stage. Regression checks cover omitted
+assets and zero-exit engine errors; they run with network/deployment checks.
+Read-only browser control diagnostics include resource, factory and tray geometry
+so acceptance checks exercise the exported multiplayer UI rather than only the
+local Pond scene.

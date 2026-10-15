@@ -522,6 +522,17 @@ func _layout_mobile() -> void:
 		mobile_resources.position=Vector2(8*s,size.y-mobile_resources.get_combined_minimum_size().y-8*s)
 	if mobile() and not is_equal_approx(prior_height,mobile_menu_height):game.touch_zoom.layout()
 
+func mobile_diagnostics(conversion: Vector2) -> Dictionary:
+	var bounds:=func(node: Control) -> Array:
+		var rect:=node.get_global_rect()
+		return [rect.position.x*conversion.x,rect.position.y*conversion.y,rect.size.x*conversion.x,rect.size.y*conversion.y]
+	var factory:=screen_at({"kind":"assembly"})*conversion
+	return {"resources_visible":mobile_resources.is_visible_in_tree(),"stocks_visible":mobile_stocks.is_visible_in_tree(),
+		"stocks":mobile_stocks.text,"resources_bounds":bounds.call(mobile_resources),"hide_bounds":bounds.call(mobile_hide),
+		"factory_visible":interior.is_visible_in_tree(),"factory":[factory.x,factory.y],
+		"tray_visible":mobile_tray.is_visible_in_tree(),"tray_bounds":bounds.call(mobile_tray),
+		"choices":choices.map(func(choice):return {"caption":choice.caption,"bounds":bounds.call(choice)})}
+
 func cycle_target(direction: int) -> void:
 	close_context()
 	var list := targets()

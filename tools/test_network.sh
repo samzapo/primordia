@@ -79,6 +79,7 @@ grep -Eq 'SNAPSHOT TRANSPORT: [0-9]+ assertions, 0 failures' "$report_file"
 GODOT_BIN="$godot_bin" python3 "$project_dir/tests/test_pond_rollover.py"
 python3 "$project_dir/tests/test_web_gateway.py"
 python3 "$project_dir/tests/test_web_version.py"
+python3 "$project_dir/tests/test_web_build.py"
 python3 "$project_dir/tests/test_model_rollback.py"
 
 "$godot_bin" --headless --path "$project_dir" --script tests/network_live.gd -- --personal-keys 2>&1 | tee "$report_file"
