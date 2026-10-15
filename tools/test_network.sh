@@ -44,6 +44,11 @@ if [[ "${1:-}" == gpu ]]; then
     grep -Eq 'NVIDIA|AMD|Intel' "$report_file"
     ! grep -Eiq 'llvmpipe|lavapipe|swiftshader' "$report_file"
   done
+  if [[ -n "${PRIMORDIA_VERIFY_CHECKPOINT_DIR:-}" ]]; then
+    xvfb-run -a -s '-screen 0 1280x720x24 -nolisten tcp' "$godot_bin" --path "$project_dir" --rendering-method mobile --rendering-driver vulkan --gpu-index 0 --script tests/realtime_checkpoint_gpu.gd 2>&1 | tee "$report_file"
+    ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
+    grep -Eq 'AGED CHECKPOINT GPU: [0-9]+ assertions, 0 failures' "$report_file"
+  fi
 fi
 
 "$godot_bin" --headless --path "$project_dir" --script tests/touch_zoom_run.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"

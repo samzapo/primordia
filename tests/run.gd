@@ -51,6 +51,8 @@ func _run() -> void:
 	preload("res://tests/porous_habitat.gd").run(expect)
 	print("CHECKS: art.gd")
 	preload("res://tests/art.gd").run(expect)
+	print("CHECKS: suction_parity.gd")
+	preload("res://tests/suction_parity.gd").run(expect)
 	print("CHECKS: paramecium.gd")
 	preload("res://tests/paramecium.gd").run(expect)
 	print("CHECKS: chemical_particles.gd")

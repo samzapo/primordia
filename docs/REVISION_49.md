@@ -27,8 +27,16 @@ GPU buffers are bounded to 32 slots with at most 24 live parcels; numeric ATP an
 biomass use compact receipts. No full particle export is needed by fine digestion.
 Hidden interiors hand back to bounded coarse CPU execution, preserving elapsed
 time. External resident/cold transport remains the existing implementation.
+The server keeps detailed recent ATP ledgers and cosmetic transfer effects for
+connected players’ selected/focused bodies. Other bodies retain all numeric
+resource updates and full physical simulation without generating unseen UI
+records. This policy changes presentation accounting only.
+
 Numeric ATP spending, turnover, reserve investment and division no longer scan
-cytoplasmic packets. Automatic paid reproduction and persistent population
+cytoplasmic packets. Oral/ciliary suction and the observed fluid-grid union have
+serial native fast paths matching the existing node order, reference field
+weights and paired body/water impulses. CPU fallback remains available; profiler
+hotpaths suction and field_views disable these independently for comparisons. Automatic paid reproduction and persistent population
 recovery continue under their existing shared rules.
 
 ## Presentation and controls

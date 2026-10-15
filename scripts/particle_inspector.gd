@@ -75,6 +75,9 @@ func _internal_pose(screen: Vector2,alpha: float,identity: int=-1) -> Dictionary
 	var cell=game._follow_cell()
 	if not game.internal_visible(cell) or not game.views.has(cell.id):return {}
 	var view=game.views[cell.id]
+	if identity<0:
+		var local: Vector2=view.to_local(screen)
+		if local.length()>cell.visible_support(local.angle())+12/game.zoom:return {}
 	var best:=INF
 	var result: Dictionary={}
 	for packet in cell.chemistry.particle_snapshots(true):
@@ -84,6 +87,7 @@ func _internal_pose(screen: Vector2,alpha: float,identity: int=-1) -> Dictionary
 		var at: Vector2=origin.get("p",packet.p).lerp(packet.p,alpha)
 		if at.length()>cell.visible_support(at.angle()):continue
 		var position: Vector2=game.world_layer.to_global(view.position+at.rotated(view.rotation))
+		if not get_viewport_rect().has_point(position):continue
 		var radius: float=preload("res://scripts/visuals.gd").internal_particle_radius(packet)*game.zoom
 		var distance:=screen.distance_to(position)
 		if (identity>=0 or distance<=maxf(radius+4,12)) and distance<best:

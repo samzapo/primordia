@@ -114,6 +114,8 @@ func run() -> void:
 	if "legacy" in switches or "obstacles" in switches: sim.habitat_geometry.native_bounds = false
 	if "legacy" in switches or "feeding" in switches: sim.native_feeding = false
 	if "legacy" in switches or "contacts" in switches: sim.native_contacts = false
+	if "field_views" in switches: sim.fluid.native_views=false
+	if "suction" in switches: sim.fluid.native_suction=false
 	if "body_fluid" in switches: sim.native_body_fluid = false
 	if "traction" in switches: sim.native_traction = false
 	for cell in sim.cells:
@@ -258,7 +260,7 @@ func run() -> void:
 		"packed_particles":sim.native_particle_pipeline,"particle_pool":sim.particle_pool,"pool_metrics":sim.kernels.pool_metrics() if sim.kernels != null else {},"particle_render_cache":sim.native_particle_render_cache,
 		"simulation_seconds":sim.time-sim_started,"rng":str(sim.rng.state),"background_rng":str(sim.background_rng.state),"ecology_rng":str(sim.ecology_rng.state),
 		"locomotion":locomotion,"player_radius":sim.player.radius,"player_biomass":sim.player.biomass,"seconds":seconds,"hotpaths":option("--hotpaths","all"),"mode":option("--mode","live"),"fixture":option("--fixture","dense"),"music":scene.music.enabled,
-		"source_commit":OS.get_environment("PRIMORDIA_PROFILE_COMMIT"),"native_cells":sim.kernels != null,"engine":Engine.get_version_info().string,"cpu":OS.get_processor_name(),"gpu":RenderingServer.get_video_adapter_name(),
+		"source_commit":OS.get_environment("PRIMORDIA_PROFILE_COMMIT"),"native_cells":sim.kernels != null,"native_suction":sim.fluid.native_suction,"native_views":sim.fluid.native_views,"engine":Engine.get_version_info().string,"cpu":OS.get_processor_name(),"gpu":RenderingServer.get_video_adapter_name(),
 		"display":DisplayServer.get_name(),"viewport":str(root.size),"zoom":scene.manual_zoom,"max_steps":Engine.max_physics_steps_per_frame,"catchup_policy":steps_text,
 		"sparks":scene.show_reaction_sparks,"bloom":scene.preferences.bloom,"music_volume":scene.preferences.music_volume,"tick_rate":Engine.physics_ticks_per_second}
 	if option("--image-output","")!="": root.get_texture().get_image().save_png(option("--image-output",""))

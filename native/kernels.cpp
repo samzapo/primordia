@@ -581,6 +581,8 @@ protected:
     ClassDB::bind_method(
         D_METHOD("fluid_body_exchange", "velocity", "activity", "body", "dt", "global_coupling"),
         &PrimordiaKernels::fluid_body_exchange);
+    ClassDB::bind_method(D_METHOD("fluid_views", "views"), &PrimordiaKernels::fluid_views);
+    ClassDB::bind_method(D_METHOD("fluid_suction", "velocity", "activity", "ids", "body", "mouth", "reach", "power", "dt", "global_coupling", "inflow_axis"), &PrimordiaKernels::fluid_suction);
     ClassDB::bind_method(
         D_METHOD("fluid_step", "velocity", "activity", "tide", "dt", "driven"),
         &PrimordiaKernels::fluid_step);
@@ -2248,6 +2250,57 @@ public:
     }
     body->set("velocity",velocity);body->set("angular_velocity",angular);
     return water;
+  }
+  Dictionary fluid_views(Array views) {
+    std::vector<std::pair<Vector2,Vector2>> regions;
+    for (int i=0;i<views.size();++i) {
+      Vector4 view=views[i];regions.emplace_back(Vector2(view.x,view.y),Vector2(view.z,view.w));
+    }
+    PackedFloat32Array weights;weights.resize(64*40);float *out=weights.ptrw();
+    PackedInt32Array indices;
+    for (int i=0;i<64*40;++i) {
+      Vector2 at=Vector2(i%64+.5,i/64+.5)*64;double value=0;
+      for (const auto &region:regions) {
+        Vector2 beyond=perception_delta(region.first,at).abs()-region.second-Vector2(64,64);
+        double t=std::clamp(1.0-std::max(beyond.x,beyond.y)/64.0,0.0,1.0);
+        value=std::max(value,t*t*(3-2*t));
+      }
+      out[i]=value;if(value>0)indices.append(i);
+    }
+    Dictionary result;result["activity"]=weights;result["indices"]=indices;return result;
+  }
+  PackedVector2Array fluid_suction(const PackedVector2Array &v, const PackedFloat32Array &activity,
+                                  const PackedInt32Array &ids, Object *body, Vector2 mouth,
+                                  double reach, double power, double dt, bool global_coupling, Vector2 inflow_axis) {
+    // Preserve Medium.suction's serial node order and body/node impulse pairing.
+    // Cache script properties once; no worker mutates a Godot Object.
+    PackedVector2Array out = v;
+    if (activity.size() != v.size()) return out;
+    Vector2 *w = out.ptrw();
+    Vector2 position = body->get("position"), body_velocity = body->get("velocity");
+    double angular = body->get("angular_velocity"), radius = body->get("radius"),
+           mass = body->get("mass"), inertia = body->get("inertia");
+    for (int k=0;k<ids.size();++k) {
+      int i=ids[k]; if (i<0 || i>=v.size()) continue;
+      Vector2 at = Vector2((i%64)+.5,(i/64)+.5)*64;
+      Vector2 d = perception_delta(at,mouth); double distance=d.length();
+      if (distance<4 || distance>=reach) continue;
+      Vector2 arm=perception_delta(position,at);
+      if (arm.length()<radius*.65) continue;
+      double falloff=std::pow(1-distance/reach,2.0)*(global_coupling ? 1.0 : activity[i]);
+      if (inflow_axis.length_squared()>.01)
+        falloff *= .15+.85*std::max(0.0,double((-d/distance).dot(inflow_axis.normalized())));
+      Vector2 surface_velocity=body_velocity+Vector2(-arm.y,arm.x)*angular;
+      Vector2 correction=d/distance*power-(w[i]-surface_velocity);
+      Vector2 axis=correction.normalized();
+      double inverse_mass=1.0/22.0+1.0/mass+std::pow(double(arm.cross(axis)),2.0)/inertia;
+      Vector2 impulse=correction*(1-std::exp(-dt*2.2*falloff))/inverse_mass;
+      w[i]+=impulse/22.0;
+      body_velocity-=impulse/mass;
+      angular-=arm.cross(impulse)/inertia;
+    }
+    body->set("velocity",body_velocity);body->set("angular_velocity",angular);
+    return out;
   }
   PackedVector2Array fluid_step(const PackedVector2Array &v,
                                 const PackedFloat32Array &a,

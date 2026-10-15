@@ -198,13 +198,22 @@ func _physics_process(dt: float) -> void:
 func _set_views() -> void:
 	world.camera_views.clear();world.interoceptive_cells.clear()
 	var now := Time.get_ticks_msec()
+	var metered: Dictionary={}
 	for peer in peers.values():
 		if peer.account=="" or peer.view==null or now-peer.seen>10000: continue
+		var selected=_selected(accounts[peer.account])
+		metered[selected.id]=true
 		var v: Vector4=peer.view
 		if peer.get("perception","exteroception")=="interoception":
 			var focus=_focus(peer)
+			if focus!=null:metered[focus.id]=true
 			if focus!=null and Sim.Medium.visibility(focus.position,Vector2(v.x,v.y),Vector2(v.z,v.w)+Vector2.ONE*focus.extent())>0:world.interoceptive_cells[focus.id]=true
 		else:world.camera_views.append(Vector4(v.x,v.y,peer.detail.x,peer.detail.y))
+	for cell in world.cells:
+		if metered.has(cell.id) and not cell.energy_budget.enabled:
+			cell.energy_budget.samples.clear();cell.energy_budget.started_at=cell.age
+		cell.energy_budget.enabled=metered.has(cell.id)
+		cell.resource_effects_enabled=metered.has(cell.id)
 	if world.kernels!=null: world.kernels.set_activity_views(world.camera_views,true)
 	if world.resident!=null: world.resident.gpu.set_activity_views(world.camera_views,true)
 

@@ -195,6 +195,8 @@ def main():
     run("bash", str(candidate / "tools/build_native.sh"), env=environment)
     inspect()
     run(str(godot), "--headless", "--path", str(candidate), "--editor", "--import", "--quit", env=environment)
+    if any((root / "state" / name).exists() for name in ("world-0.pworld", "world-1.pworld")):
+        environment["PRIMORDIA_VERIFY_CHECKPOINT_DIR"] = str(root / "state")
     run("bash", str(candidate / "tools/test_network.sh"), "gpu", env=environment)
     inspect()
     run("bash", str(candidate / "tools/build_web.sh"), env=environment)

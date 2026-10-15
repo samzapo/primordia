@@ -173,6 +173,7 @@ func run() -> void:
 		check(await until(func():return sockets[0].get_ready_state()==WebSocketPeer.STATE_CLOSED),"previous browser is disconnected on key resume")
 		check(sockets[0].get_close_reason()=="Session resumed elsewhere","resume tells the old browser why it disconnected")
 	if "--realtime" in OS.get_cmdline_user_args():
+		host.world.profiling=true
 		camera_reports[1].perception="interoception"
 		check(await until(func():return not host.world.interoceptive_cells.is_empty()),"Mixed clients request exterior and resident interior detail together")
 		# Finite authored stress input, not a food source in normal gameplay.

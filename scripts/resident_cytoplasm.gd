@@ -196,7 +196,10 @@ func _execute(args: PackedByteArray,anatomy: PackedByteArray,code: int) -> void:
 
 func _apply(bytes: PackedByteArray,code: int) -> void:
 	var chem=chemistry.get_ref();var cell=body.get_ref()
-	live_count=int(bytes.decode_double(68*8));count=int(bytes.decode_double(0))
+	var incoming_count:=int(bytes.decode_double(68*8))
+	var incoming_id:=int(bytes.decode_double(2*8))|(int(bytes.decode_double(3*8))<<32)
+	if incoming_count!=live_count or incoming_id!=chem.next_packet:presented_at=-1000000
+	live_count=incoming_count;count=int(bytes.decode_double(0))
 	chem.next_packet=int(bytes.decode_double(2*8))|(int(bytes.decode_double(3*8))<<32);chem.tick=int(bytes.decode_double(4*8))|(int(bytes.decode_double(5*8))<<32)
 	for j in species.size():chem.totals[species[j]]=bytes.decode_double((32+j)*8)
 	for pair in [["heat",20],["solar_work",21]]:chem.set(pair[0],bytes.decode_double(pair[1]*8))

@@ -56,6 +56,7 @@ var target_organ_id := -1
 var facing := Vector2.RIGHT
 var shape_acceleration := Vector2.ZERO
 var resource_packets: Array = []
+var resource_effects_enabled:=true
 var resource_budget: Dictionary = {}
 var next_organ_id := 0
 var last_wound := 0.0
@@ -445,6 +446,7 @@ static func organ_upkeep(organ: Dictionary) -> float:
 	return rate
 
 func resource_effect(kind: String, a: float, amount: float, organ_id: int = -1) -> void:
+	if not resource_effects_enabled:return
 	var key := kind+str(organ_id)
 	resource_budget[key] = resource_budget.get(key,0.0)+amount
 	if resource_budget[key] < 0.12: return

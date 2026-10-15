@@ -4,6 +4,7 @@ const Cell = preload("res://scripts/cell.gd")
 const Ledger = preload("res://scripts/energy_budget.gd")
 
 static func run(check: Callable) -> void:
+	disabled_accounting_preserves_physiology(check)
 	var cell = Cell.new()
 	cell.add_organ("propulsion",PI,"graze",false)
 	var organ: Dictionary = cell.organs[0]
@@ -59,3 +60,11 @@ static func run(check: Callable) -> void:
 		var b = unobserved.cells[i]
 		same = same and a.position == b.position and a.velocity == b.velocity and a.energy == b.energy and a.organic_mass() == b.organic_mass() and a.health == b.health
 	check.call(same,"Enabling ATP observation changes no body trajectory, resources or health")
+
+static func disabled_accounting_preserves_physiology(check: Callable) -> void:
+	var a=Cell.new();var b=Cell.clone_state(a)
+	b.energy_budget.enabled=false;b.resource_effects_enabled=false
+	for cell in [a,b]:
+		cell.receive_particle(0,2,2,cell.position+cell.local_point(0))
+		cell.chemistry.advance(cell,.25);cell.spend_energy(3);cell.reserve(2)
+	check.call(a.energy==b.energy and a.brood_energy==b.brood_energy and a.biomass==b.biomass and a.organic_mass()==b.organic_mass(),"Disabling unobserved presentation accounting never changes real resources or reproduction investment")

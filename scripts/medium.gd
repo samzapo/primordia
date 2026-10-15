@@ -15,6 +15,9 @@ var driven := true
 # Only the serial coarse cell integrator may couple to distant cached nodes.
 var global_coupling := false
 var local_suction := true
+var native_suction := true
+var native_views := true
+static var kernels=preload("res://scripts/backend.gd").create()
 var active_indices := PackedInt32Array()
 var tide := PackedVector2Array()
 var changes := PackedVector2Array()
@@ -158,6 +161,9 @@ func suction(body, mouth: Vector2, reach: float, power: float, dt: float, inflow
 			for x in range(lo.x,mini(hi.x+1,lo.x+COLS)):
 				var candidate := index(x,y)
 				if global_coupling or activity[candidate] > 0: candidates.append(candidate)
+	if native_suction and kernels!=null:
+		velocity=kernels.fluid_suction(velocity,activity,candidates,body,mouth,reach,power,dt,global_coupling,inflow_axis)
+		return
 	for i in candidates:
 		var at := Vector2(i%COLS+0.5,int(i/COLS)+0.5)*SIZE
 		var delta := offset(at,mouth)
@@ -183,6 +189,9 @@ func suction(body, mouth: Vector2, reach: float, power: float, dt: float, inflow
 
 # Union of observed rectangles; no camera means the existing coarse field path.
 func set_views(views: Array) -> void:
+	if native_views and kernels!=null:
+		var result: Dictionary=kernels.fluid_views(views)
+		activity=result.activity;active_indices=result.indices;return
 	active_indices.clear()
 	for y in ROWS:
 		for x in COLS:
