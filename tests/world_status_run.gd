@@ -12,5 +12,15 @@ func _initialize() -> void:
 	fixture.graph.objects.append({"fields":{"particles":{"$array":[{"species":"water","source":-1,"compartment":-1,"amount":1.0},{"species":"water","source":-1,"compartment":-1,"amount":2.0,"sparse_fact":true}]}}})
 	result=inspector.selection(fixture)
 	assert(result.living_chemistry[0].species.water==2 and result.living_chemistry[0].compatible_groups==1 and result.living_chemistry[0].extra_facts.sparse_fact==1,"Bounded chemistry telemetry counts species and constraints without restoring or mutating the saved world")
-	print("WORLD SELECTION: 4 assertions, 0 failures")
+	var points:=PackedVector2Array()
+	for i in 28:points.append(Vector2.from_angle(TAU*i/28)*47)
+	fixture.graph.objects[1].fields.membrane={"$ref":5}
+	fixture.graph.objects.append({"fields":{"points":points}})
+	result=inspector.selection(fixture)
+	assert(not result.membranes[0].folded and absf(result.membranes[0].turn-TAU)<.001 and not result.membranes[0].has("points"),"Healthy membrane telemetry stays bounded and omits raw geometry")
+	var swap: Vector2=points[3];points[3]=points[4];points[4]=swap
+	fixture.graph.objects[5].fields.points=points
+	result=inspector.selection(fixture)
+	assert(result.membranes[0].folded and result.membranes[0].points.size()==28,"A folded saved membrane retains decisive bounded reproduction geometry")
+	print("WORLD SELECTION: 6 assertions, 0 failures")
 	quit(0)

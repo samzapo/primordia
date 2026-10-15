@@ -38,7 +38,7 @@ static func selection(saved: Dictionary) -> Dictionary:
 	for reference in cells.slice(0,8):
 		var body:=fields(reference,objects)
 		if not body.get("dead",true):details.append(chemistry_summary(body,objects))
-	return {"living_cytoplasm_packets":living_counts.reduce(func(total,value):return total+value,0),"largest_living_cytoplasm_packets":living_counts.max() if not living_counts.is_empty() else 0,"status":"ok","world_id":saved.get("world_id",""),"epoch":saved.get("epoch",0),"tick":saved.get("tick",0),"accounts":records,"living_chemistry":details}
+	return {"living_cytoplasm_packets":living_counts.reduce(func(total,value):return total+value,0),"largest_living_cytoplasm_packets":living_counts.max() if not living_counts.is_empty() else 0,"status":"ok","world_id":saved.get("world_id",""),"epoch":saved.get("epoch",0),"tick":saved.get("tick",0),"accounts":records,"living_chemistry":details,"membranes":cells.slice(0,64).map(func(reference):return membrane_summary(fields(reference,objects),objects))}
 
 static func fields(reference,objects: Array) -> Dictionary:
 	if not reference is Dictionary:return {}
@@ -59,3 +59,16 @@ static func chemistry_summary(body: Dictionary,objects: Array) -> Dictionary:
 		for key in packet:
 			if key not in ["id","species","amount","fuel","p","previous","v","angle","source","compartment","alive"]:extra[key]=int(extra.get(key,0))+1
 	return {"radius":body.get("radius",0),"packets":packets.size(),"species":species,"compatible_groups":groups.size(),"extra_facts":extra}
+
+
+static func membrane_summary(body: Dictionary,objects: Array) -> Dictionary:
+	var points: PackedVector2Array=fields(body.get("membrane"),objects).get("points",PackedVector2Array())
+	var largest:=0.0;var smallest:=INF;var turn:=0.0;var max_step:=0.0
+	for i in points.size():
+		largest=maxf(largest,points[i].length());smallest=minf(smallest,points[i].length())
+		var step:=fposmod(points[(i+1)%points.size()].angle()-points[i].angle(),TAU)
+		turn+=step;max_step=maxf(max_step,step)
+	var folded: bool=points.size()>2 and absf(turn-TAU)>.01
+	var result: Dictionary={"id":body.get("id",-1),"radius":body.get("radius",0),"nodes":points.size(),"min_radius":smallest if points.size()>0 else 0,"max_radius":largest,"turn":turn,"max_step":max_step,"folded":folded}
+	if folded:result["points"]=Array(points).map(func(at):return [at.x,at.y])
+	return result
