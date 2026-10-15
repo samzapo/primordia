@@ -40,6 +40,12 @@ func run() -> void:
 	game.world.player.position+=Vector2(60,-20);game.world.player.previous_position=game.world.player.position
 	game._update_world(1)
 	check(game.camera_locked and game.camera_offset==offset and game.intero_rotation==rotation and absf(game.camera_rotation-(rotation-1.2))<.001,"The manipulated camera stays attached as the cell translates and rotates")
+	game.world.player.angle=0;game.world.player.previous_angle=0
+	game.manual_zoom=game.MIN_ZOOM;game.intero_rotation=0;game.camera_offset=Vector2(0,900);game._update_world(1)
+	var upper: Vector2=game.camera_screen-Vector2(0,600);var lower: Vector2=game.camera_screen+Vector2(0,600)
+	game.touch_zoom.fingers={0:upper,1:lower};game.touch_zoom._anchor_pair()
+	check(is_equal_approx(game.manual_zoom,game.MIN_ZOOM) and game.camera_offset.distance_to(Vector2(0,900))<.01,"A wide internal gesture crossing the torus seam retains its unwrapped cell-frame anchors")
+	game.touch_zoom.cancel()
 	game._toggle_build();game.cell_ui.open_context({"kind":"assembly"})
 	await process_frame
 	game.cell_ui.sync(0)

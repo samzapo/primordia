@@ -170,6 +170,7 @@ func _anchor_pair() -> void:
 	# Retain the unwrapped separation: a gesture may straddle a torus seam.
 	anchor_b=anchor_a+(points[1]-points[0]).rotated(-game.camera_rotation)/game.zoom
 	if game.perception=="interoception":
-		anchor_a=game._cell_frame_point(anchor_a);anchor_b=game._cell_frame_point(anchor_b)
+		anchor_a=game._cell_frame_point(anchor_a)
+		anchor_b=anchor_a+(points[1]-points[0]).rotated(-game.intero_rotation)/game.zoom
 	game.camera_dragging=true
 	game._camera_gesture(anchor_a,anchor_b,points[0],points[1])
