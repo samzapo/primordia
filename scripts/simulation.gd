@@ -859,6 +859,22 @@ func _chemistry(dt: float, patch: Array[int] = [], background: bool = false) -> 
 		p.reaction_activity = (1.0 if background else activity_at(p.p)) if p.alive else 0.0
 		p.contact_radius = particle_radius(p.kind)*particle_scale(p.amount)
 		if p.reaction_activity > 0 and p.kind != PHEROMONE: reaction_grid.insert(index,p.p)
+	# Snapshot full degrees before unary/pair mutations. A shared pair divisor
+	# preserves equal/opposite impulses and does not discard dense neighbours.
+	var degrees: Dictionary={}
+	if particle_collisions:
+		for index in local_ids:
+			var p: Dictionary=particles[index]
+			var elapsed: float=maxf(0,time-p.get("chemical_at",time)) if background else dt*p.reaction_activity
+			if not p.alive or p.kind==PHEROMONE or p.reaction_activity<=0 or elapsed<=0:continue
+			degrees[index]=0
+			for other_index in reaction_grid.query(p.p,18):
+				if other_index==index:continue
+				var other: Dictionary=particles[other_index]
+				var other_elapsed: float=maxf(0,time-other.get("chemical_at",time)) if background else dt*other.reaction_activity
+				if not other.alive or other.kind==PHEROMONE or other_elapsed<=0:continue
+				var contact: float=p.contact_radius+other.contact_radius
+				if Medium.offset(p.p,other.p).length_squared()<contact*contact:degrees[index]+=1
 	for index in local_ids:
 		var p: Dictionary = particles[index]
 		if not p.alive or p.kind == PHEROMONE: continue
@@ -895,7 +911,7 @@ func _chemistry(dt: float, patch: Array[int] = [], background: bool = false) -> 
 				break
 			# Optional comparison: point-centered chemical particles can overlap.
 			if particle_collisions:
-				var push := normal*(contact-delta.length())*0.25
+				var push := normal*(contact-delta.length())*(0.25/maxi(1,maxi(degrees.get(index,0),degrees.get(other_index,0))))
 				p.v -= push*8
 				other.v += push*8
 

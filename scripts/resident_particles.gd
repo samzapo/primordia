@@ -470,7 +470,7 @@ func _initialize_rd(bytes: PackedByteArray, velocities: PackedByteArray) -> void
 	upload_bytes += bytes.size()+velocities.size()
 	_ready_main.call_deferred(true,"")
 func _initialize_contacts() -> bool:
-	for size in [padded_count*8,40960*8,count*4,count*64*4,count*4,16*4,count*8,2561*4,count*16]:
+	for size in [padded_count*8,40960*8,count*8,count*64*4,count*4,16*4,count*8,2561*4,count*16]:
 		var buffer := rd.storage_buffer_create(size)
 		contact_buffers.append(buffer)
 		if not buffer.is_valid(): return false
@@ -548,7 +548,7 @@ func contact_snapshot() -> void:
 func _contact_snapshot_rd() -> void:
 	var result := {}
 	if not contact_buffers.is_empty():
-		result={"counts":rd.buffer_get_data(contact_buffers[2]).to_int32_array(),
+		result={"counts":rd.buffer_get_data(contact_buffers[2],0,work_count*4).to_int32_array(),
 			"pairs":rd.buffer_get_data(contact_buffers[3]).to_int32_array(),
 			"choices":rd.buffer_get_data(contact_buffers[4]).to_int32_array(),
 			"stats":rd.buffer_get_data(contact_buffers[5]).to_int32_array(),

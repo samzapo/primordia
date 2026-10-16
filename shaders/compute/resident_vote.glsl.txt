@@ -61,7 +61,7 @@ void main(){
    if(ds>c*c)continue;
    float dist=sqrt(ds);vec2 n=ds>.000001?d/dist:vec2(1,0);
    vec2 outward=i==low?n:-n;
-   if(ds<c*c){impulse-=outward*(c-dist)*2.;if(i==low)atomicAdd(stats[3],1u);}
+   if(ds<c*c){impulse-=outward*(c-dist)*2./float(max(1u,max(counts[pc.count+i],counts[pc.count+j])));if(i==low)atomicAdd(stats[3],1u);}
    float acid=sample_acid(lp.xy);
    if(pc.mode!=3u||!eligible(pv.w,bv.w,pm,bm,acid))continue;
    bool enzyme=(pv.w==6.&&bv.w==2.)||(pv.w==2.&&bv.w==6.)||(pv.w==0.&&bv.w==0.);

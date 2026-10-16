@@ -115,7 +115,9 @@ static func particle_motion(world: Dictionary) -> Dictionary:
 		if not packet.get("alive",false):continue
 		var velocity: Vector2=packet.get("v",Vector2.ZERO)
 		if not velocity.is_finite():nonfinite+=1;continue
-		var speed:=velocity.length();speeds.append(speed)
+		var speed:=velocity.length()
+		if not is_finite(speed):nonfinite+=1;continue
+		speeds.append(speed)
 		var kind:=str(packet.get("kind",-1))
 		if not species.has(kind):species[kind]={"packets":0,"max_launch_speed":0.0}
 		species[kind].packets+=1;species[kind].max_launch_speed=maxf(species[kind].max_launch_speed,speed)

@@ -1947,6 +1947,7 @@ public:
         matching_seen[p.identity]=matching_epoch;
       }
     }
+    const auto degrees=collisions&&!matching?contact_degrees(scratch,simulation_threads,max_radius,contact_radius,delta):std::vector<int>();
     const bool screened=!matching && simulation_threads>1 && parallel_contacts && scratch.size()>=4096 &&
       neighbors.backend==0 && !neighbors.caching && !neighbors.metrics;
     if (screened) {
@@ -2107,7 +2108,7 @@ public:
         bool solved_contact=liquid.enabled && pool_enabled && !background &&
           !packet_slots[p.identity].value.jump && !packet_slots[b.identity].value.jump;
         if (collisions && !solved_contact && dist2 < physical_c*physical_c) {
-          Vector2 push = n * (physical_c - dist) * .25;
+          Vector2 push = n * (physical_c - dist) * (.25/std::max(1,std::max(degrees[i],degrees[j])));
           p.v -= push * 8;
           b.v += push * 8;
         }

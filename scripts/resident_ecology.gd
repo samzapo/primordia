@@ -20,6 +20,7 @@ var reason:=""
 var capacity:=65536
 var elapsed_usec:=0
 var fallback_reason:=""
+var deferred_emissions:=0
 # Display zoom never changes ecology resolution. The view sets this to its
 # widest playable footprint (including aspect ratio); activity adds a halo.
 var display_scope:=Vector4(0,0,-1,-1)
@@ -125,7 +126,12 @@ func _receipt(cells: Array=[],queries: Array=[],options: Dictionary={}) -> Dicti
 	while pending.size()>256:
 		var extra:=_receipt_batch([],[],{"feeding":false,"projection":false,"chemistry":options.get("chemistry",true)},256)
 		if extra.has("error"): return extra
-		if extra.get("_capacity",false): return {"error":"Particle capacity reached; preserved paid emissions"}
+		if extra.get("_capacity",false):
+			# Keep every refused paid packet escrowed. Still deliver this tick's
+			# body/query receipt; later decay/uptake/eviction can free GPU slots.
+			var result:=_receipt_batch(cells,queries,options,0)
+			result["_capacity"]=true
+			return result
 	return _receipt_batch(cells,queries,options,pending.size())
 
 func _receipt_batch(cells: Array,queries: Array,options: Dictionary,n: int) -> Dictionary:
@@ -140,7 +146,8 @@ func _receipt_batch(cells: Array,queries: Array,options: Dictionary,n: int) -> D
 		if not result.emissions[i].accepted: refused.append(pending[i])
 	pending=refused+pending.slice(n)
 	if result.has("chemistry"): _account_chemistry(result.chemistry)
-	if not refused.is_empty(): result["_capacity"]=true
+	if not refused.is_empty():
+		deferred_emissions+=refused.size();result["_capacity"]=true
 	return result
 
 func _account_chemistry(chemistry: Dictionary) -> void:
@@ -225,7 +232,7 @@ func step(dt: float) -> void:
 		# motion/chemistry exactly once and are available to every receptor.
 		if not pending.is_empty():
 			var admission:=_receipt([],[],{"feeding":false,"projection":false,"chemistry":false})
-			if admission.has("error") or admission.get("_capacity",false): fallback("Nearby particle capacity reached");return
+			if admission.has("error"): fallback(admission.error);return
 	sim.time+=dt;sim.transport_clock+=dt;sim.revision+=1
 	sim.profile_counts.clear();sim.profile_usec.clear()
 	sim.profile_usec["streaming"]=Time.get_ticks_usec()-start
@@ -337,8 +344,6 @@ func step(dt: float) -> void:
 	else:
 		while true:
 			_apply_exposure(cells,receipt.exposure)
-			if receipt.get("_capacity",false):
-				fallback("Particle capacity reached; preserved paid emissions");break
 			if receipt.exposure.deferred==0:
 				gpu.project_cached(cells.size());break
 			# Identical hazard seed on overflow retries: one exposure lottery,

@@ -387,7 +387,7 @@ func _test_chemistry() -> void:
 	a = sim.particles[-2]; b = sim.particles[-1]
 	expect(sim._react_pair(a,b) and is_equal_approx(a.amount,0.5) and not b.alive,"Nutrient assembly makes a larger edible packet with combined value")
 	expect(Sim.binding_threshold(Sim.ENZYME,Sim.WASTE,0.4) < Sim.binding_threshold(Sim.ENZYME,Sim.WASTE,0),"Modeled acid hydrolase binds more readily at its acidic optimum")
-	expect(Sim.binding_threshold(Sim.NUTRIENT,Sim.NUTRIENT,0.4) == Sim.binding_threshold(Sim.NUTRIENT,Sim.NUTRIENT,0),"Acidity does not magically favor nutrient synthesis")
+	expect(Sim.binding_threshold(Sim.NUTRIENT,Sim.NUTRIENT,0.4) < Sim.binding_threshold(Sim.NUTRIENT,Sim.NUTRIENT,0) and Sim.binding_threshold(Sim.NUTRIENT,Sim.NUTRIENT,0.95)>Sim.binding_threshold(Sim.NUTRIENT,Sim.NUTRIENT,0.4),"Mild acid catalyzes nutrient binding; excess acid reduces affinity")
 	var stressed = isolated()
 	stressed.acidity.values.fill(0.9)
 	var energy: float = stressed.player.energy

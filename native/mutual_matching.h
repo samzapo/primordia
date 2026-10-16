@@ -8,11 +8,42 @@
 struct PairOutcome { int event=-1,other=-1,neutralizer=-1;double recycled=0,neutralized=0;bool reacted=false; };
 struct PairChoice {int partner=-1;godot::Vector2 impulse;};
 inline uint32_t pair_hash(uint32_t x){x^=x>>16;x*=0x7feb352du;x^=x>>15;x*=0x846ca68bu;return x^(x>>16);}
+// Symmetric degree scaling keeps dense overlap impulses bounded without dropping
+// contacts, limiting world velocity, or altering chemical encounter choices.
+template<class P,class Offset>
+std::vector<int> contact_degrees(const std::vector<P> &ps,int lanes,
+                                double max_radius,double physical_radius,Offset offset){
+ std::vector<int> degrees(ps.size(),0),heads(40960,-1),next(ps.size(),-1);
+ auto eligible=[](const P &p){return p.alive&&p.active>0&&p.elapsed>0&&p.kind!=3;};
+ auto periodic=[](int value,int extent){int result=value%extent;return result<0?result+extent:result;};
+ // The ordered chemistry cache deliberately stores only higher-ID partners.
+ // Degrees need all endpoints; build a complete immutable local grid instead.
+ for(size_t i=0;i<ps.size();++i)if(eligible(ps[i])){
+  int bin=periodic(int(std::floor(ps[i].p.y/16)),160)*256+periodic(int(std::floor(ps[i].p.x/16)),256);
+  next[i]=heads[bin];heads[bin]=int(i);
+ }
+ SimulationWorkers::shared().run(ps.size(),lanes,[&](size_t begin,size_t end){
+  for(size_t i=begin;i<end;++i){
+   const auto &p=ps[i];if(!eligible(p))continue;
+   double reach=std::max(p.radius,physical_radius)+max_radius+.001;
+   int lx=std::floor((p.p.x-reach)/16),hx=std::floor((p.p.x+reach)/16),
+       ly=std::floor((p.p.y-reach)/16),hy=std::floor((p.p.y+reach)/16);
+   for(int x=lx;x<=hx;++x)for(int y=ly;y<=hy;++y)
+    for(int j=heads[periodic(y,160)*256+periodic(x,256)];j>=0;j=next[j]){
+     if(int(i)==j)continue;
+     double contact=physical_radius>0?2*physical_radius:p.radius+ps[j].radius;
+     if(offset(p.p,ps[j].p).length_squared()<contact*contact)++degrees[i];
+    }
+  }
+ });
+ return degrees;
+}
 template<class P,class Grid,class Offset,class Acid>
-void mutual_matching(std::vector<P> &ps,const Grid &grid,int lanes,uint32_t tick,
+void mutual_matching(std::vector<P> &ps,Grid &grid,int lanes,uint32_t tick,
                      double max_radius,double physical_radius,bool collisions,
                      Offset offset,Acid acid,std::vector<PairChoice> &choices,std::vector<PairOutcome> &outcomes){
  choices.assign(ps.size(),{});outcomes.assign(ps.size(),{});
+ const auto degrees=collisions?contact_degrees(ps,lanes,max_radius,physical_radius,offset):std::vector<int>();
  auto available=[](const P &p){return p.alive&&p.active>0&&p.elapsed>0&&p.kind!=3;};
  auto eligible=[](const P &a,const P &b,double acidity){
   if((a.kind==6&&b.kind==2)||(a.kind==2&&b.kind==6))return acidity<.9;
@@ -34,7 +65,7 @@ void mutual_matching(std::vector<P> &ps,const Grid &grid,int lanes,uint32_t tick
     double ds=d.length_squared(),c=a.radius+b.radius,physical=physical_radius>0?2*physical_radius:c;
     if(ds>std::max(c,physical)*std::max(c,physical))return false;
     double distance=std::sqrt(ds);godot::Vector2 n=ds>.000001?d/distance:godot::Vector2(1,0);
-    if(collisions&&ds<physical*physical)choice.impulse+=(low==int(i)?-n:n)*(physical-distance)*2;
+    if(collisions&&ds<physical*physical)choice.impulse+=(low==int(i)?-n:n)*(physical-distance)*2/std::max(1,std::max(degrees[i],degrees[j]));
     if(p.reacted||ps[j].reacted||ds>c*c)return false;
     bool enzyme=(a.kind==6&&b.kind==2)||(a.kind==2&&b.kind==6)||(a.kind==0&&b.kind==0);
     bool recycling=(a.kind==2&&b.kind==1)||(a.kind==1&&b.kind==2);

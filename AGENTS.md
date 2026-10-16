@@ -336,3 +336,14 @@ food, no bonus from resolution coalescing, and proportional uptake/lysis.
 External capacity>amount encodes fully fueled food plus bonus; internal nutrition
 is an additive amount-weighted fact, resident clock.y. Omit zero fields on old
 packets so update retention remains exact. All backends share authored bounds.
+
+
+October16 particle stability: read docs/REVISION_52.md. External soft separation
+uses the same symmetric maximum-endpoint-degree divisor on resident, native and
+script paths. Count complete overlap neighbourhoods, not capped diagnostic
+contacts or higher-ID reaction caches. Retain isolated-pair behavior, transport,
+binding/material rules, current strength and full stream history. Full GPU
+admission retains/retries paid escrow and still delivers body receipts; it must
+not force a CPU fallback. Expose backlog/capacity operational metrics rather
+than silently deleting particles or hiding device errors. Do not reset the
+saved pond or clip existing velocities during this update.

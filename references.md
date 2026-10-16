@@ -479,3 +479,15 @@ demonstrates pH-controlled self-assembly in designed peptides. It motivates a
 pH-dependent contact rule only. Primordia's fictional nutrient aggregation,
 0.4 optimum,50% ATP-allocation cap and heat/tissue tradeoff are authored game
 abstractions, not measured nutrient chemistry or a claim that acid creates energy.
+
+
+## Dense external contact stabilization (October 16, 2026)
+[Fratarcangeli and Pellacini, Scalable Partitioning for Parallel Position Based Dynamics (2015)](https://mfratarcangeli.github.io/pdf/eg15_ppbd.pdf)
+discuss constraint averaging in parallel Jacobi solves. This motivates sharing
+a finite separation correction across a crowded neighbourhood. Primordia uses
+its existing soft *velocity* impulses, divided for both endpoints by the greater
+of their complete contact degrees. This symmetric engineering rule keeps each
+parcel's total impulse bounded by the largest isolated overlap impulse and
+retains equal/opposite pair contributions. It does not implement that paper's
+position solver or claim calibrated molecular crowding. Binding choices,
+radii, transport, diffusion and material/fuel accounting are unchanged.

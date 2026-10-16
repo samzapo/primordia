@@ -788,6 +788,10 @@ func _write_metrics() -> void:
 	tick_phase_peak_usec.clear();tick_phase_total_usec.clear();tick_phase_count=0
 	if world.resident!=null and world.resident.streaming!=null:
 		metrics["stream_queue"]=world.resident.streaming.queue_depth
+		metrics["resident_capacity"]=world.resident.gpu.count
+		metrics["resident_work_slots"]=world.resident.gpu.work_count
+		metrics["pending_particle_emissions"]=world.resident.pending.size()
+		metrics["deferred_particle_emissions"]=world.resident.deferred_emissions
 		metrics["eviction_deferred"]=world.resident.streaming.eviction_deferred
 	if not samples.is_empty():
 		for pair in [["p50",.5],["p95",.95],["p99",.99]]: metrics["tick_ms_"+pair[0]]=samples[mini(samples.size()-1,int(samples.size()*pair[1]))]

@@ -52,23 +52,27 @@ void main() {
   return;
  }
  if(pc.stage==3u) {
-  if(i>=pc.count || motion(i).w<0. || motion(i).w==3.)return;
+  if(i>=pc.count)return;
+  counts[pc.count+i]=0u;
+  if(motion(i).w<0. || motion(i).w==3.)return;
   vec2 at=pose(i).xy;float radius=matter(i).x*.5;
   // Every chemical radius is <=8.5. Retain the same tick-cached radius.
   float reach=radius+8.5+.001;
   ivec2 lo=ivec2(floor((at-reach)/16.)),hi=ivec2(floor((at+reach)/16.));
-  uint total=0u,checksum=0u;
+  uint total=0u,checksum=0u,degree=0u;
   for(int x=lo.x;x<=hi.x;x++)for(int y=lo.y;y<=hi.y;y++) {
    uvec2 range=ranges[bin(ivec2(x,y))];
    for(uint k=range.x;k<range.y;k++) {
-    uint j=order[k].y;if(j<=i||motion(j).w==3.||motion(j).w<0.)continue;
+    uint j=order[k].y;if(j==i||motion(j).w==3.||motion(j).w<0.)continue;
     vec2 d=offset(at,pose(j).xy);float c=radius+matter(j).x*.5;
     if(dot(d,d)>c*c)continue;
+    if(dot(d,d)<c*c)degree++;
+    if(j<i)continue;
     if(total<CAP)pairs[i*CAP+total]=j;
     total++;checksum^=j;
    }
   }
-  counts[i]=total;
+  counts[i]=total;counts[pc.count+i]=degree;
   // Exact count and checksum can be compared without exporting millions of pairs.
   atomicAdd(stats[0],total);atomicXor(stats[1],checksum);
   if(total>CAP)atomicAdd(stats[2],1u);

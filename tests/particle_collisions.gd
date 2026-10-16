@@ -79,3 +79,26 @@ static func run(check: Callable) -> void:
 			mean_square += offset.length_squared()/256
 		var expected := 2.0*12.0*32.0/60.0
 		check.call(mean_square > expected*0.7 and mean_square < expected*1.3 and mean.length_squared() < 1.0,"A coincident collision-free cloud spreads by independent random walk at the existing diffusion rate: "+backend)
+
+	# Dense parcels share contact relaxation; isolated-pair behavior is unchanged.
+	for backend in ["script","native","pool"]:
+		for hidden in [false,true]:
+			var sim=Sim.new(928)
+			if backend!="script" and sim.kernels==null:continue
+			sim.native_particles=backend!="script";sim.cells=[sim.player]
+			sim.particles.clear();sim.grid.clear();sim.particle_collisions=true
+			sim.camera_follows_player=false;sim.camera_position=Vector2(2048,1600) if hidden else Vector2(500,800)
+			sim.view_half=Vector2(100,100);sim.time=0.00000001;sim.revision=1
+			var ids: Array[int]=[]
+			for i in 128:
+				sim.spawn_particle(Sim.ENZYME,Vector2(500+(i%2)*.01,800),Vector2.ZERO,.3,91)
+				sim.particles[-1].chemical_at=0.0;ids.append(i)
+			sim.grid.rebuild(sim.particles)
+			if backend=="pool":sim.enable_particle_pool()
+			var patch: Array[int]=[]
+			if hidden:patch=ids
+			sim._chemistry(.00000001,patch,hidden)
+			var maximum:=0.0;var impulse:=Vector2.ZERO
+			for packet in sim.particle_snapshots():
+				maximum=maxf(maximum,packet.v.length());impulse+=packet.v
+			check.call(maximum<=16.01 and impulse.length()<.01,"Dense contacts retain equal/opposite bounded relaxation: "+backend+" hidden "+str(hidden))
