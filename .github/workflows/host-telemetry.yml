@@ -112,6 +112,7 @@ jobs:
           # Bounded host scheduling/clock evidence; never read other project source
           # or process environments beyond the owned Primordia service below.
           report["gpu_clocks"] = command(["nvidia-smi", "--query-gpu=name,pstate,clocks.current.graphics,clocks.current.sm,clocks.current.memory,power.draw,power.limit,temperature.gpu,utilization.gpu", "--format=csv,noheader"])
+          report["gpu_performance_detail"] = command(["nvidia-smi", "-q", "-d", "PERFORMANCE,TEMPERATURE,CLOCK,POWER"])
           report["runner_cpu_affinity"] = [line for line in pathlib.Path("/proc/self/status").read_text().splitlines() if line.startswith(("Cpus_allowed_list:", "Mems_allowed_list:"))]
           report["cpu_policies"] = []
           for policy in sorted(pathlib.Path("/sys/devices/system/cpu/cpufreq").glob("policy*")):
