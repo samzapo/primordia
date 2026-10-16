@@ -38,7 +38,7 @@ void main(){
    if(v.w!=8.&&v.w!=9.)continue;
    vec4 m=imageLoad(state,pixel(best)+ivec2(2,0));
    float next=clamp(value+(v.w==8.?1.:-1.)*min(m.z,pc.dt*.2),0.,1.);
-   m.z-=abs(next-value);value=next;
+   m.z=max(0.,m.z-abs(next-value));value=next;
    if(m.z<=.000001){
     v.w=2.;m.x=6.*clamp(sqrt(m.y/.3),.8,1.7);
     imageStore(state,pixel(best)+ivec2(1,0),v);

@@ -20,6 +20,7 @@ func setup(data: PackedFloat32Array,acid: PackedFloat32Array,seed: int=3900):
 	return gpu
 func run() -> void:
 	await finite_acid()
+	await tiny_spent_charge()
 	await spatial_pair_rules()
 	await decay_and_inventory()
 	await flow_update()
@@ -127,3 +128,18 @@ func expanded_inventory() -> void:
 	check(r.chemistry.visible=={"chemicals":3,"material":1,"signals":0},"GPU census uses the exact viewport and shared material definitions")
 	check(gpu.readbacks==0,"On-screen counts use compact receipts without downloading the particle pool")
 	gpu.close();await gpu.closed
+
+func tiny_spent_charge() -> void:
+	var field:=PackedFloat32Array();field.resize(2560);field.fill(.4)
+	for kind in [8,9]:
+		var data:=packet(kind,Vector2(96,96),.3,.00000002)
+		var gpu=await setup(data,field)
+		gpu.advance(1./30,0)
+		await receipt(gpu);gpu.snapshot()
+		var state: PackedFloat32Array=await gpu.snapshot_ready
+		check(state[10]>=0 and state[7]==2,"Sub-ULP spent acid/buffer charge cannot become negative")
+		gpu.close();await gpu.closed
+	var sim=preload("res://scripts/simulation.gd")
+	var small: Dictionary={"kind":2,"capacity":-.00000002421439,"amount":.18}
+	check(sim.repair_spent_charge(small) and small.capacity==0 and small.amount==.18,"Known saved roundoff is repaired without changing chemical material")
+	check(not sim.repair_spent_charge({"kind":0,"capacity":-.00000002}) and not sim.repair_spent_charge({"kind":2,"capacity":-.1}),"Negative nutrient fuel or substantive corruption is not silently repaired")

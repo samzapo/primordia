@@ -200,6 +200,14 @@ func disable_particle_pool() -> void:
 func _pool_supported() -> bool:
 	return kernels != null and native_particle_pipeline and native_particles and native_transport_bookkeeping and native_chemistry_writes and native_chemical_timestamps and native_background_chemistry and native_feeding and native_exclusion and native_particle_compaction and native_render and grid.native != null and grid.native_enabled and grid.incremental and gpu_transport == null and (not habitat_geometry.enabled or habitat_geometry.particles_permeable)
 
+static func repair_spent_charge(packet: Dictionary) -> bool:
+	# Legacy exhausted acid/buffer parcels became waste with a negative float
+	# remainder. Repair only this known, sub-micro charge defect, never material.
+	var charge: float=packet.get("capacity",0)
+	if packet.get("kind",-1)==WASTE and charge<0 and charge>=-.000001:
+		packet.capacity=0.0;return true
+	return false
+
 func particle_count() -> int:
 	if resident != null: return resident.alive
 	return kernels.pool_size() if particle_pool else particles.size()
@@ -884,7 +892,7 @@ func _chemistry(dt: float, patch: Array[int] = [], background: bool = false) -> 
 		if p.kind in [ACID,BUFFER]:
 			var sign_value := 1.0 if p.kind == ACID else -1.0
 			var used := absf(acidity.exchange(p.p,sign_value*minf(p.capacity,local_dt*0.2)))
-			p.capacity -= used
+			p.capacity = maxf(0,p.capacity-used)
 			if p.capacity <= 0.000001: p.kind = WASTE
 		if chance(Catalog.decay(p.kind),local_dt):
 			respiration_loss += p.amount*Catalog.material(p.kind)

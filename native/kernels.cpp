@@ -1993,7 +1993,7 @@ public:
                                                std::min(p.capacity, t * .2),
                                   0., 1.);
         acid.set(n, after);
-        p.capacity -= std::abs(after - before);
+        p.capacity = std::max(0.,p.capacity-std::abs(after-before));
         if (p.capacity <= .000001)
           p.kind = 2;
       }

@@ -16,6 +16,7 @@ func run() -> void:
 	var fields: Dictionary=saved.graph.objects[ref].fields
 	var packets: Array=fields.particles["$array"].filter(func(packet):return packet.get("alive",false))
 	var original:=packets.size()
+	for packet in packets:Sim.repair_spent_charge(packet)
 	var order: Array=[]
 	for i in packets.size():order.append(i)
 	var random:=RandomNumberGenerator.new();random.seed=76101016

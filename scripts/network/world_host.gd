@@ -146,6 +146,11 @@ func _ready() -> void:
 			world.disable_particle_pool()
 			food_supply=Population.enrich_existing(world);food_supply.archive=food_archive
 			print("FOOD_SUPPLY ",JSON.stringify(food_supply))
+	var charge_repairs:=0
+	world.disable_particle_pool()
+	for packet in world.particles:
+		if Sim.repair_spent_charge(packet):charge_repairs+=1
+	if charge_repairs>0:print("SPENT_CHARGE_ROUNDOFF_REPAIRS ",charge_repairs)
 	epoch += 1
 	world.pending_replacements.clear()
 	introduced_cells+=Population.replenish(world)

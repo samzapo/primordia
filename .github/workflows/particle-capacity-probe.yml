@@ -89,7 +89,7 @@ jobs:
                   assert health()['peers']==0,'A player connected; stop probe without changing the live pond'
                   state=owned/('case-'+str(limit));state.mkdir()
                   case_env=dict(env,PRIMORDIA_VERIFY_CHECKPOINT_DIR=str(owned/'source'),PRIMORDIA_CAPACITY_PROBE_STATE=str(state))
-                  args=['xvfb-run','-a','-s','-screen 0 1280x720x24 -nolisten tcp',str(godot),'--path','.', '--rendering-method','mobile','--rendering-driver','vulkan','--gpu-index','0','--resolution','64x64','--disable-vsync','--max-fps','120','--script','tests/particle_capacity_probe.gd','--','--particle-limit='+str(limit)]
+                  args=['xvfb-run','-a','-s','-screen 0 1280x720x24 -nolisten tcp',str(godot),'--path','.', '--audio-driver','Dummy','--rendering-method','mobile','--rendering-driver','vulkan','--gpu-index','0','--resolution','64x64','--disable-vsync','--max-fps','120','--script','tests/particle_capacity_probe.gd','--','--particle-limit='+str(limit)]
                   result=subprocess.run(args,env=case_env,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=120)
                   print(result.stdout,flush=True)
                   assert result.returncode==0 and not any(text in result.stdout for text in ['SCRIPT ERROR:','\nERROR:','Parse Error:','Compile Error:']),'Capacity fixture failed'
