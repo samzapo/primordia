@@ -130,6 +130,7 @@ func journey() -> void:
 	check(bridge.streaming.exited>0,"Moving camera evicts actual packets")
 	check(bridge.gpu.readbacks==0,"Travel never exports the whole GPU pool")
 	var packets: Array=bridge.snapshots()
+	check(sim.habitat_census().external==packets.filter(func(packet):return packet.alive).size(),"Global census includes all disjoint live owners without a per-frame snapshot")
 	var error:=organic(sim,packets)-before
 	check(absf(error)<.01,"Moving-window conservation including ecology: "+str(error))
 	print("STREAMING_JOURNEY ",JSON.stringify({"resident":bridge.alive,"cold":bridge.stored_count(),"transferred":bridge.streaming.exited,"material_error":error,"transfer_bytes":bridge.gpu.transfer_readback_bytes}))

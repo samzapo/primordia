@@ -347,3 +347,17 @@ admission retains/retries paid escrow and still delivers body receipts; it must
 not force a CPU fallback. Expose backlog/capacity operational metrics rather
 than silently deleting particles or hiding device errors. Do not reset the
 saved pond or clip existing velocities during this update.
+
+
+October16 global particle budget: the owner explicitly authorizes probabilistic
+external particle destruction above a limit, superseding prior no-particle-cull
+instructions for this exterior-only budget. Read docs/REVISION_53.md. Apply one
+global survival probability to GPU, cold and paid/trace escrow; keep species
+proportions in expectation and account material/fuel outflow explicitly. Never
+cull cells, organs, internal contents, accounts, keys or feedback. Default shared
+limit5000 is a growth guard, not a verified performance maximum. Preserve all
+saved cell state and the independent thinning clock/RNG across updates. Report
+server habitat counts separately from camera snapshots and dead storage slots.
+Clamp spent field charge, repair only known tiny legacy waste residue, and retain
+strict rejection of substantive negative inventory. Rendering benchmarks and
+schedules remain held; capacity probes require explicit dispatch or marker.

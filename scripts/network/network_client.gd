@@ -1,5 +1,6 @@
 extends "res://scripts/pond.gd"
 var family_recovery: Dictionary={}
+var server_census: Dictionary={}
 var received_death_serial:=0
 var death_tombstones: Dictionary={}
 const Codec = preload("res://scripts/network/state_codec.gd")
@@ -385,6 +386,7 @@ func _snapshot(message: Dictionary) -> void:
 		camera_offset=Vector2.ZERO
 	if world.player.dead and can_follow():
 		notice="Your lineage has ended · following a living cell for observation.";notice_timer=12
+	server_census=message.get("census",{}).duplicate()
 	world.time=message.time;world.revision=message.tick
 	world.death_serial=maxi(world.death_serial,message.get("death_serial",world.death_serial))
 	world.environment=message.get("environment",{})
@@ -419,6 +421,13 @@ func _snapshot(message: Dictionary) -> void:
 		JavaScriptBridge.eval("window.primordiaDiagnostics="+JSON.stringify({"connected":connected,"tick":world.revision,"world_id":message.world_id,"packets":packets.size(),"cells":world.cells.size(),"time":world.time,"player_name":player_name,"nameplates":nameplates.items.map(func(item):return {"cell":item.cell,"name":item.name,"online":item.online})}))
 
 	_ack_snapshot(message)
+
+func _debug_population_lines() -> String:
+	return population_text(server_census,world.particles.size())
+
+static func population_text(server_census: Dictionary,local_count: int) -> String:
+	if server_census.is_empty():return "\nCamera region: %d particles\nHabitat total: waiting for server" % local_count
+	return "\nCamera region: %d particles\nHabitat total: %d living cells / %d particles\nExterior: %d · Inside cells: %d\nGPU nearby: %d · Offscreen: %d · Queued: %d" % [server_census.get("camera_particles",local_count),server_census.get("living_cells",0),server_census.get("total",server_census.get("external",0)),server_census.get("external",0),server_census.get("internal",0),server_census.get("gpu",0),server_census.get("cold",0),server_census.get("pending",0)]
 
 func _copy_cell(incoming):
 	var cell=cells_by_id.get(incoming.id)

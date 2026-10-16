@@ -36,6 +36,7 @@ func run() -> void:
 	host.store.directory=OS.get_environment("PRIMORDIA_CAPACITY_PROBE_STATE")
 	check(host.store.directory!="" and host.store.directory!=source.directory,"Separate disposable state")
 	check(host.store.save(saved),"Saved-world copy")
+	OS.set_environment("PRIMORDIA_PARTICLE_LIMIT","0")
 	OS.set_environment("PRIMORDIA_ACCESS_KEYS_FILE","");OS.set_environment("PRIMORDIA_INVITE","private-capacity-fixture")
 	root.add_child(host)
 	check(await until(func():return host.running),"Copied GPU authority starts")

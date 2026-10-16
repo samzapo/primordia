@@ -491,3 +491,12 @@ parcel's total impulse bounded by the largest isolated overlap impulse and
 retains equal/opposite pair contributions. It does not implement that paper's
 position solver or claim calibrated molecular crowding. Binding choices,
 radii, transport, diffusion and material/fuel accounting are unchanged.
+
+
+## Numerical exterior population budget (Revision 53)
+[NIST binomial-distribution handbook](https://www.itl.nist.gov/div898/handbook/eda/section3/eda366i.htm)
+gives the mean and variance of equal-probability Bernoulli trials. With survival
+probability L/N, each species' expected surviving count is its original count
+times L/N. Primordia applies this artificial computational outflow to all exterior
+owners; it is not a biological decay-rate measurement or a calibrated dilution
+mechanism. Removed material and food potential leave the modeled inventory.

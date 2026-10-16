@@ -18,6 +18,7 @@ var count := 0
 var upload_bytes := 0
 var dispatches := 0
 var readbacks := 0
+var thinning_readback_bytes:=0
 var width := 768
 var height := 1
 var _publication
@@ -269,6 +270,9 @@ func exchange(cells: Array, emissions: Array=[], handles: Array=[], asynchronous
 	exchange_inflight+=1;exchange_peak_inflight=maxi(exchange_peak_inflight,exchange_inflight)
 	exchange_busy=exchange_inflight>=exchange_queue_depth;exchange_serial+=1
 	batch["serial"]=exchange_serial;batch["ring_slot"]=slot
+	# Only a sole blocking exchange can safely shrink work. Older asynchronous
+	# receipts may arrive after later emissions and must keep the monotonic bound.
+	batch["trim_work"]=batch.synchronous and exchange_inflight==1
 	batch["summary_offset"]=batch.body_count+batch.feed_count+batch.emit_count+batch.inspect_count*4+batch.get("query_count",0)*5
 	batch["chemistry_offset"]=batch.summary_offset+(batch.get("query_count",0)*Perception.SUMMARY_VECTORS if batch.summaries else 0)
 	batch["exposure_offset"]=batch.chemistry_offset+(Chemistry.RECEIPT_VECTORS if batch.chemistry else 0)
@@ -314,6 +318,16 @@ func _exchange_rd(batch: Dictionary, asynchronous: bool) -> void:
 		exchange_fallbacks+=1
 	# Preserve already-committed receipts if async readback is unsupported.
 	callback.call(rd.buffer_get_data(_exchange.receipt_buffers[batch.ring_slot],0,size))
+func thin_sync(probability: float,serial: int) -> Dictionary:
+	if exchange_inflight>0 or not chemistry_enabled or not _initialized or _closing or not is_finite(probability) or probability<0 or probability>1:return {"error":"Invalid resident thinning request"}
+	RenderingServer.call_on_render_thread(func():
+		_export_data=_chemistry.thin(probability,serial)
+		thinning_readback_bytes+=_export_data.readback_bytes
+		_high_water=maxi(1,_export_data.high_water);_set_work_count(_high_water)
+		_sync_semaphore.post())
+	_sync_semaphore.wait()
+	return _export_data
+
 func project_cached(cells: int) -> void:
 	# The last completed exposure exchange owns these immutable body buffers.
 	# Queue projection without another readback after every contact was delivered.
@@ -333,6 +347,10 @@ func _exchange_received(bytes: PackedByteArray,batch: Dictionary) -> void:
 	if batch.chemistry:
 		receipt["chemistry"]=Chemistry.decode(bytes,batch.chemistry_offset)
 		receipt.chemistry["tick"]=batch.chemistry_tick
+		if transfer_enabled and batch.get("trim_work",false):
+			# Compact receipt bounds work by the last live slot. Neither slot
+			# allocation nor generation counters move or reset.
+			_high_water=maxi(1,receipt.chemistry.high_water);_set_work_count(_high_water)
 	if batch.exposure: receipt["exposure"]=Exposure.decode(bytes,batch)
 	receipt["serial"]=batch.serial;receipt["readback_bytes"]=bytes.size();receipt["ring_slot"]=batch.ring_slot
 	if batch.synchronous:

@@ -1,4 +1,6 @@
 extends Node2D
+var debug_census_cache: Dictionary={}
+var debug_census_usec:=0
 const Simulation = preload("res://scripts/simulation.gd")
 const FlowView = preload("res://scripts/flow_view.gd")
 const ReactionSparks = preload("res://scripts/reaction_sparks.gd")
@@ -874,6 +876,15 @@ func _apply_fullscreen() -> void:
 	if DisplayServer.get_name() != "headless":
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if preferences.fullscreen else DisplayServer.WINDOW_MODE_WINDOWED)
 
+func _debug_population_lines() -> String:
+	if world.resident!=null:
+		var census: Dictionary=world.habitat_census()
+		return "\nDetailed region: %d cells · Coarse: %d cells\nHabitat total: %d living cells / %d particles\nGPU nearby: %d · Offscreen: %d · Queued: %d" % [world.active_cells,world.resident.coarse_cells,census.living_cells,census.total,census.gpu,census.cold,census.pending]
+	var now:=Time.get_ticks_usec()
+	if debug_census_cache.is_empty() or now-debug_census_usec>=1000000:
+		debug_census_cache=world.habitat_census();debug_census_usec=now
+	return "\nDetailed region: %d cells / %d particles\nHabitat total: %d living cells / %d particles" % [world.active_cells,world.active_particles,debug_census_cache.living_cells,debug_census_cache.total]
+
 func _update_hud() -> void:
 	var light: float=float(world.environment.get("light",world.evolution.light_factor))
 	if absf(light-light_factor_shown) > 0.02:
@@ -883,13 +894,10 @@ func _update_hud() -> void:
 	debug_label.visible = show_debug and not settings_panel.visible
 	var backend := "Resident GPU + native cells" if world.resident != null and world.kernels != null else "Resident GPU + SCRIPT cells" if world.resident != null else "GPU experiment" if world.gpu_transport != null else "Native CPU" if world.kernels != null else "GDScript"
 	debug_label.text = "%s · %d FPS · frame %.1f ms\n%d ticks/frame · simulation %.1f ms/frame · tick %.2f ms\nSimulation/wall %.2f× · view sync %.2f ms" % [backend,Engine.get_frames_per_second(),last_frame_ms,last_frame_ticks,last_frame_sim_ms,simulation_ms,simulation_rate,render_ms]
-	if world.resident != null:
-		debug_label.text += "\nDetailed region: %d cells · Coarse: %d cells\nGPU nearby particles: %d · CPU stored: %d" % [world.active_cells,world.resident.coarse_cells,world.particle_count(),world.resident.stored_count()]
-	else:
-		debug_label.text += "\nDetailed region: %d cells / %d particles\nHabitat total: %d living cells / %d particles" % [world.active_cells,world.active_particles,world.cells.filter(func(c): return not c.dead).size(),world.particle_count()]
+	if show_debug:debug_label.text += _debug_population_lines()
 	if show_debug:
 		var census: Dictionary = world.visible_particle_census()
-		debug_label.text += "\nOn screen: %d material packets · %d chemical packets · %d signals\nCytoplasm: %d actual particles · target ~%d chemical packets" % [census.material,census.chemicals,census.signals,world.player.chemistry.particle_count(),world.Catalog.data().ecology.visible_target]
+		debug_label.text += "\nOn screen: %d material packets · %d chemical packets · %d signals\nCytoplasm (this cell): %d particles" % [census.material,census.chemicals,census.signals,world.player.chemistry.particle_count()]
 	if world.resident != null:
 		var p: Dictionary = world.profile_usec
 		debug_label.text += "\nTick: flow %.1f · particles %.1f · biology %.1f · motion %.1f · exposure %.1f ms\nGPU receipts: prepare %.1f · handoff %.1f ms" % [p.get("fluid",0)/1000.0,p.get("particles",0)/1000.0,p.get("biology",0)/1000.0,p.get("motion",0)/1000.0,p.get("ecology",0)/1000.0,p.get("gpu_receipt_prepare",0)/1000.0,p.get("gpu_receipt_wait",0)/1000.0]

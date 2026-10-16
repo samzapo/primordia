@@ -6,6 +6,7 @@ var rd: RenderingDevice
 var shader:=RID()
 var pipeline:=RID()
 var partials:=RID()
+var thinning_stats:=RID()
 var sets: Array[RID]=[]
 var count:=0
 var seed:=0
@@ -14,15 +15,16 @@ var last_tick:=0
 var last_time:=0.0
 func initialize(device: RenderingDevice, state: RID, acid: RID, order: RID, ranges: RID, receipts: Array[RID], pair_stats: RID, identity: RID, events: RID, slots: int, random_seed: int, source: String) -> bool:
 	rd=device;count=slots;seed=random_seed
-	var zero:=PackedByteArray();zero.resize(ceili(count/128.0)*48)
+	var zero:=PackedByteArray();zero.resize(ceili(count/128.0)*80)
 	partials=rd.storage_buffer_create(zero.size(),zero)
+	thinning_stats=rd.storage_buffer_create(32)
 	var text:=RDShaderSource.new();text.source_compute=Catalog.glsl(source)
 	var spirv:=rd.shader_compile_spirv_from_source(text)
 	if spirv.compile_error_compute!="": push_error(spirv.compile_error_compute);return false
 	shader=rd.shader_create_from_spirv(spirv);pipeline=rd.compute_pipeline_create(shader)
 	for receipt in receipts:
 		var uniforms: Array[RDUniform]=[]
-		var resources: Array=[state,acid,order,ranges,partials,receipt,pair_stats,identity,events]
+		var resources: Array=[state,acid,order,ranges,partials,receipt,pair_stats,identity,events,thinning_stats]
 		for i in resources.size():
 			var uniform:=RDUniform.new();uniform.binding=i
 			uniform.uniform_type=RenderingDevice.UNIFORM_TYPE_IMAGE if i==0 else RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
@@ -32,8 +34,8 @@ func initialize(device: RenderingDevice, state: RID, acid: RID, order: RID, rang
 	return partials.is_valid()
 func dispatch(stage: int, groups: int, batch: Dictionary={}) -> void:
 	var params:=PackedByteArray();params.resize(48)
-	params.encode_u32(0,count);params.encode_u32(4,stage);params.encode_float(8,last_dt)
-	params.encode_u32(12,last_tick);params.encode_float(16,last_time)
+	params.encode_u32(0,count);params.encode_u32(4,stage);params.encode_float(8,batch.get("probability",last_dt))
+	params.encode_u32(12,int(batch.get("thin_serial",last_tick))&0xffffffff);params.encode_float(16,last_time)
 	params.encode_u32(20,batch.get("chemistry_offset",0));params.encode_u32(24,ceili(count/128.0))
 	params.encode_u32(28,seed&0xffffffff)
 	var scope: Vector4=batch.get("count_scope",Vector4(0,0,-1,-1))
@@ -57,7 +59,14 @@ static func decode(bytes: PackedByteArray,offset: int) -> Dictionary:
 		var base:=at+(646+i)*16
 		if bytes.decode_float(base+12)>0: cues.append({"at":Vector2(bytes.decode_float(base),bytes.decode_float(base+4)),"detox":bytes.decode_float(base+12)==2})
 	return {"recycled":losses[2],"cues":cues,"acid":values,"loss":losses[0],"decay":int(losses[1]),"alive":int(inventory[0]),"pheromones":int(inventory[1]),
-		"visible":{"chemicals":int(visible[0]),"material":int(visible[1]),"signals":int(visible[2])},"material":inventory[2],"oxygen":inventory[3],"pairs":bytes.slice(at+2560*4+32,at+2560*4+96).to_int32_array()}
+		"high_water":int(visible[3]),"visible":{"chemicals":int(visible[0]),"material":int(visible[1]),"signals":int(visible[2])},"material":inventory[2],"oxygen":inventory[3],"pairs":bytes.slice(at+2560*4+32,at+2560*4+96).to_int32_array()}
+func thin(probability: float,serial: int) -> Dictionary:
+	dispatch(4,ceili(count/128.0),{"probability":probability,"thin_serial":serial})
+	dispatch(5,1)
+	var bytes:=rd.buffer_get_data(thinning_stats)
+	var values:=bytes.to_float32_array()
+	return {"readback_bytes":bytes.size(),"loss":values[0],"removed":int(values[1]),"alive":int(values[2]),"signals":int(values[3]),"high_water":int(values[4]),"fuel_loss":values[5]}
+
 func close() -> void:
-	for resource in sets+[pipeline,shader,partials]:
+	for resource in sets+[pipeline,shader,partials,thinning_stats]:
 		if resource.is_valid(): rd.free_rid(resource)

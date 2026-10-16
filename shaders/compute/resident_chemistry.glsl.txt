@@ -10,6 +10,7 @@ layout(set=0,binding=5,std430) buffer Receipt { vec4 receipt[]; };
 layout(set=0,binding=6,std430) readonly buffer PairStats { uint pair_stats[]; };
 layout(set=0,binding=7,std430) readonly buffer Identity { uvec2 identity[]; };
 layout(set=0,binding=8,std430) readonly buffer Events { vec4 events[]; };
+layout(set=0,binding=9,std430) buffer Thinning {vec4 thinning_result[2];};
 layout(push_constant,std430) uniform Params {uint count;uint stage;float dt;uint tick;float now;uint output_at;uint groups;uint seed;vec4 scope;} pc;
 shared vec4 sums[128];
 shared vec4 shown[128];
@@ -64,7 +65,7 @@ void main(){
   }
   sums[lane]=total;barrier();
   for(uint stride=64u;stride>0u;stride>>=1){if(lane<stride)sums[lane]+=sums[lane+stride];barrier();}
-  if(lane==0u)partials[gl_WorkGroupID.x*3u]=sums[0];
+  if(lane==0u)partials[gl_WorkGroupID.x*5u]=sums[0];
   return;
  }
  if(pc.stage==2u){
@@ -74,24 +75,33 @@ void main(){
    float amount=imageLoad(state,pixel(i)+ivec2(2,0)).y;
    if(kind>=0.){
     total=vec4(1,kind==3.?1.:0.,amount*materials[int(kind)],kind==1.?amount:0.);
+    visible.w=float(i+1u);
     vec2 at=imageLoad(state,pixel(i)).xy;
     vec2 d=mod(at-pc.scope.xy+vec2(2048,1280),vec2(4096,2560))-vec2(2048,1280);
     if(pc.scope.z>=0.&&all(lessThanEqual(abs(d),pc.scope.zw)))
-     visible=vec4(kind!=3.?1.:0.,materials[int(kind)]>0.?1.:0.,kind==3.?1.:0.,0);
+     visible.xyz=vec3(kind!=3.?1.:0.,materials[int(kind)]>0.?1.:0.,kind==3.?1.:0.);
    }
   }
   sums[lane]=total;shown[lane]=visible;barrier();
-  for(uint stride=64u;stride>0u;stride>>=1){if(lane<stride){sums[lane]+=sums[lane+stride];shown[lane]+=shown[lane+stride];}barrier();}
-  if(lane==0u){partials[gl_WorkGroupID.x*3u+1u]=sums[0];partials[gl_WorkGroupID.x*3u+2u]=shown[0];}
+  for(uint stride=64u;stride>0u;stride>>=1){if(lane<stride){sums[lane]+=sums[lane+stride];shown[lane].xyz+=shown[lane+stride].xyz;shown[lane].w=max(shown[lane].w,shown[lane+stride].w);}barrier();}
+  if(lane==0u){partials[gl_WorkGroupID.x*5u+1u]=sums[0];partials[gl_WorkGroupID.x*5u+2u]=shown[0];}
   return;
  }
  if(pc.stage==3u){
   for(uint a=lane;a<640u;a+=128u)receipt[pc.output_at+a]=vec4(acid[a*4u+1u],acid[a*4u+2u],acid[a*4u+3u],acid[a*4u+4u]);
   for(uint channel=0u;channel<3u;channel++){
    vec4 total=vec4(0);
-   for(uint group=lane;group<pc.groups;group+=128u)total+=partials[group*3u+channel];
+   for(uint group=lane;group<pc.groups;group+=128u){
+    vec4 value=partials[group*5u+channel];
+    if(channel==2u){total.xyz+=value.xyz;total.w=max(total.w,value.w);}else total+=value;
+   }
    sums[lane]=total;barrier();
-   for(uint stride=64u;stride>0u;stride>>=1){if(lane<stride)sums[lane]+=sums[lane+stride];barrier();}
+   for(uint stride=64u;stride>0u;stride>>=1){
+    if(lane<stride){
+     if(channel==2u){sums[lane].xyz+=sums[lane+stride].xyz;sums[lane].w=max(sums[lane].w,sums[lane+stride].w);}
+     else sums[lane]+=sums[lane+stride];
+    }barrier();
+   }
    if(lane==0u)receipt[pc.output_at+(channel==2u?774u:640u+channel)]=sums[0];
    barrier();
   }
@@ -106,4 +116,38 @@ void main(){
   if(lane==0u)receipt[pc.output_at+640u].z=sums[0].z;
   if(lane<4u)receipt[pc.output_at+642u+lane]=uintBitsToFloat(uvec4(pair_stats[lane*4u],pair_stats[lane*4u+1u],pair_stats[lane*4u+2u],pair_stats[lane*4u+3u]));
  }
+ if(pc.stage==4u){
+  vec4 total=vec4(0),extra=vec4(0);
+  if(i<pc.count){
+   vec4 v=imageLoad(state,pixel(i)+ivec2(1,0)),m=imageLoad(state,pixel(i)+ivec2(2,0));
+   if(v.w>=0.){
+    uint random=hash32(i^hash32(identity[i].x)^hash32(pc.tick)^pc.seed^0xb371d456u);
+    float roll=(float(random>>8)+.5)/16777216.;
+    if(roll<pc.dt){
+     total=vec4(m.y*materials[int(v.w)],1,0,0);
+     extra.y=v.w==0.?clamp(m.z,0.,m.y)*7.5:0.;
+     v.w=-1.;m=vec4(0);
+     imageStore(state,pixel(i)+ivec2(1,0),v);imageStore(state,pixel(i)+ivec2(2,0),m);
+    }else{total.z=1.;total.w=v.w==3.?1.:0.;extra.x=float(i+1u);}
+   }
+  }
+  sums[lane]=total;shown[lane]=extra;barrier();
+  for(uint stride=64u;stride>0u;stride>>=1){
+   if(lane<stride){sums[lane]+=sums[lane+stride];shown[lane].x=max(shown[lane].x,shown[lane+stride].x);shown[lane].y+=shown[lane+stride].y;}barrier();
+  }
+  if(lane==0u){partials[gl_WorkGroupID.x*5u+3u]=sums[0];partials[gl_WorkGroupID.x*5u+4u]=shown[0];}
+  return;
+ }
+ if(pc.stage==5u){
+  vec4 total=vec4(0),extra=vec4(0);
+  for(uint group=lane;group<pc.groups;group+=128u){
+   total+=partials[group*5u+3u];vec4 value=partials[group*5u+4u];extra.x=max(extra.x,value.x);extra.y+=value.y;
+  }
+  sums[lane]=total;shown[lane]=extra;barrier();
+  for(uint stride=64u;stride>0u;stride>>=1){
+   if(lane<stride){sums[lane]+=sums[lane+stride];shown[lane].x=max(shown[lane].x,shown[lane+stride].x);shown[lane].y+=shown[lane+stride].y;}barrier();
+  }
+  if(lane==0u){thinning_result[0]=sums[0];thinning_result[1]=shown[0];}
+ }
+
 }

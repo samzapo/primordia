@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   measure:
-    if: github.repository == 'samzapo/primordia'
+    if: github.repository == 'samzapo/primordia' && (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[particle-capacity-probe]'))
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 15
     steps:

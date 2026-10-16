@@ -7,6 +7,8 @@ var due: Array=[] # Min heap of [time, serial, key].
 var positions: Dictionary={} # One heap entry per stored chunk.
 var serial:=0
 var count:=0
+var living:=0
+var signals:=0
 var visits:=0
 var kernels # Optional batched partitioning; owns no second copy of packet state.
 
@@ -54,9 +56,10 @@ func put(packet: Dictionary, now: float) -> void:
 	var k:=key(packet.p)
 	if not chunks.has(k):
 		serial+=1
-		chunks[k]={"packets":[],"head":0,"serial":serial,"key":k,"transport_due":now+.5,"chemical_due":INF}
+		chunks[k]={"packets":[],"head":0,"serial":serial,"key":k,"transport_due":now+.5,"chemical_due":INF,"living":0,"signals":0}
 		_push([now+.5,serial,k])
-	chunks[k].packets.append(packet);count+=1
+	chunks[k].packets.append(packet);count+=1;living+=1;chunks[k].living+=1
+	if packet.get("kind",-1)==3:signals+=1;chunks[k].signals+=1
 	chunks[k].transport_due=minf(chunks[k].transport_due,packet.get("transport_at",now)+.5)
 	if packet.get("kind",0)!=3: chunks[k].chemical_due=minf(chunks[k].chemical_due,packet.get("chemical_at",now)+.5)
 
@@ -82,6 +85,10 @@ func take(k: Vector2i,limit: int=2147483647) -> Array:
 	var end: int=mini(chunk.packets.size(),chunk.head+limit)
 	var result: Array=chunk.packets.slice(chunk.head,end)
 	count-=result.size();chunk.head=end
+	for packet in result:
+		if packet.alive:
+			living-=1;chunk.living-=1
+			if packet.get("kind",-1)==3:signals-=1;chunk.signals-=1
 	if end==chunk.packets.size(): chunks.erase(k);_remove(k)
 	elif end>=1024 and end*2>=chunk.packets.size():
 		chunk.packets=chunk.packets.slice(end);chunk.head=0
@@ -92,16 +99,22 @@ func borrow_region(at: Vector2,half: Vector2) -> Array:
 	for k in keys_in(at,half):
 		var chunk: Dictionary=chunks[k]
 		if chunk.head>0: chunk.packets=chunk.packets.slice(chunk.head);chunk.head=0
-		count-=chunk.packets.size();chunks.erase(k);_remove(k)
+		count-=chunk.packets.size();living-=chunk.living;signals-=chunk.signals;chunks.erase(k);_remove(k)
 		result.append(chunk)
 	return result
 
 func restore(chunk: Dictionary,now: float) -> void:
 	if chunk.packets.is_empty(): return
 	var k: Vector2i=chunk.key
+	chunk.living=0;chunk.signals=0
+	for packet in chunk.packets:
+		if packet.alive:
+			chunk.living+=1
+			if packet.get("kind",-1)==3:chunk.signals+=1
+	living+=chunk.living;signals+=chunk.signals
 	if chunks.has(k):
 		var held: Dictionary=chunks[k]
-		held.packets.append_array(chunk.packets)
+		held.packets.append_array(chunk.packets);held.living+=chunk.living;held.signals+=chunk.signals
 		held.transport_due=minf(held.transport_due,chunk.transport_due)
 		held.chemical_due=minf(held.chemical_due,chunk.chemical_due)
 		var index: int=positions[k]
@@ -134,4 +147,19 @@ func snapshots() -> Array:
 	# Explicit save/diagnostic only, never called by a simulation tick.
 	var result: Array=[]
 	for chunk in chunks.values(): result.append_array(chunk.packets.slice(chunk.head).duplicate(true))
+	return result
+
+func thin(probability: float,random: RandomNumberGenerator) -> Dictionary:
+	var budget=preload("res://scripts/particle_budget.gd")
+	var result: Dictionary={"removed":0,"loss":0.0,"fuel_loss":0.0}
+	for k in chunks.keys():
+		var chunk: Dictionary=chunks[k]
+		var packets: Array=chunk.packets.slice(chunk.head)
+		budget.add(result,budget.thin(packets,probability,random))
+		count-=packets.size();living-=chunk.living;signals-=chunk.signals
+		var kept: Array=packets.filter(func(packet):return packet.alive)
+		if kept.is_empty():chunks.erase(k);_remove(k);continue
+		chunk.packets=kept;chunk.head=0;chunk.living=kept.size()
+		chunk.signals=kept.filter(func(packet):return packet.get("kind",-1)==3).size()
+		count+=kept.size();living+=chunk.living;signals+=chunk.signals
 	return result

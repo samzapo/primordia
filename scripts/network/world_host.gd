@@ -154,6 +154,7 @@ func _ready() -> void:
 	epoch += 1
 	world.pending_replacements.clear()
 	introduced_cells+=Population.replenish(world)
+	world.particle_limit=int(OS.get_environment("PRIMORDIA_PARTICLE_LIMIT")) if OS.has_environment("PRIMORDIA_PARTICLE_LIMIT") else 5000
 	world.server_mode = true; world.camera_views.clear();world.enable_perception_domains();world.external_offscreen=false;world.interoceptive_cells.clear()
 	world.evolution.sandbox = true
 	for account in accounts.values():account.lineage.progression=account.evolution
@@ -654,7 +655,7 @@ func _frame(peer: Dictionary) -> Dictionary:
 		if peer.get("perception","exteroception")!="interoception" or cell!=focus:internal_overrides[cell.chemistry.get_instance_id()]={"particles":[],"vacuoles":[],"presentation_totals":{"material":cell.chemistry.material(),"storage":cell.chemistry.storage_used(),"potential":cell.chemistry.potential(),"raw_fuel":cell.chemistry.raw_fuel(),"packets":cell.chemistry.particle_count()}}
 	return {"kind":"snapshot","world_id":world_id,"epoch":epoch,"tick":world.revision,"time":world.time,"edit":account.edit,"sequence":account.sequence,
 		"family_recovery":_family_recovery(account),"lineage_names":_lineage_names(),"player_name":str(account.get("display_name","")),"graph":Codec.new().capture({"cells":cells,"player":_selected(account),"focus":_focus(peer),"lineage":account.lineage,"evolution":account.evolution},internal_overrides,peer.get("compact_cytoplasm",false),peer.get("cytoplasm_version",1)),
-		"environment":world.environment.duplicate(true),"particles":PackedByteArray(),"flow":world.fluid.velocity.duplicate(),"acid":world.acidity.values.duplicate(),
+		"census":world.habitat_census(),"environment":world.environment.duplicate(true),"particles":PackedByteArray(),"flow":world.fluid.velocity.duplicate(),"acid":world.acidity.values.duplicate(),
 		"sounds":world.sound_events.duplicate(true),"sound_sequence":world.sound_sequence,"sparks":world.reaction_sparks.duplicate(true),"perception":peer.get("perception","exteroception"),"warming":false,
 		"death_serial":world.death_serial,"deaths":_death_events(peer),"selected_cell":_selected(account).id,"followed_cell":focus.id if focus!=null else -1}
 
@@ -681,6 +682,7 @@ func _send_snapshot(peer: Dictionary,records: PackedByteArray,frame: Dictionary=
 		var d:=Sim.Medium.offset(Vector2(view.x,view.y),Vector2(records.decode_float(offset),records.decode_float(offset+4))).abs()
 		if d.x<=view.z+32 and d.y<=view.w+32: bytes.append_array(records.slice(offset,offset+32))
 	frame.particles=bytes
+	frame.census["camera_particles"]=bytes.size()/32
 	var serial: int=peer.get("frame_serial",0)+1
 	frame.serial=serial
 	frame.protocol=Protocol.VERSION
@@ -751,7 +753,8 @@ func _write_metrics() -> void:
 		if not cell.dead:
 			living+=1
 			if not claimed.has(cell.lineage_id()): joinable[cell.lineage_id()]=true
-	var metrics={"living_cells":living,"joinable_lineages":joinable.size(),"access_keys":access_hashes.size(),"world_id":world_id,"epoch":epoch,"tick":world.revision,"simulation_seconds":world.time,"uptime_seconds":wall,"simulation_wall_ratio":(world.time-start_simulation_seconds)/maxf(wall,.000001),"checkpoint_age_seconds":(Time.get_ticks_usec()-last_checkpoint_usec)/1000000.0,"updated_unix":Time.get_unix_time_from_system(),
+	var census: Dictionary=world.habitat_census()
+	var metrics={"particle_limit":world.particle_limit,"particle_thinning_removed":world.particle_thinning_removed,"particle_thinning_loss":world.particle_thinning_loss,"particle_thinning_fuel_loss":world.particle_thinning_fuel_loss,"habitat_particles":census.total,"external_particles":census.external,"external_chemicals":census.chemicals,"external_signals":census.signals,"living_cells":living,"joinable_lineages":joinable.size(),"access_keys":access_hashes.size(),"world_id":world_id,"epoch":epoch,"tick":world.revision,"simulation_seconds":world.time,"uptime_seconds":wall,"simulation_wall_ratio":(world.time-start_simulation_seconds)/maxf(wall,.000001),"checkpoint_age_seconds":(Time.get_ticks_usec()-last_checkpoint_usec)/1000000.0,"updated_unix":Time.get_unix_time_from_system(),
 		"backend":"gpu" if world.resident!=null else "cpu","gpu":RenderingServer.get_video_adapter_name(),"build":OS.get_environment("PRIMORDIA_BUILD_SHA"),
 		"views":world.camera_views.size(),"peers":peers.size(),"packets":world.particle_count(),"cold_packets":world.resident.stored_count() if world.resident!=null else 0,"accounts":accounts.size(),"stored_packets":world.particle_count()+world.resident.stored_count() if world.resident!=null else world.particle_count(),
 		"sent_bytes":sent_bytes,"skipped_frames":skipped_frames,"publication_readback_bytes":world.resident.gpu._publication.bytes_read if world.resident!=null and world.resident.gpu._publication!=null else 0,"checkpoint_tick":store.last_saved_tick,"checkpoint_ms":checkpoint_total_ms,"checkpoint_write_ms":store.latency_ms,"checkpoint_error":store.last_error,"backend_error":startup_error}

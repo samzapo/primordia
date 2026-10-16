@@ -98,6 +98,39 @@ func _queue(packet: Dictionary) -> void:
 	if streaming!=null and not streaming.contains(packet.p): streaming.cold.put(packet,world.get_ref().time)
 	else: pending.append(packet)
 
+func habitat_census() -> Dictionary:
+	var queued:=0;var queued_signals:=0
+	for packet in pending+trace_emissions.values():
+		if packet.alive:
+			queued+=1
+			if packet.kind==3:queued_signals+=1
+	var cold_live: int=streaming.cold.living if streaming!=null else 0
+	var cold_signals: int=streaming.cold.signals if streaming!=null else 0
+	if streaming!=null:
+		for packet in streaming.borrowed:
+			if packet.alive:
+				cold_live+=1
+				if packet.kind==3:cold_signals+=1
+	# The cached GPU count includes transfer escrow until receive subtracts it
+	# and credits cold ownership. An unacknowledged ticket is never added twice.
+	return {"external":alive+cold_live+queued,"signals":signals+cold_signals+queued_signals,"gpu":alive,"cold":cold_live,"pending":queued}
+
+func thin(probability: float,serial: int,random: RandomNumberGenerator) -> Dictionary:
+	var result: Dictionary=gpu.thin_sync(probability,serial)
+	if result.has("error"):return result
+	alive=result.alive;signals=result.signals
+	var budget=preload("res://scripts/particle_budget.gd")
+	if streaming!=null:
+		assert(streaming.borrowed.is_empty())
+		budget.add(result,streaming.cold.thin(probability,random))
+	budget.add(result,budget.thin(pending,probability,random))
+	pending=pending.filter(func(packet):return packet.alive)
+	var traces: Array=trace_emissions.values()
+	budget.add(result,budget.thin(traces,probability,random))
+	for key in trace_emissions.keys():
+		if not trace_emissions[key].alive:trace_emissions.erase(key)
+	return result
+
 func stored_count() -> int:
 	return streaming.cold.count if streaming!=null else 0
 

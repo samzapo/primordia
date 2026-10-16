@@ -25,6 +25,14 @@ var build_waste := 0.0
 var build_input := 0.0
 var managed_lineages: Array = []
 var autonomous_build_retry_at := 0.0
+var particle_limit:=0 # Explicit shared-server configuration; CPU comparisons default off.
+var particle_thinning_due:=0.0
+var particle_thinning_serial:=0
+var particle_thinning_removed:=0
+var particle_thinning_loss:=0.0 # Subset of respiration_loss, the existing exterior sink ledger.
+var particle_thinning_fuel_loss:=0.0
+var particle_thinning_random:=RandomNumberGenerator.new()
+
 const Backend = preload("res://scripts/backend.gd")
 var kernels = Backend.create()
 var gpu_transport = null
@@ -211,6 +219,27 @@ static func repair_spent_charge(packet: Dictionary) -> bool:
 func particle_count() -> int:
 	if resident != null: return resident.alive
 	return kernels.pool_size() if particle_pool else particles.size()
+
+func habitat_census() -> Dictionary:
+	var result: Dictionary
+	if resident!=null:result=resident.habitat_census()
+	elif kernels!=null:
+		var ids: Array[int]=[];ids.assign(range(particle_count()))
+		var counts: Dictionary=kernels.particle_census(particles,ids,Vector2.ZERO,WORLD)
+		result={"external":counts.chemicals+counts.signals,"signals":counts.signals,"gpu":0,"cold":0,"pending":0}
+	else:
+		var total:=0;var signal_count:=0
+		for packet in particles:
+			if packet.alive:
+				total+=1
+				if packet.kind==PHEROMONE:signal_count+=1
+		result={"external":total,"signals":signal_count,"gpu":0,"cold":0,"pending":0}
+	result["chemicals"]=result.external-result.signals
+	result["living_cells"]=cells.filter(func(cell):return not cell.dead).size()
+	result["internal"]=cells.reduce(func(total,cell):return total+(cell.chemistry.particle_count() if not cell.dead else 0),0)
+	result["total"]=result.external+result.internal
+	result["backend"]="gpu" if resident!=null else "cpu"
+	return result
 
 func pheromone_count() -> int:
 	if resident != null: return resident.signals
@@ -511,6 +540,7 @@ func step(dt: float) -> void:
 		view_half=resident.detail_half
 		resident.step(dt)
 		view_half=shown_half;camera_position=shown_camera;camera_follows_player=shown_follow
+		thin_external_if_due()
 		return
 	var display_half := view_half
 	var display_camera := camera_position
@@ -522,6 +552,31 @@ func step(dt: float) -> void:
 	view_half = display_half
 	camera_position = display_camera
 	camera_follows_player = display_follow
+	thin_external_if_due()
+
+func thin_external_if_due() -> void:
+	if particle_limit<=0 or time<particle_thinning_due:return
+	particle_thinning_due=time+1.0
+	var census:=habitat_census()
+	if census.external<=particle_limit:return
+	if particle_thinning_serial==0:particle_thinning_random.seed=seed_value^0xb371d456
+	particle_thinning_serial+=1
+	var probability: float=1.0-float(particle_limit)/census.external
+	var result: Dictionary
+	if resident!=null:
+		result=resident.thin(probability,particle_thinning_serial,particle_thinning_random)
+		if result.has("error"):resident.fallback(result.error);return
+	elif particle_pool:
+		var packets: Array=kernels.pool_snapshots()
+		result=preload("res://scripts/particle_budget.gd").thin(packets,probability,particle_thinning_random)
+		for i in packets.size():
+			if not packets[i].alive:kernels.pool_patch(i,{"alive":false})
+		kernels.invalidate_particle_render()
+	else:
+		result=preload("res://scripts/particle_budget.gd").thin(particles,probability,particle_thinning_random)
+	respiration_loss+=result.loss
+	particle_thinning_loss+=result.loss;particle_thinning_fuel_loss+=result.fuel_loss
+	particle_thinning_removed+=result.removed
 
 func _step_simulation(dt: float) -> void:
 	if not server_mode and (evolution.terminal() or build_original != null): return
