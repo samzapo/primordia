@@ -610,3 +610,23 @@ nothing. Every account-owned lineage remains managed, including disconnected
 players. The authority excludes those roots before purchases. Division continues
 to award two AP. Sun/Shade choices no longer occupy new random mutation slots;
 previously offered and learned choices remain saved.
+
+
+
+### Per-organelle output (October 16, 2026)
+
+Each organelle's local menu has a saved Output setting cycling through 100,
+150, 200, 300 and 400 percent. Steering is separate. Shared work-rate factors
+scale thrust, pumping, gland throughput, repair and fixation. ATP costs scale
+with work and a penalty of 5% per additional 100% output (200% work costs 210%
+ATP for ordinary paid actions). Emissions still consume proportional biomass;
+local carbon and light limit fixation. The setting itself is free and defaults
+to100% for existing organs.
+
+Receptors pay for expanded sampling reach and fall back to ordinary sensing
+without ATP. GPU queries retain their prepared output; a range the body can no
+longer fund supplies no new result. Protective cortex overdrive spends ATP to
+reduce tissue damage; an unfunded hit uses ordinary armor. Photosynthesis pays
+for additional fixation beyond baseline, so an empty ATP reserve can recover
+normally. These are shared game abstractions, not universal cellular power laws.
+The same physiology runs visible, resident and offscreen bodies.

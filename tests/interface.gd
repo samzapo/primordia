@@ -158,7 +158,7 @@ func run(test_host) -> void:
 	click(at(cell.local_point(2.15)),MOUSE_BUTTON_RIGHT)
 	expect(scene.selected == -1 and not cell.organ_by_id(organ_id).is_empty(),"Right-click cancels the held ghost without recycling installed anatomy")
 	scene.cell_ui.open_context({"kind":"organ","id":organ_id})
-	expect(scene.cell_ui.choices.size() == 2 and scene.cell_ui.choices[0].caption == "Move" and scene.cell_ui.choices[1].caption == "Recycle","An unmodified organ exposes Move and Recycle, with no resize or Undo")
+	expect(scene.cell_ui.choices.size() == 3 and scene.cell_ui.choices[0].caption == "Move" and scene.cell_ui.choices[1].caption == "Recycle" and scene.cell_ui.choices[2].caption == "Output 100%","An unmodified organ exposes Move, Recycle and output, with no resize or Undo")
 	var points: int = scene.world.evolution.points
 	scene.cell_ui.choices[1].pressed.emit()
 	scene._update_world(1)
@@ -175,13 +175,18 @@ func run(test_host) -> void:
 	# Steering lives on the organ; preview quantities are usable tissue only.
 	var pore: Dictionary = cell.organs.filter(func(item):return item.kind == "feeding")[0]
 	scene.cell_ui.open_context({"kind":"organ","id":pore.id})
-	expect(scene.cell_ui.choices.size() == 1 and scene.cell_ui.choices[0].caption == "Steering 100%","A pore exposes its signal strength as a local anatomical choice")
+	expect(scene.cell_ui.choices.size() == 2 and scene.cell_ui.choices[0].caption == "Steering 100%" and scene.cell_ui.choices[1].caption == "Output 100%","A pore exposes steering and ATP-funded output as separate choices")
 	var resource_state: Array = [cell.biomass,cell.energy,scene.world.evolution.points]
 	for i in 3: scene.cell_ui.choices[0].pressed.emit()
 	expect(Sim.Cell.steering_strength(pore) == 0 and scene.cell_ui.choices[0].caption == "Steering Off","Clicking the local strength choice cycles to steering Off")
 	expect(resource_state == [cell.biomass,cell.energy,scene.world.evolution.points],"Local tuning spends no physical resource or adaptation point")
 	expect(scene.cell_ui.describe({"kind":"organ","id":pore.id}).contains("Steering Off"),"Organ inspection immediately reports its steering setting")
 	for i in 3: scene.cell_ui.choices[0].pressed.emit()
+	var output_choice = scene.cell_ui.choices[1]
+	expect(output_choice.caption == "Output 100%" and output_choice.symbol == "Out 100%","Output has a distinct visible label beside steering")
+	output_choice.pressed.emit()
+	expect(Sim.Genes.output(pore) == 1.5 and scene.cell_ui.choices[1].caption == "Output 150%","The actual output menu applies the validated percentage command")
+	expect(resource_state == [cell.biomass,cell.energy,scene.world.evolution.points],"Output tuning itself spends no physical resource or AP")
 	scene.cell_ui.close_context()
 	# The actual kept upgrade price feeds both the tooltip and visual cost comparison.
 	cell.add_organ("propulsion",PI,"graze",false)

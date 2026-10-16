@@ -106,11 +106,11 @@ static func requests(cells: Array, dt: float=0, now: float=0) -> Array:
 			var mode: String="hunt" if organ.kind=="hunting" else organ.mode
 			if mode not in ["hunt","flee","graze","waste","toxin","inspect"]: continue
 			if mode!="flee" and cell.steering_strength(organ)<=0: continue
-			var reach: float=(120 if mode=="hunt" else 90 if mode=="flee" else 310)*sqrt(organ.scale)*(1-organ.blocked*0.65)*Genes.factor(organ,"sense")
+			var reach: float=(120 if mode=="hunt" else 90 if mode=="flee" else 310)*sqrt(organ.scale)*(1-organ.blocked*0.65)*Genes.factor(organ,"sense")*cell.sensory_output(organ)
 			result.append({"at":cell.organ_position(organ),"reach":reach,"id":cell.id,"lineage":cell.lineage_id(),
 				"mass":cell.organic_mass(),"mode":mode,"target_id":cell.target_id,
 				"incumbent":cell.target_memory>local_dt and cell.target_expires_at>now and (mode=="graze" or cell.target_lineage!=cell.lineage_id()) and cell.target_organ_id==organ.id and cell.target_mode==mode,
-				"organ_id":organ.id,"center":cell.position,"inner":maxf(70,cell.extent()+22)})
+				"organ_id":organ.id,"output":cell.sensory_output(organ),"center":cell.position,"inner":maxf(70,cell.extent()+22)})
 	return result
 
 static func for_cell(queries: Array, results: Array, cell) -> Dictionary:
@@ -120,7 +120,7 @@ static func for_cell(queries: Array, results: Array, cell) -> Dictionary:
 		var reports: Dictionary={}
 		if queries[i].mode not in ["hunt","flee","graze"]: continue
 		if results[i].valid and results[i].has("report"): reports[results[i].report.id]=results[i]
-		received[queries[i].organ_id]={"food":{},"reports":reports,"patch":results[i].get("patch",{})}
+		received[queries[i].organ_id]={"food":{},"reports":reports,"patch":results[i].get("patch",{}),"output":queries[i].get("output",1.0)}
 	return received
 
 func initialize(device: RenderingDevice, state: RID, identity: RID, order: RID, ranges: RID, receipts: Array[RID], initial: PackedByteArray, source: String, slots: int) -> bool:

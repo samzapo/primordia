@@ -318,3 +318,12 @@ GPU/backend, network and checkpoint/all-cell retention checks. Do not claim a
 rendered speed target passed from those checks. Existing performance-warning
 rollout support may record timing observations; preserve all hard correctness,
 GPU and save-retention failures. Monitoring schedules remain deleted.
+
+
+
+October16 owner adds saved per-organ Output (100/150/200/300/400%) independent
+of steering. Default100 preserves old behavior. Shared work/ATP helpers cover
+ordinary/resident/offscreen execution with a small inefficiency. Preserve finite
+emission material/carbon, ATP-backed sensory/protective boosts and baseline
+photosynthesis/sensing at zero ATP. Validate settings through editor commands;
+adjusting the percentage itself is free.

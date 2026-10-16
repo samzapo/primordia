@@ -401,6 +401,24 @@ func add_organ(kind: String, a: float, mode: String = "graze", paid: bool = true
 	render_revision += 1
 	return true
 
+const OUTPUT_STEPS := [1.0,1.5,2.0,3.0,4.0]
+
+func set_output_strength(identity: int, value: float) -> bool:
+	var organ := organ_by_id(identity)
+	if organ.is_empty() or not is_finite(value) or value not in OUTPUT_STEPS: return false
+	organ["output"] = value
+	render_revision += 1
+	return true
+
+func sensory_output(organ: Dictionary, paid: bool = false) -> float:
+	# An overdriven receptor pays only when it actually samples; its ordinary
+	# 100% sensing remains available at zero ATP.
+	var requested := Genes.output(organ)-1
+	var unit: float = .1*.15*organ.scale*organ.scale*Genes.inefficiency(organ)
+	var extra := minf(requested,energy/maxf(.0000001,unit))
+	if paid and extra > 0: spend_energy(extra*unit,organ,"sensing")
+	return 1+extra
+
 func pore_radius(organ: Dictionary) -> float:
 	return 18.0*organ.scale*Genes.factor(organ,"intake")
 
@@ -450,8 +468,10 @@ static func organ_upkeep(organ: Dictionary) -> float:
 	var area: float = float(organ.get("scale",1.0))*float(organ.get("scale",1.0))
 	var rate := area*Genes.factor(organ,"upkeep",0.0)
 	if organ.kind == "propulsion": rate += MOTION_UPKEEP*area*Genes.factor(organ,"motion_cost")
-	elif organ.kind == "feeding": rate += PUMP_UPKEEP*area
-	elif organ.kind == "cilia": rate += (CILIA_MOTION+CILIA_PUMP)*area
+	elif organ.kind == "feeding": rate += PUMP_UPKEEP*area*Genes.output_cost(organ)
+	elif organ.kind == "cilia": rate += (CILIA_MOTION+CILIA_PUMP)*area*Genes.output_cost(organ)
+	if organ.kind in ["feeding","sensing","hunting","photosynthesis"]:
+		rate += .1*(Genes.output(organ)-1)*Genes.inefficiency(organ)*area
 	if organ.kind in ["feeding","neutralizing","acidifying","regenerative"]:
 		rate += (0.35 if organ.kind == "feeding" else 2.0)*area*Genes.factor(organ,"secretion")*SECRETION_COST*Genes.factor(organ,"secretion_cost")
 	return rate
@@ -517,10 +537,16 @@ func damage(amount: float, world_angle: float) -> float:
 			distance = arc
 	if hit >= 0:
 		var organ: Dictionary = organs[hit]
-		var absorbed = minf(amount, organ.hp)
-		var lost: float = organ.material * absorbed / organ.hp
+		var output: float = Genes.output(organ) if organ.kind == "protection" else 1.0
+		var absorbed: float = minf(amount,organ.hp*output)
+		var demand: float = (absorbed-absorbed/output)*.2*Genes.inefficiency(organ)
+		if demand > energy:
+			output = 1.0; absorbed = minf(amount,organ.hp); demand = 0.0
+		if demand > 0: spend_energy(demand,organ,"protection")
+		var tissue_damage: float = absorbed/output
+		var lost: float = organ.material * tissue_damage / organ.hp
 		organ.material -= lost
-		organ.hp -= absorbed
+		organ.hp -= tissue_damage
 		released += lost
 		amount -= absorbed
 		if organ.hp <= 0:

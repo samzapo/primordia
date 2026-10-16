@@ -23,6 +23,7 @@ static func execute(sim, action: String, args: Dictionary):
 		"choose_mutation": return sim.evolution.accept_division_offer(str(args.get("gene","")))
 		"restore": return sim.restore(identity)
 		"steering": return cell.set_steering_strength(identity,value)
+		"output": return cell.set_output_strength(identity,value)
 		"exploration": return cell.set_exploration(value)
 		"cycle": return cell.set_response_cycle(value)
 		"reserve":

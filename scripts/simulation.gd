@@ -1023,7 +1023,7 @@ func _suction_cell(cell, dt: float) -> void:
 	for organ in cell.organs:
 		if organ.kind not in ["feeding","cilia"] or organ.hp <= 0 or cell.energy <= 0: continue
 		var ciliary: bool = organ.kind == "cilia"
-		var cost: float = dt*(Cell.CILIA_PUMP if ciliary else Cell.PUMP_UPKEEP)*organ.scale*organ.scale
+		var cost: float = dt*(Cell.CILIA_PUMP if ciliary else Cell.PUMP_UPKEEP)*organ.scale*organ.scale*Genes.output_cost(organ)
 		var health: float = organ.hp/organ.max_hp
 		var power: float = (Cell.CILIA_FLOW if ciliary else Cell.ORAL_FLOW)*organ.scale*health*Genes.factor(organ,"suction")
 		var paid: float = cell.spend_energy(cost,organ,"pumping")
@@ -1102,7 +1102,10 @@ func _sense(cell, dt: float, received_by_organ: Dictionary = {}) -> void:
 			var mode: String = "hunt" if organ.kind == "hunting" else "light" if organ.kind == "photosynthesis" else organ.mode
 			var strength: float = _steering_weight(organ,mode)
 			if strength <= 0: continue
-			var reach: float = (120.0 if mode == "hunt" else 90.0 if mode == "flee" else 310.0)*sqrt(organ.scale)*(1-organ.blocked*0.65)*Genes.factor(organ,"sense")
+			var output: float = cell.sensory_output(organ,true)
+			if received_by_organ.has(organ.id) and float(received_by_organ[organ.id].get("output",1)) > output+.000001:
+				received_by_organ[organ.id] = {"food":{},"reports":{},"patch":{},"output":output}
+			var reach: float = (120.0 if mode == "hunt" else 90.0 if mode == "flee" else 310.0)*sqrt(organ.scale)*(1-organ.blocked*0.65)*Genes.factor(organ,"sense")*output
 			var receptor: Vector2 = cell.organ_position(organ)
 			if mode == "light":
 				var direction := light_direction(receptor)
@@ -1363,8 +1366,8 @@ func _emit_and_attack(cell, dt: float) -> void:
 		var aim: Vector2 = cell.threat if cell.target_mode == "flee" else Medium.offset(cell.position,cell.target_position).normalized()
 		if organ.burst_clock > 0 or cell.target_id < 0 or cell.target_memory <= 0 or aim.length_squared() < 0.01: continue
 		var burst: float = organ.scale*organ.scale*Genes.factor(organ,"burst")
-		if cell.energy < 12 or cell.available_energy(organ)+0.0000001 < 2*burst or cell.biomass < 0.18*burst: continue
-		cell.spend_energy(2*burst,organ,"combat")
+		if cell.energy < 12 or cell.available_energy(organ)+0.0000001 < 2*burst*Genes.inefficiency(organ) or cell.biomass < 0.18*burst: continue
+		cell.spend_energy(2*burst*Genes.inefficiency(organ),organ,"combat")
 		if organ.kind == "poreforming":
 			_emit_aimed(TAG,cell.organ_position(organ),aim,155,0.03*burst,cell.id)
 			for unit in 4: _emit_aimed(PORE_SUBUNIT,cell.organ_position(organ),aim,155+unit*4,0.0375*burst,cell.id)

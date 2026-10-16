@@ -225,6 +225,12 @@ func open_context(target: Dictionary) -> void:
 					var index: int = steps.find(strength)
 					sim.edit("steering",{"id":organ.id,"value":steps[(index+1)%steps.size()]})
 					open_context(target),"",label)
+			var output: float = sim.Genes.output(organ)
+			_choice("Output %d%%" % roundi(output*100),"Cycle 100 / 150 / 200 / 300 / 400%. More work uses proportionally more ATP, plus 5% extra ATP per additional 100% output. Material inputs are still required. At zero ATP, ordinary photosynthesis and sensing remain available.",func():
+				var steps: Array = sim.Cell.OUTPUT_STEPS
+				var index: int = steps.find(output)
+				sim.edit("output",{"id":organ.id,"value":steps[(index+1)%steps.size()]})
+				open_context(target),"","Out %d%%" % roundi(output*100))
 			if not cell.inherent(organ):
 				for gene in sim.Genes.available(organ,run.learned):
 					var data: Dictionary = sim.Genes.DATA[gene]
@@ -391,6 +397,7 @@ func describe(target: Dictionary) -> String:
 			var organ: Dictionary = cell.organ_by_id(target.id)
 			if organ.is_empty(): return ""
 			var result: String = game.TITLES[sim.KINDS.find(organ.kind)]+"\nHealth %d%%" % roundi(100*organ.hp/organ.max_hp)
+			result += "\nOutput %d%% · ATP/work +%d%%" % [roundi(sim.Genes.output(organ)*100),roundi((sim.Genes.inefficiency(organ)-1)*100)]
 			if sim.Cell.tunable_steering(organ):
 				var strength: float = sim.Cell.steering_strength(organ)
 				result += "\nSteering "+("Off" if strength == 0 else "%d%%" % roundi(strength*100))

@@ -458,3 +458,15 @@ these values. Actual physical intake and finite material/fuel costs remain.
 ### Vegetation drag in the persistent pond (October 15, 2026)
 
 [USGS: Vegetation affects water movement in the Florida Everglades (1996)](https://pubs.usgs.gov/publication/fs14796) reports resistance from living/dead stems and leaves. [Lacy et al. (2021), field measurements of submerged vegetation and currents](https://www.usgs.gov/publications/influence-invasive-submerged-aquatic-vegetation-e-densa-currents-and-sediment) motivate attenuation through plant patches. These are macroscopic observations, not measurements of Primordia's fictional microscopic plants. The game uses a deliberately simple, bounded linear drag rasterized from existing branch geometry, integrated exponentially in the existing mass-lumped medium. Anchored vegetation is an external momentum sink; this is neither an incompressible solver nor a calibrated hydrodynamic model. Chemical packets remain permeable to branches, carried by the attenuated real water field.
+
+
+
+## Adjustable organelle output (October 16, 2026)
+
+[Alberts et al., Catalysis and the Use of Energy by Cells](https://www.ncbi.nlm.nih.gov/books/NBK26838/),
+the existing ciliary-flow sources, and [Stewart et al., Hydrostatic pressure and
+the actomyosin cortex drive mitotic cell rounding](https://www.nature.com/articles/nature09642)
+motivate energy-dependent cell work and an active cortex. The common selectable
+100–400% scale, incremental ATP penalty, sensing expense, protective damage
+reduction and baseline-fixation fallback are game rules. These sources do not
+establish one shared organelle power law or any chosen percentage.

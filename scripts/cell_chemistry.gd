@@ -258,20 +258,25 @@ func photosynthesize(sim,cell,organ: Dictionary,dt: float) -> void:
 	if dt<=0 or amount("carbon")<=.0000001:return
 	var light: float=sim.light_at(cell.organ_position(organ))
 	var budget: float=3.5*light*organ.scale*organ.scale*organ.hp/organ.max_hp*cell.Genes.factor(organ,"sun" if light>=.5 else "shade")*dt
+	var baseline_budget: float = budget/cell.Genes.output(organ)
+	var extra_cost: float = .2*cell.Genes.inefficiency(organ)
+	budget = baseline_budget+minf(budget-baseline_budget,cell.energy/extra_cost)
 	var site: Vector2=cell.local_point(organ.a)*.72
 	var used:=0.0
 	if accelerator!=null:
 		used=accelerator.command(10,budget,site,24,-1,-1,-1,0,0,"carbon")
-		if used>0:cell.gain_energy(used*4,organ)
+
 	else:
 		batching=true
 		used=_near_consume("carbon",budget,site,24)
 		if used>0:
 			emit("food",used*.65,site,organ.id,-1,used*.65*7.5)
 			emit("oxygen",used*2.5,site,organ.id,-1,0)
-			cell.biomass+=used*.35;cell.gain_energy(used*4,organ);solar_work+=used*11.5
+			cell.biomass+=used*.35;solar_work+=used*11.5
 		batching=false;refresh()
 	if used>0:
+		cell.spend_energy(maxf(0,used-baseline_budget)*extra_cost,organ,"photosynthesis")
+		cell.gain_energy(used*4,organ)
 		cell.fixed_carbon+=used;cell.oxygen_produced+=used*2.5
 		light_flux+=used/maxf(dt,.00000001)
 		cell.consumed(organ,used);cell.emitted(organ)

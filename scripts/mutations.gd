@@ -20,8 +20,21 @@ static func available(organ: Dictionary, learned: Array) -> Array:
 	if organ.get("mutation","") != "": return []
 	return learned.filter(func(gene):return DATA.has(gene) and DATA[gene].kind == organ.kind)
 
+static func output(organ: Dictionary) -> float:
+	return clampf(float(organ.get("output",1.0)),1,4)
+
+static func inefficiency(organ: Dictionary) -> float:
+	return 1+.05*(output(organ)-1)
+
+static func output_cost(organ: Dictionary) -> float:
+	return output(organ)*inefficiency(organ)
+
 static func factor(organ: Dictionary, key: String, fallback: float = 1.0) -> float:
-	return float(DATA.get(organ.get("mutation",""),{}).get(key,fallback))
+	var value := float(DATA.get(organ.get("mutation",""),{}).get(key,fallback))
+	if key in ["thrust","suction","secretion","repair","sun","shade","burst"]: value *= output(organ)
+	elif key in ["motion_cost","upkeep"]: value *= output_cost(organ)
+	elif key in ["secretion_cost","repair_cost"]: value *= inefficiency(organ)
+	return value
 
 static func price(organ: Dictionary) -> float:
 	return 0.0 # Division mutations are free to obtain and apply.
