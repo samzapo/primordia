@@ -61,7 +61,7 @@ def isolated_root(root,stable):
 def unit_text(current,godot,state,credentials,registry,sha):
     return (
         "[Unit]\nDescription=Primordia independent experimental GPU pond\nAfter=network-online.target\n\n"
-        "[Service]\nType=simple\nUMask=0077\nWorkingDirectory="+quote(current)+"\n"
+        "[Service]\nType=simple\nUMask=0077\nWorkingDirectory="+str(current).replace("%","%%")+"\n"
         "EnvironmentFile="+quote(credentials)+"\nEnvironment=PRIMORDIA_BUILD_SHA="+sha+"\n"
         "Environment="+quote("PRIMORDIA_ACCESS_KEYS_FILE="+str(registry))+"\n"
         "ExecStart=/usr/bin/python3 "+quote(current/"tools/run_service.py")+" --godot "+quote(godot)+

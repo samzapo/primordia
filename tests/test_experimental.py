@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import copy,json,sys,tempfile,threading,socket,unittest
+import copy,json,sys,tempfile,threading,socket,unittest,subprocess,shutil,os
 from pathlib import Path
 from urllib.request import build_opener,ProxyHandler,Request
 from urllib.error import HTTPError
@@ -34,6 +34,17 @@ class ExperimentalTests(unittest.TestCase):
         text=unit_text(Path("/experiment/current"),Path("/experiment/godot"),Path("/experiment/state"),Path("/experiment/credentials"),Path("/experiment/keys"),"abc")
         self.assertIn('--port 8768 --world-port 8769 --proxy-loopback',text)
         self.assertNotIn('primordia.service',text);self.assertNotIn('8766',text)
+    @unittest.skipUnless(shutil.which("systemd-analyze"),"systemd unit validator unavailable")
+    def test_actual_systemd_parser_accepts_the_candidate_unit(self):
+        with tempfile.TemporaryDirectory(prefix="primordia-experimental-unit-") as directory:
+            root=Path(directory);current=root/"current";current.mkdir()
+            credential=root/"credentials.env";credential.write_text("PRIMORDIA_INVITE=fixture")
+            unit=root/"primordia-experimental.service"
+            unit.write_text(unit_text(current,Path(sys.executable),root/"state",credential,root/"keys","abc"))
+            result=subprocess.run(["systemd-analyze","--user","verify",str(unit)],capture_output=True,text=True,
+                env={**os.environ,"XDG_RUNTIME_DIR":f"/run/user/{os.getuid()}"})
+            self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+
     def test_proxy_origin_checks_keep_foreign_sites_out(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);(root/"index.html").write_text("experimental")
