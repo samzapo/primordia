@@ -113,6 +113,16 @@ jobs:
           # or process environments beyond the owned Primordia service below.
           report["gpu_clocks"] = command(["nvidia-smi", "--query-gpu=name,pstate,clocks.current.graphics,clocks.current.sm,clocks.current.memory,power.draw,power.limit,temperature.gpu,utilization.gpu", "--format=csv,noheader"])
           report["gpu_performance_detail"] = command(["nvidia-smi", "-q", "-d", "PERFORMANCE,TEMPERATURE,CLOCK,POWER"])
+          report["numa_topology"] = []
+          for node in sorted(pathlib.Path("/sys/devices/system/node").glob("node[0-9]*")):
+              entry = {"node":node.name}
+              for name in ["cpulist", "distance"]:
+                  try: entry[name] = (node / name).read_text().strip()
+                  except OSError: pass
+              try: entry["memory"] = [line.strip() for line in (node / "meminfo").read_text().splitlines() if "MemTotal:" in line or "MemFree:" in line]
+              except OSError: pass
+              report["numa_topology"].append(entry)
+          report["gpu_numa_node"] = command(["cat", "/sys/bus/pci/devices/0000:41:00.0/numa_node"])
           report["runner_cpu_affinity"] = [line for line in pathlib.Path("/proc/self/status").read_text().splitlines() if line.startswith(("Cpus_allowed_list:", "Mems_allowed_list:"))]
           report["cpu_policies"] = []
           for policy in sorted(pathlib.Path("/sys/devices/system/cpu/cpufreq").glob("policy*")):
@@ -236,7 +246,13 @@ jobs:
                       \t\tvar v: Vector2=body.get("velocity",Vector2.ZERO)
                       \t\tbodies.append({"id":body.get("id",-1),"speed":v.length(),"angular":body.get("angular_velocity",0),"mass":body.get("mass",0)})
                       \tbodies.sort_custom(func(a,b):return a.speed>b.speed)
-                      \treturn {"world_id":saved.get("world_id",""),"epoch":saved.get("epoch",0),"tick":saved.get("tick",0),"food_supply_version":saved.get("food_supply_version",0),"food_supply":saved.get("food_supply",{}),"accounts":accounts,"fluid":{"nodes":velocities.size(),"nonfinite":nonfinite,"speed_p50":speeds[speeds.size()/2] if not speeds.is_empty() else 0,"speed_p95":speeds[int(speeds.size()*.95)] if not speeds.is_empty() else 0,"speed_max":speeds[-1] if not speeds.is_empty() else 0,"mean_velocity":[momentum.x/maxi(1,speeds.size()),momentum.y/maxi(1,speeds.size())]},"fastest_cells":bodies.slice(0,8)}
+                      \tvar native_flags: Dictionary={}
+                      \tfor key in world:
+                      \t\tif str(key).begins_with("native_"):native_flags[key]=world[key]
+                      \tvar membrane_flags: Array=[]
+                      \tfor record in objects:
+                      \t\tif record.kind=="membrane":membrane_flags.append({"constraints":record.fields.get("native_constraints"),"outline":record.fields.get("native_outline")})
+                      \treturn {"native_flags":native_flags,"membrane_flags":membrane_flags,"world_id":saved.get("world_id",""),"epoch":saved.get("epoch",0),"tick":saved.get("tick",0),"food_supply_version":saved.get("food_supply_version",0),"food_supply":saved.get("food_supply",{}),"accounts":accounts,"fluid":{"nodes":velocities.size(),"nonfinite":nonfinite,"speed_p50":speeds[speeds.size()/2] if not speeds.is_empty() else 0,"speed_p95":speeds[int(speeds.size()*.95)] if not speeds.is_empty() else 0,"speed_max":speeds[-1] if not speeds.is_empty() else 0,"mean_velocity":[momentum.x/maxi(1,speeds.size()),momentum.y/maxi(1,speeds.size())]},"fastest_cells":bodies.slice(0,8)}
                   """)
                   inspection = pathlib.Path("selection-project").resolve()
                   (inspection / "scripts/network").mkdir(parents=True)
