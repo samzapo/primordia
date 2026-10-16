@@ -531,3 +531,10 @@ Snapshot/checkpoint capture reuses only property-name schemas of the fixed scrip
 allowlist. Every graph still reads current values and object identities; no cell
 state is cached. An uncached reference path checks byte-identical full saves and
 both compact client formats, including overrides and changes between captures.
+
+Candidate authority fixtures use the deployed 64x64, disabled-vsync, 60 FPS
+presentation settings. Uncapped test rendering is a different CPU/GPU workload,
+even without world artwork. The 30 Hz simulation and all latency/real-time gates
+remain unchanged. During candidate checks a bounded read-only sampler records
+GPU clocks/load and only the owned process tree's thread runtime/runqueue delay;
+idle snapshots alone cannot diagnose active simulation stalls.

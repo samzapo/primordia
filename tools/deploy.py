@@ -19,11 +19,14 @@ from urllib.request import build_opener, ProxyHandler, HTTPSHandler, Request
 from check_capacity import inspect
 from check_wired_route import verify
 from authority_affinity import detect as detect_authority_cpus
+from observe_authority import Sampler
 
 UNIT = "primordia.service"
 
-def run(*args, **kwargs):
+def run(*args, observe=False, **kwargs):
     job = subprocess.Popen(args, start_new_session=True, **kwargs)
+    sampler = Sampler(job.pid) if observe else None
+    if sampler: sampler.start()
     try:
         while True:
             try:
@@ -38,6 +41,8 @@ def run(*args, **kwargs):
             os.killpg(job.pid, signal.SIGTERM)
             job.wait()
         raise
+    finally:
+        if sampler: sampler.stop()
 
 def quote(value):
     return '"' + str(value).replace("\\", "\\\\").replace('"', '\\"').replace("%", "%%") + '"'
@@ -274,7 +279,7 @@ def main():
         # worlds distort the cadence gate. All builds finish before this short,
         # checkpointed validation outage; any failure restores the old service.
         affinity_options = {"preexec_fn": lambda: os.sched_setaffinity(0, authority_cpus)} if authority_cpus else {}
-        run("bash", str(candidate / "tools/test_network.sh"), "gpu", env=environment, **affinity_options)
+        run("bash", str(candidate / "tools/test_network.sh"), "gpu", env=environment, observe=True, **affinity_options)
         staged_unit = unit.with_suffix(".service.new")
         staged_unit.write_text(unit_text)
         staged_unit.replace(unit)

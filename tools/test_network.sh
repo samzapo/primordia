@@ -69,19 +69,20 @@ if [[ "${1:-}" == gpu ]]; then
     ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
     grep -Eq 'DEATH RENDER GPU: [0-9]+ assertions, 0 failures' "$report_file"
   done
+  # Match run_service.py presentation pacing; chemistry/physics remain at 30 Hz.
   for scope in fixture full-world slow-observer recovery; do
     extra=()
     [[ "$scope" != full-world ]] || extra=(--full-world --realtime)
     [[ "$scope" != slow-observer ]] || extra=(--slow-observer)
     [[ "$scope" != recovery ]] || extra=(--recovery)
-    xvfb-run -a -s '-screen 0 1280x720x24 -nolisten tcp' "$godot_bin" --path "$project_dir" --rendering-method mobile --rendering-driver vulkan --gpu-index 0 --script tests/network_live.gd -- --gpu "${extra[@]}" 2>&1 | tee "$report_file"
+    xvfb-run -a -s '-screen 0 1280x720x24 -nolisten tcp' "$godot_bin" --path "$project_dir" --rendering-method mobile --rendering-driver vulkan --gpu-index 0 --resolution 64x64 --disable-vsync --max-fps 60 --script tests/network_live.gd -- --gpu "${extra[@]}" 2>&1 | tee "$report_file"
     ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:|returned to CPU' "$report_file"
     grep -Eq 'NETWORK LIVE: [0-9]+ assertions, 0 failures' "$report_file"
     grep -Eq 'NVIDIA|AMD|Intel' "$report_file"
     ! grep -Eiq 'llvmpipe|lavapipe|swiftshader' "$report_file"
   done
   if [[ -n "${PRIMORDIA_VERIFY_CHECKPOINT_DIR:-}" ]]; then
-    xvfb-run -a -s '-screen 0 1280x720x24 -nolisten tcp' "$godot_bin" --path "$project_dir" --rendering-method mobile --rendering-driver vulkan --gpu-index 0 --script tests/realtime_checkpoint_gpu.gd 2>&1 | tee "$report_file"
+    xvfb-run -a -s '-screen 0 1280x720x24 -nolisten tcp' "$godot_bin" --path "$project_dir" --rendering-method mobile --rendering-driver vulkan --gpu-index 0 --resolution 64x64 --disable-vsync --max-fps 60 --script tests/realtime_checkpoint_gpu.gd 2>&1 | tee "$report_file"
     ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
     grep -Eq 'AGED CHECKPOINT GPU: [0-9]+ assertions, 0 failures' "$report_file"
   fi
