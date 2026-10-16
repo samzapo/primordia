@@ -15,6 +15,12 @@ var deferred_acks: Dictionary={}
 func check(value: bool,message: String) -> void:
 	assertions+=1
 	if not value: failures+=1;push_error("FAIL: "+message)
+var performance_warnings:=0
+func check_performance(value: bool,message: String) -> void:
+	if not value and OS.get_environment("PRIMORDIA_PERFORMANCE_WARNINGS")=="1":
+		performance_warnings+=1
+		print("::warning::PERFORMANCE_WARNING ",message)
+	else:check(value,message)
 func _initialize() -> void: run.call_deferred()
 func poll() -> void:
 	if Time.get_ticks_msec()-keepalive_at>=200:
@@ -213,9 +219,9 @@ func run() -> void:
 		var ratio: float=(host.world.time-sim_start)/((Time.get_ticks_usec()-wall_start)/1000000.0)
 		var timings: Array=host.tick_samples.duplicate();timings.sort()
 		var p95: float=timings[mini(timings.size()-1,int(timings.size()*.95))]
-		check(ratio>=.98 and ratio<=1.02,"Shared authority advances at real time with mixed wide cameras")
+		check_performance(ratio>=.98 and ratio<=1.02,"Shared authority advances at real time with mixed wide cameras")
 		check(Engine.physics_ticks_per_second==30 and host.physics_hz==30,"Dedicated authority uses the documented 30 Hz simulation cadence")
-		check(p95<=1000.0/host.physics_hz,"Authority p95 tick fits its documented simulation cadence")
+		check_performance(p95<=1000.0/host.physics_hz,"Authority p95 tick fits its documented simulation cadence")
 		check(host.world.cells.all(func(cell):return cell.chemistry.particle_count()<=cell.chemistry.MAX_PACKETS),"Aged interiors stay bounded under sustained finite digestion")
 		host._write_metrics()
 		check(host.world.fluid.metrics().nonfinite==0 and host.world.cells.all(func(cell):return cell.velocity.is_finite() and is_finite(cell.angular_velocity)),"Mixed resident/coarse perception transitions retain finite water and body motion")
@@ -243,6 +249,7 @@ func run() -> void:
 	if personal_keys:
 		DirAccess.remove_absolute(key_file)
 		OS.unset_environment("PRIMORDIA_ACCESS_KEYS_FILE")
+	print("PERFORMANCE_WARNINGS ",performance_warnings)
 	print("NETWORK LIVE: %d assertions, %d failures" % [assertions,failures])
 	quit(0 if failures==0 else 1)
 func saved_directory() -> String:

@@ -272,3 +272,14 @@ rasterized from actual branches, including permeable fine foliage. Apply in both
 native/reference field updates and the offscreen complement; chemical packets
 remain permeable. Density/opacity reduction is presentation only. A finite saved
 sample does not rule out earlier spikes. Record current evidence and limitations.
+
+
+## October 15, 2026 — authorized rollout with performance warnings
+
+The owner says to send this update out and monitor performance. For this rollout,
+timing-target misses may be explicit warnings, selected by a manual workflow
+input or the exact head-commit marker [allow-performance-warnings]. Unmarked
+future pushes remain strict. Do not suppress functional, hardware-GPU, finite
+state, checkpoint or all-cell retention checks; keep the30Hz configured cadence
+and measured targets. Record and monitor timing misses honestly. This request
+does not authorize GPU clock/power changes, pond resets or population culling.

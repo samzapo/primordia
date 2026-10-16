@@ -20,6 +20,7 @@ from check_capacity import inspect
 from check_wired_route import verify
 from authority_affinity import detect as detect_authority_cpus
 from observe_authority import Sampler
+from performance_policy import evaluate as evaluate_performance
 
 UNIT = "primordia.service"
 
@@ -91,8 +92,8 @@ def health(build, previous=None, ca_file=None, state=None):
             if value.get("automatic_pond_restart") and value.get("living_cells", 0) < value.get("minimum_living_cells", 15):
                 raise ValueError("Pond population is below its configured floor")
             if first is not None and value["tick"] > first and value.get("uptime_seconds",0)>=10:
-                if value.get("simulation_hz") != 30 or not .98 <= value.get("simulation_wall_ratio",0) <= 1.02 or value.get("tick_ms_p95",float("inf"))>1000/30:
-                    raise ValueError("Authority misses its documented real-time 30 Hz budget")
+                value["performance_warnings"] = evaluate_performance(
+                    value, allow_warnings=os.environ.get("PRIMORDIA_PERFORMANCE_WARNINGS") == "1")
                 if value.get("food_vacuole_version")!=1 or value.get("biochemistry_version")!=1 or value.get("internal_packet_limit_per_cell")!=36 or value.get("internal_packets",0)>36*value.get("living_cells",0):
                     raise ValueError("Unbounded or obsolete internal chemistry")
                 with opener.open("https://127.0.0.1:8766/music-bank.json", timeout=3) as response:
@@ -295,6 +296,7 @@ def main():
             extinct_archive = retention.get("archived_extinct_pond") and retained_restart(report, previous, state)
             if not retention.get("ok") or not (same_pond or extinct_archive):
                 raise RuntimeError("Deployment did not verify every retained cell before resuming")
+        report["performance_warning_rollout"] = environment.get("PRIMORDIA_PERFORMANCE_WARNINGS") == "1"
         report["authority_cpus"] = sorted(authority_cpus) if authority_cpus else None
         report["access_registry_sha256"] = hashlib.sha256(registry.read_bytes()).hexdigest() if registry.exists() else None
         (root / "last-deploy.json").write_text(json.dumps(report, indent=2))

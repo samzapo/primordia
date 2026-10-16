@@ -4,6 +4,11 @@ name: Primordia persistent server CD
     branches: [samzapo/persistent-multiplayer]
     paths-ignore: [docs/**, README.md, AGENTS.md, .github/workflows/target-probe.yml, .github/workflows/host-telemetry.yml]
   workflow_dispatch:
+    inputs:
+      allow_performance_warnings:
+        description: Ship with known timing shortfalls; retain GPU, correctness and state checks
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -42,6 +47,7 @@ jobs:
         shell: bash
         env:
           PRIMORDIA_ACCESS_KEY_HASHES: ${{ secrets.PRIMORDIA_ACCESS_KEY_HASHES }}
+          PRIMORDIA_PERFORMANCE_WARNINGS: ${{ (inputs.allow_performance_warnings == true || (github.event_name == 'push' && contains(github.event.head_commit.message, '[allow-performance-warnings]'))) && '1' || '0' }}
         run: |
           task_dir="$GITHUB_WORKSPACE/samzapo--persistent-multiplayer--$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           cd "$task_dir"
@@ -56,6 +62,7 @@ jobs:
         shell: bash
         env:
           EXPECTED_SHA: ${{ github.sha }}
+          PRIMORDIA_PERFORMANCE_WARNINGS: ${{ (inputs.allow_performance_warnings == true || (github.event_name == 'push' && contains(github.event.head_commit.message, '[allow-performance-warnings]'))) && '1' || '0' }}
         run: |
           test "$RUNNER_NAME" = samzapo-desktop
           python3 - <<'PY'
@@ -76,7 +83,10 @@ jobs:
               samples.append(value)
               if index<2: time.sleep(6)
           assert samples[-1]['tick']>samples[0]['tick']
-          assert all(value.get('simulation_hz')==30 and .98<=value['simulation_wall_ratio']<=1.02 and value['tick_ms_p95']<=1000/30 for value in samples)
+          import sys
+          sys.path.insert(0,str(root/"current/tools"))
+          from performance_policy import evaluate
+          performance_warnings = [warning for value in samples for warning in evaluate(value, os.environ.get("PRIMORDIA_PERFORMANCE_WARNINGS")=="1")]
           assert all(value['living_cells']>=15 and value['minimum_living_cells']==15 and value['automatic_pond_restart'] and value['automatic_lineage_restart'] for value in samples)
           before=samples[-1]
           subprocess.run(['systemctl','--user','restart','primordia.service'],check=True)
@@ -92,7 +102,7 @@ jobs:
           assert resumed is not None and resumed['backend']=='gpu' and not resumed['backend_error'] and not resumed['checkpoint_error'], 'Saved world did not resume after a service restart'
           with opener.open('https://127.0.0.1:8766/api/network',timeout=5) as response: urls=json.load(response)
           assert all(url.startswith('https://') for url in urls['home_urls'])
-          report={'home_urls':urls['home_urls'],'tls_ca_sha256':hashlib.sha256((ca.parent/'ca.crt').read_bytes()).hexdigest(),'samples':samples,'resumed_after_restart':resumed}
+          report={'performance_warnings':performance_warnings,'performance_warning_rollout':os.environ.get('PRIMORDIA_PERFORMANCE_WARNINGS')=='1','home_urls':urls['home_urls'],'tls_ca_sha256':hashlib.sha256((ca.parent/'ca.crt').read_bytes()).hexdigest(),'samples':samples,'resumed_after_restart':resumed}
           print(json.dumps(report,indent=2))
           with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as output: output.write('Primordia remains on its hardware GPU after the deploy job ends.\n\n```json\n'+json.dumps(report,indent=2)+'\n```\n')
           PY

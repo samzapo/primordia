@@ -42,7 +42,7 @@ func run() -> void:
 	var ratio: float=(host.world.time-sim_start)/((Time.get_ticks_usec()-wall_start)/1000000.0)
 	var timings: Array=host.tick_samples.duplicate();timings.sort()
 	var p95: float=timings[mini(timings.size()-1,int(timings.size()*.95))]
-	check(ratio>=.98 and ratio<=1.02 and p95<=1000.0/host.physics_hz,"Existing saved pond meets the real-time tick budget under full client cameras")
+	check_performance(ratio>=.98 and ratio<=1.02 and p95<=1000.0/host.physics_hz,"Existing saved pond meets the real-time tick budget under full client cameras")
 	check(host.world.cells.all(func(cell):return cell.chemistry.particle_count()<=cell.chemistry.MAX_PACKETS),"Every migrated interior retains its bounded finite carrier population")
 	host._write_metrics()
 	var phases=JSON.parse_string(FileAccess.get_file_as_string(host.store.directory.path_join("health.json")))
@@ -55,4 +55,5 @@ func run() -> void:
 	root.remove_child(host);host.free()
 	for name in ["world-0.pworld","world-1.pworld","health.json"]:DirAccess.remove_absolute(output.path_join(name))
 	DirAccess.remove_absolute(output)
+	print("PERFORMANCE_WARNINGS ",performance_warnings)
 	print("AGED CHECKPOINT GPU: %d assertions, %d failures" % [assertions,failures]);quit(0 if failures==0 else 1)

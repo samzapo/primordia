@@ -538,3 +538,13 @@ even without world artwork. The 30 Hz simulation and all latency/real-time gates
 remain unchanged. During candidate checks a bounded read-only sampler records
 GPU clocks/load and only the owned process tree's thread runtime/runqueue delay;
 idle snapshots alone cannot diagnose active simulation stalls.
+
+
+The owner authorizes shipping the current update while monitoring its known
+timing shortfalls. The deployment's explicit performance-warning mode records
+ratio/p95 misses without rejecting this rollout; it does not claim those targets
+passed. The configured 30 Hz cadence, finite measurements, real progress,
+hardware GPU, particle correctness, cell-retention and checkpoint checks remain
+required. A manual workflow input or the exact head commit's
+[allow-performance-warnings] marker selects the exception. Later unmarked
+pushes are strict again; no exception is added to the running service environment.
