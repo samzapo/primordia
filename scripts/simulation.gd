@@ -1063,13 +1063,11 @@ func chance(rate: float, dt: float) -> bool:
 	return rng.randf() < 1.0-exp(-maxf(0,rate)*maxf(0,dt))
 
 func light_at(at: Vector2) -> float:
-	var p := Medium.wrap_position(at)
-	var field := 0.5+0.28*sin(TAU*p.x/WORLD.x*3+0.4)+0.22*cos(TAU*p.y/WORLD.y*3-0.8)
+	var field: float=preload("res://scripts/light_field.gd").sample(seed_value,at)
 	return clampf(field*(0.5 if habitat == 1 else 1.25 if habitat == 2 else 1.0)*float(environment.get("light",evolution.light_factor)),0.02,1.0)
 
 func light_direction(at: Vector2) -> Vector2:
-	var p := Medium.wrap_position(at)
-	return Vector2(0.28*TAU*3/WORLD.x*cos(TAU*p.x/WORLD.x*3+0.4),-0.22*TAU*3/WORLD.y*sin(TAU*p.y/WORLD.y*3-0.8)).normalized()
+	return preload("res://scripts/light_field.gd").direction(seed_value,at)
 
 func _photosynthesize(cell, dt: float) -> void:
 	cell.chemistry.light_flux = 0.0

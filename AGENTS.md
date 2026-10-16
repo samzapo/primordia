@@ -411,3 +411,11 @@ timeline; camera, particles and internal poses must agree. No local chemistry or
 unbounded extrapolation. Preserve immediate death delivery, exact view pause,
 live resume, saved cells/accounts/keys and deleted schedules. This authorizes
 focused jitter/frame-pacing checks, not a broad rendering benchmark restart.
+
+October16 illumination continuation: owner requests diffuse irregular sun/shade
+regions roughly 100–1000um across, replacing the visible regular grid. Read
+docs/REVISION_55.md. Preserve the 0.2um/unit calibration and existing pond size:
+upper-scale regions span the pond. Use one seeded continuous periodic field for
+photosynthesis, phototaxis, water and bloom, preserving mean illumination/weather.
+Derived caches consume no ecological RNG or saved cell state. Keep normalized R8
+display filtering portable and test actual pixels without broad FPS benchmarks.

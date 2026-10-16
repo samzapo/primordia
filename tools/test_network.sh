@@ -42,10 +42,10 @@ for script in anatomy_access_run; do
   ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
   grep -Eq 'ANATOMY ACCESS: [0-9]+ assertions, 0 failures' "$report_file"
 done
-for script in snapshot_playback network_state network_live; do
+for script in light_field snapshot_playback network_state network_live; do
   "$godot_bin" --headless --path "$project_dir" --script "tests/$script.gd" 2>&1 | tee "$report_file"
   ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
-  grep -Eq '(SNAPSHOT PLAYBACK|NETWORK LIVE|NETWORK CORRECTNESS): [0-9]+ assertions, 0 failures' "$report_file"
+  grep -Eq '(LIGHT FIELD|SNAPSHOT PLAYBACK|NETWORK LIVE|NETWORK CORRECTNESS): [0-9]+ assertions, 0 failures' "$report_file"
 done
 "$godot_bin" --headless --path "$project_dir" --script tests/pond_nutrition.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"
 ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
@@ -111,6 +111,9 @@ if [[ "${1:-}" == gpu ]]; then
     xvfb-run -a -s '-screen 0 1280x720x24 -nolisten tcp' "$godot_bin" --path "$project_dir" --rendering-method "$renderer" --rendering-driver "$driver" --script tests/death_render_gpu.gd 2>&1 | tee "$report_file"
     ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
     grep -Eq 'DEATH RENDER GPU: [0-9]+ assertions, 0 failures' "$report_file"
+    xvfb-run -a -s '-screen 0 1280x720x24 -nolisten tcp' "$godot_bin" --path "$project_dir" --rendering-method "$renderer" --rendering-driver "$driver" --script tests/light_field_render_gpu.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"
+    ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
+    grep -Eq 'LIGHT RENDER GPU: [0-9]+ assertions, 0 failures' "$report_file"
     xvfb-run -a -s '-screen 0 1280x720x24 -nolisten tcp' "$godot_bin" --path "$project_dir" --rendering-method "$renderer" --rendering-driver "$driver" --script tests/water_tint_gpu.gd 2>&1 | tee "$report_file"
     ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
     grep -Eq 'WATER TINT GPU: [0-9]+ assertions, 0 failures' "$report_file"

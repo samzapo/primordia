@@ -34,6 +34,16 @@ const RELEASES=[
 	"footer":"Your cell and its progress carry on between updates.",
 	"button":"Back to the pond",
 },
+{
+	"id":"2026-10-16-diffuse-light",
+	"title":"What’s new in the pond",
+	"items":[
+		"Sunlit and shady water now form broad, soft-edged patches with irregular shapes.",
+		"Light varies more naturally across the pond, giving photosynthetic cells different places to explore.",
+	],
+	"footer":"Your cell and its progress carry on between updates.",
+	"button":"Back to the pond",
+},
 ]
 const CURRENT=RELEASES[-1]
 static func seen_index(account: Dictionary) -> int:

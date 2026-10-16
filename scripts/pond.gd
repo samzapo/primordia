@@ -629,13 +629,16 @@ func _size_touch_settings(node: Node,height: float) -> void:
 		_size_touch_settings(child,height)
 
 func _refresh_light_texture() -> void:
-	var values := PackedFloat32Array()
-	values.resize(64*40)
-	for y in 40:
-		for x in 64: values[y*64+x] = world.light_at(Vector2(x+0.5,y+0.5)*64)
-	light_texture = ImageTexture.create_from_image(Image.create_from_data(64,40,false,Image.FORMAT_RF,values.to_byte_array()))
+	const LightField=preload("res://scripts/light_field.gd")
+	var values:=PackedByteArray();values.resize(LightField.COLS*LightField.ROWS)
+	for y in LightField.ROWS:
+		for x in LightField.COLS:
+			values[y*LightField.COLS+x]=roundi(world.light_at(Vector2(x+0.5,y+0.5)*LightField.SIZE)*255)
+	# Normalized R8 keeps linear filtering portable on phone WebGL renderers.
+	light_texture=ImageTexture.create_from_image(Image.create_from_data(LightField.COLS,LightField.ROWS,false,Image.FORMAT_R8,values))
 	light_layer.material.set_shader_parameter("light_map",light_texture)
 	microscope_layer.material.set_shader_parameter("light_map",light_texture)
+
 
 func _player_relative(screen: Vector2) -> Vector2:
 	var origin: Vector2=cell_ui.interior.position if views.has(world.player.id) else Simulation.Medium.offset(render_camera,world.player.position)
