@@ -203,7 +203,7 @@ func _ready() -> void:
 		data.resize(256*12)
 		buffers.append(data)
 	world_layer.add_child(preview)
-	preview.z_index = 3
+	preview.z_index = 9
 	preview.draw.connect(_draw_preview)
 	add_child(microscope_layer)
 	var canvas := CanvasLayer.new()
@@ -486,7 +486,7 @@ func _update_world(alpha: float) -> void:
 			node.z_index = 2
 			views[cell.id] = node
 		if views[cell.id].cell != cell: views[cell.id].seen_revision = -1
-		views[cell.id].z_index=5 if internal_visible(cell) else 2
+		views[cell.id].z_index=6 if cell == world.player or internal_visible(cell) else 4 if cell.lineage_id() == world.lineage.root_id else 2
 		views[cell.id].cell = cell
 		var heading := lerp_angle(cell.previous_angle,cell.angle,fraction)
 		views[cell.id].sync(Simulation.Medium.offset(render_camera,p),heading,zoom,world.activity_for_cell(cell))
@@ -494,7 +494,8 @@ func _update_world(alpha: float) -> void:
 		if not alive_ids.has(identity):
 			views[identity].queue_free()
 			views.erase(identity)
-	cell_ui.interior.z_index=6 if perception=="interoception" else 3
+	# Local factories remain above membrane attachments in either perception.
+	cell_ui.interior.z_index=8
 	cell_ui.interior.sync()
 	perception_mask.sync()
 	nameplates.sync(alpha)
@@ -607,15 +608,13 @@ func _draw_preview() -> void:
 	var kind: String = organ.kind if not organ.is_empty() else Simulation.KINDS[selected]
 	var normal: Vector2 = cell.local_normal(a)
 	var point: Vector2 = (local+normal*5*size).rotated(cell.angle)
-	var fits: bool = moving_id >= 0 or (cell.can_fit(kind,a) and cell.biomass >= Simulation.Cell.organ_cost(kind) and world.evolution.points >= 1)
+	var fits: bool = moving_id >= 0 or (cell.can_fit(kind,a,1,false) and world.evolution.points >= 1)
 	Visuals.icon(preview,point,kind,normal.angle()+cell.angle,size,ui_time)
 	preview.draw_arc(point,22*size,0,TAU,32,MINT if fits else Color("fc8c90"),2/zoom,true)
 	if selected >= 0:
-		var cost := minf(cell.biomass,Simulation.Cell.organ_cost(kind))
-		var factor := pow(maxf(8,cell.body+cell.biomass+cell.brood_mass-cost)/maxf(8,cell.body+cell.biomass+cell.brood_mass),1.0/3.0)
 		var outline: PackedVector2Array = cell.membrane.outline()
 		var contour := PackedVector2Array()
-		for vertex in outline: contour.append((vertex*factor).rotated(cell.angle))
+		for vertex in outline: contour.append(vertex.rotated(cell.angle))
 		contour.append(contour[0])
 		preview.draw_polyline(contour,Color(0.6,1,0.85,0.6) if fits else Color(1,0.6,0.65,0.65),1.5/zoom,true)
 
@@ -844,7 +843,7 @@ func _layout() -> void:
 		var mobile_theme: Theme=ui.theme.duplicate()
 		mobile_theme.default_font_size=roundi(18*preferences.hud_scale*density)
 		settings_panel.theme=mobile_theme
-		if settings_help!=null:settings_help.text="Tap factories, nucleus, bud or organelles.\nTwo fingers drag, twist and pinch the camera.\nTap the held icon at top left to cancel placement.\nTap particles for names and details below.\nPause opens settings; the shared pond continues.\nAnatomy steers the cell."
+		if settings_help!=null:settings_help.text="Tap factories, nucleus, bud or organelles.\nDouble-tap a family cell to switch to it.\nTwo fingers drag, twist and pinch the camera.\nTap the held icon at top left to cancel placement.\nTap particles for names and details below.\nPause opens settings; the shared pond continues.\nAnatomy steers the cell."
 		_size_touch_settings(settings_panel,40*preferences.hud_scale*density)
 	else:settings_panel.theme=null
 	preview.queue_redraw()
@@ -948,8 +947,7 @@ func _finish_build() -> void:
 func placement_status() -> String:
 	if selected < 0: return ""
 	if world.evolution.points < 1: return "Needs an adaptation point."
-	if world.player.biomass < Simulation.Cell.organ_cost(Simulation.KINDS[selected]): return "Needs usable tissue; structural tissue stays protected."
-	if not world.player.can_fit(Simulation.KINDS[selected],0): return "Needs more membrane area."
+	if not world.player.can_fit(Simulation.KINDS[selected],0,1,false): return "Needs more membrane area."
 	return "Tap the membrane · tap the held icon to cancel." if touch_zoom.enabled else "Click the membrane · neighbors make room."
 
 func _place_at(angle: float) -> bool:
@@ -1108,6 +1106,31 @@ func _input(event: InputEvent) -> void:
 				else: return
 		get_viewport().set_input_as_handled()
 
+func _family_at(screen: Vector2) -> int:
+	var nearest := -1
+	var distance := INF
+	for cell in world.lineage.active_family(world):
+		if not views.has(cell.id): continue
+		var view = views[cell.id]
+		var local: Vector2 = view.get_global_transform_with_canvas().affine_inverse()*screen
+		if not Geometry2D.is_point_in_polygon(local,cell.membrane.outline()): continue
+		var score: float = local.length()/maxf(1,cell.radius)
+		if score < distance:
+			distance = score
+			nearest = cell.id
+	return nearest
+
+func _switch_family(identity: int) -> bool:
+	if identity < 0 or identity == world.player.id or selected >= 0 or moving_id >= 0: return false
+	if not world.lineage.active_family(world).any(func(cell):return cell.id == identity): return false
+	if build_open: _toggle_build() # Keep completed edits before adopting another body.
+	cell_ui.close_context()
+	if not world.edit("follow",{"id":identity}): return false
+	camera_locked = true; camera_offset = Vector2.ZERO; intero_rotation = 0
+	touch_zoom.last_tap_family = -1
+	_update_world(1)
+	return true
+
 func _unhandled_input(event: InputEvent) -> void:
 	if feedback.opened or profile.opened:return
 	if touch_zoom.enabled and (event is InputEventMouseButton or event is InputEventMouseMotion) and event.device==-1:return
@@ -1171,11 +1194,12 @@ func _unhandled_input(event: InputEvent) -> void:
 				shape_preview_ticks = 60
 		return
 	if event.button_index == MOUSE_BUTTON_LEFT:
+		if event.double_click and _switch_family(_family_at(event.position)): return
 		if build_open and (selected >= 0 or moving_id >= 0):
 			if absf(relative.length()-world.player.support(relative.angle())) <= maxf(26/zoom,12):
 				_place_at(world.player.surface_parameter(local.angle()))
 				return
-		var target: Dictionary = cell_ui.hit(event.position)
+		var target: Dictionary = cell_ui.pick(event.position)
 		if not target.is_empty():
 			if not build_open: _toggle_build()
 			cell_ui.open_context(target)

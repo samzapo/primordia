@@ -70,7 +70,7 @@ func run() -> void:
 		check(game.selected==index and not game.cell_ui.mobile_tray.visible and game.cell_ui.mobile_stocks.text.contains("Cost"),"Choosing each gland enters the existing placement flow with visible resource cost")
 		var price: float=game.Simulation.Cell.organ_cost(game.Simulation.KINDS[index])
 		check(game._place_at(1.0+[7,9,3,8].find(index)),"Each restored gland can be placed on the membrane")
-		check(is_equal_approx(before_biomass-game.world.player.biomass,price) and before_ap-game.world.evolution.points==1,"Restored gland placement charges the ordinary biomass and AP exactly once")
+		check(game.world.player.biomass==before_biomass and before_ap-game.world.evolution.points==1,"Gland placement charges AP exactly once without debiting biomass")
 	game._select(6);game.cell_ui.sync(0)
 	check(game.cell_ui.cancel_icon.visible and game.cell_ui.cancel_icon.kind=="photosynthesis" and game.cell_ui.cancel_icon.position.x<30,"Selected organ remains as a circular top-left cancel action")
 	game.cell_ui.cancel_icon.pressed.emit();game.cell_ui.sync(0)

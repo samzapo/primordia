@@ -60,7 +60,7 @@ static func index(x: int, y: int) -> int:
 
 func current(p: Vector2) -> Vector2:
 	# Explicit externally maintained tide plus periodic vortices.
-	return Vector2(11 + 17 * sin(TAU * p.y / WORLD.y * 4), 15 * sin(TAU * p.x / WORLD.x * 4))*0.35
+	return Vector2(11 + 17 * sin(TAU * p.y / WORLD.y * 4), 15 * sin(TAU * p.x / WORLD.x * 4))
 
 func sample(p: Vector2) -> Vector2:
 	# Allocation-free bilinear sampling is the hottest transport operation.

@@ -9,7 +9,7 @@ func total(sim) -> float:
 		if not cell.dead: mass += cell.organic_mass()
 	for particle in sim.particles:
 		if particle.alive: mass += particle.amount*Sim.Catalog.material(particle.kind)
-	return mass+sim.build_waste+sim.lineage.stored_material()
+	return mass+sim.build_waste+sim.lineage.stored_material()-sim.external_input
 
 func run(owner_suite) -> void:
 	if not preload("res://tests/test_policy.gd").GAMEPLAY_OBJECTIVES_ENABLED:

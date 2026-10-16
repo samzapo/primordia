@@ -21,7 +21,7 @@ static func execute(sim, action: String, args: Dictionary):
 		"move": return cell.move_organ(identity,float(args.get("angle",0)))
 		"mutate": return sim.mutate_organ(identity,str(args.get("gene","")))
 		"choose_mutation": return sim.evolution.accept_division_offer(str(args.get("gene","")))
-		"restore": return cell.restore_organ(identity)
+		"restore": return sim.restore(identity)
 		"steering": return cell.set_steering_strength(identity,value)
 		"exploration": return cell.set_exploration(value)
 		"cycle": return cell.set_response_cycle(value)

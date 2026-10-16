@@ -219,7 +219,7 @@ func run(test_host) -> void:
 	scene.cell_ui.sync(0)
 	var stock = scene.cell_ui.biomass_view
 	var quote: Dictionary = stock.quote
-	expect(stock.visible and quote.available == cell.biomass and quote.cost == Sim.Cell.organ_cost("propulsion"),"The build preview compares usable biomass with the selected fixed-size organ cost")
+	expect(stock.visible and quote.available == cell.biomass and quote.cost == 0 and quote.ap_needed == 1,"The build preview shows AP-only construction alongside usable biomass")
 	expect(is_equal_approx(pow(quote.cost_radius/quote.stock_radius,2),quote.cost/quote.available),"Available and required blobs use the same area scale")
 	var usable: float = cell.biomass
 	cell.biomass = 100000
@@ -227,13 +227,13 @@ func run(test_host) -> void:
 	expect(stock.quote.stock_radius <= stock.quote.maximum+0.0001 and is_equal_approx(pow(stock.quote.cost_radius/stock.quote.stock_radius,2),stock.quote.cost/stock.quote.available),"Huge reserves fit the viewport while preserving the comparison ratio")
 	cell.biomass = 0
 	stock.sync()
-	expect(stock.quote.stock_radius == 0 and stock.quote.cost_radius > 0 and not stock.quote.enough,"Zero usable biomass renders empty while retaining the full cost blob")
+	expect(stock.quote.stock_radius == 0 and stock.quote.cost_radius == 0 and stock.quote.enough,"Zero usable biomass cannot block AP-only construction")
 	cell.biomass = 8
 	stock.sync()
-	expect(stock.quote.enough and is_equal_approx(stock.quote.stock_radius,stock.quote.cost_radius),"Exactly enough tissue produces equal-size blobs")
+	expect(stock.quote.enough and stock.quote.cost_radius == 0,"Construction has no required-tissue blob")
 	cell.biomass = 7.9
 	stock.sync()
-	expect(not stock.quote.enough,"Even a small tissue shortfall is explicitly signalled")
+	expect(stock.quote.enough,"Low tissue does not create a false construction shortfall")
 	cell.biomass = usable
 	var reserve_before: float = cell.brood_mass
 	cell.reserve(4)

@@ -72,7 +72,7 @@ func divided(_cell) -> bool:
 	if random.randf()>=0.10:return false
 	var pool: Array=[]
 	for gene in Genes.DATA:
-		if gene not in learned and gene not in division_offers:pool.append(gene)
+		if gene not in Genes.LIGHT_ADAPTATIONS and gene not in learned and gene not in division_offers:pool.append(gene)
 	if pool.is_empty():return false
 	# Offers persist until accepted, including across disconnect and restart.
 	division_offers.append(pool[random.randi_range(0,pool.size()-1)])
@@ -90,7 +90,7 @@ func _draft() -> void:
 	var useful: Array = []
 	var other: Array = []
 	for key in Genes.DATA:
-		if Genes.DATA[key].kind == "feeding": continue
+		if Genes.DATA[key].kind == "feeding" or key in Genes.LIGHT_ADAPTATIONS: continue
 		if key in learned: continue
 		if Genes.DATA[key].kind in ["feeding","regenerative","protection","photosynthesis","neutralizing"]: useful.append(key)
 		else: other.append(key)

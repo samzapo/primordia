@@ -60,7 +60,7 @@ func initialize(owner_game) -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	interior.game = game
-	interior.z_index = 3
+	interior.z_index = 8
 	game.world_layer.add_child(interior)
 	biomass_view.game = game
 	add_child(biomass_view)
@@ -115,8 +115,11 @@ func screen_at(target: Dictionary) -> Vector2:
 			for scar in cell.lost_organs:
 				if scar.id == target.id: record = scar; break
 		if not record.is_empty():
-			p = cell.local_point(record.a)
-			p += cell.local_normal(record.a)*5*record.scale
+			if target.kind == "organ" and cell.inherent(record):
+				p = preload("res://scripts/visuals.gd").oral_path(cell,record.a)[12]
+			else:
+				p = cell.local_point(record.a)
+				p += cell.local_normal(record.a)*5*record.scale
 	else: p = interior.anchors.get("nucleus" if target.kind in ["lineage","archive","past"] else target.kind,Vector2.ZERO)
 	return game.world_layer.to_global(interior.position+p.rotated(interior.rotation))
 
@@ -127,18 +130,33 @@ func targets() -> Array:
 	for scar in game.world.player.lost_organs: result.append({"kind":"scar","id":scar.id})
 	return result
 
-func hit(screen: Vector2) -> Dictionary:
-	if interior.anchors.is_empty() or not interior.visible: return {}
-	var nearest := {}
-	var best := INF
+func _hit_candidates(screen: Vector2) -> Array:
+	if interior.anchors.is_empty() or not interior.visible: return []
+	var found: Array = []
 	for target in targets():
 		var radius := maxf(18*game.preferences.hud_scale,interior.anchors.radius*game.zoom*(0.28 if target.kind == "nucleus" else 0.16))
 		if target.kind in ["organ","scar"]: radius = maxf(17*game.preferences.hud_scale,14*game.zoom)
 		var distance := screen.distance_to(screen_at(target))
-		if distance < radius and distance/radius < best:
-			best = distance/radius
-			nearest = target
-	return nearest
+		if distance < radius: found.append({"target":target,"score":distance/radius})
+	found.sort_custom(func(a,b):return a.score < b.score)
+	return found
+
+func hit(screen: Vector2) -> Dictionary:
+	var found := _hit_candidates(screen)
+	return {} if found.is_empty() else found[0].target
+
+func pick(screen: Vector2) -> Dictionary:
+	var found := _hit_candidates(screen)
+	if found.is_empty(): return {}
+	if found.size() == 1: return found[0].target
+	# Every overlapping control remains reachable, including ones behind art.
+	return {"kind":"overlap","targets":found.map(func(item):return item.target)}
+
+func target_title(target: Dictionary) -> String:
+	if target.kind == "organ":
+		var organ: Dictionary = game.world.player.organ_by_id(target.id)
+		return game.TITLES[game.Simulation.KINDS.find(organ.kind)] if not organ.is_empty() else "Organelle"
+	return {"assembly":"Assembly factory","chemistry":"Chemistry factory","nucleus":"Nucleus","bud":"Offspring reserve","atp":"ATP","scar":"Restore organelle"}.get(target.kind,"Cell")
 
 func _choice(title: String, description: String, action: Callable, organ_kind: String = "", symbol: String = "", affordable: bool = true, tissue_cost: float = -1.0, ap_cost: int = 0, rate_model: Dictionary = {}) -> void:
 	var node = Action.new()
@@ -165,11 +183,20 @@ func open_context(target: Dictionary) -> void:
 	var cell = sim.player
 	var run = sim.evolution
 	match target.kind:
+		"overlap":
+			for entry in target.targets:
+				var kind := ""
+				if entry.kind == "organ":
+					var organ: Dictionary = cell.organ_by_id(entry.id)
+					if organ.is_empty(): continue
+					kind = organ.kind
+				var symbol: String = {"assembly":"Build","chemistry":"Chem","nucleus":"Genes","bud":"Bud","atp":"ATP","scar":"Restore"}.get(entry.kind,"")
+				_choice(target_title(entry),describe(entry),open_context.bind(entry),kind,symbol)
 		"assembly","chemistry":
 			for index in ([0,1,2,3,5,10,11] if target.kind == "assembly" else [6,7,9,3,8]):
 				var kind: String = sim.KINDS[index]
-				var cost: float = sim.Cell.organ_cost(kind)
-				_choice(game.TITLES[index],"%.0f tissue · 1 AP\n%s" % [cost,game.HELP[index]],game._select.bind(index),kind,"",cell.biomass >= cost and run.points >= 1,cost,1,{"kind":kind,"scale":1.0,"mutation":""})
+				var cost := 0.0
+				_choice(game.TITLES[index],"1 AP\n%s" % game.HELP[index],game._select.bind(index),kind,"",run.points >= 1,cost,1,{"kind":kind,"scale":1.0,"mutation":""})
 			if target.kind == "chemistry":
 				_choice("Food vacuoles","Inspect oxygen-dependent digestion, fermentation, photosynthesis and waste expulsion.",func():
 					close_context()
@@ -198,23 +225,27 @@ func open_context(target: Dictionary) -> void:
 					var index: int = steps.find(strength)
 					sim.edit("steering",{"id":organ.id,"value":steps[(index+1)%steps.size()]})
 					open_context(target),"",label)
-			if not cell.inherent(organ) and organ.get("mutation","") == "":
-				for gene in run.learned:
+			if not cell.inherent(organ):
+				for gene in sim.Genes.available(organ,run.learned):
 					var data: Dictionary = sim.Genes.DATA[gene]
-					if data.kind != organ.kind: continue
 					var cost: float = sim.Genes.price(organ)
 					var ap: int = sim.Genes.adaptation_price(organ)
 					var rate_model: Dictionary = organ.duplicate(true)
 					rate_model.mutation = gene
 					_choice(data.title,data.text+"\nFree mutation.",func():
 						game._message("Specialization installed." if sim.mutate_organ(target.id,gene) else "This organ cannot accept that mutation.")
-						open_context(target),organ.kind,"",cell.biomass >= cost and run.points >= ap,cost,ap,rate_model)
+						open_context(target),"" if gene in sim.Genes.LIGHT_ADAPTATIONS else organ.kind,("Sun" if gene == "sun_leaf" else "Shade") if gene in sim.Genes.LIGHT_ADAPTATIONS else "",cell.biomass >= cost and run.points >= ap,cost,ap,rate_model)
+					if organ.get("mutation","") == gene:
+						choices[-1].caption += " (active)"
+						choices[-1].symbol += " ✓"
+						choices[-1].tint = Color("ffe6a1")
+						choices[-1].disabled = true
 		"scar":
 			for scar in cell.lost_organs:
 				if scar.id != target.id: continue
-				_choice("Restore "+game.TITLES[sim.KINDS.find(scar.kind)],"%.0f tissue · 0 AP\nRestore the lost organ in its original form." % scar.max_material,func():
-					game._message("Organelle restored." if sim.edit("restore",{"id":target.id}) else "Needs usable tissue and membrane room.")
-					close_context(),scar.kind,"",cell.biomass >= scar.max_material,scar.max_material,0,scar)
+				_choice("Restore "+game.TITLES[sim.KINDS.find(scar.kind)],"1 AP\nRestore the lost organ in its original form.",func():
+					game._message("Organelle restored." if sim.edit("restore",{"id":target.id}) else "Needs an adaptation point and membrane room.")
+					close_context(),scar.kind,"",run.points >= 1,0,1,scar)
 		"nucleus":
 			for gene in run.division_offers:
 				var data: Dictionary=sim.Genes.DATA[gene]
@@ -341,6 +372,7 @@ func describe(target: Dictionary) -> String:
 	var sim = game.world
 	var run = sim.evolution
 	match target.kind:
+		"overlap": return "Choose a structure\nSeveral controls overlap here."
 		"assembly": return "Assembly factory\nCilia, flagella, armor, chemical glands, repair and receptors."
 		"chemistry": return "Chemistry factory\nPhotosynthesis, toxin, acid, buffer/repair and toxin-neutralizing glands."
 		"atp":
@@ -372,7 +404,7 @@ func describe(target: Dictionary) -> String:
 			if organ.get("mutation","") != "": result += "\n"+sim.Genes.DATA[organ.mutation].title
 			return result+"\n"+game.HELP[sim.KINDS.find(organ.kind)]
 		"body": return "Membrane · health %d%%\nAcid stress %d%% · local light %d%%\nPunctures lose tissue; repair needs biomass and ATP." % [roundi(cell.health),roundi(cell.acid_stress*100),roundi(sim.light_at(cell.position)*100)]
-		"scar": return "Lost organelle\nClick to restore using tissue."
+		"scar": return "Lost organelle\nClick to restore for 1 AP."
 	return ""
 
 func _tooltip(value: String, at: Vector2) -> void:
@@ -508,8 +540,7 @@ func sync(_dt: float) -> void:
 		elif not hovered.is_empty() and (game.build_open or Input.is_key_pressed(KEY_ALT)) and (hovered.kind != "body" or Input.is_key_pressed(KEY_ALT)) and game.selected < 0 and game.moving_id < 0: _tooltip(describe(hovered),screen_at(hovered))
 		elif not keyboard_target.is_empty() and game.selected < 0: _tooltip(describe(keyboard_target),screen_at(keyboard_target))
 		elif game.selected >= 0:
-			var cost: float = game.Simulation.Cell.organ_cost(game.Simulation.KINDS[game.selected])
-			_tooltip("%s\n%.0f tissue · 1 AP\n%s" % [game.TITLES[game.selected],cost,game.placement_status()],cursor)
+			_tooltip("%s\n1 AP\n%s" % [game.TITLES[game.selected],game.placement_status()],cursor)
 		else:
 			tip_box.hide()
 	if mobile():
@@ -543,7 +574,7 @@ func _layout_mobile() -> void:
 		mobile_stocks.visible=not resources_hidden
 		mobile_stocks.add_theme_font_size_override("font_size",roundi(18*s))
 		mobile_stocks.text="Biomass %.1f   AP %d   ATP %.1f" % [game.world.player.biomass,game.world.evolution.points,game.world.player.energy]
-		if game.selected>=0:mobile_stocks.text+="\nCost %.0f biomass · 1 AP" % game.Simulation.Cell.organ_cost(game.Simulation.KINDS[game.selected])
+		if game.selected>=0:mobile_stocks.text+="\nCost 1 AP"
 		mobile_hide.text="Resources" if resources_hidden else "−"
 		mobile_hide.add_theme_font_size_override("font_size",roundi(16*s))
 		mobile_hide.custom_minimum_size=Vector2(30,30)*s

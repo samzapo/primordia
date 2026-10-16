@@ -16,6 +16,11 @@ grep -Eq 'CELL RETENTION: [0-9]+ assertions, 0 failures' "$report_file"
 "$godot_bin" --headless --path "$project_dir" --script tests/nameplates_run.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"
 ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
 grep -Eq 'NAMEPLATES: [0-9]+ assertions, 0 failures' "$report_file"
+for script in anatomy_access_run; do
+  "$godot_bin" --headless --path "$project_dir" --script "tests/$script.gd" -- --particle-backend=cpu 2>&1 | tee "$report_file"
+  ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
+  grep -Eq 'ANATOMY ACCESS: [0-9]+ assertions, 0 failures' "$report_file"
+done
 for script in network_state network_live; do
   "$godot_bin" --headless --path "$project_dir" --script "tests/$script.gd" 2>&1 | tee "$report_file"
   ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
@@ -68,6 +73,12 @@ if [[ "${1:-}" == gpu ]]; then
     xvfb-run -a -s '-screen 0 1280x720x24 -nolisten tcp' "$godot_bin" --path "$project_dir" --rendering-method "$renderer" --rendering-driver "$driver" --script tests/death_render_gpu.gd 2>&1 | tee "$report_file"
     ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
     grep -Eq 'DEATH RENDER GPU: [0-9]+ assertions, 0 failures' "$report_file"
+    xvfb-run -a -s '-screen 0 1280x720x24 -nolisten tcp' "$godot_bin" --path "$project_dir" --rendering-method "$renderer" --rendering-driver "$driver" --script tests/water_tint_gpu.gd 2>&1 | tee "$report_file"
+    ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
+    grep -Eq 'WATER TINT GPU: [0-9]+ assertions, 0 failures' "$report_file"
+    xvfb-run -a -s '-screen 0 1280x1600x24 -nolisten tcp' "$godot_bin" --path "$project_dir" --rendering-method "$renderer" --rendering-driver "$driver" --script tests/anatomy_render_gpu.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"
+    ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
+    grep -Eq 'ANATOMY RENDER GPU: [0-9]+ assertions, 0 failures' "$report_file"
   done
   # Match run_service.py presentation pacing; chemistry/physics remain at 30 Hz.
   for scope in fixture full-world slow-observer recovery; do

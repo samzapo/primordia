@@ -10,6 +10,31 @@ static func internal_content_radius(kind: int,amount: float=.3) -> float:
 static func internal_particle_radius(packet: Dictionary) -> float:
 	return 1.4 if packet.species in ["oxygen","carbon"] else 7.0 # One carrier; illustrated contents use half-size external glyphs.
 
+# The inherent mouth is membrane tissue, not a fixed-size attachment icon.
+# Sample the exact rendered curve over the same half-radian groove as physics.
+static func oral_path(cell, angle: float) -> PackedVector2Array:
+	var outline: PackedVector2Array = cell.membrane.outline()
+	var path := PackedVector2Array()
+	for i in 25:
+		var phase := fposmod(angle-.5+i/24.0,TAU)/TAU*outline.size()
+		var index := int(phase)
+		path.append(outline[index].lerp(outline[(index+1)%outline.size()],phase-index))
+	return path
+
+static func oral_groove(c: Node2D, cell, organ: Dictionary, clock: float, detail: bool) -> void:
+	var lip := oral_path(cell,organ.a)
+	var width := minf(5,cell.radius*.10)
+	var pulse: float = organ.consume_flash
+	c.draw_polyline(lip,Color("31537c"),width,true)
+	c.draw_polyline(lip,Color("6ee6d4").lerp(Color("fff1ab"),pulse),width*.44,true)
+	if detail:
+		for i in range(2,23,3):
+			var a: float = organ.a-.5+i/24.0
+			var normal: Vector2 = cell.local_normal(a)
+			var reach := minf(6,cell.radius*.13)*(1+.15*sin(clock*7+i))
+			c.draw_line(lip[i],lip[i]+normal*reach,Color("caf7be"),width*.24,true)
+	c.draw_circle(lip[12],width*.48*(1+.18*pulse),Color("e1f5ac"))
+
 static func icon(c: Node2D, p: Vector2, kind: String, rotation: float, scale: float, animation_time: float = 0, mode: String = "graze", pulse: float = 0, detail: bool = true, charge: float = 0) -> void:
 	c.draw_set_transform(p,rotation,Vector2.ONE*scale)
 	var steps := 24 if detail else 10

@@ -158,7 +158,8 @@ func run() -> void:
 	var restored=preload("res://scripts/network/state_codec.gd").new().restore(saved.graph)
 	check(restored.accounts[welcome0.token.sha256_text()].display_name=="Sam 🌱","Chosen player name survives checkpoint restoration")
 	check(restored.accounts[welcome0.token.sha256_text()].sequence==1,"idempotency sequence survives restart")
-	check(restored.accounts[welcome0.token.sha256_text()].lineage==restored.world.family_ledgers[0],"ownership ledger references survive checkpoint")
+	var restored_account: Dictionary = restored.accounts[welcome0.token.sha256_text()]
+	check(restored.world.family_ledgers.any(func(ledger):return ledger == restored_account.lineage) and restored_account.lineage.root_id == restored_account.root,"ownership ledger references survive checkpoint alongside earlier NPC ledgers")
 	if "--recovery" in OS.get_cmdline_user_args():
 		var ended: int=account.selected
 		check(account.lineage.dormant.is_empty(),"Replacement fixture has no prepaid backup")

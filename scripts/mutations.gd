@@ -13,6 +13,13 @@ const DATA := {
 	"dense_antitoxin":{"title":"Dense neutralization","kind":"neutralizing","text":"70% more antitoxin secretion; 90% more ATP per packet.","secretion":1.7,"secretion_cost":1.9},
 	"acid_pulse":{"title":"Acid pulse","kind":"acidifying","text":"70% more acid secretion; 90% more ATP per packet. You share the acid exposure.","secretion":1.7,"secretion_cost":1.9}
 }
+const LIGHT_ADAPTATIONS := ["sun_leaf","shade_leaf"]
+
+static func available(organ: Dictionary, learned: Array) -> Array:
+	if organ.kind == "photosynthesis": return LIGHT_ADAPTATIONS.duplicate()
+	if organ.get("mutation","") != "": return []
+	return learned.filter(func(gene):return DATA.has(gene) and DATA[gene].kind == organ.kind)
+
 static func factor(organ: Dictionary, key: String, fallback: float = 1.0) -> float:
 	return float(DATA.get(organ.get("mutation",""),{}).get(key,fallback))
 

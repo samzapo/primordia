@@ -211,6 +211,8 @@ func _physics_process(dt: float) -> void:
 	queued.clear()
 	_set_views()
 	preload("res://scripts/environment_cycle.gd").update(world,Time.get_unix_time_from_system())
+	world.managed_lineages = accounts.values().map(func(account):return account.root)
+	world.step_autonomous_builds()
 	world.step(dt)
 	if world.resident!=null:
 		if not world.resident.gpu.cytoplasm_error.is_empty():_fatal(world.resident.gpu.cytoplasm_error);return

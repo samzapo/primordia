@@ -639,7 +639,10 @@ func resize_organ(identity: int, size: float) -> Dictionary:
 
 func specialize(identity: int, gene: String) -> bool:
 	var organ := organ_by_id(identity)
-	if organ.is_empty() or inherent(organ) or not Genes.DATA.has(gene) or organ.get("mutation","") != "" or Genes.DATA[gene].kind != organ.kind: return false
+	if organ.is_empty() or inherent(organ) or not Genes.DATA.has(gene) or Genes.DATA[gene].kind != organ.kind: return false
+	var current: String = organ.get("mutation","")
+	if current == gene: return false
+	if current != "" and not (organ.kind == "photosynthesis" and current in Genes.LIGHT_ADAPTATIONS and gene in Genes.LIGHT_ADAPTATIONS): return false
 	var cost := Genes.price(organ)
 	if biomass < cost: return false
 	var health: float = organ.hp/organ.max_hp
@@ -656,15 +659,15 @@ func specialize(identity: int, gene: String) -> bool:
 	render_revision += 1
 	return true
 
-func restore_organ(identity: int) -> bool:
+func restore_organ(identity: int, paid: bool = true) -> bool:
 	for record in lost_organs:
 		if record.id != identity: continue
 		var cost: float = record.max_material
-		var available := perimeter()*pow(maxf(8,body+biomass+brood_mass-cost)/maxf(8,body+biomass+brood_mass),0.5)
-		if biomass < cost or occupied()+organ_width(record) > available: return false
+		var available := perimeter()*pow(maxf(8,body+biomass+brood_mass-(cost if paid else 0.0))/maxf(8,body+biomass+brood_mass),0.5)
+		if (paid and biomass < cost) or occupied()+organ_width(record) > available: return false
 		var organ: Dictionary = record.duplicate(true)
 		_make_room(organ.a,organ_width(organ),available)
-		biomass -= cost
+		if paid: biomass -= cost
 		organ.material = cost
 		organ.hp = organ.max_hp
 		organ.id = next_organ_id

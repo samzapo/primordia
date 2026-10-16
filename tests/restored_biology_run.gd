@@ -45,6 +45,13 @@ func run() -> void:
 	var environment: Dictionary=sim.environment.duplicate(true)
 	var tide: PackedVector2Array=sim.fluid.tide.duplicate()
 	check(not Weather.update(sim,first+300) and sim.environment==environment and sim.fluid.tide==tide,"Conditions are fixed within the hour")
+	# Upgrade the reduced-current revision without replacing any actual velocity.
+	sim.environment.flow_version = 1
+	for i in sim.fluid.tide.size(): sim.fluid.tide[i] *= .35
+	var water_before: PackedVector2Array = sim.fluid.velocity.duplicate()
+	check(Weather.update(sim,first+300) and sim.fluid.tide==tide and sim.environment==environment,"The reduced-current save refreshes to the original ambient strength within the same hour")
+	check(sim.fluid.velocity==water_before,"Restoring the ambient target preserves every saved water velocity")
+
 	var recovered=Codec.new().restore(Codec.new().capture(sim))
 	check(not Weather.update(recovered,first+600) and recovered.environment==environment,"Saved conditions do not reroll on restart")
 	check(Weather.update(sim,first+3600) and int(sim.environment.hour)==int(environment.hour)+1,"A new hour resamples calendar-derived conditions")

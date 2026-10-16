@@ -548,3 +548,65 @@ hardware GPU, particle correctness, cell-retention and checkpoint checks remain
 required. A manual workflow input or the exact head commit's
 [allow-performance-warnings] marker selects the exception. Later unmarked
 pushes are strict again; no exception is added to the running service environment.
+
+
+### Oral-groove artwork and overlapping controls (October 16, 2026)
+
+The inherent mouth traces the actual deformed oral membrane rather than a
+fixed crescent. Lip thickness and cilia shrink with the body, preserving the
+factory space in small cells without changing feeding geometry or rates.
+The selected cell's local factories draw above membrane appendages. A tap or
+click shared by several controls offers each overlapping structure, using the
+mobile top tray or compact desktop choices, so drawing order cannot prevent
+access. Selecting one opens its existing actions; no paid action happens during
+selection. Keyboard target cycling remains available. Existing cells, anatomy,
+resource rules and saved-world formats are unchanged.
+
+
+The currently controlled cell draws above other cells and their appendages;
+other living cells in the player's lineage draw above uncontrolled lineages.
+Double-tapping a living family member (desktop: double-clicking) adopts that
+existing body through the same server-validated family command as the family
+menu. It grants no cells or resources and keeps completed edits. Pinch/drag
+sequences and held organ placement cannot switch control accidentally.
+
+Photosynthesis always offers Sun specialist and Shade specialist without a
+random blueprint prerequisite. These existing adaptations remain free, mutually
+exclusive and replaceable; the active choice is marked. Other specializations
+retain their existing discovery and one-mutation rules. Actual light-dependent
+fixation effects, carbon inputs and resource accounting are unchanged.
+
+
+Acidic water uses a stronger magenta response and a bounded nine-sample visual
+footprint spanning neighboring field nodes. Buffer neutralization visibly
+restores the same blue water over that footprint. This expands the readable
+color patch without inventing a buffer concentration, changing physical acid
+capacity, advection/diffusion or cell damage, or revealing private particles.
+
+
+October 16 owner correction: restore the original ambient current amplitude,
+superseding the 35% reduction. Flow target version 2 refreshes an older saved
+target even within the same calendar hour, using that hour's existing seeded
+weather choices. Actual water and all cell velocities remain saved and relax
+normally; plant damping, full stream history and the stronger chemistry tint
+remain enabled.
+
+
+### AP-only construction and unmanaged anatomy (October 16, 2026)
+
+Installing a standard organelle costs one AP, with no biomass or ATP construction
+charge; restoring a lost organelle also costs one AP. Mutations remain free.
+Membrane space still limits construction, and operating energy, repair, growth
+and paid reproduction continue to use the existing finite cell resources.
+The AP purchase explicitly introduces the organ's represented construction
+tissue into the existing external-input ledger. Recycling and lysis conserve
+that material; cancelling a local draft rolls back its introduced input too.
+Saved existing anatomy is untouched by loading an update.
+
+Persistent unmanaged lineages spend their existing AP on random fitting organs,
+at most one purchase per lineage every two simulation seconds. Each lineage
+uses its retained progression RNG and shared AP balance; failed fits cost
+nothing. Every account-owned lineage remains managed, including disconnected
+players. The authority excludes those roots before purchases. Division continues
+to award two AP. Sun/Shade choices no longer occupy new random mutation slots;
+previously offered and learned choices remain saved.

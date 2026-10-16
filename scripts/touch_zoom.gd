@@ -1,6 +1,9 @@
 extends RefCounted
 ## Raw multi-touch is used on the web; GUI controls retain native mouse emulation.
 var game
+var last_tap_family := -1
+var last_tap_time := -10000
+var last_tap_at := Vector2.ZERO
 var enabled := false
 var pixels := 1.0
 var viewport_size := Vector2.ZERO
@@ -122,12 +125,21 @@ func _over_gui(node: Node,at: Vector2) -> bool:
 	return false
 
 func cancel() -> void:
-	fingers.clear();moved=false
+	fingers.clear();moved=false;last_tap_family=-1
 	if game!=null:game.tube_start.clear();game.camera_dragging=false
 
 func _tap(at: Vector2) -> void:
 	game.inspector.inspect_touch(at)
 	if game.user_paused:return
+	var now := Time.get_ticks_msec()
+	var family: int = game._family_at(at)
+	if family >= 0 and family == last_tap_family and now-last_tap_time <= 400 and at.distance_to(last_tap_at) <= 24*pixels:
+		last_tap_family = -1
+		if game._switch_family(family): return
+	last_tap_family = family; last_tap_time = now; last_tap_at = at
+	if family >= 0 and family != game.world.player.id and game.selected < 0 and game.moving_id < 0:
+		game.cell_ui.close_context(); return # First tap must not recenter/edit another body.
+
 	if game.cell_ui.hit(at).is_empty() and game.selected<0 and game.moving_id<0:
 		game.cell_ui.close_context();return
 	var event:=InputEventMouseButton.new();event.position=at;event.button_index=MOUSE_BUTTON_LEFT
@@ -145,6 +157,7 @@ func handle(event: InputEvent) -> bool:
 			if fingers.size()==1:
 				start=event.position;moved=false;game.inspector.inspect_touch(event.position)
 			elif fingers.size()==2:
+				last_tap_family = -1
 				game.inspector.touch_until=0
 				moved=true;game.tube_start.clear();game.camera_dragging=false
 				_anchor_pair()

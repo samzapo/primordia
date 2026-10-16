@@ -39,3 +39,21 @@ static func run(check: Callable) -> void:
 	preload("res://tests/pheromones.gd").deliver(sim,prey)
 	preload("res://tests/pheromones.gd").listen(sim)
 	check.call(is_equal_approx(sim.player.target_mouth,sim.player.organ_normal(sim.player.organs[0]).angle()),"Pursuit aligns the receptor's membrane normal to the target")
+
+	var visuals = preload("res://scripts/visuals.gd")
+	for size in [18.0,47.0,110.0]:
+		var small = Cell.new(302)
+		small.radius = size
+		small.membrane = preload("res://scripts/membrane.gd").new(size)
+		small.membrane.oral_angle = TAU-.12
+		for frame in 15: small.membrane.step(1.0/60,size,Vector2.ZERO,frame/60.0)
+		var curve: PackedVector2Array = small.membrane.outline()
+		var lip: PackedVector2Array = visuals.oral_path(small,small.membrane.oral_angle)
+		var error := 0.0
+		for point in lip:
+			var nearest := INF
+			for i in curve.size():
+				nearest = minf(nearest,point.distance_to(Geometry2D.get_closest_point_to_segment(point,curve[i],curve[(i+1)%curve.size()])))
+			error = maxf(error,nearest)
+		check.call(error < .001,"Mouth follows the exact deformed membrane at small/large sizes and the wrapping seam")
+		check.call(lip[0].distance_to(lip[-1]) < size*1.3,"Oral artwork scales down with small cells instead of spanning their interior")

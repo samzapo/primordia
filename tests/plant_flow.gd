@@ -7,6 +7,7 @@ static func run(check: Callable) -> void:
  habitat.forms=[{"branches":[{"a":Vector2(-50,0),"b":Vector2(50,0),"r":14.0,"depth":1}]}]
  habitat.rebuild()
  var medium=Medium.new();medium.driven=false
+ check.call(medium.current(Vector2.ZERO)==Vector2(11,0),"Ambient current retains its original strength while vegetation supplies local drag")
  medium.set_plants(habitat)
  check.call(Array(medium.plant_drag).max()>0,"Existing plant branches create a nonzero porous water drag")
  var original: PackedFloat32Array=medium.plant_drag.duplicate()

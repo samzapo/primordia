@@ -22,6 +22,9 @@ const REPRODUCTION_ATP_FLOOR := 20.0
 var build_original = null
 var build_state: Dictionary = {}
 var build_waste := 0.0
+var build_input := 0.0
+var managed_lineages: Array = []
+var autonomous_build_retry_at := 0.0
 const Backend = preload("res://scripts/backend.gd")
 var kernels = Backend.create()
 var gpu_transport = null
@@ -339,11 +342,50 @@ func local_particle_kind(kind: int) -> Array[int]:
 
 func install(kind: String, local_angle: float, mode: String = "graze", size: float = 1.0) -> bool:
 	if remote_client: return edit("install",{"kind":kind,"angle":local_angle})
+	return _install_for(player,evolution,kind,local_angle,mode,size)
+
+func _construction_input(amount: float) -> void:
+	# AP authorizes new construction material; do not debit existing cell stocks.
+	external_input += amount
+	if build_original != null: build_input += amount
+
+func _install_for(cell, progression, kind: String, local_angle: float, mode: String = "graze", size: float = 1.0) -> bool:
+	if kind == "feeding": return false # Inherent membrane anatomy is never purchased.
 	var cost := Evolution.install_price(size)
-	if evolution.terminal() or (evolution.enabled and evolution.points < cost): return false
-	if not player.add_organ(kind,local_angle,mode,true,size): return false
-	evolution.spend(cost,"Install "+kind)
+	if progression.terminal() or (progression.enabled and progression.points < cost): return false
+	if not cell.add_organ(kind,local_angle,mode,false,size): return false
+	progression.spend(cost,"Install "+kind)
+	_construction_input(cell.organs[-1].material)
 	return true
+
+func restore(identity: int) -> bool:
+	if remote_client: return edit("restore",{"id":identity})
+	if evolution.terminal() or (evolution.enabled and evolution.points < 1): return false
+	if not player.restore_organ(identity,false): return false
+	evolution.spend(1,"Restore organ")
+	_construction_input(player.organs[-1].material)
+	return true
+
+func step_autonomous_builds() -> void:
+	# Persistent NPC policy, called by the authority with every account root.
+	if remote_client or time < autonomous_build_retry_at: return
+	autonomous_build_retry_at = time+2.0
+	var visited: Dictionary = {}
+	for cell in cells:
+		var root: int = cell.lineage_id()
+		if cell.dead or cell.health <= 0 or root == lineage.root_id or root in managed_lineages or visited.has(root): continue
+		visited[root] = true
+		var ledger = _family_ledger(cell)
+		var progression = ledger.progression
+		if progression == null or progression.points < 1: continue
+		var choices: Array = []
+		for relative in ledger.active_family(self):
+			for kind in KINDS:
+				if kind != "feeding" and relative.can_fit(kind,0,1,false):
+					choices.append({"cell":relative,"kind":kind})
+		if choices.is_empty(): continue
+		var choice: Dictionary = choices[progression.random.randi_range(0,choices.size()-1)]
+		_install_for(choice.cell,progression,choice.kind,progression.random.randf()*TAU)
 
 func remove(index: int) -> bool:
 	if remote_client: return edit("remove",{"id":player.organs[index].id}) if index>=0 and index<player.organs.size() else false
@@ -1625,12 +1667,15 @@ func begin_build() -> void:
 	player = Cell.clone_state(player)
 	cells[index] = player
 	build_waste = 0
+	build_input = 0
 
 func cancel_build() -> void:
 	if build_original == null: return
 	cells[cells.find(player)] = build_original
 	player = build_original
 	for key in build_state: evolution.set(key,build_state[key])
+	external_input -= build_input
+	build_input = 0
 	build_original = null
 	build_state.clear()
 	build_waste = 0
@@ -1641,6 +1686,7 @@ func commit_build() -> void:
 	build_state.clear()
 	_build_debris(build_waste)
 	build_waste = 0
+	build_input = 0
 
 func undo_build() -> void:
 	cancel_build()
@@ -1658,7 +1704,7 @@ func resize_organ(identity: int, size: float) -> bool:
 func mutate_organ(identity: int, gene: String) -> bool:
 	if remote_client: return edit("mutate",{"id":identity,"gene":gene})
 	var organ: Dictionary = player.organ_by_id(identity)
-	if gene not in evolution.learned or organ.is_empty(): return false
+	if organ.is_empty() or gene not in Genes.available(organ,evolution.learned): return false
 	var cost := Genes.adaptation_price(organ)
 	if evolution.enabled and evolution.points < cost: return false
 	if not player.specialize(identity,gene): return false

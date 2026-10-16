@@ -32,7 +32,18 @@ void fragment() {
 	vec2 p = camera + vec2(c*delta.x+s*delta.y,-s*delta.x+c*delta.y);
 	vec2 habitat_uv = fract(p/vec2(4096.0,2560.0));
 	float light = texture(light_map,habitat_uv).r;
-	float acid = texture(acidity_map,habitat_uv).r;
+	// A bounded nine-tap display footprint makes real acid patches readable
+	// beyond one grid square. This does not change chemistry or transport.
+	vec2 texel = vec2(1.5/64.0,1.5/40.0);
+	float acid = texture(acidity_map,habitat_uv).r*0.28;
+	acid += (texture(acidity_map,habitat_uv+vec2(texel.x,0.0)).r+
+		texture(acidity_map,habitat_uv-vec2(texel.x,0.0)).r+
+		texture(acidity_map,habitat_uv+vec2(0.0,texel.y)).r+
+		texture(acidity_map,habitat_uv-vec2(0.0,texel.y)).r)*0.12;
+	acid += (texture(acidity_map,habitat_uv+texel).r+
+		texture(acidity_map,habitat_uv-texel).r+
+		texture(acidity_map,habitat_uv+vec2(texel.x,-texel.y)).r+
+		texture(acidity_map,habitat_uv+vec2(-texel.x,texel.y)).r)*0.06;
 	// Quiet blue water leaves luminance headroom for anatomy and lit tips.
 	vec3 water = mix(vec3(0.018,0.032,0.105),vec3(0.025,0.25,0.32),smoothstep(0.12,0.96,light));
 	if (fractal_color) {
@@ -41,9 +52,10 @@ void fragment() {
 		water = mix(water,reef,0.44);
 		water = mix(water,vec3(0.065,0.42,0.45),smoothstep(0.60,0.81,terrain)*smoothstep(0.38,0.9,light)*0.75);
 	}
-	vec3 acidic_water = mix(vec3(0.20,0.035,0.22),vec3(0.48,0.045,0.23),smoothstep(0.35,0.95,acid));
-	acidic_water *= 0.65+light*0.35;
-	water = mix(water,acidic_water,smoothstep(0.02,0.85,acid)*0.85);
+	vec3 acidic_water = mix(vec3(0.32,0.045,0.32),vec3(0.62,0.07,0.36),smoothstep(0.05,0.45,acid));
+	acidic_water *= 0.85+light*0.15;
+	// Buffers remove actual acid, visibly restoring the original blue water.
+	water = mix(water,acidic_water,(1.0-exp(-acid*24.0))*0.94);
 	if (water_ripples) {
 		// Slow world-anchored light caustics: no screen sampling or geometry warp.
 		vec2 phase = habitat_uv*6.283185;

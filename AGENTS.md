@@ -283,3 +283,38 @@ future pushes remain strict. Do not suppress functional, hardware-GPU, finite
 state, checkpoint or all-cell retention checks; keep the30Hz configured cadence
 and measured targets. Record and monitor timing misses honestly. This request
 does not authorize GPU clock/power changes, pond resets or population culling.
+
+
+## October 16, 2026 — accessible anatomy and original ambient current
+
+The mouth follows the actual oral membrane curve and scales with small cells.
+Controlled cells and their local factories draw above uncontrolled anatomy;
+owned family cells also draw above NPC lineages. Overlapping clickable structures
+must remain individually accessible through temporary choices. Double-tap adopts
+a living owned family member through the validated existing follow command.
+Photosynthesis always offers free, mutually exclusive Sun/Shade adaptations;
+other mutations retain their discovery requirements. Acid tint is stronger and
+has a broader bounded visual footprint; buffers restore blue through real acid
+neutralization. This is presentation, not extra chemical material or damage.
+The owner restores the original ambient current strength, superseding the prior
+35% reduction; retain plant drag and refresh only the maintained target through
+flow version2 without resetting saved water or any cells. Scheduled monitoring
+was removed at the owner's request; do not resume or recreate it.
+
+
+October16 continuation: standard installation and lost-organ restoration cost
+one AP only. No biomass/ATP construction debit; retain operating ATP, repair
+and reproduction costs. AP-funded organ tissue is an explicit external_input
+source; canceling local construction rolls it back. Persistent NPC lineages may
+spend their retained AP on bounded random fitting organs, excluding all account
+roots even offline. Use the same priced path; do not borrow player AP or reroll
+progression on restart. Update retired tissue-price tests to this economy and
+keep conservation checks against the explicit source.
+
+
+October16 owner hold: do not run rendering-speed/FPS/frame-budget benchmarks
+until the owner asks to resume. Field updates after focused correctness, real
+GPU/backend, network and checkpoint/all-cell retention checks. Do not claim a
+rendered speed target passed from those checks. Existing performance-warning
+rollout support may record timing observations; preserve all hard correctness,
+GPU and save-retention failures. Monitoring schedules remain deleted.

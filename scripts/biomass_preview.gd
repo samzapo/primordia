@@ -35,7 +35,7 @@ func sync() -> void:
 	var amount: float = maxf(0,game.world.player.biomass)
 	var price: Dictionary = game.cell_ui.hovered_price
 	var showing_cost: bool = not price.is_empty() or game.selected >= 0
-	var cost: float = float(price.tissue) if not price.is_empty() else game.Simulation.Cell.organ_cost(game.Simulation.KINDS[game.selected]) if game.selected >= 0 else 0.0
+	var cost: float = float(price.tissue) if not price.is_empty() else 0.0
 	var ap_needed: int = int(price.ap) if not price.is_empty() else 1 if game.selected >= 0 else 0
 	var s: float = game.preferences.hud_scale
 	var view := get_viewport_rect().size
@@ -102,7 +102,7 @@ func _draw() -> void:
 	if quote.show_cost:
 		var tint := Color("ffd68a") if quote.enough else Color("ff829e")
 		_blob(needed,quote.cost_radius,tint)
-		_caption("Needed tissue",needed+Vector2(0,maximum+24*s),tint)
+		_caption("AP only" if quote.cost == 0 and quote.ap_needed > 0 else "Free" if quote.cost == 0 else "Needed tissue",needed+Vector2(0,maximum+24*s),tint)
 		if not quote.enough: _caption("Need more tissue",needed+Vector2(0,maximum+44*s),tint)
 		elif not quote.ap_ready: _caption("Needs AP",needed+Vector2(0,maximum+44*s),Color("ff829e"))
 		_draw_ap(needed+Vector2(0,maximum+60*s),s,quote.ap_needed,"Needed AP",quote.ap_ready)
