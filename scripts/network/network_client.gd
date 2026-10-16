@@ -2,7 +2,8 @@ extends "res://scripts/pond.gd"
 var family_recovery: Dictionary={}
 var server_census: Dictionary={}
 var update_popup=preload("res://scripts/update_popup.gd").new()
-var pending_release_notes: Dictionary={}
+var pending_release_updates: Array=[]
+var defer_release_updates:=false
 var received_death_serial:=0
 var death_tombstones: Dictionary={}
 const Codec = preload("res://scripts/network/state_codec.gd")
@@ -101,6 +102,7 @@ func _ready() -> void:
 	super()
 	update_popup.initialize(ui)
 	update_popup.dismissed.connect(func(id):_send({"op":"update_seen","id":id}))
+	update_popup.unconfirmed.connect(func(_id):defer_release_updates=true)
 	network_particles=preload("res://scripts/network/network_particles.gd").new()
 	world_layer.add_child(network_particles)
 	notice = "Connect to the shared pond. Your lineage and chemistry continue while disconnected."
@@ -234,7 +236,7 @@ func _connect(manual: bool=true) -> void:
 	socket=WebSocketPeer.new();socket.inbound_buffer_size=Protocol.MAX_FRAME;socket.outbound_buffer_size=65536;socket.max_queued_packets=8
 	hello_sent=false;connected=false;connecting=true;attempted=true;retry_enabled=true;reconnect_due=3;inflight.clear();commands.clear()
 	view_announced=false;view_clock=0;keepalive_clock=0;received_usec=0
-	update_popup.close();pending_release_notes={}
+	update_popup.close();pending_release_updates=[]
 	last_snapshot_time=-1;user_paused=false;paused_snapshot={};touch_zoom.cancel();camera_initialized=false
 	connect_started_usec=Time.get_ticks_usec()
 	if OS.has_feature("web"):
@@ -248,7 +250,7 @@ func _connect(manual: bool=true) -> void:
 	_show_connection("Connecting to the shared pond…")
 
 func _connection_closed(code: int,reason: String) -> void:
-	update_popup.close();pending_release_notes={};player_help.close()
+	update_popup.close();pending_release_updates=[];player_help.close()
 	connecting=false;connected=false;loading_world=false;commands.clear();inflight.clear();connection_stage="disconnected"
 	if code==1008:
 		retry_enabled=false
@@ -287,7 +289,7 @@ func _poll_network() -> void:
 				"death_events": _receive_deaths(message)
 				"profile_result": profile.result(message)
 				"feedback_result": feedback.result(message)
-				"update_seen_result": update_popup.result(message)
+				"update_seen_result": _release_result(message)
 				"welcome": _welcome(message)
 				"snapshot": _snapshot(message)
 				"snapshot_error":
@@ -304,7 +306,9 @@ func _poll_network() -> void:
 			_connection_closed(socket.get_close_code(),socket.get_close_reason())
 
 func _welcome(message: Dictionary) -> void:
-	update_popup.close();pending_release_notes=message.get("release_notes",{}).duplicate(true)
+	defer_release_updates=false;update_popup.close()
+	pending_release_updates=message.get("release_updates",[]).duplicate(true)
+	if pending_release_updates.is_empty() and not message.get("release_notes",{}).is_empty():pending_release_updates=[message.release_notes.duplicate(true)]
 	camera_initialized=false;cells_by_id.clear();packet_ids.clear();received_usec=0
 	world.death_bursts.clear();world.death_serial=message.get("death_serial",0)
 	death_world=world;death_seen=world.death_serial;death_focus_age=2.0
@@ -429,8 +433,20 @@ func _snapshot(message: Dictionary) -> void:
 		JavaScriptBridge.eval("window.primordiaDiagnostics="+JSON.stringify({"connected":connected,"tick":world.revision,"world_id":message.world_id,"packets":packets.size(),"cells":world.cells.size(),"time":world.time,"player_name":player_name,"nameplates":nameplates.items.map(func(item):return {"cell":item.cell,"name":item.name,"online":item.online})}))
 
 	_ack_snapshot(message)
-	if not pending_release_notes.is_empty():
-		touch_zoom.cancel();update_popup.open(pending_release_notes);pending_release_notes={}
+	_show_next_update()
+
+func _show_next_update() -> void:
+	if defer_release_updates or not connected or loading_world or login.visible or update_popup.opened or update_popup.pending or pending_release_updates.is_empty():return
+	if player_help.opened or feedback.opened or profile.opened or settings_panel.visible:return
+	var notes: Dictionary=pending_release_updates[0].duplicate(true)
+	if pending_release_updates.size()>1:notes.button="Next update"
+	touch_zoom.cancel();update_popup.open(notes)
+func _release_result(message: Dictionary) -> void:
+	var current: bool=message.get("id","")==update_popup.release_id
+	update_popup.result(message)
+	if current and message.get("ok",false):
+		if not pending_release_updates.is_empty() and pending_release_updates[0].id==message.id:pending_release_updates.pop_front()
+		_show_next_update.call_deferred()
 
 func _debug_population_lines() -> String:
 	return population_text(server_census,world.particles.size())

@@ -367,8 +367,8 @@ October16 player update notices: after each public game update, include a brief
 player-facing change log shown once after sign-in and the first ready world view.
 The owner approved the first What’s new in the pond copy in
 scripts/network/release_notes.gd and wants this voice used routinely. Before every
-public update, advance its authored release ID and replace its bullets with the
-substantial changes in that release. Use plain gameplay language, a few short
+public update, append a new authored release ID and brief bullets with the
+substantial changes in that release, preserving earlier entries. Use plain gameplay language, a few short
 bullets and Back to the pond; exclude implementation details, commit IDs,
 benchmarks and deployment jargon. The first copy required approval and is now
 approved; later copy follows this standard workflow without repeated approval.
@@ -388,3 +388,18 @@ Clearly identify fictional recipes, costs, probabilities, presentation and
 persistent-world rules as game choices. Do not restore retired pathways by
 documenting them as available. Review/update this content alongside release notes
 before every public deployment; keep explanations simple for the game audience.
+
+
+October16 reader correction: the first canvas pop-up was blank on the owner’s
+phone despite passing geometry/text-property tests. Web update/help readers now
+use native HTML panels with real browser visibility, scrolling and close checks;
+never infer visible text from data or rectangles alone. Keep a fixed close
+button and never require a server response to leave a reader. Acknowledgement
+still counts only after durable server save, with bounded background retries.
+
+The owner requests every missed update, oldest first until all are cleared.
+Append to ReleaseNotes.RELEASES; never replace historical player copy. The saved
+last-cleared release advances only one known release at a time; old duplicate
+acks must not move it backwards. Preserve legacy seen_release values. Show Next
+update until the last message, then Back to the pond. On acknowledgement failure,
+leave the game accessible and defer the uncleared queue until next sign-in.

@@ -313,7 +313,7 @@ func _update_seen(peer: Dictionary,message: Dictionary) -> void:
 	var previous: String=str(account.get("seen_release",""))
 	var id=message.get("id")
 	var ok:=ReleaseNotes.acknowledge(account,id)
-	if ok and previous!=id and not checkpoint():
+	if ok and previous!=str(account.get("seen_release","")) and not checkpoint():
 		if previous=="":account.erase("seen_release")
 		else:account.seen_release=previous
 		ok=false
@@ -464,7 +464,7 @@ func _hello(id: int,message: Dictionary) -> void:
 	var center: Vector2=focus.position if focus!=null else cell.position
 	peer.view=Vector4(center.x,center.y,Sim.VIEW.x/.8/2,Sim.VIEW.y/.8/2)
 	peer.view_tick=world.revision
-	_send(peer,{"kind":"welcome","release_notes":ReleaseNotes.pending(account),"token":token,"world_id":world_id,"epoch":epoch,"sequence":account.sequence,"edit":account.edit,"seed":world.seed_value,"habitat":Codec.new().capture(world.habitat_geometry),"cell":cell.id,"player_name":str(account.get("display_name","")),"death_serial":world.death_serial})
+	_send(peer,{"kind":"welcome","release_notes":ReleaseNotes.pending(account),"release_updates":ReleaseNotes.pending_all(account),"token":token,"world_id":world_id,"epoch":epoch,"sequence":account.sequence,"edit":account.edit,"seed":world.seed_value,"habitat":Codec.new().capture(world.habitat_geometry),"cell":cell.id,"player_name":str(account.get("display_name","")),"death_serial":world.death_serial})
 	var initial:=_frame(peer)
 	initial.warming=true
 	_send(peer,initial)

@@ -96,7 +96,12 @@ func run() -> void:
 	messages[0]=messages[0].filter(func(m):return m.get("kind","")!="update_seen_result")
 	sockets[0].send_text(JSON.stringify({"op":"update_seen","id":welcome0.release_notes.id}))
 	check(await until(func():return find_message(0,"update_seen_result").get("ok",false)),"Dismissing the update is durably acknowledged")
-	check(host.ReleaseNotes.pending(host.accounts[welcome0.token.sha256_text()]).is_empty() and not host.ReleaseNotes.pending(host.accounts[welcome1.token.sha256_text()]).is_empty(),"Dismissal is per player and does not suppress other players’ notices")
+	check(host.ReleaseNotes.pending_all(host.accounts[welcome0.token.sha256_text()]).size()==welcome0.release_updates.size()-1 and host.ReleaseNotes.pending_all(host.accounts[welcome1.token.sha256_text()]).size()==welcome1.release_updates.size(),"Dismissal is per player and does not suppress other players’ notices")
+	for update in welcome0.release_updates.slice(1):
+		messages[0]=messages[0].filter(func(m):return m.get("kind","")!="update_seen_result")
+		sockets[0].send_text(JSON.stringify({"op":"update_seen","id":update.id}))
+		check(await until(func():return find_message(0,"update_seen_result").get("ok",false)),"Each missed update is durably cleared in order over a real socket")
+	check(host.ReleaseNotes.pending_all(host.accounts[welcome0.token.sha256_text()]).is_empty(),"The account has no replay after every missed update is cleared")
 	check(welcome0.cell!=welcome1.cell,"accounts own distinct cells")
 	sockets[0].send_text(JSON.stringify({"op":"profile","name":"  Sam 🌱  "}))
 	check(await until(func():return not find_message(0,"profile_result").is_empty()),"Player name can be saved over the authenticated socket")

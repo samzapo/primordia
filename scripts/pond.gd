@@ -50,6 +50,8 @@ var currents_origin := Vector2.ZERO
 var preview := Node2D.new()
 var ui := Control.new()
 var player_help:=preload("res://scripts/player_help.gd").new()
+var gameplay_menu_button: Button
+var mechanics_menu_button: Button
 var touch_zoom := preload("res://scripts/touch_zoom.gd").new()
 var user_paused := false
 var perception := "exteroception"
@@ -755,8 +757,8 @@ func _build_ui() -> void:
 	_label(options,"SETTINGS [M]",MINT)
 	profile_menu_button=_button(options,"Player name",profile.open)
 	feedback_menu_button=_button(options,"Feature request / Bug report",feedback.open)
-	_button(options,"Gameplay",player_help.open.bind("gameplay"))
-	_button(options,"Mechanics",player_help.open.bind("mechanics"))
+	gameplay_menu_button=_button(options,"Gameplay",player_help.open.bind("gameplay"))
+	mechanics_menu_button=_button(options,"Mechanics",player_help.open.bind("mechanics"))
 	_label(options,"Text and interaction size")
 	options.add_child(scale_select)
 	for scale_value in Preferences.SCALES: scale_select.add_item("%d%%" % roundi(scale_value*100))
