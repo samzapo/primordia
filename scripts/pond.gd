@@ -49,6 +49,7 @@ var flow_wakes := true
 var currents_origin := Vector2.ZERO
 var preview := Node2D.new()
 var ui := Control.new()
+var player_help:=preload("res://scripts/player_help.gd").new()
 var touch_zoom := preload("res://scripts/touch_zoom.gd").new()
 var user_paused := false
 var perception := "exteroception"
@@ -741,7 +742,7 @@ func _build_ui() -> void:
 	debug_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	debug_label.add_theme_color_override("font_outline_color",Color("142540"))
 	debug_label.add_theme_constant_override("outline_size",5)
-	feedback.initialize(self);profile.initialize(self);nameplates.initialize(self)
+	feedback.initialize(self);profile.initialize(self);nameplates.initialize(self);player_help.initialize(self)
 	var options_box := _panel_box(settings_panel)
 	var settings_scroll := ScrollContainer.new()
 	settings_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -754,6 +755,8 @@ func _build_ui() -> void:
 	_label(options,"SETTINGS [M]",MINT)
 	profile_menu_button=_button(options,"Player name",profile.open)
 	feedback_menu_button=_button(options,"Feature request / Bug report",feedback.open)
+	_button(options,"Gameplay",player_help.open.bind("gameplay"))
+	_button(options,"Mechanics",player_help.open.bind("mechanics"))
 	_label(options,"Text and interaction size")
 	options.add_child(scale_select)
 	for scale_value in Preferences.SCALES: scale_select.add_item("%d%%" % roundi(scale_value*100))
@@ -1059,7 +1062,7 @@ func _notification(what: int) -> void:
 	if what==NOTIFICATION_WM_WINDOW_FOCUS_OUT:touch_zoom.cancel()
 
 func _input(event: InputEvent) -> void:
-	if feedback.opened or profile.opened:return
+	if feedback.opened or profile.opened or player_help.opened:return
 	if event is InputEventScreenTouch or event is InputEventScreenDrag:
 		if touch_zoom.handle(event):get_viewport().set_input_as_handled()
 		return
@@ -1140,7 +1143,7 @@ func _switch_family(identity: int) -> bool:
 	return true
 
 func _unhandled_input(event: InputEvent) -> void:
-	if feedback.opened or profile.opened:return
+	if feedback.opened or profile.opened or player_help.opened:return
 	if touch_zoom.enabled and (event is InputEventMouseButton or event is InputEventMouseMotion) and event.device==-1:return
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT and not cell_ui.context.is_empty():
 		cell_ui.close_context()

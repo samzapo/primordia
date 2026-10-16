@@ -361,3 +361,30 @@ server habitat counts separately from camera snapshots and dead storage slots.
 Clamp spent field charge, repair only known tiny legacy waste residue, and retain
 strict rejection of substantive negative inventory. Rendering benchmarks and
 schedules remain held; capacity probes require explicit dispatch or marker.
+
+
+October16 player update notices: after each public game update, include a brief
+player-facing change log shown once after sign-in and the first ready world view.
+The owner approved the first What’s new in the pond copy in
+scripts/network/release_notes.gd and wants this voice used routinely. Before every
+public update, advance its authored release ID and replace its bullets with the
+substantial changes in that release. Use plain gameplay language, a few short
+bullets and Back to the pond; exclude implementation details, commit IDs,
+benchmarks and deployment jargon. The first copy required approval and is now
+approved; later copy follows this standard workflow without repeated approval.
+Retain acknowledgement on the player account only after a durable save, so
+reconnects/devices/restarts do not replay it. A later release appears again. The
+shared world continues while reading; no new HUD or automatic world pause.
+
+
+October16 player guide requirement: keep Pause → Gameplay and Mechanics current
+with every shipped feature, changed rule, organelle, gesture or shortcut.
+data/player_guide.json is authored player copy, not a dump of historical design
+documents or retired chemistry catalog entries. Gameplay shows only the current
+touch or desktop controls, never keyboard/mouse shortcuts on mobile. Mechanics
+uses short descriptions of active rules, grouped for reading, with clickable
+HTTPS links to the matching scientific grounding already retained in references.md.
+Clearly identify fictional recipes, costs, probabilities, presentation and
+persistent-world rules as game choices. Do not restore retired pathways by
+documenting them as available. Review/update this content alongside release notes
+before every public deployment; keep explanations simple for the game audience.

@@ -1,0 +1,707 @@
+{
+  "version": 1,
+  "gameplay": {
+    "common": [
+      {
+        "id": "anatomy",
+        "title": "Your cell chooses where to swim",
+        "text": "Build and tune its organs to influence feeding, pursuit, escape and light seeking. You do not steer it directly.",
+        "sources": []
+      },
+      {
+        "id": "overlap",
+        "title": "Choose overlapping structures",
+        "text": "When several structures share a spot, choose the one you want from the temporary selection menu.",
+        "sources": []
+      },
+      {
+        "id": "build",
+        "title": "Build and restore",
+        "text": "Open the Assembly or Chemistry factory, choose an organelle, then choose a place on the membrane. Each installation or lost-organ restoration costs 1 AP. Organs need room.",
+        "sources": []
+      },
+      {
+        "id": "cell_details",
+        "title": "Read the cell’s resources",
+        "text": "Open the ATP store for energy details. Chemistry factory → Food vacuoles explains digestion and waste. The nucleus and family menu show lineage progress.",
+        "sources": []
+      },
+      {
+        "id": "organs",
+        "title": "Move, recycle and tune",
+        "text": "Open an installed organelle to move it, recycle it, change its Output, or adjust Steering where available. Output increases its work and ATP use; Steering changes its influence on swimming.",
+        "sources": []
+      },
+      {
+        "id": "mutate",
+        "title": "Choose adaptations",
+        "text": "Open the nucleus to keep an offered division mutation. Open a matching organelle to apply a learned mutation. Photosynthesis always offers Sun or Shade specialization. These choices are free.",
+        "sources": []
+      },
+      {
+        "id": "behavior",
+        "title": "Tune exploration",
+        "text": "Open Nucleus → Behavior to change wandering strength and the cycle between exploration and following a signal.",
+        "sources": []
+      },
+      {
+        "id": "offspring",
+        "title": "Manage offspring",
+        "text": "Open the offspring reserve to add or reclaim resources, release a funded successor, or store one dormant. Surplus investment and splitting also happen automatically.",
+        "sources": []
+      },
+      {
+        "id": "history",
+        "title": "View your family",
+        "text": "Open Nucleus → Family & goals, or Family history in Pause, to see your relatives and select a living family member.",
+        "sources": []
+      },
+      {
+        "id": "settings",
+        "title": "Pause and personalize",
+        "text": "Pause/settings contains Player name, private bug reports and feature requests, Gameplay, Mechanics, music volume, text size, visual options and fullscreen. Pausing freezes your view; the shared pond continues.",
+        "sources": []
+      }
+    ],
+    "touch": [
+      {
+        "id": "camera",
+        "title": "Move, turn and zoom",
+        "text": "Use two fingers together: drag to move the view, twist to rotate, and pinch to zoom. The touched places stay under your fingers. The + and − buttons also zoom.",
+        "sources": []
+      },
+      {
+        "id": "follow",
+        "title": "Follow and look inside",
+        "text": "Tap Follow to center on your cell. Tap Interoception to look inside, or Exteroception to return to the pond. Inside, gestures stay relative to your cell and you can zoom much closer.",
+        "sources": []
+      },
+      {
+        "id": "select",
+        "title": "Open cell controls",
+        "text": "Tap a factory, nucleus, offspring reserve, ATP store or installed organelle. Choices appear along the top. Tap × or empty water to close choices.",
+        "sources": []
+      },
+      {
+        "id": "cancel",
+        "title": "Cancel placement",
+        "text": "Tap the circular icon of the held organelle at the top left to cancel placing or moving it.",
+        "sources": []
+      },
+      {
+        "id": "switch",
+        "title": "Switch family member",
+        "text": "Double-tap a living cell in your lineage to manage it. Your previous cell stays in the pond.",
+        "sources": []
+      },
+      {
+        "id": "inspect",
+        "title": "Inspect particles",
+        "text": "Tap a particle or vacuole to see its name and details at the bottom.",
+        "sources": []
+      },
+      {
+        "id": "resources",
+        "title": "Show resources",
+        "text": "Biomass, AP and ATP appear along the bottom. Tap − to hide them and Resources to bring them back.",
+        "sources": []
+      },
+      {
+        "id": "pause",
+        "title": "Pause, resume and music",
+        "text": "Tap Pause for the menu and Resume to return to the live view. Tap Enable music when shown, then Music to mute or resume; the slider changes volume.",
+        "sources": []
+      }
+    ],
+    "desktop": [
+      {
+        "id": "camera",
+        "title": "Move and zoom",
+        "text": "Scroll the mouse wheel to zoom. Drag with the middle mouse button to pan in Free view or inside a cell. In Free view, dragging empty water with the left button also pans.",
+        "sources": []
+      },
+      {
+        "id": "follow",
+        "title": "Follow and look inside",
+        "text": "Space toggles Follow / Free view outside the cell and recenters the cell frame inside. I switches Interoception / Exteroception.",
+        "sources": []
+      },
+      {
+        "id": "select",
+        "title": "Open cell controls",
+        "text": "Click a factory, nucleus, offspring reserve, ATP store or organelle. Tab enters or leaves cell editing.",
+        "sources": []
+      },
+      {
+        "id": "cancel",
+        "title": "Cancel placement",
+        "text": "Right-click cancels a held organelle or closes choices. Clicking the held icon also cancels.",
+        "sources": []
+      },
+      {
+        "id": "keyboard",
+        "title": "Build with the keyboard",
+        "text": "[ and ] cycle cell targets; Enter opens the selected target or places the held organelle. Arrow keys adjust choices or membrane placement. Number keys and F / C / V select organelle types.",
+        "sources": []
+      },
+      {
+        "id": "switch",
+        "title": "Switch family member",
+        "text": "Double-click a living cell in your lineage, or choose it from the family menu. Your previous cell stays in the pond.",
+        "sources": []
+      },
+      {
+        "id": "inspect",
+        "title": "Inspect and inspect more",
+        "text": "Hover over a particle for its name and magnified shape. Hold Alt for expanded cell and organelle details.",
+        "sources": []
+      },
+      {
+        "id": "pause",
+        "title": "Pause, settings and display",
+        "text": "P pauses or resumes your view. M opens or closes settings. F11 toggles fullscreen. S toggles sensed signals; F3 toggles the information overlay. Music and resource controls are in the cell and Pause menu.",
+        "sources": []
+      }
+    ]
+  },
+  "mechanics": [
+    {
+      "id": "food",
+      "title": "Food & energy",
+      "items": [
+        {
+          "id": "digestion",
+          "title": "Food → ATP, biomass and waste",
+          "text": "The oral groove takes in real food particles. Food vacuoles drift inside for at least 10 seconds while digesting their contents. ATP and biomass are stored amounts; waste-filled vacuoles move to the outlet and are expelled.",
+          "sources": [
+            {
+              "title": "Food-vacuole formation",
+              "url": "https://pubmed.ncbi.nlm.nih.gov/11831772/"
+            },
+            {
+              "title": "How cells obtain energy from food",
+              "url": "https://www.ncbi.nlm.nih.gov/books/NBK26882/"
+            }
+          ]
+        },
+        {
+          "id": "respiration",
+          "title": "Food + oxygen → more useful energy",
+          "text": "Nearby oxygen supports more efficient digestion and more biomass. Without enough oxygen, fermentation still processes food but yields less. Carbon and waste are released. These are simplified food-processing rules, not full molecular pathways.",
+          "sources": [
+            {
+              "title": "How cells obtain energy from food",
+              "url": "https://www.ncbi.nlm.nih.gov/books/NBK26882/"
+            }
+          ]
+        },
+        {
+          "id": "photosynthesis",
+          "title": "Carbon + light → food, biomass and oxygen",
+          "text": "Photosynthesis uses carbon particles and light to make food and biomass, releases oxygen, and supplies ATP. Sun and Shade specializations favor different light conditions. In nature, oxygen comes from water; the game leaves water implicit.",
+          "sources": [
+            {
+              "title": "Oxygen production in photosynthesis",
+              "url": "https://pubs.acs.org/doi/10.1021/ja01848a512"
+            },
+            {
+              "title": "Light-guided swimming",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC4868408/"
+            }
+          ]
+        },
+        {
+          "id": "emergency",
+          "title": "Emergency fuel",
+          "text": "When ATP is low, a cell can reclaim uncommitted offspring reserves and use spare biomass as fuel. It cannot live indefinitely without food or light and carbon.",
+          "sources": [
+            {
+              "title": "Microbial energy reserves",
+              "url": "https://journals.asm.org/doi/10.1128/AEM.00049-20"
+            }
+          ]
+        },
+        {
+          "id": "upkeep",
+          "title": "ATP pays for work",
+          "text": "Maintenance, swimming, pumping, repair and secretion spend ATP. Higher Output does more work but uses more ATP, with a small extra cost. Ordinary light collection and sensing remain possible at zero ATP.",
+          "sources": [
+            {
+              "title": "Catalysis and cellular energy",
+              "url": "https://www.ncbi.nlm.nih.gov/books/NBK26838/"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "water",
+      "title": "Chemistry in the water",
+      "items": [
+        {
+          "id": "encounters",
+          "title": "Particles have to meet",
+          "text": "Chemical parcels drift, turn and mix with the water. Reactions need compatible contact and facing. They stand for amounts of material, not individual molecules.",
+          "sources": [
+            {
+              "title": "Directional particle binding",
+              "url": "https://hoomd-blue.readthedocs.io/en/v5.2.0/hoomd/md/pair/aniso/patchy.html"
+            },
+            {
+              "title": "Life at low Reynolds number",
+              "url": "https://doi.org/10.1119/1.10903"
+            }
+          ]
+        },
+        {
+          "id": "nutrient_binding",
+          "title": "Nutrient + nutrient → a richer parcel",
+          "text": "Joining combines the food. Fully fueled parcels also gain a bounded ATP-yield bonus. Mild acid helps them bind; joining spent food does not refill its energy. The bonus is a game rule inspired by pH-sensitive assembly.",
+          "sources": [
+            {
+              "title": "Directional particle binding",
+              "url": "https://hoomd-blue.readthedocs.io/en/v5.2.0/hoomd/md/pair/aniso/patchy.html"
+            },
+            {
+              "title": "pH-dependent assembly",
+              "url": "https://pubmed.ncbi.nlm.nih.gov/12904028/"
+            }
+          ]
+        },
+        {
+          "id": "enzyme_recycling",
+          "title": "Enzyme + waste → reusable food",
+          "text": "An aligned digestive enzyme converts waste into edible material and can be reused. Moderate acidity helps; too much prevents the reaction. Recycling does not restore the food’s spent fuel.",
+          "sources": [
+            {
+              "title": "Acid protease activity",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC6027330/"
+            }
+          ]
+        },
+        {
+          "id": "oxygen_recycling",
+          "title": "Waste + oxygen → food and carbon",
+          "text": "When conditions permit, oxygen helps turn waste into reusable food material and carbon. Recycled food has no fresh fuel. This contact rule stands in for wider microbial recycling, rather than a literal chemical equation.",
+          "sources": [
+            {
+              "title": "Microbial respiration and growth",
+              "url": "https://www.nature.com/articles/s42003-025-07574-2"
+            }
+          ]
+        },
+        {
+          "id": "neutralization",
+          "title": "Antitoxin + toxin, tag or pore part → waste",
+          "text": "A neutralizer binds an attacking parcel and makes harmless waste containing both parcels’ material. Real antitoxins are specific; the game combines several defenses into one.",
+          "sources": [
+            {
+              "title": "Toxin–antitoxin binding",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8860590/"
+            }
+          ]
+        },
+        {
+          "id": "spoiling",
+          "title": "Toxin + nutrient → waste",
+          "text": "Toxins spoil food they contact. The toxin remains dangerous. This is a game simplification of contamination.",
+          "sources": [
+            {
+              "title": "Toxin–antitoxin binding",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8860590/"
+            }
+          ]
+        },
+        {
+          "id": "acid_buffer",
+          "title": "Acid + buffer → spent charge",
+          "text": "Acid raises local acidity; buffers reduce it. Opposite charges neutralize each other, and exhausted parcels become waste. Pink water shows acidity; the colors are an aid, not a real pH scale.",
+          "sources": [
+            {
+              "title": "Acid protease activity",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC6027330/"
+            },
+            {
+              "title": "Cell responses to weak acids",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3678083/"
+            }
+          ]
+        },
+        {
+          "id": "aggregation",
+          "title": "Waste, carbon or oxygen + matching parcel → a larger parcel",
+          "text": "Matching parcels can combine up to their size limit, keeping their material. Only nutrient binding has the extra ATP-yield rule.",
+          "sources": [
+            {
+              "title": "Directional particle binding",
+              "url": "https://hoomd-blue.readthedocs.io/en/v5.2.0/hoomd/md/pair/aniso/patchy.html"
+            }
+          ]
+        },
+        {
+          "id": "toxin_contact",
+          "title": "Toxin + foreign cell → damage",
+          "text": "Toxin packets hurt cells outside their own lineage. A neutralizer can intercept them. Defense and repair compete with the attacker’s finite supplies.",
+          "sources": [
+            {
+              "title": "Toxin–antitoxin binding",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8860590/"
+            },
+            {
+              "title": "Cell membrane repair",
+              "url": "https://pubmed.ncbi.nlm.nih.gov/11511344/"
+            }
+          ]
+        },
+        {
+          "id": "pore_assembly",
+          "title": "Tag + membrane + four pore parts → a damaging pore",
+          "text": "Surface tags attach locally; pore parts build up on the tag. Four make an active pore. Antitoxin can cap an unfinished assembly, while repair helps remove an active pore. The four-part recipe is fictional.",
+          "sources": [
+            {
+              "title": "Structure of a membrane pore",
+              "url": "https://www.nature.com/articles/s41467-019-10645-8"
+            },
+            {
+              "title": "Cell membrane repair",
+              "url": "https://pubmed.ncbi.nlm.nih.gov/11511344/"
+            }
+          ]
+        },
+        {
+          "id": "decoys",
+          "title": "Decoy + receptor → weaker sensing",
+          "text": "Foreign decoys temporarily occupy receptors. They can release on their own; ATP and repair help clear them sooner. Light seeking is separate.",
+          "sources": [
+            {
+              "title": "Receptor recovery",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3856725/"
+            }
+          ]
+        },
+        {
+          "id": "signals",
+          "title": "Pheromones carry old reports",
+          "text": "Hunting and flight receptors read drifting reports of nearby cells. Reports age and expire; they do not reveal another cell’s live location. Family signatures help relatives recognize one another.",
+          "sources": [
+            {
+              "title": "Chemical signals in flowing habitats",
+              "url": "https://www.nature.com/articles/s41467-023-44267-y"
+            },
+            {
+              "title": "Cell recognition",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC5769593/"
+            }
+          ]
+        },
+        {
+          "id": "turnover",
+          "title": "Particles decay and disperse",
+          "text": "Parcels have limited lifetimes. Above the pond’s particle limit, excess exterior parcels have the same chance of dispersing, regardless of type. The limit is a game rule; it never removes cells or their internal contents.",
+          "sources": []
+        }
+      ]
+    },
+    {
+      "id": "organs",
+      "title": "What each organelle does",
+      "items": [
+        {
+          "id": "organ_propulsion",
+          "title": "Flagellum",
+          "text": "Pushes water to provide thrust. Anatomy and sensed signals choose the direction.",
+          "sources": [
+            {
+              "title": "Life at low Reynolds number",
+              "url": "https://doi.org/10.1119/1.10903"
+            }
+          ]
+        },
+        {
+          "id": "organ_cilia",
+          "title": "Cilia",
+          "text": "Beat to swim and draw water past the cell. The current carries food and hazards alike; the oral groove still has to take food in.",
+          "sources": [
+            {
+              "title": "Cilia and swimming in Paramecium",
+              "url": "https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1010899"
+            }
+          ]
+        },
+        {
+          "id": "organ_protection",
+          "title": "Protective cortex",
+          "text": "Protects the patch of membrane beneath it. Coverage depends on placement.",
+          "sources": [
+            {
+              "title": "Cell shape and internal support",
+              "url": "https://www.ncbi.nlm.nih.gov/books/NBK26809/"
+            }
+          ]
+        },
+        {
+          "id": "organ_feeding",
+          "title": "Oral groove",
+          "text": "Senses and takes in food, pumps nearby water, and releases digestive enzymes. Turning its Steering off does not turn feeding off.",
+          "sources": [
+            {
+              "title": "Food-vacuole formation",
+              "url": "https://pubmed.ncbi.nlm.nih.gov/11831772/"
+            }
+          ]
+        },
+        {
+          "id": "organ_hunting",
+          "title": "Hunting receptor",
+          "text": "Follows pheromone reports of smaller or undefended foreign cells. It senses; glands provide the attack.",
+          "sources": [
+            {
+              "title": "Chemical signals in flowing habitats",
+              "url": "https://www.nature.com/articles/s41467-023-44267-y"
+            }
+          ]
+        },
+        {
+          "id": "organ_sensing",
+          "title": "Flight receptor",
+          "text": "Responds to reports of threatening foreign cells. Escape takes priority over other steering.",
+          "sources": [
+            {
+              "title": "Chemical signals in flowing habitats",
+              "url": "https://www.nature.com/articles/s41467-023-44267-y"
+            }
+          ]
+        },
+        {
+          "id": "organ_photosynthesis",
+          "title": "Photosynthesis",
+          "text": "Uses light and carbon; also steers toward light. Choose Sun or Shade from its menu.",
+          "sources": [
+            {
+              "title": "Oxygen production in photosynthesis",
+              "url": "https://pubs.acs.org/doi/10.1021/ja01848a512"
+            },
+            {
+              "title": "Light-guided swimming",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC4868408/"
+            }
+          ]
+        },
+        {
+          "id": "organ_toxin",
+          "title": "Toxin gland",
+          "text": "Spends biomass and ATP to send toxin and receptor-blocking decoys toward a locally reported target.",
+          "sources": [
+            {
+              "title": "Toxin–antitoxin binding",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8860590/"
+            },
+            {
+              "title": "Receptor recovery",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3856725/"
+            }
+          ]
+        },
+        {
+          "id": "organ_poreforming",
+          "title": "Pore-forming gland",
+          "text": "Releases tags and pore parts toward a local target report. Damage requires assembly on a foreign membrane.",
+          "sources": [
+            {
+              "title": "Structure of a membrane pore",
+              "url": "https://www.nature.com/articles/s41467-019-10645-8"
+            }
+          ]
+        },
+        {
+          "id": "organ_acidifying",
+          "title": "Acid gland",
+          "text": "Releases acid parcels. Mild acid helps food binding and enzyme action, but too much also harms the secreting cell.",
+          "sources": [
+            {
+              "title": "Acid protease activity",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC6027330/"
+            },
+            {
+              "title": "Cell responses to weak acids",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3678083/"
+            }
+          ]
+        },
+        {
+          "id": "organ_neutralizing",
+          "title": "Toxin neutralizer",
+          "text": "Releases antitoxin when a nearby chemical threat is present.",
+          "sources": [
+            {
+              "title": "Toxin–antitoxin binding",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8860590/"
+            }
+          ]
+        },
+        {
+          "id": "organ_regenerative",
+          "title": "Buffer / repair gland",
+          "text": "Uses biomass and ATP to repair damage, helps remove pores and decoys, and releases buffer when needed.",
+          "sources": [
+            {
+              "title": "Cell membrane repair",
+              "url": "https://pubmed.ncbi.nlm.nih.gov/11511344/"
+            },
+            {
+              "title": "Cell responses to weak acids",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3678083/"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cells",
+      "title": "Cells & lineages",
+      "items": [
+        {
+          "id": "growth",
+          "title": "Biomass, shape and support",
+          "text": "Biomass supports growth and repair. The membrane deforms around a lightly drawn internal support network. That network is sampled per cell and is not editable.",
+          "sources": [
+            {
+              "title": "Cell shape and internal support",
+              "url": "https://www.ncbi.nlm.nih.gov/books/NBK26809/"
+            }
+          ]
+        },
+        {
+          "id": "division",
+          "title": "Reproduction and AP",
+          "text": "Surplus biomass and ATP go into offspring reserves automatically. A funded cell divides when there is room. Each committed division awards 2 AP; building or restoring an organelle costs 1 AP. AP is a game resource.",
+          "sources": [
+            {
+              "title": "Cell division",
+              "url": "https://www.ncbi.nlm.nih.gov/books/NBK26831/"
+            }
+          ]
+        },
+        {
+          "id": "mutations",
+          "title": "Mutations and inheritance",
+          "text": "Division has a 10% chance to offer a free mutation. Keep it through the nucleus, then apply it to a matching organelle. Descendants inherit their lineage’s anatomy. The chance and choices are game rules.",
+          "sources": [
+            {
+              "title": "Cell division",
+              "url": "https://www.ncbi.nlm.nih.gov/books/NBK26831/"
+            }
+          ]
+        },
+        {
+          "id": "dormant",
+          "title": "Stored successors",
+          "text": "A fully paid dormant successor can preserve the lineage if its active cells die. Storing one still needs real offspring reserves.",
+          "sources": [
+            {
+              "title": "Microbial dormancy",
+              "url": "https://pubmed.ncbi.nlm.nih.gov/20231463/"
+            }
+          ]
+        },
+        {
+          "id": "starvation",
+          "title": "Hunger is gradual",
+          "text": "Low ATP can draw on spare reserves and biomass. Prolonged serious shortage eventually damages the cell; brief shortages have a grace period. Feeding, photosynthesis and repair can help it recover.",
+          "sources": [
+            {
+              "title": "Microbial energy reserves",
+              "url": "https://journals.asm.org/doi/10.1128/AEM.00049-20"
+            },
+            {
+              "title": "Cell membrane repair",
+              "url": "https://pubmed.ncbi.nlm.nih.gov/11511344/"
+            }
+          ]
+        },
+        {
+          "id": "death",
+          "title": "Death returns material to the pond",
+          "text": "A dying cell ruptures and releases its remaining represented contents. The material can feed other cells; the attacker receives no private food reward.",
+          "sources": [
+            {
+              "title": "Release of contents when cells rupture",
+              "url": "https://www.nature.com/articles/ncomms11220"
+            }
+          ]
+        },
+        {
+          "id": "continuity",
+          "title": "The pond continues",
+          "text": "Cells keep living while players are away. Updates preserve saved cells and accounts. If your lineage is lost, a new cell brings you back; the pond keeps a minimum of 15 living cells and restarts if completely empty. These are game rules.",
+          "sources": []
+        },
+        {
+          "id": "contractile",
+          "title": "Contractile vacuoles",
+          "text": "The paired pulsing structures and canals illustrate water regulation. They do not currently simulate osmotic water balance or create resources.",
+          "sources": [
+            {
+              "title": "Contractile vacuoles",
+              "url": "https://pubmed.ncbi.nlm.nih.gov/12006618/"
+            }
+          ]
+        },
+        {
+          "id": "npc_growth",
+          "title": "Other cells develop too",
+          "text": "Cells without a player lineage can spend their AP on random organelles that fit. Your lineage keeps its AP for you.",
+          "sources": []
+        }
+      ]
+    },
+    {
+      "id": "pond",
+      "title": "Pond life",
+      "items": [
+        {
+          "id": "currents",
+          "title": "Currents and plants",
+          "text": "Swimming and feeding disturb the water, which carries chemical parcels. Plants damp flow; cells meet plant branches while chemistry can pass through. This is a stylized fluid world, not a calibrated microscopic-water model.",
+          "sources": [
+            {
+              "title": "Life at low Reynolds number",
+              "url": "https://doi.org/10.1119/1.10903"
+            },
+            {
+              "title": "Vegetation slows water movement",
+              "url": "https://pubs.usgs.gov/publication/fs14796"
+            }
+          ]
+        },
+        {
+          "id": "environment",
+          "title": "Changing conditions",
+          "text": "Light and other environmental conditions vary with the calendar and time of day, changing roughly hourly. Brighter water supports photosynthesis; excessive acid is stressful. The schedule is a game rule.",
+          "sources": [
+            {
+              "title": "Light-guided swimming",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC4868408/"
+            },
+            {
+              "title": "Cell responses to weak acids",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3678083/"
+            }
+          ]
+        },
+        {
+          "id": "views",
+          "title": "Inside and outside views",
+          "text": "Exteroception shows exterior chemistry. Interoception focuses on the followed cell’s contents and dims the exterior. The rest of the pond keeps evolving.",
+          "sources": []
+        },
+        {
+          "id": "names_music",
+          "title": "Identity and music",
+          "text": "Names appear above player lineages and brighten while their owner is connected. Music responds to the world, but muting it does not change the cell’s biology.",
+          "sources": []
+        }
+      ]
+    }
+  ]
+}

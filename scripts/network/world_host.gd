@@ -9,6 +9,7 @@ const Population = preload("res://scripts/network/pond_population.gd")
 const MAX_PLAYERS := 8
 var world
 var accounts: Dictionary = {}
+const ReleaseNotes=preload("res://scripts/network/release_notes.gd")
 var peers: Dictionary = {}
 var queued: Array = []
 var listener := TCPServer.new()
@@ -291,6 +292,7 @@ func _poll() -> void:
 			elif peer.account=="" : socket.close(1008,"Authenticate first")
 			elif message.get("op","")=="feedback":_feedback(peer,message)
 			elif message.get("op","")=="profile":_profile(peer,message)
+			elif message.get("op","")=="update_seen":_update_seen(peer,message)
 			elif message.get("op","")=="ping": pass
 			elif message.get("op","")=="snapshot_ack":
 				if message.get("serial") is float or message.get("serial") is int:
@@ -305,6 +307,17 @@ func _poll() -> void:
 				if valid: queued.append({"peer":id,"message":message})
 				else: socket.close(1008,"Invalid command")
 
+
+func _update_seen(peer: Dictionary,message: Dictionary) -> void:
+	var account: Dictionary=accounts[peer.account]
+	var previous: String=str(account.get("seen_release",""))
+	var id=message.get("id")
+	var ok:=ReleaseNotes.acknowledge(account,id)
+	if ok and previous!=id and not checkpoint():
+		if previous=="":account.erase("seen_release")
+		else:account.seen_release=previous
+		ok=false
+	_send(peer,{"kind":"update_seen_result","id":id if id is String else "","ok":ok})
 
 func _profile(peer: Dictionary,message: Dictionary) -> void:
 	var value=message.get("name")
@@ -451,7 +464,7 @@ func _hello(id: int,message: Dictionary) -> void:
 	var center: Vector2=focus.position if focus!=null else cell.position
 	peer.view=Vector4(center.x,center.y,Sim.VIEW.x/.8/2,Sim.VIEW.y/.8/2)
 	peer.view_tick=world.revision
-	_send(peer,{"kind":"welcome","token":token,"world_id":world_id,"epoch":epoch,"sequence":account.sequence,"edit":account.edit,"seed":world.seed_value,"habitat":Codec.new().capture(world.habitat_geometry),"cell":cell.id,"player_name":str(account.get("display_name","")),"death_serial":world.death_serial})
+	_send(peer,{"kind":"welcome","release_notes":ReleaseNotes.pending(account),"token":token,"world_id":world_id,"epoch":epoch,"sequence":account.sequence,"edit":account.edit,"seed":world.seed_value,"habitat":Codec.new().capture(world.habitat_geometry),"cell":cell.id,"player_name":str(account.get("display_name","")),"death_serial":world.death_serial})
 	var initial:=_frame(peer)
 	initial.warming=true
 	_send(peer,initial)

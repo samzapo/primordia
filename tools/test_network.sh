@@ -6,6 +6,12 @@ godot_bin="$(resolve_godot)"
 export PRIMORDIA_INVITE=bounded-infrastructure-fixture
 report_file="$(mktemp "${TMPDIR:-/tmp}/primordia-network.XXXXXX")"
 trap 'rm -f -- "$report_file"; if [[ -n ${recovery_state:-} ]]; then rm -rf -- "$recovery_state"; fi' EXIT
+"$godot_bin" --headless --path "$project_dir" --script tests/player_help_run.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"
+! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
+grep -Eq 'PLAYER HELP: [0-9]+ assertions, 0 failures' "$report_file"
+"$godot_bin" --headless --path "$project_dir" --script tests/release_notes_run.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"
+! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
+grep -Eq 'RELEASE NOTES: [0-9]+ assertions, 0 failures' "$report_file"
 "$godot_bin" --headless --path "$project_dir" --script tests/particle_charge_run.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"
 ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
 grep -Eq 'PARTICLE CHARGE: [0-9]+ assertions, 0 failures' "$report_file"
