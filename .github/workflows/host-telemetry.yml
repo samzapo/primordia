@@ -277,6 +277,19 @@ jobs:
           if ca.exists():
               report["browser_delivery"]["native_https"] = browser_delivery("127.0.0.1", ssl.create_default_context(cafile=str(ca)))
           report["browser_delivery"]["public_https"] = browser_delivery("2601:19b:401:f7b5:6f5e:e2e9:76e8:8258", ssl.create_default_context())
+          # Snapshot decoding above is diagnostic CPU/memory load. Let the
+          # 150-tick health window expire before sampling ordinary service work.
+          report["steady_service_samples"] = []
+          time.sleep(6)
+          for index in range(3):
+              try:
+                  with build_opener(ProxyHandler({})).open("http://127.0.0.1:8766/metrics", timeout=5) as response:
+                      live = json.load(response)
+                  report["steady_service_samples"].append({key: live.get(key) for key in ["updated_unix", "build", "world_id", "epoch", "tick", "living_cells", "simulation_hz", "simulation_wall_ratio", "tick_ms_p50", "tick_ms_p95", "tick_ms_p99", "backend", "gpu", "backend_error", "checkpoint_error", "internal_packets", "stored_packets", "food_supply_version", "peers", "views"]})
+              except OSError as error:
+                  report["steady_service_samples"].append({"status": "unavailable", "reason": type(error).__name__})
+              if index < 2:
+                  time.sleep(2)
           payload = json.dumps(report, indent=2)
           print(payload)
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
