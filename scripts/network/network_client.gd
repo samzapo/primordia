@@ -67,8 +67,9 @@ var edit_revision := 0
 var commands: Array = []
 var inflight: Dictionary = {}
 var received_usec := 0
-var interval_usec := 100000.0
-var last_snapshot_time := -1.0
+var playback=preload("res://scripts/network/snapshot_playback.gd").new()
+var playback_domain:=""
+var playback_after_tick:=-1
 var view_clock := 0.0
 var keepalive_clock := 0.0
 var last_camera: Vector4
@@ -141,12 +142,14 @@ func _publish_login_geometry() -> void:
 
 func _toggle_user_pause() -> void:
 	if not connected or world.revision==0:return
+	if not user_paused:_freeze_network_pose()
 	user_paused=not user_paused
 	touch_zoom.cancel()
 	if user_paused:
 		build_open=false;selected=-1;moving_id=-1;tube_start.clear();cell_ui.close_context()
 	else:
 		settings_panel.hide()
+		playback.reset();playback_domain="";playback_after_tick=-1
 		var latest:=paused_snapshot;paused_snapshot={}
 		if not latest.is_empty():
 			# Resume at the live world; do not replay deaths that happened while paused.
@@ -157,6 +160,24 @@ func _toggle_user_pause() -> void:
 		if network_particles!=null:network_particles.prepare(world.particles,world.cells)
 		received_usec=0
 	touch_zoom.layout()
+
+func _freeze_network_pose() -> void:
+	# Pause holds precisely the visible presentation, not the newer buffered target.
+	for cell in world.cells:
+		cell.position=Simulation.Medium.wrap_position(cell.previous_position+Simulation.Medium.offset(cell.previous_position,cell.position)*network_alpha)
+		cell.angle=lerp_angle(cell.previous_angle,cell.angle,network_alpha)
+		cell.previous_position=cell.position;cell.previous_angle=cell.angle
+		for packet in cell.chemistry.particles:
+			var origin: Dictionary=cell.chemistry.render_origins.get(packet.id,{})
+			packet.p=origin.get("p",packet.p).lerp(packet.p,network_alpha)
+			packet.angle=lerp_angle(origin.get("angle",packet.angle),packet.angle,network_alpha)
+		cell.chemistry.render_origins.clear()
+	for packet in world.particles:
+		packet.p=Simulation.Medium.wrap_position(packet.previous+Simulation.Medium.offset(packet.previous,packet.p)*network_alpha)
+		packet.angle=lerp_angle(packet.previous_angle,packet.angle,network_alpha)
+		packet.previous=packet.p;packet.previous_angle=packet.angle
+	network_alpha=1
+	if network_particles!=null:network_particles.prepare(world.particles,world.cells)
 
 func _follow_cell():
 	return focus_cell if focus_cell!=null else world.player
@@ -185,7 +206,19 @@ func is_paused() -> bool: return user_paused
 func _physics_process(_dt: float) -> void:
 	if music.refill_between_ticks: music.refill()
 func _update_world(_alpha: float) -> void:
-	var alpha:=clampf((Time.get_ticks_usec()-received_usec)/interval_usec,0,1) if received_usec>0 and not user_paused else 1.0
+	var alpha:=1.0
+	if not user_paused:
+		var sample: Dictionary=playback.sample(Time.get_ticks_usec()/1000000.0)
+		if not sample.is_empty():
+			var before: Dictionary=sample.before;var after: Dictionary=sample.after
+			if playback_after_tick!=int(after.tick):
+				# If a suspended/stalled browser skipped an endpoint, restore its actual
+				# predecessor before blending. Never restart from a half-drawn pose.
+				if playback_after_tick!=int(before.tick):_snapshot(before)
+				if int(before.tick)!=int(after.tick):_snapshot(after)
+				playback_after_tick=int(after.tick)
+			alpha=sample.alpha
+			world.time=lerpf(float(before.time),float(after.time),alpha)
 	network_alpha=alpha
 	super(alpha)
 func _process(dt: float) -> void:
@@ -237,7 +270,7 @@ func _connect(manual: bool=true) -> void:
 	hello_sent=false;connected=false;connecting=true;attempted=true;retry_enabled=true;reconnect_due=3;inflight.clear();commands.clear()
 	view_announced=false;view_clock=0;keepalive_clock=0;received_usec=0
 	update_popup.close();pending_release_updates=[]
-	last_snapshot_time=-1;user_paused=false;paused_snapshot={};touch_zoom.cancel();camera_initialized=false
+	playback.reset();playback_domain="";playback_after_tick=-1;user_paused=false;paused_snapshot={};touch_zoom.cancel();camera_initialized=false
 	connect_started_usec=Time.get_ticks_usec()
 	if OS.has_feature("web"):
 		JavaScriptBridge.eval(BROWSER_SOCKET_ADDRESS % JSON.stringify(server_url))
@@ -251,6 +284,7 @@ func _connect(manual: bool=true) -> void:
 
 func _connection_closed(code: int,reason: String) -> void:
 	update_popup.close();pending_release_updates=[];player_help.close()
+	playback.reset();playback_domain="";playback_after_tick=-1
 	connecting=false;connected=false;loading_world=false;commands.clear();inflight.clear();connection_stage="disconnected"
 	if code==1008:
 		retry_enabled=false
@@ -291,7 +325,9 @@ func _poll_network() -> void:
 				"feedback_result": feedback.result(message)
 				"update_seen_result": _release_result(message)
 				"welcome": _welcome(message)
-				"snapshot": _snapshot(message)
+				"snapshot":
+					_receive_snapshot(message)
+					break # Bound burst decoding to one potentially large snapshot per frame.
 				"snapshot_error":
 					connection_stage="error";_show_connection(message.message)
 				"result":
@@ -307,6 +343,7 @@ func _poll_network() -> void:
 
 func _welcome(message: Dictionary) -> void:
 	defer_release_updates=false;update_popup.close()
+	playback.reset();playback_domain="";playback_after_tick=-1
 	pending_release_updates=message.get("release_updates",[]).duplicate(true)
 	if pending_release_updates.is_empty() and not message.get("release_notes",{}).is_empty():pending_release_updates=[message.release_notes.duplicate(true)]
 	camera_initialized=false;cells_by_id.clear();packet_ids.clear();received_usec=0
@@ -346,6 +383,24 @@ func _receive_deaths(message: Dictionary) -> void:
 			death_tombstones[event.id]=true
 			if cells_by_id.has(event.id):cells_by_id[event.id].dead=true
 			if death_tombstones.size()>32:death_tombstones.erase(death_tombstones.keys()[0])
+
+func _receive_snapshot(message: Dictionary) -> void:
+	if int(message.epoch)!=epoch:return
+	_receive_deaths(message) # Ruptures remain immediate, independent of the view buffer.
+	_ack_snapshot(message)
+	if user_paused:
+		playback.reset()
+		if not message.get("warming",false):paused_snapshot=message
+		return
+	if message.get("perception",perception)!=perception:return
+	if message.get("warming",false):
+		# A moving camera can warm a new region while the current view is valid.
+		# Do not overwrite buffered endpoints or reopen sign-in during that handoff.
+		if loading_world:_snapshot(message)
+		return
+	if playback_domain!=perception:
+		playback.reset();playback_domain=perception;playback_after_tick=-1
+	playback.push(message,Time.get_ticks_usec()/1000000.0)
 
 func _snapshot(message: Dictionary) -> void:
 	if int(message.epoch)!=epoch: return
@@ -407,11 +462,7 @@ func _snapshot(message: Dictionary) -> void:
 	if inflight.is_empty():
 		command_sequence=maxi(command_sequence,message.sequence)
 		edit_revision=maxi(edit_revision,message.edit)
-	var now:=Time.get_ticks_usec()
-	if last_snapshot_time>=0 and float(message.time)>last_snapshot_time:
-		interval_usec=lerpf(interval_usec,clampf((float(message.time)-last_snapshot_time)*1000000,50000,250000),.25)
-	last_snapshot_time=float(message.time)
-	received_usec=now
+	received_usec=Time.get_ticks_usec()
 	var bytes: PackedByteArray=message.particles
 	var next: Dictionary={};var packets: Array=[]
 	for at in range(0,bytes.size(),32):
@@ -419,7 +470,7 @@ func _snapshot(message: Dictionary) -> void:
 		var packet: Dictionary=packet_ids.get(identity,{})
 		var position:=Vector2(bytes.decode_float(at),bytes.decode_float(at+4))
 		var angle:=bytes.decode_float(at+8)
-		packet.previous=packet.get("previous",position)+Simulation.Medium.offset(packet.get("previous",position),packet.get("p",position))*network_alpha;packet.previous_angle=lerp_angle(packet.get("previous_angle",angle),packet.get("angle",angle),network_alpha)
+		packet.previous=packet.get("p",position);packet.previous_angle=packet.get("angle",angle)
 		packet.p=position;packet.angle=angle;packet.kind=int(bytes.decode_float(at+12));packet.amount=bytes.decode_float(at+16)
 		packet.alive=true;packet.updated=world.revision;packet.owner=-1;packet.v=Vector2.ZERO
 		packet._handle=(int(identity.y)&0xffffffff)*4294967296+(int(identity.x)&0xffffffff);packet._index=packets.size()
@@ -428,11 +479,9 @@ func _snapshot(message: Dictionary) -> void:
 	world.pheromones=packets.filter(func(p):return p.kind==3)
 	world.active_particles=packets.size()
 	if network_particles!=null: network_particles.prepare(packets,world.cells)
-	_update_hud()
 	if OS.has_feature("web"):
-		JavaScriptBridge.eval("window.primordiaDiagnostics="+JSON.stringify({"connected":connected,"tick":world.revision,"world_id":message.world_id,"packets":packets.size(),"cells":world.cells.size(),"time":world.time,"player_name":player_name,"nameplates":nameplates.items.map(func(item):return {"cell":item.cell,"name":item.name,"online":item.online})}))
+		JavaScriptBridge.eval("window.primordiaDiagnostics="+JSON.stringify({"playback":playback.diagnostics(),"connected":connected,"tick":world.revision,"world_id":message.world_id,"packets":packets.size(),"cells":world.cells.size(),"time":world.time,"player_name":player_name,"nameplates":nameplates.items.map(func(item):return {"cell":item.cell,"name":item.name,"online":item.online})}))
 
-	_ack_snapshot(message)
 	_show_next_update()
 
 func _show_next_update() -> void:
@@ -461,9 +510,8 @@ func _copy_cell(incoming):
 	else:
 		var origins: Dictionary={}
 		for packet in cell.chemistry.particles:
-			var origin: Dictionary=cell.chemistry.render_origins.get(packet.id,{})
-			origins[packet.id]={"p":origin.get("p",packet.p).lerp(packet.p,network_alpha),"angle":lerp_angle(origin.get("angle",packet.angle),packet.angle,network_alpha)}
-		var previous: Vector2=cell.previous_position+Simulation.Medium.offset(cell.previous_position,cell.position)*network_alpha;var heading: float=lerp_angle(cell.previous_angle,cell.angle,network_alpha)
+			origins[packet.id]={"p":packet.p,"angle":packet.angle}
+		var previous: Vector2=cell.position;var heading: float=cell.angle
 		for property in incoming.get_property_list():
 			if not (property.usage & PROPERTY_USAGE_SCRIPT_VARIABLE) or property.name in Codec.DERIVED_CELL: continue
 			cell.set(property.name,incoming.get(property.name))

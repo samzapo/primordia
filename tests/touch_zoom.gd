@@ -124,7 +124,7 @@ func run(suite) -> void:
 	suite.expect(client.loading_world and client.login.visible and not client.invite_input.visible and not client.join_button.visible,"Initial camera preparation preserves accepted sign-in presentation")
 	client.camera_locked=false;client.camera_rotation=1;client.camera_offset=Vector2(80,30);client._snapshot(message)
 	suite.expect(not client.login.visible and not client.loading_world and client.connection_stage=="ready","First complete world snapshot dismisses loading automatically")
-	client.received_usec=Time.get_ticks_usec()-250000;client.interval_usec=1000000;client._update_world(1)
+	client._update_world(1)
 	suite.expect(client.camera_initialized and client.camera_locked and client.camera_rotation==0,"First real snapshot resets stale free-view state even if the server cell ID matches the local placeholder")
 	suite.expect(client.views.has(client.world.player.id) and client.views[client.world.player.id].position.length()<.005,"A coarse server cell stays rendered at the follow center throughout browser interpolation")
 	client._toggle_camera();client.free_camera=Vector2(600,600);message.tick=21;client._snapshot(message)

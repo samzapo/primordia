@@ -25,8 +25,11 @@ func prepare(packets: Array,cells: Array) -> void:
 	for i in packets.size():
 		var p: Dictionary=packets[i]
 		var diameter: float=2*preload("res://scripts/simulation.gd").particle_radius(p.kind)*preload("res://scripts/simulation.gd").particle_scale(p.amount)
-		for j in 8: current[i*8+j]=[p.p.x,p.p.y,p.angle,diameter,p.kind,p.amount,0,0][j]
-		for j in 4: prior[i*4+j]=[p.previous.x,p.previous.y,p.previous_angle,diameter][j]
+		var at:=i*8;var old:=i*4
+		current[at]=p.p.x;current[at+1]=p.p.y;current[at+2]=p.angle
+		current[at+3]=diameter;current[at+4]=p.kind;current[at+5]=p.amount
+		prior[old]=p.previous.x;prior[old+1]=p.previous.y
+		prior[old+2]=p.previous_angle;prior[old+3]=diameter
 	_upload(texture,current,512,rows,Image.FORMAT_RGBAF)
 	_upload(previous_texture,prior,256,rows,Image.FORMAT_RGBAF)
 	var bodies:=PackedFloat32Array();bodies.resize(64*12)

@@ -403,3 +403,11 @@ last-cleared release advances only one known release at a time; old duplicate
 acks must not move it backwards. Preserve legacy seen_release values. Show Next
 update until the last message, then Back to the pond. On acknowledgement failure,
 leave the game accessible and defer the uncleared queue until next sign-in.
+
+October16 phone-motion continuation: owner resumes scoped presentation-pacing
+work after discontinuing the earlier iOS investigation. Read docs/REVISION_54.md.
+Network views interpolate actual captured endpoints on one bounded playback
+timeline; camera, particles and internal poses must agree. No local chemistry or
+unbounded extrapolation. Preserve immediate death delivery, exact view pause,
+live resume, saved cells/accounts/keys and deleted schedules. This authorizes
+focused jitter/frame-pacing checks, not a broad rendering benchmark restart.

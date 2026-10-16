@@ -42,10 +42,10 @@ for script in anatomy_access_run; do
   ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
   grep -Eq 'ANATOMY ACCESS: [0-9]+ assertions, 0 failures' "$report_file"
 done
-for script in network_state network_live; do
+for script in snapshot_playback network_state network_live; do
   "$godot_bin" --headless --path "$project_dir" --script "tests/$script.gd" 2>&1 | tee "$report_file"
   ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
-  grep -Eq 'NETWORK (LIVE|CORRECTNESS): [0-9]+ assertions, 0 failures' "$report_file"
+  grep -Eq '(SNAPSHOT PLAYBACK|NETWORK LIVE|NETWORK CORRECTNESS): [0-9]+ assertions, 0 failures' "$report_file"
 done
 "$godot_bin" --headless --path "$project_dir" --script tests/pond_nutrition.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"
 ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"

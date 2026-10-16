@@ -24,6 +24,16 @@ const RELEASES=[
 	"footer":"Your cell and its progress carry on between updates.",
 	"button":"Back to the pond",
 },
+{
+	"id":"2026-10-16-smoother-motion",
+	"title":"What’s new in the pond",
+	"items":[
+		"Cells, particles and the Follow view move more smoothly when your connection is uneven.",
+		"Pause holds the view where you left it. Resume returns you to the live pond.",
+	],
+	"footer":"Your cell and its progress carry on between updates.",
+	"button":"Back to the pond",
+},
 ]
 const CURRENT=RELEASES[-1]
 static func seen_index(account: Dictionary) -> int:
