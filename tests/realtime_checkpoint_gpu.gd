@@ -47,6 +47,7 @@ func run() -> void:
 	host._write_metrics()
 	var phases=JSON.parse_string(FileAccess.get_file_as_string(host.store.directory.path_join("health.json")))
 	print("AGED_AUTHORITY ",JSON.stringify({"simulation_hz":Engine.physics_ticks_per_second,"tick_budget_ms":1000.0/host.physics_hz,"source_world":saved.world_id,"simulation_wall_ratio":ratio,"tick_p95_ms":p95,"cells":host.world.cells.filter(func(cell):return not cell.dead).size(),"phase_mean_ms":phases.get("tick_phase_mean_ms",{}),"gpu":RenderingServer.get_video_adapter_name()}))
+	if ratio<.98 or ratio>1.02 or p95>1000.0/host.physics_hz:await diagnostic_warm_window()
 	for socket in sockets:socket.close(-1)
 	host.running=false;host.listener.stop()
 	var gpu=host.world.resident.gpu;gpu.close();await gpu.closed

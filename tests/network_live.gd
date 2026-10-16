@@ -223,6 +223,7 @@ func run() -> void:
 		print("AUTHORITY_PHASES ",JSON.stringify(phase_report.get("tick_phase_mean_ms",{})))
 		print("PUBLICATION_ENCODING ",JSON.stringify({"mean_ms":phase_report.get("snapshot_encode_ms_mean",0),"pending":phase_report.get("snapshots_encoding",0)}))
 		print("REALTIME_AUTHORITY ",JSON.stringify({"simulation_hz":Engine.physics_ticks_per_second,"tick_budget_ms":1000.0/host.physics_hz,"simulation_wall_ratio":ratio,"tick_p95_ms":p95,"living_cells":host.world.cells.filter(func(cell):return not cell.dead).size(),"interior_packets":host.world.cells.reduce(func(total,cell):return total+cell.chemistry.particle_count(),0),"gpu":RenderingServer.get_video_adapter_name()}))
+		if ratio<.98 or ratio>1.02 or p95>1000.0/host.physics_hz:await diagnostic_warm_window()
 	for socket in sockets:socket.close(-1)
 	check(await until(func():return host.world.camera_views.is_empty()),"disconnect removes every detailed camera")
 	check(host._lineage_names().all(func(row):return not row.online),"Disconnected owners retain dim nameplates")
@@ -246,3 +247,11 @@ func run() -> void:
 	quit(0 if failures==0 else 1)
 func saved_directory() -> String:
 	return ProjectSettings.globalize_path("res://build/network-live-"+str(OS.get_process_id()))
+
+func diagnostic_warm_window() -> void:
+	# Diagnostic only: never clears failures or changes the cold acceptance gate.
+	var start:=Time.get_ticks_usec();var clock: float=host.world.time;var revision: int=host.world.revision
+	while Time.get_ticks_usec()-start<12000000:poll();await process_frame
+	var count: int=host.world.revision-revision
+	var timings: Array=host.tick_samples.slice(maxi(0,host.tick_samples.size()-count));timings.sort()
+	print("WARM_WINDOW_DIAGNOSTIC ",JSON.stringify({"wall":(Time.get_ticks_usec()-start)/1000000.0,"simulation_wall_ratio":(host.world.time-clock)/((Time.get_ticks_usec()-start)/1000000.0),"p95_ms":timings[mini(timings.size()-1,int(timings.size()*.95))] if not timings.is_empty() else -1,"living_cells":host.world.cells.filter(func(cell):return not cell.dead).size(),"active_cells":host.world.active_cells,"packets":host.world.particle_count(),"largest_radius":host.world.cells.map(func(cell):return cell.radius).max(),"most_organs":host.world.cells.map(func(cell):return cell.organs.size()).max()}))

@@ -241,10 +241,11 @@ func step(dt: float) -> void:
 	var mark:=Time.get_ticks_usec()
 	# Cheap habitat field and GPU transport remain continuous. Only cell
 	# detail is tiered; no full particle download or frozen offscreen clouds.
+	sim.fluid.set_plants(sim.habitat_geometry)
 	if sim.external_offscreen:sim.fluid.set_views([])
 	elif sim.server_mode: sim.fluid.set_views(sim.camera_views)
 	if sim.native_fluid:
-		sim.fluid.velocity=sim.kernels.fluid_step(sim.fluid.velocity,sim.fluid.activity,sim.fluid.tide,dt,sim.fluid.driven)
+		sim.fluid.velocity=sim.kernels.fluid_step(sim.fluid.velocity,sim.fluid.activity,sim.fluid.tide,dt,sim.fluid.driven,sim.fluid.plant_drag)
 		if sim.revision%6==0: sim.acidity.values=sim.kernels.acid_step(sim.acidity.values,sim.fluid.velocity,sim.fluid.activity,dt*6)
 	else:
 		sim.fluid.step(dt)

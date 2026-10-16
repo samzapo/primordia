@@ -519,7 +519,8 @@ one candidate authority during acceptance, matching the deployed workload. A
 failed check restores the saved generations and previous service. The 30 Hz,
 real-time ratio and p95 gates are unchanged; updates include this bounded outage.
 
-On NUMA hosts, deployment may restrict the authority and its candidate checks to
+With explicit PRIMORDIA_LOCAL_NUMA=1, deployment may restrict the authority and
+its candidate checks to
 the selected GPU's RAM-backed CPU node, intersected with the caller's allowed
 CPU set. Missing topology, a memoryless GPU node or no eligible CPUs retains the
 ordinary scheduler. This per-process placement changes no clock, power or boot

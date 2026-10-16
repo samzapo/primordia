@@ -251,7 +251,7 @@ def main():
     unit = unit_dir / UNIT
     old_unit = unit.read_text() if unit.exists() else None
     unit_text = "[Unit]\nDescription=Primordia persistent GPU world and browser gateway\nAfter=network-online.target\n\n[Service]\nType=simple\nUMask=0077\nWorkingDirectory=" + str(current).replace("%", "%%") + "\nEnvironmentFile=" + str(credential).replace("%", "%%") + "\nEnvironment=PRIMORDIA_BUILD_SHA=" + sha + "\nExecStart=/usr/bin/python3 " + quote(current / "tools/run_service.py") + " --godot " + quote(godot) + " --state " + quote(state) + " --port 8766 --world-port 8767\nRestart=on-failure\nRestartSec=5\nTimeoutStopSec=60\nKillMode=mixed\n\n[Install]\nWantedBy=default.target\n"
-    authority_cpus = detect_authority_cpus()
+    authority_cpus = detect_authority_cpus() if os.environ.get("PRIMORDIA_LOCAL_NUMA") == "1" else None
     if authority_cpus:
         cpu_list = " ".join(str(cpu) for cpu in sorted(authority_cpus))
         unit_text = unit_text.replace("[Service]\n", "[Service]\nCPUAffinity=" + cpu_list + "\n", 1)

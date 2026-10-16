@@ -41,6 +41,11 @@ PRIMORDIA_RESTART_TEST_STATE="$recovery_state" "$godot_bin" --headless --path "$
 grep -Eq 'POND RESTART NETWORK: [0-9]+ assertions, 0 failures' "$report_file"
 rm -rf -- "$recovery_state"
 if [[ "${1:-}" == gpu ]]; then
+  xvfb-run -a -s '-screen 0 1280x720x24 -nolisten tcp' "$godot_bin" --path "$project_dir" --rendering-method mobile --rendering-driver vulkan --gpu-index 0 --script tests/resident_plant_flow_gpu.gd 2>&1 | tee "$report_file"
+  ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:|returned to CPU' "$report_file"
+  grep -Eq 'RESIDENT PLANT FLOW: [0-9]+ assertions, 0 failures' "$report_file"
+  grep -Eq 'NVIDIA|AMD|Intel' "$report_file"
+  ! grep -Eiq 'llvmpipe|lavapipe|swiftshader' "$report_file"
   xvfb-run -a -s '-screen 0 1280x720x24 -nolisten tcp' "$godot_bin" --path "$project_dir" --rendering-method mobile --rendering-driver vulkan --gpu-index 0 --script tests/resident_cytoplasm_gpu.gd 2>&1 | tee "$report_file"
   ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
   grep -Eq 'CYTOPLASM GPU: [0-9]+ assertions, 0 failures' "$report_file"
