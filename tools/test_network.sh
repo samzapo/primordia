@@ -111,6 +111,7 @@ python3 "$project_dir/tests/test_web_gateway.py"
 python3 "$project_dir/tests/test_web_version.py"
 python3 "$project_dir/tests/test_web_build.py"
 python3 "$project_dir/tests/test_model_rollback.py"
+python3 "$project_dir/tests/test_authority_affinity.py"
 
 "$godot_bin" --headless --path "$project_dir" --script tests/network_live.gd -- --personal-keys 2>&1 | tee "$report_file"
 ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"

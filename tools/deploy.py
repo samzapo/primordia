@@ -18,6 +18,7 @@ from urllib.request import build_opener, ProxyHandler, HTTPSHandler, Request
 
 from check_capacity import inspect
 from check_wired_route import verify
+from authority_affinity import detect as detect_authority_cpus
 
 UNIT = "primordia.service"
 
@@ -250,6 +251,11 @@ def main():
     unit = unit_dir / UNIT
     old_unit = unit.read_text() if unit.exists() else None
     unit_text = "[Unit]\nDescription=Primordia persistent GPU world and browser gateway\nAfter=network-online.target\n\n[Service]\nType=simple\nUMask=0077\nWorkingDirectory=" + str(current).replace("%", "%%") + "\nEnvironmentFile=" + str(credential).replace("%", "%%") + "\nEnvironment=PRIMORDIA_BUILD_SHA=" + sha + "\nExecStart=/usr/bin/python3 " + quote(current / "tools/run_service.py") + " --godot " + quote(godot) + " --state " + quote(state) + " --port 8766 --world-port 8767\nRestart=on-failure\nRestartSec=5\nTimeoutStopSec=60\nKillMode=mixed\n\n[Install]\nWantedBy=default.target\n"
+    authority_cpus = detect_authority_cpus()
+    if authority_cpus:
+        cpu_list = " ".join(str(cpu) for cpu in sorted(authority_cpus))
+        unit_text = unit_text.replace("[Service]\n", "[Service]\nCPUAffinity=" + cpu_list + "\n", 1)
+        print("Authority GPU-local memory CPUs: " + cpu_list, flush=True)
     if registry.exists():
         unit_text = unit_text.replace("Environment=PRIMORDIA_BUILD_SHA=", "Environment=" + quote("PRIMORDIA_ACCESS_KEYS_FILE="+str(registry)) + "\nEnvironment=PRIMORDIA_BUILD_SHA=")
     validation_dir = root / "unit-candidate"
@@ -267,7 +273,8 @@ def main():
         # One GPU authority is the deployed workload. Concurrent live/candidate
         # worlds distort the cadence gate. All builds finish before this short,
         # checkpointed validation outage; any failure restores the old service.
-        run("bash", str(candidate / "tools/test_network.sh"), "gpu", env=environment)
+        affinity_options = {"preexec_fn": lambda: os.sched_setaffinity(0, authority_cpus)} if authority_cpus else {}
+        run("bash", str(candidate / "tools/test_network.sh"), "gpu", env=environment, **affinity_options)
         staged_unit = unit.with_suffix(".service.new")
         staged_unit.write_text(unit_text)
         staged_unit.replace(unit)
@@ -283,6 +290,7 @@ def main():
             extinct_archive = retention.get("archived_extinct_pond") and retained_restart(report, previous, state)
             if not retention.get("ok") or not (same_pond or extinct_archive):
                 raise RuntimeError("Deployment did not verify every retained cell before resuming")
+        report["authority_cpus"] = sorted(authority_cpus) if authority_cpus else None
         report["access_registry_sha256"] = hashlib.sha256(registry.read_bytes()).hexdigest() if registry.exists() else None
         (root / "last-deploy.json").write_text(json.dumps(report, indent=2))
     except BaseException:
