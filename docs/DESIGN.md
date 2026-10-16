@@ -526,3 +526,8 @@ CPU set. Missing topology, a memoryless GPU node or no eligible CPUs retains the
 ordinary scheduler. This per-process placement changes no clock, power or boot
 policy and uses the same performance thresholds. The previous service unit is
 restored on rejection.
+
+Snapshot/checkpoint capture reuses only property-name schemas of the fixed script
+allowlist. Every graph still reads current values and object identities; no cell
+state is cached. An uncached reference path checks byte-identical full saves and
+both compact client formats, including overrides and changes between captures.

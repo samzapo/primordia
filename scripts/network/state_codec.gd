@@ -22,6 +22,9 @@ var overrides: Dictionary = {}
 var compact_cytoplasm := false
 var cytoplasm_version:=2
 var migration_audit: Array=[]
+# Fixed allowlisted scripts share a schema; values and identities are always fresh.
+static var property_schemas: Dictionary={}
+var cache_property_schema:=true
 
 func capture(value, field_overrides: Dictionary = {}, compact: bool = false,columns_version: int=2) -> Dictionary:
 	objects.clear(); identities.clear(); overrides = field_overrides;compact_cytoplasm=compact;cytoplasm_version=columns_version
@@ -31,10 +34,7 @@ func capture(value, field_overrides: Dictionary = {}, compact: bool = false,colu
 		var source = objects[index].source
 		var kind: String = objects[index].kind
 		var fields: Dictionary = {}
-		for property in source.get_property_list():
-			if not (property.usage & PROPERTY_USAGE_SCRIPT_VARIABLE): continue
-			var key: String = property.name
-			if key in TRANSIENT or (kind == "cell" and key in DERIVED_CELL): continue
+		for key in _field_names(source,kind):
 			var field = source.get(key)
 
 			if overrides.has(source.get_instance_id()) and overrides[source.get_instance_id()].has(key):
@@ -47,6 +47,17 @@ func capture(value, field_overrides: Dictionary = {}, compact: bool = false,colu
 	var records: Array = []
 	for object in objects: records.append({"kind":object.kind,"fields":object.fields})
 	return {"format":1,"root":root,"objects":records}
+
+
+func _field_names(source,kind: String) -> Array:
+	if cache_property_schema and property_schemas.has(kind):return property_schemas[kind]
+	var names: Array[String]=[]
+	for property in source.get_property_list():
+		if not (property.usage & PROPERTY_USAGE_SCRIPT_VARIABLE):continue
+		var key: String=property.name
+		if key not in TRANSIENT and not (kind=="cell" and key in DERIVED_CELL):names.append(key)
+	if cache_property_schema:property_schemas[kind]=names
+	return names
 
 func _encode(value):
 	if value is RandomNumberGenerator:

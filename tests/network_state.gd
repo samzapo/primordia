@@ -27,6 +27,18 @@ func run() -> void:
 		check(sim.enable_particle_pool(),"native particle owner starts")
 	var packets=sim.particle_snapshots()
 	var graph=Codec.new().capture({"world":sim,"same_player":sim.player},{sim.get_instance_id():{"particles":packets,"pheromones":[],"particle_pool":false}})
+	var uncached=Codec.new();uncached.cache_property_schema=false
+	var schema_fixture: Array=[]
+	for kind in Codec.TYPES:
+		schema_fixture.append(Codec.TYPES[kind].new(0,0,false) if kind=="simulation" else Codec.TYPES[kind].new())
+	for compact in [false,true]:
+		for version in [1,2]:
+			check(var_to_bytes(Codec.new().capture(schema_fixture,{},compact,version))==var_to_bytes(uncached.capture(schema_fixture,{},compact,version)),"Schema reuse preserves every allowlisted field and exact graph bytes for saved and compact client formats")
+	var override_fields: Dictionary={sim.get_instance_id():{"particles":packets,"pheromones":[],"particle_pool":false}}
+	var old_energy: float=sim.player.energy;sim.player.energy+=1
+	var changed=Codec.new().capture({"world":sim,"same_player":sim.player},override_fields)
+	check(var_to_bytes(changed)==var_to_bytes(uncached.capture({"world":sim,"same_player":sim.player},override_fields)) and var_to_bytes(changed)!=var_to_bytes(graph),"Reusing field names captures current biology and overrides without retaining an older cell state")
+	sim.player.energy=old_energy
 	var restored=Codec.new().restore(bytes_to_var(var_to_bytes(graph)))
 	check(restored.world.player==restored.same_player,"checkpoint retains shared object identities")
 	check(restored.world.cells[0]==restored.world.player,"player refers to the actual restored world cell")
