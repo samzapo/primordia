@@ -327,3 +327,12 @@ ordinary/resident/offscreen execution with a small inefficiency. Preserve finite
 emission material/carbon, ATP-backed sensory/protective boosts and baseline
 photosynthesis/sensing at zero ATP. Validate settings through editor commands;
 adjusting the percentage itself is free.
+
+October16 nutrient continuation: extend existing joining, not a duplicate pathway.
+Mild acid assists contact alignment; excess acid still harms cells. Nutrient
+parcels gain a bounded ATP-per-unit allocation bonus, funded from their existing
+heat/tissue fuel budget. Keep true fuel unchanged, no rejuvenation of depleted
+food, no bonus from resolution coalescing, and proportional uptake/lysis.
+External capacity>amount encodes fully fueled food plus bonus; internal nutrition
+is an additive amount-weighted fact, resident clock.y. Omit zero fields on old
+packets so update retention remains exact. All backends share authored bounds.

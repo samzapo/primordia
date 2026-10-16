@@ -21,7 +21,7 @@ void mutual_matching(std::vector<P> &ps,const Grid &grid,int lanes,uint32_t tick
   if(a.kind==2&&b.kind==1)return b.amount>=a.amount*.15&&acidity<.8;
   if(a.kind==1&&b.kind==2)return a.amount>=b.amount*.15&&acidity<.8;
   if((a.kind==0&&b.kind==4)||(a.kind==4&&b.kind==0))return true;
-  return a.kind==b.kind&&(a.kind==0||a.kind==1||a.kind==2||a.kind==5)&&a.amount+b.amount>0&&a.amount+b.amount<=primordia_chemistry::merge_limit;
+  return a.kind==b.kind&&(a.kind==0||a.kind==1||a.kind==2||a.kind==5)&&a.amount+b.amount>0&&a.amount+b.amount<=(a.kind==0?primordia_chemistry::nutrient_merge_limit:primordia_chemistry::merge_limit);
  };
  SimulationWorkers::shared().run(ps.size(),lanes,[&](size_t begin,size_t end){
   for(size_t i=begin;i<end;++i){
@@ -36,7 +36,7 @@ void mutual_matching(std::vector<P> &ps,const Grid &grid,int lanes,uint32_t tick
     double distance=std::sqrt(ds);godot::Vector2 n=ds>.000001?d/distance:godot::Vector2(1,0);
     if(collisions&&ds<physical*physical)choice.impulse+=(low==int(i)?-n:n)*(physical-distance)*2;
     if(p.reacted||ps[j].reacted||ds>c*c)return false;
-    bool enzyme=(a.kind==6&&b.kind==2)||(a.kind==2&&b.kind==6);
+    bool enzyme=(a.kind==6&&b.kind==2)||(a.kind==2&&b.kind==6)||(a.kind==0&&b.kind==0);
     bool recycling=(a.kind==2&&b.kind==1)||(a.kind==1&&b.kind==2);
     double acidity=(enzyme||recycling)?acid(a.p):0;
     if(!eligible(a,b,acidity))return false;
@@ -74,7 +74,7 @@ void mutual_matching(std::vector<P> &ps,const Grid &grid,int lanes,uint32_t tick
    }else if(u->kind==2&&v->kind==1){
     double amount=u->amount;u->kind=0;u->capacity=0;u->amount=amount*.6;v->kind=5;v->amount=amount*.4;event.event=2;event.recycled=amount*.6;
    }else if(u->kind==0&&v->kind==4){u->kind=2;event.event=4;}
-   else {double total=u->amount+v->amount;u->v=u->v.lerp(v->v,v->amount/total);u->amount=total;u->capacity+=v->capacity;v->alive=false;event.event=1;}
+   else {double total=u->amount+v->amount;u->v=u->v.lerp(v->v,v->amount/total);u->capacity=u->kind==0?primordia_chemistry::nutrient_capacity(u->amount,u->capacity,v->amount,v->capacity):u->capacity+v->capacity;u->amount=total;v->alive=false;event.event=1;}
    a.reacted=b.reacted=true;
   }
  });

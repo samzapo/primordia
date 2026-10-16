@@ -217,7 +217,7 @@ func _feed(sim, cell, dt: float) -> void:
 			cell.receive_particle(sim.CARBON,amount,amount,p.p)
 			if p.owner != cell.id: cell.foreign_intake += amount
 		else:
-			var fuel: float = minf(p.get("capacity",p.amount+amount),p.amount+amount)*amount/maxf(0.000001,p.amount+amount)
+			var fuel: float = maxf(0,float(p.get("capacity",p.amount+amount)))*amount/maxf(0.000001,p.amount+amount)
 			cell.receive_particle(sim.NUTRIENT,amount,fuel,p.p)
 			p.capacity=maxf(0,p.get("capacity",p.amount+amount)-fuel)
 			cell.eaten += amount

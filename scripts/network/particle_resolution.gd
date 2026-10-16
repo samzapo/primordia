@@ -10,7 +10,9 @@ static func _join(a: Dictionary,b: Dictionary,internal: bool) -> void:
 	var weight: float=b.amount/total
 	a.p=a.p.lerp(b.p,weight);a.previous=a.p
 	a.v=a.v.lerp(b.v,weight)
-	if internal: a.fuel+=b.fuel
+	if internal:
+		a.fuel+=b.fuel
+		if a.has("nutrition") or b.has("nutrition"):a.nutrition=float(a.get("nutrition",0))+float(b.get("nutrition",0))
 	else:
 		a.capacity=float(a.get("capacity",a.amount))+float(b.get("capacity",b.amount))
 		a.age=lerpf(a.get("age",0),b.get("age",0),weight)

@@ -50,6 +50,7 @@ func prepare(chem,cell) -> void:
 	chemistry=weakref(chem);body=weakref(cell)
 	species=Catalog.data().species.keys()
 	var constants:="const int SPECIES=%d;\nconst int FOOD=%d;\nconst int WASTE=%d;\nconst int OXYGEN=%d;\nconst int CARBON=%d;\n" % [species.size(),species.find("food"),species.find("waste"),species.find("oxygen"),species.find("carbon")]
+	constants+="const double NUTRIENT_BONUS_LIMIT=%.6f;\n" % Catalog.data().ecology.nutrient_bonus_limit
 	source=FileAccess.get_file_as_string("res://shaders/compute/resident_cytoplasm.glsl.txt").replace("/*CYTOPLASM_CATALOG*/",constants)
 	capacity=64
 
@@ -58,9 +59,10 @@ func _pack(packets: Array) -> PackedByteArray:
 	for i in packets.size():
 		var packet: Dictionary=packets[i];var at:=i*STRIDE
 		var facts:=packet.duplicate(true)
-		for key in ["id","species","amount","fuel","p","previous","v","angle","source","compartment","alive","age"]:facts.erase(key)
+		for key in ["id","species","amount","fuel","p","previous","v","angle","source","compartment","alive","age","nutrition"]:facts.erase(key)
 		if not facts.is_empty():metadata[packet.id]=facts
 		bytes.encode_double(at+80,float(packet.get("age",0)))
+		bytes.encode_double(at+88,float(packet.get("nutrition",0)))
 		bytes.encode_double(at,packet.amount);bytes.encode_double(at+8,packet.fuel)
 		for j in 7:bytes.encode_float(at+16+j*4,[packet.p.x,packet.p.y,packet.previous.x,packet.previous.y,packet.v.x,packet.v.y,packet.angle][j])
 		bytes.encode_s32(at+48,species.find(packet.species));bytes.encode_u32(at+52,packet.source&0xffffffff);bytes.encode_u32(at+56,packet.compartment&0xffffffff);bytes.encode_s32(at+60,1 if packet.alive else 0)
@@ -73,6 +75,7 @@ func _unpack(bytes: PackedByteArray) -> Array:
 		var at:=i*STRIDE
 		if bytes.decode_s32(at+60)==0:continue
 		packets.append({"age":bytes.decode_double(at+80),"id":bytes.decode_s64(at+64),"species":species[bytes.decode_s32(at+48)],"amount":bytes.decode_double(at),"fuel":bytes.decode_double(at+8),"p":Vector2(bytes.decode_float(at+16),bytes.decode_float(at+20)),"previous":Vector2(bytes.decode_float(at+24),bytes.decode_float(at+28)),"v":Vector2(bytes.decode_float(at+32),bytes.decode_float(at+36)),"angle":bytes.decode_float(at+40),"source":(int(bytes.decode_s32(at+72))<<32)|bytes.decode_u32(at+52),"compartment":(int(bytes.decode_s32(at+76))<<32)|bytes.decode_u32(at+56),"alive":true})
+		if bytes.decode_double(at+88)>0:packets[-1].nutrition=bytes.decode_double(at+88)
 	for packet in packets:packet.merge(metadata.get(packet.id,{}),false)
 	return packets
 

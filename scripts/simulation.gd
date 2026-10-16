@@ -906,7 +906,7 @@ static func particle_scale(amount: float) -> float:
 	return clampf(sqrt(amount/0.3),0.8,1.7)
 
 static func binding_threshold(a: int, b: int, acid: float) -> float:
-	if ENZYME in [a,b] and WASTE in [a,b]:
+	if (ENZYME in [a,b] and WASTE in [a,b]) or (a==NUTRIENT and b==NUTRIENT):
 		# A modeled acid hydrolase has an acidic optimum. This is an affinity
 		# abstraction, not a claim that pH literally widens a molecular patch.
 		return 0.5+0.46*pow(clampf(absf(acid-0.4)/0.4,0,1),2)
@@ -961,15 +961,15 @@ func _react_pair(a: Dictionary, b: Dictionary, acid: float = 0.0) -> bool:
 		a.kind = WASTE
 		chemistry_events.spoil += 1
 		return true
-	if a.kind == b.kind and a.kind in [NUTRIENT,WASTE,CARBON,OXYGEN] and a.amount+b.amount <= float(Catalog.data().ecology.merge_limit):
+	if a.kind == b.kind and a.kind in [NUTRIENT,WASTE,CARBON,OXYGEN] and a.amount+b.amount <= Catalog.merge_limit(a.kind):
 		if a.kind == TOXIN and a.owner != b.owner: return false
 		var total: float = a.amount+b.amount
 		if total <= 0: return false
 		# Normalize weights before float-vector arithmetic: tiny photosynthetic
 		# remainders can be below float32 range while their ratio is well-defined.
 		a.v = a.v.lerp(b.v,b.amount/total)
-		a.amount += b.amount
-		a.capacity = float(a.get("capacity",0))+float(b.get("capacity",0))
+		a.capacity = Catalog.nutrient_capacity(a.amount,float(a.get("capacity",a.amount)),b.amount,float(b.get("capacity",b.amount))) if a.kind==NUTRIENT else float(a.get("capacity",0))+float(b.get("capacity",0))
+		a.amount = total
 		b.alive = false
 		chemistry_events.combine += 1
 		return true
@@ -1228,7 +1228,7 @@ func _feed(cell) -> void:
 				var amount = minf(p.amount,maxf(0,cell.gut_capacity()-cell.substrate))
 				p.amount -= amount
 				if kernels != null: kernels.invalidate_particle_render(index)
-				var fuel: float = minf(p.get("capacity",p.amount+amount),p.amount+amount)*amount/maxf(0.000001,p.amount+amount)
+				var fuel: float = maxf(0,float(p.get("capacity",p.amount+amount)))*amount/maxf(0.000001,p.amount+amount)
 				cell.receive_particle(NUTRIENT,amount,fuel,p.p)
 				p.capacity = maxf(0,p.get("capacity",p.amount+amount)-fuel)
 				cell.eaten += amount
@@ -1606,6 +1606,8 @@ func _die(cell, transferred: float = 0.0) -> void:
 		spawn_particle(kind,at,normal*24,packet.amount,cell.id)
 		if kind == NUTRIENT:
 			last_spawn.capacity = clampf(packet.fuel/7.5,0,packet.amount)
+			if last_spawn.capacity>=packet.amount:
+				last_spawn.capacity+=clampf(float(packet.get("nutrition",0)),0,packet.amount*float(Catalog.data().ecology.nutrient_bonus_limit))
 			_commit_spawn_metadata()
 		packet.alive = false
 	cell.chemistry.particles.clear()

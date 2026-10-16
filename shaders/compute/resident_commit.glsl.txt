@@ -13,6 +13,7 @@ layout(set=0,binding=8,std430) readonly buffer Acidity { float acid_field[]; };
 layout(set=0,binding=9,std430) buffer Events { vec4 events[]; };
 layout(push_constant,std430) uniform Params { uint count;uint padded;uint stage;uint level;uint stride;uint mode;float acid;uint tick; } pc;
 const vec2 WORLD=vec2(4096,2560);
+/*CATALOG_NUTRIENT_BINDING*/
 ivec2 pixel(uint i) {return ivec2(int(i%256u)*3,int(i/256u));}
 vec4 pose(uint i) {return imageLoad(state,pixel(i));}
 vec4 motion(uint i) {return imageLoad(state,pixel(i)+ivec2(1,0));}
@@ -59,8 +60,8 @@ void main(){
    float amount=um.y;recycled=amount*.6;uv.w=0.;um.z=0.;um.y=amount*.6;vv.w=5.;vm.y=amount*.4;atomicAdd(stats[8],1u);event=true;
   }
   else if(uv.w==0.&&vv.w==4.){uv.w=2.;atomicAdd(stats[9],1u);event=true;}
-  else if(uv.w==vv.w&&(uv.w==0.||uv.w==1.||uv.w==2.||uv.w==5.)&&um.y+vm.y<=/*CATALOG_MERGE_LIMIT*/&&um.y+vm.y>0.) {
-   float total=um.y+vm.y;uv.xy=mix(uv.xy,vv.xy,vm.y/total);um.y=total;um.z+=vm.z;vv.w=-1.;vm.y=0.;atomicAdd(stats[10],1u);event=true;
+  else if(uv.w==vv.w&&(uv.w==0.||uv.w==1.||uv.w==2.||uv.w==5.)&&um.y+vm.y<=(uv.w==0.?nutrient_merge_limit:/*CATALOG_MERGE_LIMIT*/)&&um.y+vm.y>0.) {
+   float total=um.y+vm.y;uv.xy=mix(uv.xy,vv.xy,vm.y/total);um.z=uv.w==0.?nutrient_capacity(um.y,um.z,vm.y,vm.z):um.z+vm.z;um.y=total;vv.w=-1.;vm.y=0.;atomicAdd(stats[10],1u);event=true;
   }
 
  if(event){

@@ -1432,7 +1432,7 @@ public:
       }
       double taken = std::min(p.amount(),capacity);
       double available_fuel = double(p.get(keys.capacity,p.amount()));
-      double fuel = kind==0 ? std::min(available_fuel,p.amount())*taken/std::max(.00000001,p.amount()) : taken;
+      double fuel = kind==0 ? std::max(0.,available_fuel)*taken/std::max(.00000001,p.amount()) : taken;
       body->call("receive_particle",kind,taken,fuel,at);
         if (kind==0) substrate=body->get("substrate");
       if (kind==0) p.set(keys.capacity,std::max(0.,available_fuel-fuel));
@@ -1517,7 +1517,7 @@ public:
       if (!handled) continue;
       if (taken > 0) {
         double available_fuel = double(p.get(keys.capacity,p.amount()));
-        double fuel = kind==0 ? std::min(available_fuel,p.amount())*taken/std::max(.00000001,p.amount()) : taken;
+        double fuel = kind==0 ? std::max(0.,available_fuel)*taken/std::max(.00000001,p.amount()) : taken;
         body->call("receive_particle",kind,taken,fuel,at);
         if (kind==0) substrate=body->get("substrate");
         else if (kind==1) oxygen=body->get("oxygen");
@@ -2020,7 +2020,7 @@ public:
         neighbors.contact();
         double dist = std::sqrt(dist2);
         Vector2 n = dist2 > .000001 ? d / dist : Vector2(1, 0);
-        const bool enzyme_pair = (p.kind == 6 && b.kind == 2) || (p.kind == 2 && b.kind == 6);
+        const bool enzyme_pair = (p.kind == 6 && b.kind == 2) || (p.kind == 2 && b.kind == 6) || (p.kind == 0 && b.kind == 0);
         // Most chemistry and every separation impulse are acid-independent.
         double a = (!lazy_acid || enzyme_pair) ? acid_sample(acid, p.p) : 0.;
         double threshold = .5;
@@ -2085,13 +2085,13 @@ public:
           } else if (u->kind == v->kind &&
                      (u->kind == 0 || u->kind == 2 || u->kind == 5 ||
                       u->kind == 1) &&
-                     u->amount + v->amount <= primordia_chemistry::merge_limit) {
+                     u->amount + v->amount <= (u->kind==0?primordia_chemistry::nutrient_merge_limit:primordia_chemistry::merge_limit)) {
             double total = u->amount + v->amount;
             if (total <= 0)
               return false;
             u->v = u->v.lerp(v->v, v->amount / total);
+            u->capacity = u->kind==0?primordia_chemistry::nutrient_capacity(u->amount,u->capacity,v->amount,v->capacity):u->capacity+v->capacity;
             u->amount = total;
-            u->capacity += v->capacity;
             v->alive = false;
             ++events[1];
             reacted = true;

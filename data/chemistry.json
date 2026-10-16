@@ -219,7 +219,10 @@
     "visible_target": 700,
     "parcel_scale": 10,
     "internal_parcel_scale": 10,
-    "seed_food_scale": 3
+    "seed_food_scale": 3,
+    "nutrient_merge_limit": 200.0,
+    "nutrient_binding_bonus": 0.4,
+    "nutrient_bonus_limit": 0.5
   },
   "species": {
     "glucose": {

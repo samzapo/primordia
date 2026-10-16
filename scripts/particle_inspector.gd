@@ -2,7 +2,7 @@ extends Control
 ## A local optical lens. Picking uses the existing spatial grid and rendered poses.
 const Art = preload("res://scripts/particle_art.gd")
 const DETAILS := [
-	"Food collected by grazing pores.",
+	"Food collected by grazing pores. Binding improves ATP yield; mild acid helps it bind.",
 	"Supports efficient respiration.",
 	"Enzymes can convert it into food.",
 	"A drifting cell report. Hunting and flight receptors read its last-known location, size and hostility.",
@@ -10,7 +10,7 @@ const DETAILS := [
 	"Photosynthesis uses it in bright water.",
 	"Reuses waste as food when its binding face aligns.",
 	"Binds toxins into harmless waste.",
-	"Raises local acidity and changes water color.",
+	"Helps nutrients bind, but excessive acidity damages cells.",
 	"Reduces local acidity.",
 	"Temporarily competes for sensing receptors."
 ]
@@ -260,6 +260,10 @@ func update_lens(dt: float, screen: Vector2, alpha: float, allowed: bool) -> voi
 	box.visible = active and lens_amount > 0.15
 	if box.visible:
 		var value: String = Art.Catalog.data().external_species[hovered.kind].name+"\n"+(DETAILS[hovered.kind] if hovered.kind < DETAILS.size() else "A finite cell-derived chemical packet.")
+		if not hovered.get("internal",false) and hovered.kind==0:
+			var food: Dictionary=hovered.packet
+			var bonus:=clampf(float(food.get("capacity",food.amount))/maxf(.00000001,food.amount)-1,0,float(Art.Catalog.data().ecology.nutrient_bonus_limit))
+			value+="\nBinding: +%d%% ATP yield" % roundi(bonus*100)
 		if hovered.get("internal",false) and not hovered.get("gas",false):
 			value=("Food vacuole\nLocal oxygen supports respiration; otherwise food ferments. Both produce ATP, biomass, carbon and waste." if hovered.kind==0 else "Waste vacuole\nTravels to the cytoproct, then releases waste into the water.")+"\nFood %.2f · Waste %.2f\nResidence %.1f s" % [hovered.food,hovered.waste,hovered.age]
 		if hovered.kind == game.world.PHEROMONE:

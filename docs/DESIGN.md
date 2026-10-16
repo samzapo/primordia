@@ -630,3 +630,30 @@ reduce tissue damage; an unfunded hit uses ordinary armor. Photosynthesis pays
 for additional fixation beyond baseline, so an empty ATP reserve can recover
 normally. These are shared game abstractions, not universal cellular power laws.
 The same physiology runs visible, resident and offscreen bodies.
+
+### Acid-assisted nutrient binding (October 16, 2026)
+
+Existing nutrient joining now accepts parcels up to200 units, rather than the
+legacy5-unit limit used by the other small molecules. Local contact and facing
+are still required. Mild acid broadens eligible facing alignment, with the same
+0.4 optimum used by the existing acid-dependent enzyme rule; excess acid narrows
+it again. Acid gland emissions feed the real local acidity field. Existing ATP
+stress and sustained membrane damage from excessive acidity remain unchanged.
+
+Binding carries a bounded, amount-weighted ATP-allocation benefit: each contact
+adds0.4 times the smaller parcel's mass, capped at50% of food mass. Thus equally
+sized fresh parcels gain20% ATP yield on their first join, with further joins
+increasing the benefit. This is not extra chemical fuel. Digestion recovers
+otherwise dissipated heat first, then allocates some tissue-producing fuel to
+ATP; aerobic food therefore produces somewhat less biomass for its higher ATP
+yield. Material becomes ordinary waste/carbon, and total fuel still pays for ATP,
+retained biomass and heat. Depleted salvaged nutrients cannot refuel by joining.
+
+External nutrient capacity below amount retains its original finite fuel meaning.
+Above amount it encodes fully fueled food plus this allocation bonus; acid/buffer
+capacity semantics are untouched. Uptake transfers it proportionally. Internal
+food stores additive nutrition alongside unchanged fuel; the resident component
+uses its previously unused clock.y without a pose mirror or a larger allocation.
+Coalescing only mixes the benefit; resolution conversion itself never awards it.
+Old packets default to zero bonus and loading an update does not alter saved
+cells. Save/restore, partial intake, resident handoff and lysis retain the benefit.

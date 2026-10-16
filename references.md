@@ -470,3 +470,12 @@ motivate energy-dependent cell work and an active cortex. The common selectable
 100–400% scale, incremental ATP penalty, sensing expense, protective damage
 reduction and baseline-fixation fallback are game rules. These sources do not
 establish one shared organelle power law or any chosen percentage.
+
+## Acid-assisted food assembly (October 16, 2026)
+
+[Aggeli et al., pH as a trigger of peptide beta-sheet self-assembly and reversible
+switching between nematic and isotropic phases (2003)](https://pubmed.ncbi.nlm.nih.gov/12904028/)
+demonstrates pH-controlled self-assembly in designed peptides. It motivates a
+pH-dependent contact rule only. Primordia's fictional nutrient aggregation,
+0.4 optimum,50% ATP-allocation cap and heat/tissue tradeoff are authored game
+abstractions, not measured nutrient chemistry or a claim that acid creates energy.

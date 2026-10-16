@@ -54,10 +54,10 @@ func raw_fuel() -> float:
 func _index(_packet: Dictionary) -> void: pass
 func _quantum(_species: String) -> float: return 4.0
 
-func emit(species: String, quantity: float, at: Vector2, source: int=-1, compartment: int=-1, fuel: float=-1, _spread: float=0) -> void:
+func emit(species: String, quantity: float, at: Vector2, source: int=-1, compartment: int=-1, fuel: float=-1, _spread: float=0, nutrition: float=0) -> void:
 	if quantity<=0 or species not in ACTIVE_SPECIES:return
 	fuel=quantity*7.5 if fuel<0 and species=="food" else maxf(0,fuel)
-	if accelerator!=null:accelerator.command(1,quantity,at,0,-1,source,compartment,fuel,0,species);return
+	if accelerator!=null:accelerator.command(1,quantity,at,0,-1,source,compartment,fuel,0,species,{19:nutrition});return
 	var chosen: Dictionary={}
 	var count:=0
 	for packet in particles:
@@ -68,17 +68,20 @@ func emit(species: String, quantity: float, at: Vector2, source: int=-1, compart
 	# carrier. This changes parcel resolution, never represented material/fuel.
 	if not chosen.is_empty() and (count>=(MAX_VACUOLES if species in ["food","waste"] else MAX_GAS) or ((chosen.compartment==compartment or (compartment<0 and float(chosen.get("age",0))<1)) and chosen.p.distance_squared_to(at)<196)):
 		chosen.amount+=quantity;chosen.fuel+=fuel
+		if nutrition>0 or chosen.has("nutrition"):chosen.nutrition=float(chosen.get("nutrition",0))+quantity*nutrition
 		if compartment<0 and float(chosen.get("age",0))>=1:chosen.age=1.0
 	else:
 		var parent: Dictionary={}
 		for packet in particles:
 			if packet.compartment==compartment and compartment>=0:parent=packet;break
 		particles.append({"age":float(parent.get("age",0)),"id":next_packet,"species":species,"amount":quantity,"fuel":fuel,"p":at,"previous":at,"v":Vector2.ZERO,"angle":next_packet*2.399963,"source":source,"compartment":next_packet if compartment<0 else compartment,"alive":true})
+		if nutrition>0:particles[-1].nutrition=quantity*nutrition
 		next_packet+=1
 	if not batching:refresh()
 func _consume(packet: Dictionary, quantity: float) -> float:
 	quantity=minf(quantity,packet.amount)
 	var fuel: float=packet.fuel*quantity/maxf(.00000001,packet.amount)
+	if packet.has("nutrition"):packet.nutrition*=1-quantity/maxf(.00000001,packet.amount)
 	packet.amount-=quantity;packet.fuel-=fuel
 	packet.alive=packet.amount>.0000001
 	return fuel
@@ -103,7 +106,9 @@ func receive(kind: int, quantity: float, capacity: float, world_at: Vector2) -> 
 	var cell=owner.get_ref()
 	var local:=Vector2(wrapf(world_at.x-cell.position.x,-2048,2048),wrapf(world_at.y-cell.position.y,-1280,1280)).rotated(-cell.angle)
 	local=local.normalized()*minf(local.length(),cell.support(local.angle()+cell.angle)*.78)
-	emit({0:"food",1:"oxygen",5:"carbon"}[kind],quantity,local,-1,-1,minf(quantity,capacity)*7.5 if kind==0 else 0)
+	# External profile carries true fuel up to quantity, then ATP allocation credit.
+	var bonus := clampf(capacity/quantity-1,0,float(Catalog.data().ecology.nutrient_bonus_limit)) if kind==0 else 0.0
+	emit({0:"food",1:"oxygen",5:"carbon"}[kind],quantity,local,-1,-1,minf(quantity,capacity)*7.5 if kind==0 else 0,0,bonus)
 func refresh() -> void:
 	particles=particles.filter(func(packet):return packet.alive)
 	totals.clear();vacuoles.clear()
@@ -145,10 +150,16 @@ func advance(cell, dt: float, _external_osmolarity: float=.15) -> void:
 		var used: float=minf(budget,packet.amount*minf(1,dt/duration));budget-=used
 		var aerobic:=_near_consume("oxygen",used,packet.p,REACTION_REACH)
 		var anaerobic:=used-aerobic
+		var bonus := clampf(float(packet.get("nutrition",0))/maxf(.00000001,packet.amount),0,float(Catalog.data().ecology.nutrient_bonus_limit))
 		var fuel:=_consume(packet,used)
 		var fueled:=minf(used,fuel/7.5)
 		var tissue: float=fueled*(.7*aerobic+.3*anaerobic)/maxf(.00000001,used)
 		var work: float=minf(maxf(0,fuel-tissue*7.5),fueled*(2.25*aerobic+1.0*anaerobic)/maxf(.00000001,used))
+		if bonus>0:
+			var extra := minf(work*bonus,maxf(0,fuel-work))
+			var recovered_heat := maxf(0,fuel-tissue*7.5-work)
+			tissue-=maxf(0,extra-recovered_heat)/7.5
+			work+=extra
 		cell.biomass+=tissue;cell.gain_energy(work);cell.processed+=used
 		cell.fermented+=anaerobic
 		if anaerobic>0:cell.fermentation_activity=2

@@ -98,7 +98,7 @@ void main(){
      bool inside=meta.z>0.?distance<=reach:query.w==1.?(pc.parallel_oxygen>0u?((oxygen_mask[slot][body/32u]&(1u<<(body%32u)))!=0u):
       distance<support(body,atan(d.y,d.x)-shape.z,false)+14.):distance<=reach;
      if(!inside)continue;
-     float taken=min(m.y,remaining);float fuel=query.w==0.?min(m.z,m.y)*taken/max(m.y,.00000001):taken;
+     float taken=min(m.y,remaining);float fuel=query.w==0.?max(0.,m.z)*taken/max(m.y,.00000001):taken;
      fuel_total+=fuel;moment+=offset(shape.xy,pose(slot).xy)*taken;if(query.w==0.)m.z=max(0.,m.z-fuel);m.y-=taken;remaining-=taken;taken_total+=taken;
      if(query.w!=1.&&identity[slot].y!=uint(budget.w))receipts[body].w+=taken;
      shrink(slot,v,m);
