@@ -44,11 +44,17 @@ jobs:
           python3 - <<'PY'
           import os,pathlib,json,subprocess,time,tempfile,shutil
           from urllib.request import build_opener,ProxyHandler
+          from urllib.error import HTTPError
           root=pathlib.Path.home()/'.local/share/primordia-deploy'
           opener=build_opener(ProxyHandler({}))
           def health():
-              with opener.open('http://127.0.0.1:8766/metrics',timeout=5) as response:return json.load(response)
+              try:
+                  with opener.open('http://127.0.0.1:8766/metrics',timeout=5) as response:return json.load(response)
+              except HTTPError as error:
+                  if error.code==503:return json.load(error)
+                  raise
           before=health()
+          print('LIVE_PROBE_CONTEXT '+json.dumps({key:before.get(key) for key in ['build','backend','backend_error','checkpoint_error','world_id','epoch','peers','stored_packets']}),flush=True)
           assert before['peers']==0,'Defer capacity probe while players are connected'
           available=int(next(line.split()[1] for line in pathlib.Path('/proc/meminfo').read_text().splitlines() if line.startswith('MemAvailable:')))
           assert available>8000000,'Insufficient shared memory headroom'
@@ -61,7 +67,18 @@ jobs:
           assert not busy,'Defer while another build is active'
           godot=next((root/'runtime').glob('**/Godot_v4.7.2-stable_linux.x86_64'))
           env=dict(os.environ,GODOT_BIN=str(godot),PRIMORDIA_BUILD_JOBS='2')
-          subprocess.run(['bash','tools/build_native.sh'],env=env,check=True)
+          build=subprocess.Popen(['bash','tools/build_native.sh'],env=env,start_new_session=True)
+          try:
+              while build.poll() is None:
+                  time.sleep(10)
+                  available=int(next(line.split()[1] for line in pathlib.Path('/proc/meminfo').read_text().splitlines() if line.startswith('MemAvailable:')))
+                  assert available>4000000,'Build memory headroom exhausted'
+              assert build.returncode==0,'Native build failed'
+          finally:
+              if build.poll() is None:
+                  import signal
+                  os.killpg(build.pid,signal.SIGTERM)
+                  build.wait(timeout=20)
           subprocess.run([str(godot),'--headless','--path','.', '--editor','--import','--quit'],env=env,check=True)
           owned=pathlib.Path(tempfile.mkdtemp(prefix='samzapo--particle-capacity-',dir=os.environ['RUNNER_TEMP']))
           (owned/'OWNERSHIP.json').write_text(json.dumps({'repository':'samzapo/primordia','run':os.environ['GITHUB_RUN_ID'],'source':os.getcwd(),'purpose':'isolated tick-only copied-world capacity probe; production remains untouched'}))
