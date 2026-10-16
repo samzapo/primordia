@@ -221,6 +221,7 @@ func run() -> void:
 		check(host.world.fluid.metrics().nonfinite==0 and host.world.cells.all(func(cell):return cell.velocity.is_finite() and is_finite(cell.angular_velocity)),"Mixed resident/coarse perception transitions retain finite water and body motion")
 		var phase_report=JSON.parse_string(FileAccess.get_file_as_string(host.store.directory.path_join("health.json")))
 		print("AUTHORITY_PHASES ",JSON.stringify(phase_report.get("tick_phase_mean_ms",{})))
+		print("PUBLICATION_ENCODING ",JSON.stringify({"mean_ms":phase_report.get("snapshot_encode_ms_mean",0),"pending":phase_report.get("snapshots_encoding",0)}))
 		print("REALTIME_AUTHORITY ",JSON.stringify({"simulation_hz":Engine.physics_ticks_per_second,"tick_budget_ms":1000.0/host.physics_hz,"simulation_wall_ratio":ratio,"tick_p95_ms":p95,"living_cells":host.world.cells.filter(func(cell):return not cell.dead).size(),"interior_packets":host.world.cells.reduce(func(total,cell):return total+cell.chemistry.particle_count(),0),"gpu":RenderingServer.get_video_adapter_name()}))
 	for socket in sockets:socket.close(-1)
 	check(await until(func():return host.world.camera_views.is_empty()),"disconnect removes every detailed camera")

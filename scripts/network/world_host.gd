@@ -60,6 +60,10 @@ var feedback_thread: Thread
 var feedback_recent: Dictionary={}
 var retention_before: Dictionary={}
 var cell_retention: Dictionary={}
+var snapshot_queue: Array=[]
+var snapshot_job: Dictionary={}
+var snapshot_thread: Thread
+var snapshot_encode_usec: Array=[]
 
 
 func _ready() -> void:
@@ -191,6 +195,7 @@ func _process(_dt: float) -> void:
 		DirAccess.remove_absolute(store.directory.path_join("stop.request"));stop();return
 	_poll()
 	_poll_feedback()
+	_poll_snapshots()
 	var now:=Time.get_ticks_usec()
 	if now-last_publication_usec>=100000:
 		last_publication_usec=now;_publish()
@@ -362,6 +367,7 @@ func _finish_feedback() -> void:
 	feedback_queue.clear()
 
 func _exit_tree() -> void:
+	_finish_snapshots()
 	_finish_feedback()
 
 func _close_sessions(key: String,except_id: int) -> void:
@@ -594,7 +600,7 @@ func _publish() -> void:
 	_publish_deaths()
 	# Inside views need current intracellular graphs, not an external pose gather.
 	for peer in peers.values():
-		if peer.account!="" and peer.view!=null and peer.get("perception","exteroception")=="interoception" and peer.view_tick<world.revision and peer.get("awaiting_snapshot",0)==0:
+		if peer.account!="" and peer.view!=null and peer.get("perception","exteroception")=="interoception" and peer.view_tick<world.revision and peer.get("awaiting_snapshot",0)==0 and peer.get("encoding_snapshot",0)==0:
 			_send_snapshot(peer,PackedByteArray())
 	if world.camera_views.is_empty() or not pending_frame.is_empty(): return
 	if world.resident!=null:
@@ -603,13 +609,13 @@ func _publish() -> void:
 		var regions: Array=[]
 		for id in peers:
 			var peer: Dictionary=peers[id]
-			if peer.account=="" or peer.view==null or peer.view_tick>=world.revision or peer.get("perception","exteroception")!="exteroception" or peer.get("awaiting_snapshot",0)>0: continue
+			if peer.account=="" or peer.view==null or peer.view_tick>=world.revision or peer.get("perception","exteroception")!="exteroception" or peer.get("awaiting_snapshot",0)>0 or peer.get("encoding_snapshot",0)>0: continue
 			pending_frame.frames[id]={"view":peer.view,"frame":_frame(peer)}
 			regions.append(peer.view)
 		if regions.is_empty() or not world.resident.gpu.publish_views(regions): pending_frame.clear()
 	else:
 		for peer in peers.values():
-			if peer.account=="" or peer.get("perception","exteroception")!="exteroception" or peer.get("awaiting_snapshot",0)>0: continue
+			if peer.account=="" or peer.get("perception","exteroception")!="exteroception" or peer.get("awaiting_snapshot",0)>0 or peer.get("encoding_snapshot",0)>0: continue
 			var bytes:=PackedByteArray()
 			var view: Vector4=peer.view
 			for index in world.grid.query_rect(Vector2(view.x,view.y),Vector2(view.z,view.w)+Vector2.ONE*32):
@@ -659,7 +665,8 @@ func _death_events(peer: Dictionary) -> Array:
 	return result
 
 func _send_snapshot(peer: Dictionary,records: PackedByteArray,frame: Dictionary={}) -> void:
-	if peer.view==null or peer.socket.get_ready_state()!=WebSocketPeer.STATE_OPEN or peer.get("awaiting_snapshot",0)>0: return
+	if peer.view==null or peer.socket.get_ready_state()!=WebSocketPeer.STATE_OPEN or peer.get("awaiting_snapshot",0)>0 or peer.get("encoding_snapshot",0)>0: return
+	if snapshot_queue.size()+(1 if snapshot_thread!=null else 0)>=MAX_PLAYERS:skipped_frames+=1;return
 	if frame.is_empty(): frame=_frame(peer)
 	var bytes:=PackedByteArray()
 	var view: Vector4=peer.view
@@ -669,16 +676,54 @@ func _send_snapshot(peer: Dictionary,records: PackedByteArray,frame: Dictionary=
 	frame.particles=bytes
 	var serial: int=peer.get("frame_serial",0)+1
 	frame.serial=serial
-	if _send(peer,frame):
-		peer.frame_serial=serial
-		if not peer.get("death_events",false):peer.death_after=maxi(peer.get("death_after",0),frame.death_serial)
-		peer.selected_cell=frame.selected_cell;peer.followed_cell=frame.followed_cell
-		if peer.get("snapshot_ack",false):peer.awaiting_snapshot=serial
+	frame.protocol=Protocol.VERSION
+	peer.encoding_snapshot=serial
+	snapshot_queue.append({"peer":peer.socket.get_instance_id(),"frame":frame})
+	_poll_snapshots()
+
+static func _encode_snapshot(frame: Dictionary) -> Dictionary:
+	# Codec.capture already produced data-only immutable ownership snapshots.
+	# No live simulation objects or sockets are read from this worker.
+	var start:=Time.get_ticks_usec()
+	return {"bytes":Protocol.pack(frame),"usec":Time.get_ticks_usec()-start}
+
+func _poll_snapshots() -> void:
+	if snapshot_thread!=null and not snapshot_thread.is_alive():
+		var result: Dictionary=snapshot_thread.wait_to_finish();snapshot_thread=null
+		snapshot_encode_usec.append(result.usec)
+		if snapshot_encode_usec.size()>100:snapshot_encode_usec.pop_front()
+		var peer: Dictionary=peers.get(snapshot_job.peer,{})
+		var frame: Dictionary=snapshot_job.frame
+		if not peer.is_empty():
+			peer.encoding_snapshot=0
+			if peer.socket.get_ready_state()==WebSocketPeer.STATE_OPEN and _send_bytes(peer,frame,result.bytes):
+				peer.frame_serial=frame.serial
+				if not peer.get("death_events",false):peer.death_after=maxi(peer.get("death_after",0),frame.death_serial)
+				peer.selected_cell=frame.selected_cell;peer.followed_cell=frame.followed_cell
+				if peer.get("snapshot_ack",false):peer.awaiting_snapshot=frame.serial
+		snapshot_job.clear()
+	if snapshot_thread!=null:return
+	while not snapshot_queue.is_empty():
+		var next: Dictionary=snapshot_queue.pop_front()
+		if not peers.has(next.peer):continue
+		snapshot_job=next;snapshot_thread=Thread.new()
+		if snapshot_thread.start(_encode_snapshot.bind(next.frame))!=OK:
+			snapshot_thread=null;peers[next.peer].encoding_snapshot=0;snapshot_job.clear();skipped_frames+=1
+		return
+
+func _finish_snapshots() -> void:
+	if snapshot_thread!=null:snapshot_thread.wait_to_finish();snapshot_thread=null
+	snapshot_job.clear();snapshot_queue.clear()
+	for peer in peers.values():peer.encoding_snapshot=0
+
 
 func _send(peer: Dictionary,value: Dictionary) -> bool:
 	if peer.socket.get_current_outbound_buffered_amount()>1048576: skipped_frames+=1;return false
 	value.protocol=Protocol.VERSION
-	var bytes:=Protocol.pack(value)
+	return _send_bytes(peer,value,Protocol.pack(value))
+
+func _send_bytes(peer: Dictionary,value: Dictionary,bytes: PackedByteArray) -> bool:
+	if peer.socket.get_current_outbound_buffered_amount()>1048576:skipped_frames+=1;return false
 	if bytes.is_empty() or bytes.size()>Protocol.MAX_FRAME:
 		skipped_frames+=1
 		if value.get("kind","")=="snapshot":_send(peer,{"kind":"snapshot_error","message":"The world view could not be loaded. Your sign-in is saved."})
@@ -725,6 +770,8 @@ func _write_metrics() -> void:
 	metrics["particle_parcel_scale"]=world.Catalog.data().ecology.get("parcel_scale",1)
 	metrics["visible_particle_target"]=world.Catalog.data().ecology.visible_target
 	metrics["snapshots_sent"]=snapshots_sent
+	metrics["snapshots_encoding"]=snapshot_queue.size()+(1 if snapshot_thread!=null else 0)
+	metrics["snapshot_encode_ms_mean"]=snapshot_encode_usec.reduce(func(a,b):return a+b,0)/maxf(1,snapshot_encode_usec.size())/1000.0
 	metrics["ready_views"]=peers.values().filter(func(peer):return peer.account!="" and peer.view!=null and peer.view_tick<world.revision).size()
 	metrics["interoceptive_cells"]=world.interoceptive_cells.size()
 	metrics["interoception_peers"]=peers.values().filter(func(peer):return peer.account!="" and peer.get("perception","exteroception")=="interoception").size()
@@ -751,6 +798,7 @@ func stop(exit_status: int=0) -> void:
 	if not running: return
 	running=false
 	_finish_feedback()
+	_finish_snapshots()
 	if not checkpoint():_fatal(store.last_error);return
 	listener.stop()
 	for peer in peers.values(): peer.socket.close(1001,"World service restarting")
