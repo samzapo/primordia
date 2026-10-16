@@ -194,7 +194,20 @@ jobs:
                       \t\t\t\tif organ.has(key):shape[key]=organ[key]
                       \t\t\tanatomy.append(shape)
                       \t\taccounts.append({"selected":selected,"body":body.get("id",-1),"lineage":body.get("lineage",-1),"dead":body.get("dead",true),"age":body.get("age",0),"organs":anatomy,"anatomy_sha256":JSON.stringify(anatomy).sha256_text()})
-                      \treturn {"world_id":saved.get("world_id",""),"epoch":saved.get("epoch",0),"tick":saved.get("tick",0),"food_supply_version":saved.get("food_supply_version",0),"food_supply":saved.get("food_supply",{}),"accounts":accounts}
+                      \tvar medium: Dictionary=fields(world.get("fluid"),objects)
+                      \tvar velocities: PackedVector2Array=medium.get("velocity",PackedVector2Array())
+                      \tvar speeds: Array=[];var nonfinite:=0;var momentum:=Vector2.ZERO
+                      \tfor v in velocities:
+                      \t\tif v.is_finite():speeds.append(v.length());momentum+=v
+                      \t\telse:nonfinite+=1
+                      \tspeeds.sort()
+                      \tvar bodies: Array=[]
+                      \tfor body in cells.values():
+                      \t\tif body.get("dead",true):continue
+                      \t\tvar v: Vector2=body.get("velocity",Vector2.ZERO)
+                      \t\tbodies.append({"id":body.get("id",-1),"speed":v.length(),"angular":body.get("angular_velocity",0),"mass":body.get("mass",0)})
+                      \tbodies.sort_custom(func(a,b):return a.speed>b.speed)
+                      \treturn {"world_id":saved.get("world_id",""),"epoch":saved.get("epoch",0),"tick":saved.get("tick",0),"food_supply_version":saved.get("food_supply_version",0),"food_supply":saved.get("food_supply",{}),"accounts":accounts,"fluid":{"nodes":velocities.size(),"nonfinite":nonfinite,"speed_p50":speeds[speeds.size()/2] if not speeds.is_empty() else 0,"speed_p95":speeds[int(speeds.size()*.95)] if not speeds.is_empty() else 0,"speed_max":speeds[-1] if not speeds.is_empty() else 0,"mean_velocity":[momentum.x/maxi(1,speeds.size()),momentum.y/maxi(1,speeds.size())]},"fastest_cells":bodies.slice(0,8)}
                   """)
                   inspection = pathlib.Path("selection-project").resolve()
                   (inspection / "scripts/network").mkdir(parents=True)
