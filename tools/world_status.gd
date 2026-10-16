@@ -38,7 +38,7 @@ static func selection(saved: Dictionary) -> Dictionary:
 	for reference in cells.slice(0,8):
 		var body:=fields(reference,objects)
 		if not body.get("dead",true):details.append(chemistry_summary(body,objects))
-	return {"living_cytoplasm_packets":living_counts.reduce(func(total,value):return total+value,0),"largest_living_cytoplasm_packets":living_counts.max() if not living_counts.is_empty() else 0,"status":"ok","world_id":saved.get("world_id",""),"epoch":saved.get("epoch",0),"tick":saved.get("tick",0),"accounts":records,"living_chemistry":details,"nutrition":nutrition_summary(world,objects),"membranes":cells.slice(0,64).map(func(reference):return membrane_summary(fields(reference,objects),objects))}
+	return {"living_cytoplasm_packets":living_counts.reduce(func(total,value):return total+value,0),"largest_living_cytoplasm_packets":living_counts.max() if not living_counts.is_empty() else 0,"status":"ok","world_id":saved.get("world_id",""),"epoch":saved.get("epoch",0),"tick":saved.get("tick",0),"accounts":records,"living_chemistry":details,"nutrition":nutrition_summary(world,objects),"particle_motion":particle_motion(world),"membranes":cells.slice(0,64).map(func(reference):return membrane_summary(fields(reference,objects),objects))}
 
 static func fields(reference,objects: Array) -> Dictionary:
 	if not reference is Dictionary:return {}
@@ -107,3 +107,21 @@ static func nutrition_summary(world: Dictionary,objects: Array) -> Dictionary:
 			var cause: String=record.get("cause","");causes[cause]=int(causes.get(cause,0))+1
 			lifetimes.append(float(record.get("ended",0))-float(record.get("born",0)))
 	return {"external":external,"bodies":bodies,"recent_lineage_death_causes":causes,"mean_recorded_lifetime":lifetimes.reduce(func(total,value):return total+value,0.0)/maxi(1,lifetimes.size()),"sampled_deaths":lifetimes.size(),"lost_organic_material":world.get("respiration_loss",0)}
+
+static func particle_motion(world: Dictionary) -> Dictionary:
+	# Saved launch velocities, distinct from water advection and browser interpolation.
+	var speeds: Array[float]=[];var top: Array=[];var species: Dictionary={};var nonfinite:=0
+	for packet in world.get("particles",{}).get("$array",[]):
+		if not packet.get("alive",false):continue
+		var velocity: Vector2=packet.get("v",Vector2.ZERO)
+		if not velocity.is_finite():nonfinite+=1;continue
+		var speed:=velocity.length();speeds.append(speed)
+		var kind:=str(packet.get("kind",-1))
+		if not species.has(kind):species[kind]={"packets":0,"max_launch_speed":0.0}
+		species[kind].packets+=1;species[kind].max_launch_speed=maxf(species[kind].max_launch_speed,speed)
+		var at: Vector2=packet.get("p",Vector2.ZERO)
+		top.append({"kind":packet.get("kind",-1),"speed":speed,"position":[at.x,at.y],"amount":packet.get("amount",0),"age":packet.get("age",0)})
+		top.sort_custom(func(a,b):return a.speed>b.speed)
+		if top.size()>8:top.resize(8)
+	speeds.sort()
+	return {"finite_packets":speeds.size(),"nonfinite_velocities":nonfinite,"launch_p50":speeds[int((speeds.size()-1)*.5)] if not speeds.is_empty() else 0,"launch_p95":speeds[int((speeds.size()-1)*.95)] if not speeds.is_empty() else 0,"launch_max":speeds[-1] if not speeds.is_empty() else 0,"species":species,"fastest":top}
