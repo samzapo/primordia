@@ -511,3 +511,10 @@ a data-only frame. There is at most one queued/encoding snapshot per peer and at
 most eight in total. Acknowledgement backpressure begins after delivery, and
 small death/authentication messages bypass this queue. No simulation objects or
 sockets are accessed by the compression worker. Shutdown joins the owned worker.
+
+Candidate GPU networking and saved-world performance checks run after the live
+service has gracefully checkpointed/stopped and its exact generations are backed
+up. Source/native/web builds finish beforehand. The single GPU is reserved for
+one candidate authority during acceptance, matching the deployed workload. A
+failed check restores the saved generations and previous service. The 30 Hz,
+real-time ratio and p95 gates are unchanged; updates include this bounded outage.

@@ -205,7 +205,6 @@ def main():
     run(str(godot), "--headless", "--path", str(candidate), "--editor", "--import", "--quit", env=environment)
     if any((root / "state" / name).exists() for name in ("world-0.pworld", "world-1.pworld")):
         environment["PRIMORDIA_VERIFY_CHECKPOINT_DIR"] = str(root / "state")
-    run("bash", str(candidate / "tools/test_network.sh"), "gpu", env=environment)
     inspect()
     run("bash", str(candidate / "tools/build_web.sh"), env=environment)
     state = root / "state"
@@ -260,11 +259,15 @@ def main():
     validation = subprocess.run(["systemd-analyze", "--user", "verify", str(validation_unit)], capture_output=True, text=True)
     if validation.returncode or str(validation_unit) in validation.stderr:
         raise RuntimeError("Candidate systemd unit did not validate: " + validation.stderr)
-    subprocess.run(["systemctl", "--user", "stop", UNIT], check=bool(old))
     migration_backup = None
     try:
+        subprocess.run(["systemctl", "--user", "stop", UNIT], check=bool(old))
         if old and previous:
             migration_backup = retain_model_boundary(state, root, model_boundary_prefix(previous) or "before-update-")
+        # One GPU authority is the deployed workload. Concurrent live/candidate
+        # worlds distort the cadence gate. All builds finish before this short,
+        # checkpointed validation outage; any failure restores the old service.
+        run("bash", str(candidate / "tools/test_network.sh"), "gpu", env=environment)
         staged_unit = unit.with_suffix(".service.new")
         staged_unit.write_text(unit_text)
         staged_unit.replace(unit)
