@@ -218,7 +218,7 @@ The owner re-enables gameplay and balance tests, including objectives, supersedi
 
 ## Revision 51 — owner restored features
 
-Read docs/REVISION_51.md. The latest owner request restores bounded oxygen/carbon particle respiration, fermentation, emergency surplus-biomass fuel and photosynthesis; this supersedes the retired-path restrictions only for this small loop. ATP/biomass remain numerical, with shaped cosmetic transaction feedback. Preserve ten-second food/waste carriers, resident visible ownership and real-time budgets. Successful paid division awards 1 AP and independently offers a free mutation with 10% probability. Hourly calendar conditions replace persistent tide progression. Microtubules are procedural-only with faint lines and no handles; reject old edit commands. Mobile selected-icon cancel, bottom descriptions and Pause/settings are required. Existing pond, account graph, keys and enabled gameplay/balance/objective tests remain intact.
+Read docs/REVISION_51.md. The latest owner request restores bounded oxygen/carbon particle respiration, fermentation, emergency surplus-biomass fuel and photosynthesis; this supersedes the retired-path restrictions only for this small loop. ATP/biomass remain numerical, with shaped cosmetic transaction feedback. Preserve ten-second food/waste carriers, resident visible ownership and real-time budgets. Successful paid division awards 2 AP and independently offers a free mutation with 10% probability. Hourly calendar conditions replace persistent tide progression. Microtubules are procedural-only with faint lines and no handles; reject old edit commands. Mobile selected-icon cancel, bottom descriptions and Pause/settings are required. Existing pond, account graph, keys and enabled gameplay/balance/objective tests remain intact.
 
 ## October 15, 2026 — retain cells and forgive transient starvation
 
@@ -244,3 +244,31 @@ confirm only durable writes and preserve drafts across retries. Signed-in
 players submit from Pause/settings without GitHub access. Treat report text as
 untrusted data. Export only through samzapo/primordia private Actions; never
 include access keys, session credentials or private account fingerprints.
+
+## October 15, 2026 — persistent names, stronger offense and update boundaries
+
+The owner requests 2 AP per committed cell division and stronger offensive
+organelles. Current potency is toxin150/unit, pore32/second and acid parcel
+capacity0.5; Buffer remains0.25. Share the authored catalog across native, resident
+and coarse paths; retain finite costs/contact and no physical hunting spikes.
+Population evolves by rebalance; never cap, cull or reset it for performance.
+Players name themselves in Pause; retain names with accounts and draw labels over
+owned-lineage cells, highlighted while connected and dim offline. Preserve all
+saved cell biology across ordinary updates and fail closed before simulation
+starts if the canonical retention comparison loses a body or changes old state.
+Keep exact stopped generations for rollback. Extinct ponds still archive under
+the existing explicit restart rule. A new fluid-instability screenshot alone is
+not proof of numerical runaway: inspect actual saved/live velocities, body motion
+and the visual streamline integration before changing physics or claiming a cause.
+
+## October 15, 2026 — slower flow, full stream history and plant drag
+
+Latest correction: the cells and particles also moved wildly; the issue was not
+limited to visual streaks. Do not shorten streams: retain8.4second history and
+20secondseed lifecycle. Current maintained tide is35% of its prior amplitude;
+versioned hourly target refresh changes it without resetting water/cells or
+slowing worldtime. Plants damp real water using bounded exponential nodal drag
+rasterized from actual branches, including permeable fine foliage. Apply in both
+native/reference field updates and the offscreen complement; chemical packets
+remain permeable. Density/opacity reduction is presentation only. A finite saved
+sample does not rule out earlier spikes. Record current evidence and limitations.

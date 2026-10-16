@@ -615,7 +615,7 @@ func _lineage() -> void:
 	scene.cell_ui.choices[2].pressed.emit()
 	scene._update_world(1)
 	expect(sim.lineage.births == 1 and sim.cells.size() == 2 and sim.player.id == parent.id,"Release from the bud creates a real autonomous family member")
-	expect(scene.build_open and sim.build_original != null and sim.player.organic_mass() < mass and sim.evolution.points == points+1,"Birth awards one AP, commits paid anatomy and resumes editing the depleted parent")
+	expect(scene.build_open and sim.build_original != null and sim.player.organic_mass() < mass and sim.evolution.points == points+2,"Birth awards two AP, commits paid anatomy and resumes editing the depleted parent")
 	var child = sim.cells[-1]
 	expect(scene.views.has(child.id) and scene.views[sim.player.id].cell == sim.player,"Parent and offspring drawings update immediately during editing")
 	scene.cell_ui.open_context({"kind":"bud"})
@@ -639,7 +639,7 @@ func _lineage() -> void:
 	scene._physics_process(DT)
 	scene._process(DT)
 	expect(scene.world == sim and sim.player.id != identity and sim.time > time and not sim.evolution.terminal(),"The scene continues the same habitat after fatal damage")
-	expect(sim.evolution.points == points+1 and sim.evolution.learned == learned,"Scene handoff keeps the expedition economy")
+	expect(sim.evolution.points == points+2 and sim.evolution.learned == learned,"Scene handoff keeps the expedition economy")
 	expect(scene.music.frame_cursor >= score_clock,"Succession does not reset the musical transport")
 	var death_at: Vector2 = sim.death_bursts[-1].at
 	expect(scene.death_focus_age < 0.1 and Sim.Medium.offset(scene.render_camera,death_at).length() < 0.001,"The camera holds the original death site after immediate physiological succession")

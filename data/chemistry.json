@@ -513,5 +513,10 @@
       },
       "atp": -0.15
     }
-  ]
+  ],
+  "combat": {
+    "toxin_damage_per_unit": 150.0,
+    "pore_damage_per_second": 32.0,
+    "acid_secretion_capacity": 0.5
+  }
 }

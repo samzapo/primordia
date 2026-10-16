@@ -16,11 +16,15 @@ func run() -> void:
 		check(absf(audit.before_material-audit.after_material)<.000001*maxf(1,audit.before_material),"Legacy body conversion preserves represented organic material")
 	host=Host.new();host.cpu=false;host.port=18000+OS.get_process_id()%20000
 	host.store.directory=ProjectSettings.globalize_path("res://build/aged-network-"+str(OS.get_process_id()))
-	host.world=data.world
+	# Exercise the real restore/startup boundary and the complete account graph,
+	# not just a detached simulation with a new world identity.
+	check(host.store.save(saved),"Isolated copy retains the complete saved world and accounts")
 	OS.set_environment("PRIMORDIA_ACCESS_KEYS_FILE","");OS.set_environment("PRIMORDIA_INVITE","bounded-aged-checkpoint-fixture")
 	root.add_child(host)
 	check(await until(func():return host.running),"Saved-world GPU authority starts in isolated storage")
 	if not host.running:quit(1);return
+	if saved.get("food_vacuole_version",0)>=1 and saved.get("biochemistry_version",0)>=1:
+		check(host.cell_retention.get("ok",false),"Resident startup retains every original saved cell before its first tick")
 	host.world.profiling=true
 	for i in 2:
 		var socket:=WebSocketPeer.new();socket.inbound_buffer_size=Protocol.MAX_FRAME;socket.outbound_buffer_size=65536

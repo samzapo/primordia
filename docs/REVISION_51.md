@@ -2,7 +2,7 @@
 
 ## Division and mutations
 Every committed paid birth, including formation of a prepaid dormant body, awards
-one AP to that lineage. Failed placement/funding, dormant hatching, following,
+two AP to that lineage. Failed placement/funding, dormant hatching, following,
 login and restored history award nothing. The family ledger and account share
 one checkpointed progression object; rewards happen inside the committed birth
 rather than by rescanning old events. Unowned lineages keep their progression

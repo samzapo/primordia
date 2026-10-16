@@ -15,9 +15,10 @@ func initialize(owner_game) -> void:
 	game.microscope_layer.material.set_shader_parameter("focus_mask",viewport.get_texture())
 func sync() -> void:
 	var focus=game._follow_cell()
-	enabled=game.perception=="interoception" and game.views.has(focus.id)
+	var internal: bool=game.perception=="interoception" and game.death_focus_age>=game.death_view.LIFETIME
+	enabled=internal and game.views.has(focus.id)
 	var material: ShaderMaterial=game.microscope_layer.material
-	material.set_shader_parameter("interoception",game.perception=="interoception")
+	material.set_shader_parameter("interoception",internal)
 	material.set_shader_parameter("focus_valid",enabled)
 	viewport.render_target_update_mode=SubViewport.UPDATE_ALWAYS if enabled else SubViewport.UPDATE_DISABLED
 	if not enabled:return

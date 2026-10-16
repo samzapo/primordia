@@ -1,5 +1,7 @@
 extends "res://scripts/pond.gd"
 var family_recovery: Dictionary={}
+var received_death_serial:=0
+var death_tombstones: Dictionary={}
 const Codec = preload("res://scripts/network/state_codec.gd")
 const Protocol = preload("res://scripts/network/protocol.gd")
 # Godot 4.7.2 EMWSPeer removes IPv6 brackets when reconstructing a web URL.
@@ -269,12 +271,14 @@ func _poll_network() -> void:
 		socket.close(-1);_connection_closed(-1,"");return
 	if socket.get_ready_state()==WebSocketPeer.STATE_OPEN:
 		if not hello_sent:
-			_send({"op":"hello","token":token,"invite":invitation,"snapshot_ack":true,"compact_cytoplasm":true,"cytoplasm_version":2});hello_sent=true
+			_send({"op":"hello","token":token,"invite":invitation,"snapshot_ack":true,"compact_cytoplasm":true,"cytoplasm_version":2,"death_events":true});hello_sent=true
 		var polled:=0
 		while socket.get_available_packet_count()>0 and polled<4:
 			polled+=1
 			var message:=Protocol.unpack(socket.get_packet())
 			match message.get("kind",""):
+				"death_events": _receive_deaths(message)
+				"profile_result": profile.result(message)
 				"feedback_result": feedback.result(message)
 				"welcome": _welcome(message)
 				"snapshot": _snapshot(message)
@@ -295,7 +299,9 @@ func _welcome(message: Dictionary) -> void:
 	camera_initialized=false;cells_by_id.clear();packet_ids.clear();received_usec=0
 	world.death_bursts.clear();world.death_serial=message.get("death_serial",0)
 	death_world=world;death_seen=world.death_serial;death_focus_age=2.0
+	received_death_serial=world.death_serial;death_tombstones.clear()
 	death_view.reset(world,world.death_serial)
+	player_name=str(message.get("player_name",""))
 	token=message.token;epoch=message.epoch;command_sequence=message.sequence;edit_revision=message.edit
 	world.seed_value=message.seed;world.habitat_geometry=Codec.new().restore(message.habitat)
 	habitat_view.configure(world.habitat_geometry)
@@ -309,8 +315,29 @@ func _welcome(message: Dictionary) -> void:
 func _ack_snapshot(message: Dictionary) -> void:
 	if message.get("serial",0)>0:_send({"op":"snapshot_ack","serial":message.serial,"epoch":epoch})
 
+func _receive_deaths(message: Dictionary) -> void:
+	if int(message.get("epoch",-1))!=epoch:return
+	world.death_serial=maxi(world.death_serial,int(message.get("death_serial",world.death_serial)))
+	if user_paused:
+		received_death_serial=maxi(received_death_serial,world.death_serial);return
+	var consumed: int=mini(death_seen,death_view.seen)
+	world.death_bursts.assign(world.death_bursts.filter(func(event):return event.serial>consumed and death_view.recent(event,world.time)))
+	for event in message.get("deaths",[]):
+		if int(event.serial)<=received_death_serial:continue
+		received_death_serial=int(event.serial)
+		if float(message.get("time",world.time))-float(event.time)>death_view.LIFETIME:continue
+		var fact: Dictionary=event.duplicate(true);fact["_arrived_usec"]=Time.get_ticks_usec()
+		world.death_bursts.append(fact)
+		if world.death_bursts.size()>32:world.death_bursts.pop_front()
+		if event.has("id"):
+			death_tombstones[event.id]=true
+			if cells_by_id.has(event.id):cells_by_id[event.id].dead=true
+			if death_tombstones.size()>32:death_tombstones.erase(death_tombstones.keys()[0])
+
 func _snapshot(message: Dictionary) -> void:
 	if int(message.epoch)!=epoch: return
+	_receive_deaths(message)
+	lineage_names=message.get("lineage_names",[]);player_name=str(message.get("player_name",player_name))
 	if user_paused:
 		if not message.get("warming",false):paused_snapshot=message
 		_ack_snapshot(message)
@@ -359,7 +386,7 @@ func _snapshot(message: Dictionary) -> void:
 	if world.player.dead and can_follow():
 		notice="Your lineage has ended · following a living cell for observation.";notice_timer=12
 	world.time=message.time;world.revision=message.tick
-	world.death_bursts.assign(message.get("deaths",[]));world.death_serial=message.get("death_serial",world.death_serial)
+	world.death_serial=maxi(world.death_serial,message.get("death_serial",world.death_serial))
 	world.environment=message.get("environment",{})
 	world.fluid.velocity=message.flow;world.acidity.values=message.acid
 	world.sound_events=message.sounds;world.sound_sequence=message.sound_sequence;world.reaction_sparks=message.sparks
@@ -389,7 +416,7 @@ func _snapshot(message: Dictionary) -> void:
 	if network_particles!=null: network_particles.prepare(packets,world.cells)
 	_update_hud()
 	if OS.has_feature("web"):
-		JavaScriptBridge.eval("window.primordiaDiagnostics="+JSON.stringify({"connected":connected,"tick":world.revision,"world_id":message.world_id,"packets":packets.size(),"cells":world.cells.size(),"time":world.time}))
+		JavaScriptBridge.eval("window.primordiaDiagnostics="+JSON.stringify({"connected":connected,"tick":world.revision,"world_id":message.world_id,"packets":packets.size(),"cells":world.cells.size(),"time":world.time,"player_name":player_name,"nameplates":nameplates.items.map(func(item):return {"cell":item.cell,"name":item.name,"online":item.online})}))
 
 	_ack_snapshot(message)
 
@@ -408,7 +435,12 @@ func _copy_cell(incoming):
 		cell.previous_position=previous;cell.previous_angle=heading
 		cell.chemistry.owner=weakref(cell)
 		cell.chemistry.render_origins=origins
+	if death_tombstones.has(cell.id):cell.dead=true
 	return cell
+
+func _submit_profile(value: String) -> String:
+	if not connected:return "Reconnect before saving your name. Your text is kept."
+	_send({"op":"profile","name":value});return ""
 
 func _submit_feedback(report: Dictionary) -> String:
 	if not connected:return "Reconnect before submitting. Your draft is kept."

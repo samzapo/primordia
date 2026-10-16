@@ -79,11 +79,20 @@ func run() -> void:
 		var socket:=WebSocketPeer.new();socket.inbound_buffer_size=Protocol.MAX_FRAME;socket.outbound_buffer_size=65536
 		sockets.append(socket);socket.connect_to_url("ws://127.0.0.1:"+str(host.port))
 	check(await until(func():return sockets.all(func(s):return s.get_ready_state()==WebSocketPeer.STATE_OPEN)),"two real WebSocket connections")
-	for i in sockets.size():sockets[i].send_text(JSON.stringify({"op":"hello","invite":fixture_keys[i] if personal_keys else OS.get_environment("PRIMORDIA_INVITE"),"snapshot_ack":true,"compact_cytoplasm":true,"cytoplasm_version":2}))
+	for i in sockets.size():sockets[i].send_text(JSON.stringify({"op":"hello","invite":fixture_keys[i] if personal_keys else OS.get_environment("PRIMORDIA_INVITE"),"snapshot_ack":true,"death_events":true,"compact_cytoplasm":true,"cytoplasm_version":2}))
 	check(await until(func():return not find_message(0,"welcome").is_empty() and not find_message(1,"welcome").is_empty()),"distinct lineage accounts authenticated")
 	var welcome0:=find_message(0,"welcome")
 	var welcome1:=find_message(1,"welcome")
 	check(welcome0.cell!=welcome1.cell,"accounts own distinct cells")
+	sockets[0].send_text(JSON.stringify({"op":"profile","name":"  Sam 🌱  "}))
+	check(await until(func():return not find_message(0,"profile_result").is_empty()),"Player name can be saved over the authenticated socket")
+	check(find_message(0,"profile_result").get("ok",false) and host.accounts[welcome0.token.sha256_text()].display_name=="Sam 🌱","Name is trimmed and saved on the account")
+	var public_names: Array=host._lineage_names()
+	check(public_names.any(func(row):return row.name=="Sam 🌱" and row.online) and public_names.all(func(row):return row.size()==3 and row.has("root") and row.has("name") and row.has("online")),"Lineage labels expose only names, roots and connected status")
+	messages[0]=messages[0].filter(func(m):return m.get("kind","")!="profile_result")
+	sockets[0].send_text(JSON.stringify({"op":"profile","name":"bad\nname"}))
+	check(await until(func():return not find_message(0,"profile_result").is_empty()),"Invalid name has an explicit receipt")
+	check(not find_message(0,"profile_result").get("ok",true) and host.accounts[welcome0.token.sha256_text()].display_name=="Sam 🌱","Control characters cannot change the saved player name")
 	check(await until(func():return host.world.camera_views.size()==2),"camera union tracks both clients")
 	check(await until(func():return messages[0].any(func(m):return m.get("kind","")=="snapshot" and m.get("particles",PackedByteArray()).size()>0 and not m.get("warming",true))),"bounded particle publication reaches client")
 	withheld_acks[0]=true
@@ -141,12 +150,19 @@ func run() -> void:
 	if not host.cpu: check(saved.stream_rng==PackedInt64Array([host.world.resident.streaming.random.seed,host.world.resident.streaming.random.state]),"cold transport random stream is checkpointed")
 	check(saved.particle_resolution_version==preload("res://scripts/network/particle_resolution.gd").VERSION,"checkpoint records resolution so restarts cannot compact again")
 	var restored=preload("res://scripts/network/state_codec.gd").new().restore(saved.graph)
+	check(restored.accounts[welcome0.token.sha256_text()].display_name=="Sam 🌱","Chosen player name survives checkpoint restoration")
 	check(restored.accounts[welcome0.token.sha256_text()].sequence==1,"idempotency sequence survives restart")
 	check(restored.accounts[welcome0.token.sha256_text()].lineage==restored.world.family_ledgers[0],"ownership ledger references survive checkpoint")
 	if "--recovery" in OS.get_cmdline_user_args():
 		var ended: int=account.selected
 		check(account.lineage.dormant.is_empty(),"Replacement fixture has no prepaid backup")
+		withheld_acks[0]=true
+		check(await until(func():return deferred_acks.has(0)),"Death fixture holds the browser snapshot acknowledgement")
+		if host.cpu:host.pending_frame={"frames":{}}
 		host.world._die(host._selected(account))
+		check(await until(func():return messages[0].any(func(frame):return frame.get("kind","")=="death_events" and frame.get("deaths",[]).any(func(event):return event.id==ended and event.player))),"Rupture reaches a real socket while pose publication and acknowledgement are blocked")
+		if host.cpu:host.pending_frame.clear()
+		withheld_acks.erase(0)
 		check(await until(func():return account.selected!=ended and not account.current.dead),"A disconnected-independent replacement reaches the retained live account")
 		check(await until(func():return messages[0].any(func(frame):return frame.get("deaths",[]).any(func(event):return event.get("id",-1)==ended and event.player))),"Real WebSocket delivers the selected body's rupture after automatic succession")
 		check(host.accounts.has(welcome0.token.sha256_text()) and account.sequence==1 and account.receipts.has(1) and account.root!=ended,"Replacement retains the session and paid receipt while switching lineage")
@@ -202,11 +218,14 @@ func run() -> void:
 		check(p95<=1000.0/host.physics_hz,"Authority p95 tick fits its documented simulation cadence")
 		check(host.world.cells.all(func(cell):return cell.chemistry.particle_count()<=cell.chemistry.MAX_PACKETS),"Aged interiors stay bounded under sustained finite digestion")
 		host._write_metrics()
+		check(host.world.fluid.metrics().nonfinite==0 and host.world.cells.all(func(cell):return cell.velocity.is_finite() and is_finite(cell.angular_velocity)),"Mixed resident/coarse perception transitions retain finite water and body motion")
 		var phase_report=JSON.parse_string(FileAccess.get_file_as_string(host.store.directory.path_join("health.json")))
 		print("AUTHORITY_PHASES ",JSON.stringify(phase_report.get("tick_phase_mean_ms",{})))
 		print("REALTIME_AUTHORITY ",JSON.stringify({"simulation_hz":Engine.physics_ticks_per_second,"tick_budget_ms":1000.0/host.physics_hz,"simulation_wall_ratio":ratio,"tick_p95_ms":p95,"living_cells":host.world.cells.filter(func(cell):return not cell.dead).size(),"interior_packets":host.world.cells.reduce(func(total,cell):return total+cell.chemistry.particle_count(),0),"gpu":RenderingServer.get_video_adapter_name()}))
 	for socket in sockets:socket.close(-1)
 	check(await until(func():return host.world.camera_views.is_empty()),"disconnect removes every detailed camera")
+	check(host._lineage_names().all(func(row):return not row.online),"Disconnected owners retain dim nameplates")
+
 	before=host.world.time
 	check(await until(func():return host.world.time>before+.05),"zero-client world continues")
 	if not host.cpu: check(host.world.resident!=null and host.startup_error=="","GPU remains authoritative through live edits, save and every camera disconnect")

@@ -68,7 +68,7 @@ func terminal() -> bool:
 
 func divided(_cell) -> bool:
 	# Called only at the committed paid birth, never on hatch, follow or login.
-	points+=1;division_count+=1
+	points+=2;division_count+=1
 	if random.randf()>=0.10:return false
 	var pool: Array=[]
 	for gene in Genes.DATA:

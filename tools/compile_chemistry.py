@@ -31,6 +31,7 @@ def compile_catalog(source, output):
         f"inline constexpr std::array<double,species_count> radii = {{{values('radius')}}};\n"
         f"inline constexpr std::array<double,species_count> decay = {{{values('decay')}}};\n"
         f"inline constexpr std::array<double,species_count> material = {{{', '.join(map(str,materials))}}};\n"
+        f"inline constexpr double toxin_damage_per_unit = {float(catalog['combat']['toxin_damage_per_unit'])};\n"
         f"inline constexpr double merge_limit = {catalog['ecology']['merge_limit']};\n"
         f"inline constexpr double carbon_capacity = {catalog['ecology']['carbon_capacity']};\n"
         "}\n")

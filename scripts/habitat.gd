@@ -10,6 +10,7 @@ var forms: Array = []
 var segments: Array = []
 var bins: Dictionary = {}
 var enabled := true
+var flow_revision := 0
 # Cells collide with stems; dissolved packets permeate the colony.
 # False is retained solely for the historical contact benchmark.
 var particles_permeable := true
@@ -126,6 +127,7 @@ static func _branch(output: Array, a: Vector2, angle: float, length: float, widt
 			_branch(output,a.lerp(b,fraction),angle+sign_value*turn,length*0.39,width*0.49,depth-1,turn)
 
 func rebuild() -> void:
+	flow_revision+=1
 	segments.clear()
 	bins.clear()
 	for plant in plants:

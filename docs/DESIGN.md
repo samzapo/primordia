@@ -423,7 +423,7 @@ The persistent pond now maintains a floor of fifteen living cells. Exhausted acc
 
 ## Revision 51 — restored bounded biology and division progression
 
-The owner restores photosynthesis, local oxygen-dependent respiration/fermentation and emergency biomass fuel within the bounded food-vacuole model. ATP and biomass remain numbers. Paid division grants one AP and has a ten percent chance to offer a free mutation; hourly calendar-derived light/current conditions serve the persistent pond. Restore visual contractile vacuoles, shaped ATP/repair feedback and actual-secretion gland bounce. Microtubules are procedural anatomy with faint lines and no editing. Mobile cancellation uses the held organ's top-left circular icon; descriptions occupy a bottom strip and Pause opens settings while freezing only that view. See [Revision 51](REVISION_51.md).
+The owner restores photosynthesis, local oxygen-dependent respiration/fermentation and emergency biomass fuel within the bounded food-vacuole model. ATP and biomass remain numbers. Paid division grants two AP and has a ten percent chance to offer a free mutation; hourly calendar-derived light/current conditions serve the persistent pond. Restore visual contractile vacuoles, shaped ATP/repair feedback and actual-secretion gland bounce. Microtubules are procedural anatomy with faint lines and no editing. Mobile cancellation uses the held organ's top-left circular icon; descriptions occupy a bottom strip and Pause opens settings while freezing only that view. See [Revision 51](REVISION_51.md).
 
 ## Persistent pond survival — October 15, 2026
 
@@ -455,3 +455,52 @@ previously selected/followed body briefly frame the death site before returning
 to the replacement; nearby deaths animate without taking over the camera.
 Local pause freezes existing fragments and resume does not replay paused-world
 deaths. Presentation neither creates lysis material nor delays succession.
+
+
+### Persistent account names and update retention (October 15, 2026)
+
+Players choose a 1–24 character name from Pause → Player name. The server saves
+it with the account before confirming success. Every visible cell in that
+account's current lineage carries a nameplate; connected owners are highlighted,
+offline owners are dim. Interoception shows only the focused cell's label.
+Names carry no authority and never expose account/session keys.
+
+Successful paid division awards **2 AP**. Toxin damage per delivered unit and
+assembled pore damage per second are doubled; newly emitted acid parcels carry
+twice the acid capacity. Secretion still spends the same finite tissue/ATP and
+requires the same physical transport and contact, with unchanged family immunity.
+No update resets or culls the pond to control population.
+
+Every ordinary current-model restart compares all saved cell records, including
+NPCs and dormant successors, before the first simulation tick. Anatomy, resources,
+membrane state, cytoplasmic parcels and other saved biological fields must match;
+only derived rendering/solver caches are excluded. Deployment retains the exact
+stopped checkpoint generations and restores them with the previous release if
+acceptance fails. An already extinct pond retains its full archive under the
+existing explicit extinction rule. Natural evolution continues during builds and
+resumes after startup; host downtime does not age cells.
+
+Death facts use a small opt-in WebSocket event independent of GPU pose publication
+and snapshot acknowledgement. The client queues and deduplicates these facts so
+a later snapshot cannot erase an unseen rupture. A personal rupture briefly fits
+the real membrane into the view, including at maximum interoception zoom, and
+suppresses the interior mask until the camera returns to the successor. Reconnect
+and local Pause do not replay old deaths.
+
+
+### Slower water and porous vegetation drag (October 15, 2026)
+
+The owner requests slower actual water flow while preserving the full 8.4-second
+stream histories and 20-second presentation seed lifecycle. Maintained ambient
+current is 35% of the prior target. Existing water relaxes toward that target;
+cells and saved velocities are not reset or hard-capped. Calendar conditions retain
+their hourly sample; a versioned target refresh applies the new amplitude once.
+
+Plants absorb fluid momentum through a cached drag map built from their existing
+stems and fine foliage. Each wet node uses bounded density-dependent linear drag,
+integrated exponentially after ordinary viscosity and tide in both native and
+reference paths. The offscreen complement receives the same elapsed drag. Fixed
+plants are an explicit external momentum sink. This game abstraction does not
+add pressure projection or solid barriers for chemical packets. Cells retain
+ordinary stem contacts. Trail count/opacity are reduced for readability without
+shortening stream history or slowing the simulation clock.

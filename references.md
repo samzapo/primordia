@@ -454,3 +454,7 @@ new biological pathway. The five-minute grace, gradual damage, recovery clock,
 richer introduction parcels and longer environmental food/carbon/oxygen
 lifetimes are explicit playability choices; no cited experiment establishes
 these values. Actual physical intake and finite material/fuel costs remain.
+
+### Vegetation drag in the persistent pond (October 15, 2026)
+
+[USGS: Vegetation affects water movement in the Florida Everglades (1996)](https://pubs.usgs.gov/publication/fs14796) reports resistance from living/dead stems and leaves. [Lacy et al. (2021), field measurements of submerged vegetation and currents](https://www.usgs.gov/publications/influence-invasive-submerged-aquatic-vegetation-e-densa-currents-and-sediment) motivate attenuation through plant patches. These are macroscopic observations, not measurements of Primordia's fictional microscopic plants. The game uses a deliberately simple, bounded linear drag rasterized from existing branch geometry, integrated exponentially in the existing mass-lumped medium. Anchored vegetation is an external momentum sink; this is neither an incompressible solver nor a calibrated hydrodynamic model. Chemical packets remain permeable to branches, carried by the attenuated real water field.

@@ -584,8 +584,8 @@ protected:
     ClassDB::bind_method(D_METHOD("fluid_views", "views"), &PrimordiaKernels::fluid_views);
     ClassDB::bind_method(D_METHOD("fluid_suction", "velocity", "activity", "ids", "body", "mouth", "reach", "power", "dt", "global_coupling", "inflow_axis"), &PrimordiaKernels::fluid_suction);
     ClassDB::bind_method(
-        D_METHOD("fluid_step", "velocity", "activity", "tide", "dt", "driven"),
-        &PrimordiaKernels::fluid_step);
+        D_METHOD("fluid_step", "velocity", "activity", "tide", "dt", "driven", "plant_drag"),
+        &PrimordiaKernels::fluid_step, DEFVAL(PackedFloat32Array()));
     ClassDB::bind_method(
         D_METHOD("acid_step", "values", "velocity", "activity", "dt"),
         &PrimordiaKernels::acid_step);
@@ -893,10 +893,10 @@ public:
             int(cell->call("lineage_id"))==int(inherited.get(owner,owner))) continue;
         Vector2 d=perception_delta(cell->get("position"),p.p);
         if (d.length()>double(cell->call("support",d.angle()))+5) continue;
-        double debris=cell->call("damage",p.amount*75,d.angle());
+        double debris=cell->call("damage",p.amount*primordia_chemistry::toxin_damage_per_unit,d.angle());
         cell->set("waste",double(cell->get("waste"))+(debris+p.amount));
         cell->set("death_hint","Membrane failed after toxin exposure");
-        if (owner==player) director->call("record","toxin",p.amount*75);
+        if (owner==player) director->call("record","toxin",p.amount*primordia_chemistry::toxin_damage_per_unit);
         p.alive=false; break;
       }
     }
@@ -929,7 +929,7 @@ public:
       }
       p.alive=false; cell->set("waste",double(cell->get("waste"))+p.amount);
       if (p.kind==4) {
-        double debris=cell->call("damage",p.amount*75,d.angle());
+        double debris=cell->call("damage",p.amount*primordia_chemistry::toxin_damage_per_unit,d.angle());
         cell->set("waste",double(cell->get("waste"))+debris);
         cell->set("death_hint","Membrane failed after toxin exposure");
       }
@@ -2324,7 +2324,7 @@ public:
   PackedVector2Array fluid_step(const PackedVector2Array &v,
                                 const PackedFloat32Array &a,
                                 const PackedVector2Array &tide, double dt,
-                                bool driven) {
+                                bool driven, const PackedFloat32Array &plant_drag) {
     PackedVector2Array out = v;
     Vector2 *w = out.ptrw();
     // Gather the same symmetric edge flux once per endpoint, avoiding scatter
@@ -2341,6 +2341,7 @@ public:
       if (driven)
         change += (tide[i] - v[i]) * (1 - std::exp(-dt * a[i] * .12));
       w[i] += change;
+      if (plant_drag.size()==v.size()) w[i]*=std::exp(-plant_drag[i]*dt*a[i]);
     }
     return out;
   }

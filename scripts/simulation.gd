@@ -492,6 +492,7 @@ func _step_simulation(dt: float) -> void:
 	if particle_pool and not _pool_supported(): disable_particle_pool()
 	if grid.source_size != particle_count(): grid.rebuild(particles)
 	var mark := Time.get_ticks_usec()
+	fluid.set_plants(habitat_geometry)
 	if external_offscreen:fluid.set_views([])
 	elif server_mode: fluid.set_views(camera_views)
 	else: fluid.set_camera(player.position if camera_follows_player else camera_position,view_half)
@@ -504,7 +505,7 @@ func _step_simulation(dt: float) -> void:
 			if native_fluid: acidity.values = kernels.acid_step(acidity.values,fluid.velocity,fluid.activity,dt*6)
 			else: acidity.step(dt*6,fluid)
 	elif native_fluid:
-		fluid.velocity = kernels.fluid_step(fluid.velocity,fluid.activity,fluid.tide,dt,fluid.driven)
+		fluid.velocity = kernels.fluid_step(fluid.velocity,fluid.activity,fluid.tide,dt,fluid.driven,fluid.plant_drag)
 		if revision%6 == 0: acidity.values = kernels.acid_step(acidity.values,fluid.velocity,fluid.activity,dt*6)
 	else:
 		fluid.step(dt)
@@ -679,7 +680,7 @@ func _step_background_fluid(dt: float) -> void:
 					fluid.active_indices = far_indices
 					acidity.step(0.25,fluid)
 		elif native_fluid:
-			fluid.velocity = kernels.fluid_step(fluid.velocity,far_activity,fluid.tide,0.25,fluid.driven)
+			fluid.velocity = kernels.fluid_step(fluid.velocity,far_activity,fluid.tide,0.25,fluid.driven,fluid.plant_drag)
 			if background_biology: acidity.values = kernels.acid_step(acidity.values,fluid.velocity,far_activity,0.25)
 		else:
 			fluid.activity = far_activity
@@ -1301,7 +1302,7 @@ func _emit_and_attack(cell, dt: float) -> void:
 			cell.spend_energy(energy_cost,organ,"secretion")
 			var direction: Vector2 = cell.organ_normal(organ).rotated(cell.angle)
 			spawn_particle(kind,cell.organ_position(organ)+direction*10,direction*18*Genes.factor(organ,"dispersal"),0.06,cell.id)
-			last_spawn.capacity = 0.25 if kind in [ACID,BUFFER] else 0.06
+			last_spawn.capacity = Catalog.data().combat.acid_secretion_capacity if kind==ACID else 0.25 if kind==BUFFER else 0.06
 			_commit_spawn_metadata()
 			organ.charge_flash = 1
 			cell.emitted(organ)
@@ -1518,9 +1519,9 @@ func _toxin_contacts() -> void:
 			if cell.dead or cell.activity <= 0 or cell.lineage_id() == inherited_lineages.get(p.owner,p.owner): continue
 			var d = Medium.offset(cell.position,p.p)
 			if d.length() <= cell.support(d.angle())+5:
-				cell.waste += cell.damage(p.amount*75,d.angle()) + p.amount
+				cell.waste += cell.damage(p.amount*Catalog.data().combat.toxin_damage_per_unit,d.angle()) + p.amount
 				cell.death_hint = "Membrane failed after toxin exposure"
-				if p.owner == player.id: evolution.record("toxin",p.amount*75)
+				if p.owner == player.id: evolution.record("toxin",p.amount*Catalog.data().combat.toxin_damage_per_unit)
 				if kernels != null: kernels.invalidate_particle_render(index)
 				p.alive = false
 				break

@@ -143,14 +143,14 @@ def retain_model_boundary(state, root, prefix):
     return target
 
 
-def restore_model_boundary(state, backup, root):
+def restore_model_boundary(state, backup, root, failed_prefix="failed-food-vacuoles-v1-"):
     manifest = json.loads((backup / "manifest.json").read_text())
     for name, digest in manifest.items():
         if name not in ("world-0.pworld", "world-1.pworld") or hashlib.sha256((backup / name).read_bytes()).hexdigest() != digest:
             raise RuntimeError("Model rollback archive failed validation; service remains stopped")
     # Retain the failed new-model world before restoring the old format. Keys and
     # the other source/evidence archives are never replaced or removed.
-    retain_model_boundary(state, root, "failed-food-vacuoles-v1-")
+    retain_model_boundary(state, root, failed_prefix)
     for name in manifest:
         temporary = state / (name + ".rollback")
         shutil.copyfile(backup / name, temporary)
@@ -260,11 +260,11 @@ def main():
     validation = subprocess.run(["systemd-analyze", "--user", "verify", str(validation_unit)], capture_output=True, text=True)
     if validation.returncode or str(validation_unit) in validation.stderr:
         raise RuntimeError("Candidate systemd unit did not validate: " + validation.stderr)
-    subprocess.run(["systemctl", "--user", "stop", UNIT], check=False)
+    subprocess.run(["systemctl", "--user", "stop", UNIT], check=bool(old))
     migration_backup = None
     try:
-        if old and previous and model_boundary_prefix(previous):
-            migration_backup = retain_model_boundary(state, root, model_boundary_prefix(previous))
+        if old and previous:
+            migration_backup = retain_model_boundary(state, root, model_boundary_prefix(previous) or "before-update-")
         staged_unit = unit.with_suffix(".service.new")
         staged_unit.write_text(unit_text)
         staged_unit.replace(unit)
@@ -274,13 +274,19 @@ def main():
         report = health(sha, previous, root / "tls/authority/ca.pem", state)
         if previous and report.get("accounts", 0) < previous.get("accounts", 0):
             raise RuntimeError("Deployment lost a retained account")
+        if previous and previous.get("food_vacuole_version", 0) >= 1 and previous.get("biochemistry_version", 0) >= 1:
+            retention = report.get("cell_retention", {})
+            same_pond = retention.get("world_id") == previous["world_id"] and retention.get("tick", -1) >= previous["checkpoint_tick"]
+            extinct_archive = retention.get("archived_extinct_pond") and retained_restart(report, previous, state)
+            if not retention.get("ok") or not (same_pond or extinct_archive):
+                raise RuntimeError("Deployment did not verify every retained cell before resuming")
         report["access_registry_sha256"] = hashlib.sha256(registry.read_bytes()).hexdigest() if registry.exists() else None
         (root / "last-deploy.json").write_text(json.dumps(report, indent=2))
     except BaseException:
         subprocess.run(["systemctl", "--user", "stop", UNIT], check=False)
         if old and old_unit:
             if migration_backup is not None:
-                restore_model_boundary(state, migration_backup, root)
+                restore_model_boundary(state, migration_backup, root, "failed-update-")
             unit.write_text(old_unit)
             switch(current, old)
             run("systemctl", "--user", "daemon-reload")

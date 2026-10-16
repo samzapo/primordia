@@ -34,6 +34,24 @@ class ModelRollback(unittest.TestCase):
                 self.assertEqual((failed[0] / f"world-{index}.pworld").read_bytes(), f"new-generation-{index}".encode())
             self.assertEqual(keys.read_text(), "fixture-existing-registry")
 
+    def test_ordinary_update_retains_failed_candidate_and_inbox(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            state = root / "state"
+            state.mkdir()
+            feedback = state / "feedback"
+            feedback.mkdir()
+            (feedback / "existing.json").write_text("private-existing-report")
+            (state / "world-0.pworld").write_bytes(b"every-original-cell")
+            backup = retain_model_boundary(state, root, "before-update-")
+            (state / "world-0.pworld").write_bytes(b"candidate-missing-a-cell")
+            restore_model_boundary(state, backup, root, "failed-update-")
+            self.assertEqual((state / "world-0.pworld").read_bytes(), b"every-original-cell")
+            failed = list(root.glob("failed-update-*"))
+            self.assertEqual(len(failed), 1)
+            self.assertEqual((failed[0] / "world-0.pworld").read_bytes(), b"candidate-missing-a-cell")
+            self.assertEqual((feedback / "existing.json").read_text(), "private-existing-report")
+
     def test_corrupt_backup_fails_before_touching_current_world(self):
         with tempfile.TemporaryDirectory() as directory:
             root = pathlib.Path(directory)

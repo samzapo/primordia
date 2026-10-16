@@ -35,6 +35,8 @@ var reaction_view := ReactionSparks.new()
 var death_view := preload("res://scripts/death_view.gd").new()
 var death_focus_age := 2.0
 var death_focus_at := Vector2.ZERO
+var death_focus_extent:=1.0
+var death_focus_rotation:=0.0
 var death_seen := 0
 var death_world
 var death_frame_dt := 0.0
@@ -68,6 +70,11 @@ var scale_bar := preload("res://scripts/scale_bar.gd").new()
 var settings_panel := PanelContainer.new()
 var feedback:=preload("res://scripts/feedback_form.gd").new()
 var feedback_menu_button: Button
+var profile:=preload("res://scripts/player_profile.gd").new()
+var nameplates:=preload("res://scripts/player_nameplates.gd").new()
+var profile_menu_button: Button
+var player_name:=""
+var lineage_names: Array=[]
 var settings_help: Label
 var debug_label := Label.new()
 var tube_hint := Label.new()
@@ -350,9 +357,12 @@ func _track_player_death() -> void:
 	for event in world.death_bursts:
 		if event.serial <= death_seen: continue
 		death_seen = event.serial
-		if not event.player or world.time-event.time > 1.8: continue
+		if not event.player or not death_view.recent(event,world.time): continue
 		death_focus_age = 0
 		death_focus_at = event.at
+		death_focus_extent=float(event.radius)
+		for point in event.outline:death_focus_extent=maxf(death_focus_extent,point.length())
+		death_focus_rotation=intero_rotation-float(event.angle) if perception=="interoception" else camera_rotation
 		cell_ui.close_context()
 		inspector.update_lens(0,get_global_mouse_position(),1,false)
 		camera_locked = true
@@ -391,6 +401,7 @@ func _update_world(alpha: float) -> void:
 	var sync_start := Time.get_ticks_usec() if frame_trace != null else 0
 	var size := get_viewport_rect().size
 	var base_zoom := minf(size.x/Simulation.VIEW.x,size.y/Simulation.VIEW.y)
+	_track_player_death()
 	if not diagnostic_zoom: manual_zoom = clampf(manual_zoom,MIN_ZOOM,_maximum_zoom())
 	if not focus_animating: camera_zoom = manual_zoom
 	zoom = base_zoom*camera_zoom
@@ -398,12 +409,17 @@ func _update_world(alpha: float) -> void:
 	if not diagnostic_zoom: zoom = maxf(zoom,base_zoom*MIN_ZOOM)
 	scale_bar.configure(size,zoom,preferences.hud_scale)
 	camera_screen = size*0.5
-	_track_player_death()
 	var followed=_follow_cell()
 	follow_heading=lerp_angle(followed.previous_angle,followed.angle,_cell_render_alpha(followed,alpha))
 	follow_origin=followed.previous_position+Simulation.Medium.offset(followed.previous_position,followed.position)*_cell_render_alpha(followed,alpha)
 	if perception=="interoception":
 		camera_locked=true;camera_rotation=intero_rotation-follow_heading
+	if death_focus_age<death_view.LIFETIME:
+		var blend: float=smoothstep(1.15,death_view.LIFETIME,death_focus_age)
+		var fit: float=minf(size.x,size.y)/(3.6*maxf(1,death_focus_extent))
+		zoom=lerpf(minf(zoom,fit),zoom,blend)
+		camera_rotation=lerp_angle(death_focus_rotation,camera_rotation,blend)
+		scale_bar.configure(size,zoom,preferences.hud_scale)
 	world.view_half = _camera_bounds(size/(2*zoom))
 	if world.resident!=null:
 		world.resident.detail_half=_camera_bounds(size/(2*base_zoom*MIN_ZOOM))
@@ -481,6 +497,7 @@ func _update_world(alpha: float) -> void:
 	cell_ui.interior.z_index=6 if perception=="interoception" else 3
 	cell_ui.interior.sync()
 	perception_mask.sync()
+	nameplates.sync(alpha)
 	if frame_trace != null: frame_trace.work("cell_sync",Time.get_ticks_usec()-cells_start)
 
 func _sync_particles(alpha: float = 1.0) -> void:
@@ -672,6 +689,9 @@ func _update_perception_menu() -> void:
 	if perception_menu_button!=null:
 		perception_menu_button.text=("Interoception" if perception=="exteroception" else "Exteroception")+" [I]"
 
+func _submit_profile(_name: String) -> String:
+	return "Connect to the shared pond to save a player name."
+
 func _submit_feedback(_report: Dictionary) -> String:
 	return "Connect to the shared pond to submit feedback. Your draft is kept."
 
@@ -720,7 +740,7 @@ func _build_ui() -> void:
 	debug_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	debug_label.add_theme_color_override("font_outline_color",Color("142540"))
 	debug_label.add_theme_constant_override("outline_size",5)
-	feedback.initialize(self)
+	feedback.initialize(self);profile.initialize(self);nameplates.initialize(self)
 	var options_box := _panel_box(settings_panel)
 	var settings_scroll := ScrollContainer.new()
 	settings_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -731,6 +751,7 @@ func _build_ui() -> void:
 	options.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	settings_scroll.add_child(options)
 	_label(options,"SETTINGS [M]",MINT)
+	profile_menu_button=_button(options,"Player name",profile.open)
 	feedback_menu_button=_button(options,"Feature request / Bug report",feedback.open)
 	_label(options,"Text and interaction size")
 	options.add_child(scale_select)
@@ -1032,7 +1053,7 @@ func _notification(what: int) -> void:
 	if what==NOTIFICATION_WM_WINDOW_FOCUS_OUT:touch_zoom.cancel()
 
 func _input(event: InputEvent) -> void:
-	if feedback.opened:return
+	if feedback.opened or profile.opened:return
 	if event is InputEventScreenTouch or event is InputEventScreenDrag:
 		if touch_zoom.handle(event):get_viewport().set_input_as_handled()
 		return
@@ -1088,7 +1109,7 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 func _unhandled_input(event: InputEvent) -> void:
-	if feedback.opened:return
+	if feedback.opened or profile.opened:return
 	if touch_zoom.enabled and (event is InputEventMouseButton or event is InputEventMouseMotion) and event.device==-1:return
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT and not cell_ui.context.is_empty():
 		cell_ui.close_context()

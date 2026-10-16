@@ -24,7 +24,7 @@ void vertex() {
 	vec2 normal = vec2(-v.y,v.x)/max(speed,0.001);
 	// One periodic image for the entire strip avoids a seam-spanning triangle.
 	vec2 relative = mod(INSTANCE_CUSTOM.xy-camera+world_size*0.5,world_size)-world_size*0.5 + p-INSTANCE_CUSTOM.xy;
-	VERTEX = relative+normal*(UV.y-0.5)*1.50/max(zoom,0.001);
+	VERTEX = relative+normal*(UV.y-0.5)*0.90/max(zoom,0.001);
 	opacity = smoothstep(0.2,4.0,age)*(1.0-smoothstep(18.5,20.0,age));
 	opacity *= smoothstep(1.0,8.0,speed)*INSTANCE_CUSTOM.w;
 }
@@ -32,5 +32,5 @@ void fragment() {
 	float taper = smoothstep(0.0,0.18,UV.x)*(1.0-smoothstep(0.94,1.0,UV.x));
 	float core = 1.0-smoothstep(0.16,0.50,abs(UV.y-0.5));
 	float head = mix(0.35,1.0,UV.x);
-	COLOR = vec4(0.68,0.94,0.97,opacity*taper*core*head*0.46);
+	COLOR = vec4(0.68,0.94,0.97,opacity*taper*core*head*0.16);
 }

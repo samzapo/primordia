@@ -21,6 +21,8 @@ func _run() -> void:
 	preload("res://tests/acceleration.gd").run(expect)
 	print("CHECKS: performance.gd")
 	preload("res://tests/performance.gd").run(expect)
+	print("CHECKS: plant_flow.gd")
+	preload("res://tests/plant_flow.gd").run(expect)
 	print("CHECKS: fluid_options.gd")
 	preload("res://tests/fluid_options.gd").run(expect)
 	print("CHECKS: packed_particles.gd")
@@ -286,9 +288,9 @@ func _test_propulsion_and_toxins() -> void:
 	prey.activity = 1
 	sim.particles[-1].p = prey.position
 	sim._toxin_contacts()
-	expect(is_equal_approx(prey.health,88.75) and not sim.particles[-1].alive,"Toxin contact damages a cell once")
+	expect(is_equal_approx(prey.health,77.5) and not sim.particles[-1].alive,"Toxin contact damages a cell once")
 	sim._toxin_contacts()
-	expect(is_equal_approx(prey.health,88.75),"Consumed toxin cannot apply damage twice")
+	expect(is_equal_approx(prey.health,77.5),"Consumed toxin cannot apply damage twice")
 
 func _test_membrane() -> void:
 	var membrane = Membrane.new(47)

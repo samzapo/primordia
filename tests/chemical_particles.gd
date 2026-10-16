@@ -16,6 +16,11 @@ static func run(check: Callable) -> void:
 	var hp: float=cell.health
 	Surface.advance(cell,0.1)
 	check.call(cell.health<hp or cell.organs[0].hp<cell.organs[0].max_hp,"A completed chemical pore damages the ordinary membrane/armor")
+	cell=empty();cell.energy=0
+	Surface.bind(cell,11,0.03,0)
+	for i in 4:Surface.bind(cell,12,.0375,0)
+	Surface.advance(cell,.1)
+	check.call(is_equal_approx(cell.health,96.8),"A complete finite pore applies the increased membrane damage rate")
 	cell=empty()
 	Surface.bind(cell,11,0.03,0)
 	Surface.bind(cell,12,0.0375,0)

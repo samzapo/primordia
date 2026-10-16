@@ -14,6 +14,7 @@ func check(ok: bool,text: String) -> void:
 	if not ok:failures+=1;push_error(text)
 func _initialize() -> void:run.call_deferred()
 func run() -> void:
+	root.size=Vector2i(412,915)
 	var sim=Sim.new(56,0,false);sim.server_mode=true;sim.cells=[sim.player];sim.next_id=1
 	sim.player.position=Vector2(800,800);sim.player.previous_position=sim.player.position
 	sim.habitat_geometry=Sim.Habitat.new(56,sim.cells)
@@ -34,9 +35,19 @@ func run() -> void:
 	var frame: Dictionary=host._frame(peer);frame.protocol=Protocol.VERSION
 	frame=Protocol.unpack(Protocol.pack(frame))
 	check(frame.deaths.size()==1 and frame.deaths[0].id==ended.id and frame.deaths[0].player,"Real wire codec carries the correct account's death identity and membrane")
-	client._snapshot(frame);client._process(.05)
+	client._snapshot(frame)
+	var later: Dictionary=frame.duplicate(true);later.deaths=[];later.time+=.1;later.tick+=3
+	client._snapshot(later);client._process(.05)
 	check(client.world.player.id==account.current.id and client.death_view.bursts.size()==1,"Browser draws a rupture even after the selected body has already changed")
 	check(client.death_focus_age==0 and Sim.Medium.offset(client.render_camera,site).length()<.001,"Browser holds the death site before following its replacement")
+	client.perception="interoception";client.manual_zoom=client._maximum_zoom();client.camera_zoom=client.manual_zoom
+	client._update_world(1)
+	var fits:=true
+	for point in ended.membrane.outline():
+		var screen: Vector2=client.camera_screen+(point.rotated(ended.angle)*client.zoom).rotated(client.camera_rotation)
+		fits=fits and Rect2(Vector2(12,12),client.get_viewport_rect().size-Vector2(24,24)).has_point(screen)
+	check(fits,"A phone at maximum interoception zoom still frames the dying membrane")
+	check(not client.perception_mask.enabled,"Interoception cannot dim or mask the personal rupture")
 	var biology:=var_to_bytes(preload("res://scripts/network/state_codec.gd").new().capture(sim))
 	client._snapshot(frame);client._process(.2)
 	check(client.death_view.bursts.size()==1 and client.death_focus_age>.1,"Repeated frames do not restart the rupture or death camera")

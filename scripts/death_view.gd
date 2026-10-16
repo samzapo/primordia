@@ -12,6 +12,9 @@ func reset(sim, serial: int=0) -> void:
 	source=sim;seen=serial;bursts.clear()
 	queue_redraw()
 
+static func recent(event: Dictionary, simulation_time: float) -> bool:
+	return Time.get_ticks_usec()-int(event._arrived_usec)<=int(LIFETIME*1000000) if event.has("_arrived_usec") else simulation_time-float(event.time)<=LIFETIME
+
 func sync(sim, at: Vector2, scale: float, dt: float) -> void:
 	if source != sim:
 		source = sim
@@ -22,7 +25,7 @@ func sync(sim, at: Vector2, scale: float, dt: float) -> void:
 	for event in sim.death_bursts:
 		if event.serial <= seen: continue
 		seen = event.serial
-		if sim.time-event.time > LIFETIME: continue
+		if not recent(event,sim.time): continue
 		var burst: Dictionary = event.duplicate()
 		burst.age = 0.0
 		burst.colors = Art.make(sim.seed_value,event.lineage).colors

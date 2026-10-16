@@ -20,6 +20,11 @@ var native_views := true
 static var kernels=preload("res://scripts/backend.gd").create()
 var active_indices := PackedInt32Array()
 var tide := PackedVector2Array()
+# Derived habitat cache, rebuilt from retained plant anatomy rather than saved.
+var plant_drag := PackedFloat32Array()
+var plant_geometry := -1
+var plant_revision := -1
+var plant_enabled := false
 var changes := PackedVector2Array()
 var indices := PackedInt32Array([0,0,0,0])
 var weights := PackedFloat64Array([0,0,0,0])
@@ -55,7 +60,7 @@ static func index(x: int, y: int) -> int:
 
 func current(p: Vector2) -> Vector2:
 	# Explicit externally maintained tide plus periodic vortices.
-	return Vector2(11 + 17 * sin(TAU * p.y / WORLD.y * 4), 15 * sin(TAU * p.x / WORLD.x * 4))
+	return Vector2(11 + 17 * sin(TAU * p.y / WORLD.y * 4), 15 * sin(TAU * p.x / WORLD.x * 4))*0.35
 
 func sample(p: Vector2) -> Vector2:
 	# Allocation-free bilinear sampling is the hottest transport operation.
@@ -139,7 +144,9 @@ func step(dt: float) -> void:
 			changes[i] += exchange_velocity
 			changes[j] -= exchange_velocity
 		if driven: changes[i] += (tide[i]-velocity[i])*(1-exp(-dt*activity[i]*0.12))
-	for i in active_indices: velocity[i] += changes[i]
+	for i in active_indices:
+		velocity[i] += changes[i]
+		if plant_drag.size()==velocity.size():velocity[i]*=exp(-plant_drag[i]*dt*activity[i])
 
 func momentum() -> Vector2:
 	var sum = Vector2.ZERO
@@ -201,3 +208,41 @@ func set_views(views: Array) -> void:
 			for view in views: detail = maxf(detail,visibility(at,Vector2(view.x,view.y),Vector2(view.z,view.w)))
 			activity[i] = detail
 			if detail > 0: active_indices.append(i)
+
+func metrics() -> Dictionary:
+	var speeds: Array=[];var invalid:=0
+	for v in velocity:
+		if v.is_finite():speeds.append(v.length())
+		else:invalid+=1
+	speeds.sort()
+	return {"nodes":velocity.size(),"nonfinite":invalid,"speed_p50":speeds[speeds.size()/2] if not speeds.is_empty() else 0,"speed_p95":speeds[int(speeds.size()*.95)] if not speeds.is_empty() else 0,"speed_max":speeds[-1] if not speeds.is_empty() else 0}
+
+func set_plants(habitat) -> void:
+	var enabled: bool=habitat!=null and habitat.enabled
+	var identity: int=habitat.get_instance_id() if habitat!=null else 0
+	var revision: int=habitat.flow_revision if habitat!=null else 0
+	if identity==plant_geometry and revision==plant_revision and enabled==plant_enabled:return
+	plant_geometry=identity;plant_revision=revision;plant_enabled=enabled
+	plant_drag.resize(COLS*ROWS);plant_drag.fill(0)
+	if not enabled:return
+	# Compact raster kernel over actual branches, including permeable foliage.
+	# Sum stem density at wet grid nodes; a finite drag relaxes water toward the
+	# anchored vegetation. It neither stops particles at stems nor caps velocity.
+	for plant in habitat.plants:
+		var scale: float=plant.radius/100.0
+		for branch in habitat.forms[plant.form].branches:
+			var a: Vector2=plant.p+branch.a.rotated(plant.angle)*scale
+			var b: Vector2=plant.p+branch.b.rotated(plant.angle)*scale
+			var radius: float=branch.r*scale
+			var halo: float=SIZE*.55
+			var reach:=Vector2.ONE*(radius+halo)
+			var low:=Vector2i(((a.min(b)-reach)/SIZE-Vector2.ONE*.5).ceil())
+			var high:=Vector2i(((a.max(b)+reach)/SIZE-Vector2.ONE*.5).floor())
+			for y in range(low.y,high.y+1):
+				for x in range(low.x,high.x+1):
+					var at:=Vector2(x+.5,y+.5)*SIZE
+					var edge:=b-a
+					var closest: Vector2=a+edge*clampf((at-a).dot(edge)/maxf(edge.length_squared(),.00001),0,1)
+					var coverage:=clampf((radius+halo-at.distance_to(closest))/halo,0,1)
+					var i:=index(x,y)
+					plant_drag[i]=minf(2.0,plant_drag[i]+.9*minf(1,2*radius/SIZE)*coverage)

@@ -2,6 +2,7 @@ extends Node2D
 ## Two bounded GPU batches. Reads the fluid cache; no ecological particles or RNG.
 const Medium = preload("res://scripts/medium.gd")
 const MAX_STREAMERS := 640
+const SEED_STRIDE := 4
 const MAX_WAKE_ANCHORS := 30
 const PAD := 384.0
 const STRIP_SEGMENTS := 24
@@ -84,6 +85,9 @@ static func seeds(camera: Vector2, half_view: Vector2) -> Dictionary:
 			var wy := posmod(y,int(Medium.WORLD.y)/step)
 			# Presentation hash, periodic across seams; never draw simulation RNG.
 			var h := posmod(wx*73856093 ^ wy*19349663,65521)
+			# Thin by a periodic stable hash, preserving the original tile scale.
+			# Coarsening beyond 512 would stop dividing the 2560-high torus.
+			if h%SEED_STRIDE!=0:continue
 			var jitter := Vector2(float(h%97)/97.0,float(h%89)/89.0)
 			var p := (Vector2(wx,wy)+jitter)*step
 			data.append(Color(p.x,p.y,float(h%101)/101.0,0.6+float(h%31)/77.5))

@@ -57,7 +57,7 @@ static func run(check: Callable) -> void:
 	sim._die(parent)
 	check.call(sim.lineage.recover(sim,0.01) and sim.player == child,"Death prefers a living family member")
 	check.call(child.position == child_position and child.health == child_health,"Handoff neither teleports nor heals an existing descendant")
-	check.call(not run.terminal() and run.points == 3,"Ordinary death is continuation without a fresh AP allowance")
+	check.call(not run.terminal() and run.points == 4,"Ordinary death is continuation without a fresh AP allowance")
 	fund(sim)
 	initial = mass(sim)
 	var oxygen: float = child.oxygen
