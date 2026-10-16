@@ -109,6 +109,34 @@ jobs:
                   time.sleep(5)
           report["vulkan_summary"] = command(["xvfb-run", "-a", "vulkaninfo", "--summary"])
           driver_variables = ["VK_ICD_FILENAMES", "VK_DRIVER_FILES", "VK_LOADER_DRIVERS_SELECT", "VK_LOADER_DRIVERS_DISABLE", "DRI_PRIME", "__NV_PRIME_RENDER_OFFLOAD"]
+          # Bounded host scheduling/clock evidence; never read other project source
+          # or process environments beyond the owned Primordia service below.
+          report["gpu_clocks"] = command(["nvidia-smi", "--query-gpu=name,pstate,clocks.current.graphics,clocks.current.sm,clocks.current.memory,power.draw,power.limit,temperature.gpu,utilization.gpu", "--format=csv,noheader"])
+          report["runner_cpu_affinity"] = [line for line in pathlib.Path("/proc/self/status").read_text().splitlines() if line.startswith(("Cpus_allowed_list:", "Mems_allowed_list:"))]
+          report["cpu_policies"] = []
+          for policy in sorted(pathlib.Path("/sys/devices/system/cpu/cpufreq").glob("policy*")):
+              values = {"policy": policy.name}
+              for name in ["scaling_governor", "scaling_cur_freq", "scaling_min_freq", "scaling_max_freq", "cpuinfo_max_freq", "energy_performance_preference"]:
+                  try: values[name] = (policy / name).read_text().strip()
+                  except OSError: pass
+              report["cpu_policies"].append(values)
+          own_group = next((line.split(":", 2)[2] for line in pathlib.Path("/proc/self/cgroup").read_text().splitlines() if line.startswith("0:")), "/")
+          group_path = pathlib.Path("/sys/fs/cgroup") / own_group.lstrip("/")
+          report["runner_cgroup_limits"] = []
+          for path in [group_path, *group_path.parents]:
+              if str(path) == "/sys/fs": break
+              limits = {"level": path.name}
+              for name in ["cpu.max", "cpu.stat", "cpuset.cpus.effective"]:
+                  try: limits[name] = (path / name).read_text().strip()
+                  except OSError: pass
+              report["runner_cgroup_limits"].append(limits)
+          report["godot_processes"] = []
+          for comm in pathlib.Path("/proc").glob("[0-9]*/comm"):
+              try:
+                  if comm.read_text().strip().startswith("Godot"):
+                      status = (comm.parent / "status").read_text()
+                      report["godot_processes"].append({"pid":int(comm.parent.name),"affinity":[line for line in status.splitlines() if line.startswith("Cpus_allowed_list:")],"wchan":(comm.parent / "wchan").read_text().strip()})
+              except OSError: pass
           report["runner_driver_environment"] = {key: os.environ[key] for key in driver_variables if key in os.environ}
           report["vulkan_icds"] = {path.name: json.loads(path.read_text()) for path in pathlib.Path("/usr/share/vulkan/icd.d").glob("*.json")}
           report["nvidia_library_versions"] = command(["nvidia-smi", "--query-gpu=name,driver_version", "--format=csv,noheader"])
