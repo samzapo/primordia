@@ -14,6 +14,12 @@ from urllib.error import HTTPError
 from urllib.parse import urlsplit
 from experimental_instance import stable_identity,guard,health,UNIT
 
+def music_manifest(value):
+    filename=value.get("file","")
+    size=value.get("bytes")
+    if not isinstance(filename,str) or not re.fullmatch(r"music-bank-[a-f0-9]{24}[.]bin",filename) or type(size) is not int or not 0<size<4*1024*1024:
+        raise ValueError("Invalid music asset manifest")
+    return filename,size
 def main(restart=False):
     if os.environ.get("RUNNER_NAME")!="samzapo-desktop":raise RuntimeError("Wrong target")
     os.environ.setdefault("XDG_RUNTIME_DIR",f"/run/user/{os.getuid()}")
@@ -55,7 +61,7 @@ def main(restart=False):
             assert size==manifest["fileSizes"][asset]
             assets[asset]=size
         with public.open(base+prefix+"/music-bank.json",timeout=10) as response:music=json.load(response)
-        assert re.fullmatch(r"music-bank-[a-f0-9]{24}\\.bin",music["file"])
+        music_manifest(music)
         with public.open(Request(base+prefix+"/"+music["file"],method="HEAD"),timeout=10) as response:
             assert int(response.headers["Content-Length"])==music["bytes"]
         assets[music["file"]]=music["bytes"]
@@ -80,9 +86,12 @@ def main(restart=False):
     final=guard(stable,baseline)
     assert final["tick"]>baseline["tick"]
     assert hashlib_sha(root/"access-keys.json")==hashlib_sha(stable/"access-keys.json")
+    manifest=json.loads((root/"caddy-route-manifest.json").read_text())
+    installed=hashlib_sha(Path("/etc/caddy/Caddyfile"))==manifest["candidate_sha256"]
+    persistence="installed" if installed else record["routing"]["persistence"]
     report={"revision":expected,"experimental":after,"stable_before":baseline,"stable_after":final,
         "public_delivery":deliveries,"restart_tested":restart,"stable_unit_restarted":False,
-        "routing_persistence":record["routing"]["persistence"],"operator_command":record["routing"]["operator_command"],
+        "routing_persistence":persistence,"operator_command":None if installed else record["routing"]["operator_command"],
         "scope":"Server-origin trusted HTTPS/WSS, no physical-phone claim or synthetic production sign-in/report"}
     (root/"last-verify.json").write_text(json.dumps(report,indent=2))
     print("EXPERIMENTAL_VERIFIED "+json.dumps(report))

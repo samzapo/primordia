@@ -7,6 +7,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"tools"))
 from experimental_routing import experimental_route,with_experimental,scope,caddyfile
 from experimental_instance import isolated_root,unit_text
 from web_gateway import create
+from verify_experimental import music_manifest
 
 class ExperimentalTests(unittest.TestCase):
     def test_only_experimental_routes_are_added_and_existing_routes_are_unchanged(self):
@@ -44,6 +45,12 @@ class ExperimentalTests(unittest.TestCase):
             result=subprocess.run(["systemd-analyze","--user","verify",str(unit)],capture_output=True,text=True,
                 env={**os.environ,"XDG_RUNTIME_DIR":f"/run/user/{os.getuid()}"})
             self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+
+    def test_music_manifest_accepts_real_names_and_rejects_path_escape(self):
+        name="music-bank-"+24*"a"+".bin"
+        self.assertEqual(music_manifest({"file":name,"bytes":1156400}),(name,1156400))
+        for candidate in [{"file":"../"+name,"bytes":12},{"file":name.replace(".bin",r"\.bin"),"bytes":12},{"file":name,"bytes":True},{"file":name,"bytes":0},{"file":name,"bytes":9*1024*1024}]:
+            with self.assertRaises(ValueError):music_manifest(candidate)
 
     def test_proxy_origin_checks_keep_foreign_sites_out(self):
         with tempfile.TemporaryDirectory() as tmp:
