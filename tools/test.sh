@@ -10,6 +10,13 @@ if [[ "${PRIMORDIA_BACKEND:-native}" != script ]]; then
 fi
 report_file="$(mktemp "${TMPDIR:-/tmp}/primordia-test.XXXXXX")"
 trap 'rm -f -- "$report_file"' EXIT
+# Fresh worktrees have no imported font/resources yet. Generate imports here
+# and reject import errors before running an apparently successful partial suite.
+"$godot_bin" --headless --path "$project_dir" --editor --import --quit 2>&1 | tee "$report_file"
+if grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"; then
+  echo "Godot reported an import error." >&2
+  exit 1
+fi
 "$godot_bin" --headless --path "$project_dir" --script tests/run.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"
 if grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"; then
   echo "Godot reported a script or runtime error." >&2

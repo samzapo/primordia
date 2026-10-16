@@ -131,3 +131,48 @@ write queue and a 5,000-report inbox ceiling. Existing-report retries remain
 idempotent. A worker handles file synchronization outside simulation ticks.
 Offline/local-only sessions can retain a draft and must connect to the shared
 pond to submit it.
+
+
+## Independent experimental instance
+
+The first stable game is main at7df04de and main is the default branch. Stable CD
+still explicitly deploys samzapo/persistent-multiplayer. Experimental source/CD
+uses samzapo/experimental-server and .github/workflows/experimental.yml.
+
+The same samzapo-desktop machine and public HTTPS8766 serve /experimental/.
+Caddy strips that prefix and proxies to loopback HTTP8768; its independent Godot
+authority listens on loopback8769. No router rule/new machine/public port.
+The existing / and /health retain their stable upstream and source revision.
+Experimental /health and /ws belong to its own pond. Public setup/CA/network
+discovery/metrics endpoints remain denied in that prefix too.
+
+The experimental deployment root is ~/.local/share/primordia-experimental,
+service primordia-experimental.service. Saves, feedback, accounts, opaque browser
+identities, deploy lock, runtime, releases and current symlink are independent.
+Existing access-key hashes are copied once, never plaintext keys or stable
+accounts/cells/checkpoints/feedback. A key signs into separate lineages per pond.
+The experimental web build uses a different IndexedDB mount and custom user
+directory, plus separate feedback draft storage. Its visible badge identifies
+the pond. All URLs/assets/music/secure WebSockets retain the /experimental/
+prefix. Stable client/storage formats remain unchanged.
+
+Experimental CD never stops stable. It builds with conservative concurrency,
+checks shared capacity and unchanged stable process/revision/pond/epoch/keys,
+tests a small resident hardware-GPU network fixture, then replaces only the
+experimental service. It verifies exact saved cells on its own restart and
+trusted public HTTPS/WSS delivery, including foreign-origin rejection.
+Changing later experimental releases needs no proxy rewrite or stable restart.
+No rendering-speed benchmark or scheduled monitor is added.
+
+One-time path registration uses Caddy's existing loopback config API with ETag /
+If-Match; it preserves the existing stable routing and listener. It can cause
+normal WebSocket reconnects during that initial proxy reload; world authority
+keeps running. If Caddy boots from its root-owned /etc/caddy/Caddyfile rather than
+--resume, the already-validated candidate must also be installed there once.
+The deploy report prints the exact sudo command. The narrow installer checks
+both old/new SHA256, retains the original file, and atomically installs only
+that candidate. CI never runs it with sudo or resumes earlier stopped helpers.
+
+Sources: [Caddy path routing](https://caddyserver.com/docs/caddyfile/directives/handle),
+[conditional configuration API](https://caddyserver.com/docs/api),
+[Web persistence](https://docs.godotengine.org/en/stable/tutorials/export/exporting_for_web.html).

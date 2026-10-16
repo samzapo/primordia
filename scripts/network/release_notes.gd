@@ -55,6 +55,16 @@ const RELEASES=[
 	"footer":"Your cell and its progress carry on between updates.",
 	"button":"Back to the pond",
 },
+{
+	"id":"2026-10-16-experimental-pond",
+	"title":"What’s new in the pond",
+	"items":[
+		"The experimental pond is a separate place to try new features.",
+		"Your cells and progress here stay separate from the main pond.",
+	],
+	"footer":"Your cell and its progress carry on between updates.",
+	"button":"Back to the pond",
+},
 ]
 const CURRENT=RELEASES[-1]
 static func seen_index(account: Dictionary) -> int:

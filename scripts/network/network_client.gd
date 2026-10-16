@@ -95,7 +95,7 @@ func _ready() -> void:
 	world.habitat_geometry=Simulation.Habitat.new(0,[])
 	world.native_render=false;world.native_particle_render_cache=false
 	if OS.has_feature("web"):
-		server_url = str(JavaScriptBridge.eval("(location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws'"))
+		server_url = str(JavaScriptBridge.eval("(location.protocol==='https:'?'wss://':'ws://')+location.host+new URL('./ws',location.href).pathname"))
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--connect="): server_url=arg.trim_prefix("--connect=")
 		elif arg.begins_with("--invite="): invitation=arg.trim_prefix("--invite=")

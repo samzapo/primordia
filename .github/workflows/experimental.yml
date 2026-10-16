@@ -2,7 +2,7 @@ name: Primordia experimental instance
 "on":
   push:
     branches: [samzapo/experimental-server]
-    paths: [.github/workflows/experimental.yml, tools/experimental_instance.py]
+    paths-ignore: [docs/**, README.md, AGENTS.md]
   workflow_dispatch:
 permissions:
   contents: read
@@ -10,39 +10,48 @@ concurrency:
   group: primordia-experimental-instance
   cancel-in-progress: false
 jobs:
-  inspect:
+  deploy:
     if: github.repository == 'samzapo/primordia' && github.actor == 'samzapo'
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 5
+    timeout-minutes: 50
     steps:
-      - name: Inspect existing Primordia routing without changing services
+      - name: Verify target and wired source route
         shell: bash
         run: |
           test "$RUNNER_NAME" = samzapo-desktop
           test "$(hostname)" = samzapo-desktop
           python3 - <<'PY'
-          import json,os,pathlib,subprocess,urllib.request
-          root=pathlib.Path.home()/".local/share/primordia-deploy"
-          health=json.loads((root/"state/health.json").read_text())
-          print("STABLE",json.dumps({k:health.get(k) for k in ["build","world_id","epoch","tick","accounts","access_keys","gpu","backend","backend_error","checkpoint_error"]}))
-          unit=subprocess.run(["systemctl","show","caddy","-p","MainPID","-p","CanReload","-p","FragmentPath"],capture_output=True,text=True)
-          print("CADDY_UNIT",unit.stdout.strip())
-          p=pathlib.Path("/etc/caddy/Caddyfile")
-          print("CADDY_FILE",json.dumps({"exists":p.exists(),"readable":os.access(p,os.R_OK),"writable":os.access(p,os.W_OK)}))
-          print("LISTENERS",subprocess.check_output(["ss","-ltn","sport = :8766 or sport = :8767 or sport = :8768 or sport = :8769 or sport = :2019"],text=True))
-          opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
-          try:
-              with opener.open("http://127.0.0.1:2019/config/",timeout=3) as response: config=json.load(response)
-              servers=config.get("apps",{}).get("http",{}).get("servers",{})
-              relevant={name:value for name,value in servers.items() if any(str(at).endswith(":8766") for at in value.get("listen",[]))}
-              print("CADDY_API",json.dumps({"available":True,"admin":config.get("admin",{}),"primordia_servers":relevant}))
-          except Exception as error:
-              print("CADDY_API",json.dumps({"available":False,"error":type(error).__name__}))
-              if os.access(p,os.R_OK):
-                  c=subprocess.run(["caddy","adapt","--config",str(p),"--adapter","caddyfile"],capture_output=True,text=True)
-                  if c.returncode==0:
-                      v=json.loads(c.stdout)
-                      servers=v.get("apps",{}).get("http",{}).get("servers",{})
-                      print("CADDY_ADAPTED",json.dumps({"admin":v.get("admin",{}),"primordia_servers":{n:a for n,a in servers.items() if any(str(at).endswith(":8766") for at in a.get("listen",[]))}}))
-                  else:print("CADDY_ADAPT",c.returncode)
+          import socket,subprocess,json,pathlib
+          for host in ['github.com','api.github.com','release-assets.githubusercontent.com']:
+              peer=socket.gethostbyname(host)
+              for row in json.loads(subprocess.check_output(['ip','-j','route','get',peer],text=True)):
+                  p=pathlib.Path('/sys/class/net')/row['dev']
+                  assert (p/'device').exists() and not (p/'wireless').exists() and not (p/'phy80211').exists()
+                  assert (p/'operstate').read_text().strip()=='up'
           PY
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: samzapo--experimental-server--${{ github.run_id }}-${{ github.run_attempt }}
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Check instance isolation and deploy experimental only
+        shell: bash
+        env:
+          PRIMORDIA_PERFORMANCE_WARNINGS: "1"
+        run: |
+          cd "$GITHUB_WORKSPACE/samzapo--experimental-server--$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          python3 tests/test_experimental.py
+          python3 tests/test_web_build.py
+          python3 tests/test_web_version.py
+          python3 tests/test_web_gateway.py
+          python3 tools/experimental_instance.py
+  verify:
+    needs: deploy
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 5
+    steps:
+      - name: Verify independent restart and both public paths after cleanup
+        shell: bash
+        run: |
+          test "$RUNNER_NAME" = samzapo-desktop
+          python3 "$HOME/.local/share/primordia-experimental/current/tools/verify_experimental.py" --restart

@@ -633,7 +633,7 @@
         {
           "id": "continuity",
           "title": "The pond continues",
-          "text": "Cells keep living while players are away. Updates preserve saved cells and accounts. If your lineage is lost, a new cell brings you back; the pond keeps a minimum of 15 living cells and restarts if completely empty. These are game rules.",
+          "text": "Cells keep living while players are away. Updates preserve saved cells and accounts. The main and experimental ponds have separate cells and progress. If your lineage is lost, a new cell brings you back; the pond keeps a minimum of 15 living cells and restarts if completely empty. These are game rules.",
           "sources": []
         },
         {

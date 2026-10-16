@@ -18,6 +18,8 @@ def main():
     parser.add_argument("--port", type=int, default=8766)
     parser.add_argument("--world-port", type=int, default=8767)
     parser.add_argument("--cpu", action="store_true")
+    parser.add_argument("--proxy-loopback", action="store_true",
+                        help="Private HTTP gateway for the experimental HTTPS reverse proxy")
     args = parser.parse_args()
     source = Path(__file__).resolve().parents[1]
     state = args.state.resolve()
@@ -26,7 +28,9 @@ def main():
     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     (state / "stop.request").unlink(missing_ok=True)
     gateway = create(source / "build/web", state, args.port, args.world_port,
-                     tls_directory=state.parent / "tls")
+                     bind="127.0.0.1" if args.proxy_loopback else "0.0.0.0",
+                     tls_directory=None if args.proxy_loopback else state.parent / "tls",
+                     trusted_proxy=args.proxy_loopback)
     worker = threading.Thread(target=gateway.serve_forever, daemon=True)
     worker.start()
     command = [str(args.godot), "--path", str(source)]
@@ -52,7 +56,8 @@ def main():
             except (OSError, ValueError, subprocess.CalledProcessError, RuntimeError):
                 # Retain the working pair and report renewal failure without private material.
                 print("Primordia LAN TLS renewal failed; existing certificate retained", flush=True)
-    threading.Thread(target=renew_certificates, daemon=True).start()
+    if gateway.tls_directory:
+        threading.Thread(target=renew_certificates, daemon=True).start()
     for sig in (signal.SIGTERM, signal.SIGINT):
         signal.signal(sig, lambda *_: stopping.set())
     try:

@@ -429,3 +429,15 @@ and confine animated caustics to lit water. Use actual default-art pixels in
 portrait and dim conditions; a uniform diagnostic/daytime screenshot alone
 does not establish visual acceptance. Preserve pause/toggle, acid readability,
 saved world/cells and the rendering-speed benchmark hold.
+
+
+October16 stable/experimental continuation: main is the default and first stable
+source7df04de. The owner authorizes a second game instance on the same machine
+and HTTPS port under /experimental/. Read docs/deployment.md. Keep its process,
+ports8768/8769 (loopback only), root/state/accounts/feedback/browser IndexedDB
+and CD independent from stable. Reuse existing key hashes without copying live
+cells/checkpoints/accounts/reports. Experimental deploys must never stop stable;
+verify stable PID/build/pond/epoch/registry plus continued time. Never auto-run
+a privileged helper or resume stopped ingress/router helpers. Caddy route
+updates use conditional ETags, preserve existing configuration, and report any
+remaining one-time root-owned boot-file install. No new schedules/FPS campaigns.

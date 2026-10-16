@@ -4,10 +4,12 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import os
 
 CONFIG = re.compile(r"const GODOT_CONFIG = ([^\r\n]+);")
 
-def version(web_root: Path) -> dict:
+def version(web_root: Path, instance: str = "stable") -> dict:
+    if instance not in {"stable", "experimental"}: raise ValueError("Unknown game instance")
     page = web_root / "index.html"
     html = page.read_text()
     match = CONFIG.search(html)
@@ -26,10 +28,15 @@ def version(web_root: Path) -> dict:
             raise ValueError("Existing versioned pack has different contents")
         pack.replace(destination)
     config["mainPack"] = name
+    if instance == "experimental":
+        # A different IndexedDB mount, not merely different files in one mount.
+        config["persistentPaths"] = ["/userfs/primordia-experimental"]
     sizes = config.setdefault("fileSizes", {})
     sizes.pop(original, None)
     sizes[name] = destination.stat().st_size
     html = html[:match.start(1)] + json.dumps(config, separators=(",", ":")) + html[match.end(1):]
+    if instance == "experimental" and 'id="primordia-instance"' not in html:
+        html = html.replace("</body>", '<aside id="primordia-instance" style="position:fixed;top:8px;left:8px;z-index:5000;pointer-events:none;padding:4px 8px;border-radius:6px;background:#35234bd9;color:#f2ddff;font:14px sans-serif">Experimental pond</aside></body>')
     pending = page.with_name("index.html.versioning")
     pending.write_text(html)
     pending.replace(page)
@@ -37,4 +44,4 @@ def version(web_root: Path) -> dict:
 
 if __name__ == "__main__":
     import sys
-    print(json.dumps(version(Path(sys.argv[1]))))
+    print(json.dumps(version(Path(sys.argv[1]), os.environ.get("PRIMORDIA_INSTANCE", "stable"))))
