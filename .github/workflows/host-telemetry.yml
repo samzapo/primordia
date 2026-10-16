@@ -113,6 +113,7 @@ jobs:
           # or process environments beyond the owned Primordia service below.
           report["gpu_clocks"] = command(["nvidia-smi", "--query-gpu=name,pstate,clocks.current.graphics,clocks.current.sm,clocks.current.memory,power.draw,power.limit,temperature.gpu,utilization.gpu", "--format=csv,noheader"])
           report["gpu_performance_detail"] = command(["nvidia-smi", "-q", "-d", "PERFORMANCE,TEMPERATURE,CLOCK,POWER"])
+          report["gpu_supported_stock_clocks"] = command(["nvidia-smi", "--query-supported-clocks=memory,graphics", "--format=csv,noheader,nounits"])
           report["numa_topology"] = []
           for node in sorted(pathlib.Path("/sys/devices/system/node").glob("node[0-9]*")):
               entry = {"node":node.name}
