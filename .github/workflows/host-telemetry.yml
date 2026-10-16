@@ -274,7 +274,7 @@ jobs:
               else:
                   report["saved_selection"] = {"status":"unavailable", "reason":"Inspection runtime unavailable in current deployment"}
           from urllib.error import HTTPError
-          from urllib.request import build_opener, ProxyHandler, HTTPSHandler
+          from urllib.request import build_opener, ProxyHandler, HTTPSHandler, Request
           try:
               with build_opener(ProxyHandler({})).open("http://127.0.0.1:8766/metrics",timeout=5) as response:
                   report["primordia_service"] = json.load(response)
@@ -303,6 +303,18 @@ jobs:
                                             "main_pack": config.get("mainPack"),
                                             "sha256": hashlib.sha256(document).hexdigest(),
                                             "cache_control": response.headers.get("Cache-Control")}
+                      result["document"]["profile_overlay_present"] = b"primordia-profile" in document
+                      result["assets"] = {}
+                      for filename, expected_bytes in list(config.get("fileSizes", {}).items())[:4]:
+                          if not re.fullmatch(r"[A-Za-z0-9_.-]+", filename):
+                              result["assets"][filename] = {"error": "InvalidFilename"}
+                              continue
+                          try:
+                              with opener.open(Request(url + "/" + filename, method="HEAD"), timeout=5) as asset:
+                                  size = int(asset.headers.get("Content-Length", -1))
+                                  result["assets"][filename] = {"status":asset.status, "bytes":size, "expected_bytes":expected_bytes, "size_matches":size==expected_bytes, "cache_control":asset.headers.get("Cache-Control")}
+                          except (OSError, ValueError) as error:
+                              result["assets"][filename] = {"error":type(error).__name__}
               except (OSError, ValueError) as error:
                   result["document"] = {"error": type(error).__name__, "detail": str(error)[:300]}
               try:
@@ -354,11 +366,11 @@ jobs:
               try:
                   with build_opener(ProxyHandler({})).open("http://127.0.0.1:8766/metrics", timeout=5) as response:
                       live = json.load(response)
-                  report["steady_service_samples"].append({key: live.get(key) for key in ["updated_unix", "build", "world_id", "epoch", "tick", "living_cells", "simulation_hz", "simulation_wall_ratio", "tick_ms_p50", "tick_ms_p95", "tick_ms_p99", "backend", "gpu", "backend_error", "checkpoint_error", "internal_packets", "stored_packets", "food_supply_version", "peers", "views"]})
+                  report["steady_service_samples"].append({key: live.get(key) for key in ["updated_unix", "build", "world_id", "epoch", "tick", "living_cells", "simulation_hz", "simulation_wall_ratio", "tick_ms_p50", "tick_ms_p95", "tick_ms_p99", "backend", "gpu", "backend_error", "checkpoint_error", "internal_packets", "stored_packets", "food_supply_version", "peers", "views", "simulation_seconds", "uptime_seconds", "fluid", "snapshots_sent", "ready_views", "snapshots_awaiting_ack", "snapshots_encoding", "snapshot_encode_ms_mean", "publication_pending", "stream_queue"]})
               except OSError as error:
                   report["steady_service_samples"].append({"status": "unavailable", "reason": type(error).__name__})
               if index < 2:
-                  time.sleep(2)
+                  time.sleep(6)
           payload = json.dumps(report, indent=2)
           print(payload)
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
