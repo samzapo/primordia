@@ -303,7 +303,6 @@ jobs:
                                             "main_pack": config.get("mainPack"),
                                             "sha256": hashlib.sha256(document).hexdigest(),
                                             "cache_control": response.headers.get("Cache-Control")}
-                      result["document"]["profile_overlay_present"] = b"primordia-profile" in document
                       result["assets"] = {}
                       for filename, expected_bytes in list(config.get("fileSizes", {}).items())[:4]:
                           if not re.fullmatch(r"[A-Za-z0-9_.-]+", filename):
