@@ -74,7 +74,7 @@ This is a living design record. For each new biological or physical mechanic, re
 
 **Abstraction:** light is energy, not oxygen mass. Water is an implicit reservoir; carbon fixation, photosynthetic electron transport and oxygen evolution are bundled into one event. Combining light sensing, propulsion and photosynthesis in one buildable organ is a convenience. Real phototaxis can have either sign, not simply “always seek more light.”
 
-The seeded, diffuse light/shade regions in Revision 55 are an authored habitat layout, not a measured optical field. At the existing 0.2 μm per world unit, their broad variation spans approximately 100 μm to pond-wide regions (the pond is about 819 × 512 μm). Photosynthesis, light sensing and visible water use the same field; the weather multiplier retains its existing role.
+The seeded, diffuse light/shade regions in Revision 55 are an authored habitat layout, not a measured optical field. Revision 56 renders that same field with stronger spatial contrast and animated caustic-like curves. These are an artistic approximation of refracted light, not a wave-optics solver or additional energy. Hourly weather still controls overall brightness; visual exposure preserves readable shade in dim conditions. At the existing 0.2 μm per world unit, their broad variation spans approximately 100 μm to pond-wide regions (the pond is about 819 × 512 μm). Photosynthesis, light sensing and visible water use the same field; the weather multiplier retains its existing role.
 
 ## Chemical sensing and indirect motion
 

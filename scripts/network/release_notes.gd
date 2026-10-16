@@ -44,6 +44,17 @@ const RELEASES=[
 	"footer":"Your cell and its progress carry on between updates.",
 	"button":"Back to the pond",
 },
+{
+	"id":"2026-10-16-rippling-sunlight",
+	"title":"What’s new in the pond",
+	"items":[
+		"Sunlit water is much brighter, with deeper shade and soft, irregular edges.",
+		"Rippling ribbons of light now shimmer through sunny patches.",
+		"Removed the repeated glow spots that made the light look like a grid.",
+	],
+	"footer":"Your cell and its progress carry on between updates.",
+	"button":"Back to the pond",
+},
 ]
 const CURRENT=RELEASES[-1]
 static func seen_index(account: Dictionary) -> int:

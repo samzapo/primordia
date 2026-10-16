@@ -10,21 +10,35 @@ uniform float habitat_seed = 0.0;
 uniform bool fractal_color = true;
 uniform bool water_ripples = true;
 uniform float clock = 0.0;
-float lattice(vec2 p, vec2 period) {
-	p = mod(p,period);
-	return fract(sin(dot(p,vec2(127.1,311.7))+habitat_seed*0.13)*43758.5453);
-}
-float tile_noise(vec2 uv, vec2 period) {
-	vec2 p = uv*period;
-	vec2 i = floor(p);
-	vec2 f = fract(p);
-	f = f*f*(3.0-2.0*f);
-	return mix(mix(lattice(i,period),lattice(i+vec2(1,0),period),f.x),
-		mix(lattice(i+vec2(0,1),period),lattice(i+vec2(1,1),period),f.x),f.y);
-}
-float fractal(vec2 uv) {
-	return tile_noise(uv,vec2(4,3))*0.54+tile_noise(uv,vec2(8,6))*0.27+
-		tile_noise(uv,vec2(16,12))*0.13+tile_noise(uv,vec2(32,24))*0.06;
+// Separate spatial contrast from the hourly brightness multiplier. The texture
+// remains the actual gameplay light; this exposure only makes its pattern readable.
+uniform float illumination_scale = 1.0;
+float caustics(vec2 phase, float time) {
+	// Animated, warped cellular focusing curves, rather than intersecting sine
+	// stripes or regularly placed point glows. Periodic seeds wrap with the pond.
+	vec2 period = vec2(26.0,16.0);
+	vec2 warp = vec2(
+		sin(phase.y*3.0+sin(phase.x*2.0)+time*0.17),
+		cos(phase.x*3.0-phase.y+time*0.13));
+	vec2 p = phase/6.283185*period+warp*1.15;
+	vec2 cell = floor(p), local = fract(p);
+	float nearest = 100.0, second = 100.0;
+	for (int y = -1; y <= 1; y++) {
+		for (int x = -1; x <= 1; x++) {
+			vec2 step = vec2(float(x),float(y));
+			vec2 id = mod(cell+step,period);
+			vec2 seed = vec2(dot(id,vec2(127.1,311.7)),dot(id,vec2(269.5,183.3)));
+			vec2 point = 0.5+0.43*sin(seed+habitat_seed*0.13+vec2(time*0.31,-time*0.27));
+			vec2 offset = step+point-local;
+			float distance = dot(offset,offset);
+			if (distance < nearest) {second=nearest;nearest=distance;}
+			else {second=min(second,distance);}
+		}
+	}
+	float edge = sqrt(second)-sqrt(nearest);
+	float ridge = 1.0-smoothstep(0.018,0.09,edge);
+	float halo = 1.0-smoothstep(0.06,0.24,edge);
+	return ridge*0.60+halo*0.16;
 }
 void fragment() {
 	vec2 delta = (UV-screen_center)*view_size;
@@ -44,25 +58,23 @@ void fragment() {
 		texture(acidity_map,habitat_uv-texel).r+
 		texture(acidity_map,habitat_uv+vec2(texel.x,-texel.y)).r+
 		texture(acidity_map,habitat_uv+vec2(-texel.x,texel.y)).r)*0.06;
-	// Quiet blue water leaves luminance headroom for anatomy and lit tips.
-	vec3 water = mix(vec3(0.018,0.032,0.105),vec3(0.025,0.25,0.32),smoothstep(0.12,0.96,light));
+	vec2 phase = habitat_uv*6.283185;
+	float local_light = clamp(light/max(illumination_scale,0.06),0.0,1.0);
+	float sunlit = smoothstep(0.18,0.78,local_light);
+	float daylight = 0.55+0.45*sqrt(clamp(illumination_scale,0.0,1.0));
+	// Broad deep indigo shade and luminous turquoise sunlight. Every bright
+	// region follows the shared light field, never an independent grid of glows.
+	vec3 water = mix(vec3(0.008,0.013,0.048),vec3(0.055,0.38,0.44),sunlit)*daylight;
 	if (fractal_color) {
-		float terrain = fractal(p/vec2(4096.0,2560.0));
-		vec3 reef = mix(vec3(0.025,0.105,0.17),vec3(0.115,0.065,0.25),smoothstep(0.3,0.7,terrain));
-		water = mix(water,reef,0.44);
-		water = mix(water,vec3(0.065,0.42,0.45),smoothstep(0.60,0.81,terrain)*smoothstep(0.38,0.9,light)*0.75);
+		float hue = 0.5+0.5*sin(phase.y+0.9*sin(phase.x+habitat_seed*0.13));
+		water *= mix(vec3(0.83,0.92,1.08),vec3(1.10,1.04,0.93),hue);
+	}
+	if (water_ripples) {
+		water += vec3(0.22,0.33,0.27)*caustics(phase,clock)*sunlit*sunlit*daylight;
 	}
 	vec3 acidic_water = mix(vec3(0.32,0.045,0.32),vec3(0.62,0.07,0.36),smoothstep(0.05,0.45,acid));
 	acidic_water *= 0.85+light*0.15;
 	// Buffers remove actual acid, visibly restoring the original blue water.
 	water = mix(water,acidic_water,(1.0-exp(-acid*24.0))*0.94);
-	if (water_ripples) {
-		// Slow world-anchored light caustics: no screen sampling or geometry warp.
-		vec2 phase = habitat_uv*6.283185;
-		float a = sin(phase.x*8.0+phase.y*6.0-clock*0.34);
-		float b = sin(phase.x*5.0-phase.y*7.0+clock*0.23);
-		float caustic = pow(max(0.0,a*b),3.0);
-		water = water*(1.0+0.035*a*b)+vec3(0.012,0.035,0.045)*caustic;
-	}
 	COLOR = vec4(water,1.0);
 }

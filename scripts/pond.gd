@@ -637,6 +637,8 @@ func _refresh_light_texture() -> void:
 	# Normalized R8 keeps linear filtering portable on phone WebGL renderers.
 	light_texture=ImageTexture.create_from_image(Image.create_from_data(LightField.COLS,LightField.ROWS,false,Image.FORMAT_R8,values))
 	light_layer.material.set_shader_parameter("light_map",light_texture)
+	var illumination_scale: float=(0.5 if world.habitat==1 else 1.25 if world.habitat==2 else 1.0)*float(world.environment.get("light",world.evolution.light_factor))
+	light_layer.material.set_shader_parameter("illumination_scale",illumination_scale)
 	microscope_layer.material.set_shader_parameter("light_map",light_texture)
 
 

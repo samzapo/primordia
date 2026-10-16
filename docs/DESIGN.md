@@ -657,3 +657,14 @@ uses its previously unused clock.y without a pose mirror or a larger allocation.
 Coalescing only mixes the benefit; resolution conversion itself never awards it.
 Old packets default to zero bonus and loading an update does not alter saved
 cells. Save/restore, partial intake, resident handoff and lysis retain the benefit.
+
+
+### Clear sun/shade and caustics (October 16, 2026)
+
+The owner rejected Revision 55's muted light and remaining repeated glow spots.
+Revision 56 removes the independent fractal highlight pass. Strong deep-indigo
+shade and turquoise sunlight follow the existing continuous light field, with
+weather-aware visual exposure so dim conditions retain spatial contrast.
+Irregular animated caustic curves appear only in lit water, follow world time
+and respect the water-ripple setting. They add no energy, chemistry, fluid force
+or camera displacement. See [Revision 56](REVISION_56.md).

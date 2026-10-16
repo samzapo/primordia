@@ -419,3 +419,13 @@ upper-scale regions span the pond. Use one seeded continuous periodic field for
 photosynthesis, phototaxis, water and bloom, preserving mean illumination/weather.
 Derived caches consume no ecological RNG or saved cell state. Keep normalized R8
 display filtering portable and test actual pixels without broad FPS benchmarks.
+
+
+October16 illumination correction: Revision55 field-only acceptance missed the
+old shader's independent glow spots and dim-weather contrast collapse, reported
+again on the owner's phone. Read docs/REVISION_56.md. Remove independent light
+sources, strengthen spatial contrast without changing photosynthetic energy,
+and confine animated caustics to lit water. Use actual default-art pixels in
+portrait and dim conditions; a uniform diagnostic/daytime screenshot alone
+does not establish visual acceptance. Preserve pause/toggle, acid readability,
+saved world/cells and the rendering-speed benchmark hold.
