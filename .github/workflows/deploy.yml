@@ -68,6 +68,7 @@ jobs:
           pwd
           python3 - <<'PYTHON'
           import hashlib,json,os,pathlib,subprocess,sys
+          os.environ.setdefault("XDG_RUNTIME_DIR",f"/run/user/{os.getuid()}")
           sys.path.insert(0,str(pathlib.Path.cwd()/"tools"))
           from deploy import main
           from experimental_instance import get_json
