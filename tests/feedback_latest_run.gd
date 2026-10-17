@@ -64,13 +64,16 @@ func internal_and_investment(scene) -> void:
   scene.cell_ui.open_context({"kind":"investment"})
   var picker=scene.cell_ui.investment_picker
   check(picker.visible and picker.cards.size()==3 and picker.cards.all(func(card):return card.visible),"All three illustrated strategies appear together")
+  check(picker.family.text=="Family" and picker.family.icon!=null and picker.body.icon==null,"Family scope uses a font-independent selection texture")
   for kind in ["grazer","producer","hunter"]:
    picker.choose(kind)
    check(sim.investment.lineages[sim.player.lineage_id()]==kind,"Family strategy is selected directly, never cycled")
   picker._scope("cell");picker.choose("producer")
   check(sim.investment.cells[sim.player.id]=="producer" and picker.inherit.visible,"Body strategy has its own direct choice")
+  check(picker.body.text=="This cell" and picker.body.icon!=null and picker.family.icon==null,"Scope marker follows the selected body scope without a font glyph")
   picker.choose("inherit")
   check(not sim.investment.cells.has(sim.player.id) and picker.current()=="inherit","Inherit explicitly removes a body override")
+  check(picker.inherit.text=="Inherit" and picker.inherit.icon!=null,"Inherited mode uses the same visible vector mark")
   picker._scope("lineage");picker.choose("manual")
   check(sim.investment.lineages[sim.player.lineage_id()]=="manual" and not picker.inherit.visible,"Manual is explicit and family scope cannot inherit")
   scene.cell_ui.close_context()

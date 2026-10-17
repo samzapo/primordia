@@ -165,6 +165,20 @@ const RELEASES=[
  "footer":"This update starts a fresh pond. Your existing access key still works.",
  "button":"Back to the pond",
 },
+{
+ "id":"2026-10-17-growing-new-builds",
+ "audience":"experimental",
+ "title":"What’s new in the pond",
+ "items":[
+  "Daughter cells begin with a basic oral groove and build their own organs, instead of receiving a copy of the parent’s build.",
+  "Daughters inherit the parent’s Hunter, Producer or Grazer investment strategy. A Manual parent gives one of those three at random.",
+  "Reproduction now funds the daughter’s basic body, without charging for the parent’s extra organs.",
+  "Your first added organelle is free, the second costs 1 AP, the third 2 AP, and so on. Selling lowers the next price and returns the AP you paid minus 1 (at least 0).",
+  "Selected investment choices now show a clear tick on phones.",
+ ],
+ "footer":"Your existing cells and their organs carry on between updates.",
+ "button":"Back to the pond",
+},
 ]
 const CURRENT=RELEASES[-1]
 static func seen_index(account: Dictionary) -> int:

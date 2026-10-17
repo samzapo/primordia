@@ -146,6 +146,14 @@ func count(kind: String) -> int:
 		if organ.kind == kind: n += 1
 	return n
 
+func construction_price() -> int:
+	# The inherent oral groove belongs to the body, not the purchased build.
+	return organs.filter(func(organ):return not inherent(organ)).size()
+
+static func construction_refund(organ: Dictionary) -> int:
+	# Pre-progressive saves paid at most one AP per normal installation.
+	return maxi(0,int(organ.get("construction_ap",1))-1)
+
 func has_mode(mode: String) -> bool:
 	for organ in organs:
 		if organ.kind == "feeding" and organ.mode == mode: return true

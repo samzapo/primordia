@@ -17,7 +17,7 @@
       {
         "id": "build",
         "title": "Build and restore",
-        "text": "Open the Assembly or Chemistry factory for membrane organs. The three teal chambers with a small + are the Chemistry factory: open it from either view for mitochondria. Choosing an internal organ switches smoothly to Interoception so you can place it inside. Each installation or restoration costs 1 AP. While building, the resource strip shows your AP and the cost.",
+        "text": "Open the Assembly or Chemistry factory for membrane organs. The three teal chambers with a small + are the Chemistry factory: open it from either view for mitochondria. Choosing an internal organ switches smoothly to Interoception so you can place it inside. The first added organelle is free, the second costs 1 AP, the third 2 AP, and so on. The oral groove does not count. Selling lowers the next price and returns the AP you paid minus 1, with a minimum return of 0; restoration uses that same next price. While building, the resource strip shows your AP and the cost.",
         "sources": []
       },
       {
@@ -47,7 +47,7 @@
       {
         "id": "offspring",
         "title": "Manage offspring",
-        "text": "Open the offspring reserve to add or reclaim resources, release a funded successor, or store one dormant. Surplus investment and splitting also happen automatically.",
+        "text": "Open the offspring reserve to add or reclaim resources, release a funded successor, or store one dormant. Surplus investment and splitting also happen automatically. Daughters begin with a basic oral groove instead of copies of the parent’s organs. They inherit its investment strategy; a Manual parent gives a random Hunter, Producer or Grazer strategy.",
         "sources": []
       },
       {
@@ -620,7 +620,7 @@
         {
           "id": "division",
           "title": "Reproduction and AP",
-          "text": "Surplus biomass and ATP go into offspring reserves automatically. A funded cell divides when there is room. Each committed division awards 2 AP; building or restoring an organelle costs 1 AP. AP is a game resource.",
+          "text": "Surplus biomass and ATP go into offspring reserves automatically. A funded cell divides when there is room. Each committed division awards 2 AP; each cell’s first added organelle costs 0 AP, its second 1 AP, its third 2 AP, and so on. The oral groove does not count. Selling lowers the next price and returns the AP you paid minus 1, with a minimum return of 0; restoring an absent organ uses the next price. AP is a game resource. Daughters start with a basic oral groove and rebuild their own organs. They inherit the parent’s investment choice; Manual gives a random Hunter, Producer or Grazer.",
           "sources": [
             {
               "title": "Cell division",
@@ -696,7 +696,7 @@
         {
           "id": "npc_growth",
           "title": "Other cells develop too",
-          "text": "One in ten computer-controlled cells follows Hunter investment; the rest split evenly between Producer and Grazer, with rounding for small populations. These strategies guide all their AP purchases. Your unattended cells buy only if you opt in through Nucleus → Investment. Existing organs are kept. Strategies build a core, then complementary support. Different cells develop different builds; injury favors repair and escape senses. These are game rules.",
+          "text": "Unassigned computer-controlled cells are balanced toward one in ten Hunters, with the rest split between Producers and Grazers. Daughters keep their parent’s investment strategy; a Manual parent gives a random Hunter, Producer or Grazer. Inherited choices stay with each daughter, so reproduction can change the mix. Strategies build a core and complementary support; injury favors repair and escape senses. Your selected cell stays manual to build, while unattended cells follow their saved strategy. These are game rules.",
           "sources": []
         }
       ]

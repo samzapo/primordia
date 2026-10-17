@@ -395,18 +395,21 @@ func _construction_input(amount: float) -> void:
 
 func _install_for(cell, progression, kind: String, local_angle: float, mode: String = "graze", size: float = 1.0) -> bool:
 	if kind == "feeding": return false # Inherent membrane anatomy is never purchased.
-	var cost := Evolution.install_price(size)
+	var cost: int = cell.construction_price()
 	if progression.terminal() or (progression.enabled and progression.points < cost): return false
 	if not cell.add_organ(kind,local_angle,mode,false,size): return false
 	progression.spend(cost,"Install "+kind)
+	cell.organs[-1]["construction_ap"]=cost if progression.enabled else 0
 	_construction_input(cell.organs[-1].material)
 	return true
 
 func restore(identity: int) -> bool:
 	if remote_client: return edit("restore",{"id":identity})
-	if evolution.terminal() or (evolution.enabled and evolution.points < 1): return false
+	var cost: int = player.construction_price()
+	if evolution.terminal() or (evolution.enabled and evolution.points < cost): return false
 	if not player.restore_organ(identity,false): return false
-	evolution.spend(1,"Restore organ")
+	evolution.spend(cost,"Restore organ")
+	player.organs[-1]["construction_ap"]=cost if evolution.enabled else 0
 	_construction_input(player.organs[-1].material)
 	return true
 
@@ -421,7 +424,7 @@ func step_autonomous_builds() -> void:
 		visited[root]=true
 		var ledger=_family_ledger(cell)
 		var progression=ledger.progression
-		if progression==null or progression.points<1:continue
+		if progression==null:continue
 		for relative in ledger.active_family(self):
 			var choice: Dictionary=Investment.candidate(self,relative)
 			if choice.is_empty():continue
@@ -433,8 +436,11 @@ func step_autonomous_builds() -> void:
 
 func remove(index: int) -> bool:
 	if remote_client: return edit("remove",{"id":player.organs[index].id}) if index>=0 and index<player.organs.size() else false
+	if index<0 or index>=player.organs.size():return false
+	var refund: int=Cell.construction_refund(player.organs[index])
 	var debris: float = player.recycle(index)
 	if debris < 0: return false
+	evolution.refund(refund,"Recycle organ")
 	_build_debris(debris)
 	return true
 
@@ -1817,6 +1823,8 @@ func _die(cell, transferred: float = 0.0) -> void:
 	if death_bursts.size() > 32: death_bursts.pop_front()
 	cell.chemistry.ensure_cpu()
 	cell.dead = true
+	investment.cells.erase(cell.id)
+	investment.npc.erase(cell.id)
 	cell.health = 0
 	var total: float = maxf(0,cell.organic_mass()-transferred)
 	var oxygen: float = cell.oxygen
@@ -1953,14 +1961,10 @@ func mutate_organ(identity: int, gene: String) -> bool:
 
 func offspring_quote(subject = null) -> Dictionary:
 	var parent=player if subject==null else subject
-	var tissue: float = parent.chemistry.reactor_mass
-	for node in parent.chemistry.nodes:
-		if not node.basal: tissue += 0.025
-	for organ in parent.organs: tissue += organ.get("max_material",Cell.organ_cost(organ.kind,organ.scale))
-	var radius := maxf(34,parent.occupied()/(TAU*0.8))
-	var body := maxf(30,pow(radius/47.0,2)*78-12)
+	# A new body has only its inherent oral groove, not the parent's paid build.
+	var body := 30.0
 	var inherited_body := minf(body,maxf(0,parent.body-30))
-	return {"body":body,"body_transfer":inherited_body,"biomass":12.0,"material":body+12+tissue-inherited_body,"total_material":body+12+tissue,"energy":60.0,"oxygen":0.0}
+	return {"body":body,"body_transfer":inherited_body,"biomass":12.0,"material":body+12-inherited_body,"total_material":body+12,"energy":60.0,"oxygen":0.0}
 
 func safe_birth_position(at: Vector2, radius: float) -> bool:
 	if not habitat_geometry.clear_at(at,radius): return false
@@ -1979,30 +1983,9 @@ func make_offspring(parent, quote: Dictionary):
 	child.carbon = 0
 	child.oxygen = 0
 	child.energy = 40
-	child.chemistry.inherit_configuration(parent.chemistry)
-	child.organs = parent.organs.duplicate(true)
-	child.next_organ_id = parent.next_organ_id
-	child.exploration = parent.exploration
-	child.response_cycle = parent.response_cycle
-	for organ in child.organs:
-		organ.hp = organ.max_hp
-		organ.material = organ.max_material
-		organ.blocked = 0
-		organ.target_id = -1
-		organ.burst_clock = 0.0
-		organ.feeding = false
-		organ.link = Vector2.ZERO
-		organ.consume_flash = 0.0
-		organ.consume_clock = 0.0
-		organ.charge_flash = 0.0
-		organ.consumed_total = 0.0
-		organ["emission_serial"]=0;organ["emission_age"]=-100.0
-	for organ in child.organs:
-		if organ.kind == "photosynthesis": child.chemistry.anchor_photosynthesis(child,organ); break
+	child.add_organ("feeding",0,"graze",false)
 	child.update_geometry()
-	child.membrane = Cell.Membrane.new(child.radius)
-	child.membrane.skeleton = Cell.clone_state(parent.membrane.skeleton)
-	child.membrane.skeleton.begin(child.radius)
+	child.membrane = Cell.Membrane.new(child.radius,child.id)
 	child.update_geometry()
 	return child
 
@@ -2029,6 +2012,7 @@ func _divide_paid(parent,ledger,dormant: bool=false,follow: bool=false,progress:
 				found = true
 				break
 	if not found: return false
+	Investment.inherit_strategy(self,parent,child)
 	child.chemistry.partition(parent.chemistry,0.25)
 	parent.brood_mass -= quote.material
 	parent.body -= quote.body_transfer

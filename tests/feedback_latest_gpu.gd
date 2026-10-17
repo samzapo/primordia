@@ -110,6 +110,15 @@ func investment_input(scene) -> void:
   var conversion:=Vector2(root.size)/Vector2(setting.logical)
   var pixel:=image.get_pixelv(Vector2i((rect.position+Vector2(rect.size.x*.5,rect.size.y*.35))*conversion))
   check(pixel.b>.35 or pixel.g>.5,"Strategy card renders an actual colored cell illustration")
+  var mark_scale: float=picker.cards[1].text_scale
+  var mark_rect:=Rect2((rect.position+Vector2(rect.size.x-25*mark_scale,10*mark_scale))*conversion,Vector2.ONE*16*mark_scale*conversion)
+  var mark_pixels:=0
+  for y in range(ceili(mark_rect.position.y),floori(mark_rect.end.y)):
+   for x in range(ceili(mark_rect.position.x),floori(mark_rect.end.x)):
+    var color:=image.get_pixel(x,y)
+    if color.r>.55 and color.g>.75 and color.b>.65:mark_pixels+=1
+  check(mark_pixels>=3,"Actual pixels show a vector selection tick in every viewport and UI scale")
+
   scene.cell_ui.close_context();scene.perception="exteroception"
  # The shared drawings must produce visible icons, not names or blank circles.
  scene.touch_zoom.enabled=false;scene.preferences.hud_scale=1.0;root.content_scale_size=Vector2i.ZERO;root.size=Vector2i(1280,800)

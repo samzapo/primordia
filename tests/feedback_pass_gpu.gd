@@ -34,6 +34,21 @@ func run() -> void:
  for packet in sim.particles:exterior+=packet.amount
  check(absf(plant.substrate-plant.fixed_carbon*.65*.75)<.000001 and absf(exterior-plant.fixed_carbon*.65*.25)<.000001,"GPU food sharing delivers exactly 75% internal and 25% external")
  plant.chemistry.ensure_cpu()
+ # Division keeps resident ingested chemistry on its owner, never on the child.
+ var birth=Sim.new(61,0,false);birth.server_mode=true;birth.cells=[birth.player]
+ birth.habitat_geometry=Sim.Habitat.new(61,birth.cells);birth.habitat_geometry.enabled=false
+ var parent=birth.player;parent.add_organ("feeding",0,"graze",false);parent.add_organ("photosynthesis",1,"graze",false)
+ birth.investment.cells[parent.id]="producer"
+ var quote: Dictionary=birth.offspring_quote(parent)
+ parent.biomass+=quote.material;parent.energy=100;parent.reserve(60,quote.material)
+ parent.chemistry.emit("food",3,Vector2(20,0))
+ check(Cytoplasm.new().attach(gpu,parent.chemistry,parent),"Division parent retains a real resident cytoplasm")
+ var food: float=parent.substrate
+ check(birth.divide_lineage(false,false),"Resident-parent paid division commits")
+ var daughter=birth.cells[-1]
+ check(daughter.organs.size()==1 and daughter.count("photosynthesis")==0 and birth.Investment.strategy(birth,daughter)=="producer","Resident-parent daughters inherit strategy and basic anatomy only")
+ check(parent.substrate==food and daughter.substrate==0 and daughter.chemistry.particle_count()==0 and parent.chemistry.accelerator!=null,"Division neither clones resident vacuoles nor drops the parent's GPU owner")
+ parent.chemistry.ensure_cpu()
  # Counterattack reception works through actual GPU queries, without a source body.
  var defender=Sim.Cell.new(90,Vector2(1000,900));defender.add_organ("counterattack",0,"graze",false)
  var receptor: Vector2=defender.organ_position(defender.organs[0])

@@ -57,6 +57,23 @@ func run() -> void:
  socket.send_text(JSON.stringify({"op":"lineage_color","color":"javascript:bad"}))
  check(await until(func():return messages.any(func(m):return m.get("kind","")=="lineage_color_result")),"Invalid color has an explicit rejection")
  check(not messages.filter(func(m):return m.get("kind","")=="lineage_color_result")[-1].ok and account.lineage_color=="#32d4a7","Untrusted strings cannot replace a validated color")
+ # The authenticated sale returns only the recorded paid cost minus one.
+ account.evolution.points=20
+ for kind in ["cilia","photosynthesis","mitochondrion"]:
+  check(host.world._install_for(selected,account.evolution,kind,1),"Refund fixture builds through the actual AP-funded installation path")
+ var sold: Dictionary=selected.organs[-1]
+ var refund: int=selected.construction_refund(sold)
+ check(sold.construction_ap>=2 and refund==sold.construction_ap-1,"The organ records its actual progressive purchase price")
+ var before_refund: int=account.evolution.points
+ command={"op":"command","epoch":host.epoch,"cell":selected.id,"edit":account.edit,"sequence":4,"action":"remove","args":{"id":sold.id}}
+ socket.send_text(JSON.stringify(command))
+ check(await until(func():return not result(4).is_empty()),"Sale receives an authenticated durable receipt")
+ check(result(4).ok and selected.organ_by_id(sold.id).is_empty() and account.evolution.points==before_refund+refund,"Sale returns paid AP minus one exactly once")
+ socket.send_text(JSON.stringify(command))
+ check(await until(func():return messages.filter(func(m):return m.get("kind","")=="result" and m.get("sequence",-1)==4).size()==2),"A repeated sale returns its original receipt")
+ check(account.evolution.points==before_refund+refund,"Retrying a sale cannot duplicate its AP refund")
+ saved=Codec.new().restore(host.store.load_latest().graph)
+ check(saved.accounts[welcome.token.sha256_text()].evolution.points==account.evolution.points,"Sale AP refund is already in the saved account")
  socket.close();host.running=false;host.listener.stop();host._finish_snapshots()
  if host.world.resident!=null:
   host.world.resident.gpu.close();await host.world.resident.gpu.closed

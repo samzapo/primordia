@@ -485,3 +485,30 @@ October17 owner correction: read Revision60. Shade leaves seek soft light using 
 October17 final owner continuation supersedes manual Exploration/response-cycle and per-organ Steering. Read Revision60. Use one shared local-signal behavior tree for selected/unattended player cells, NPCs and all activity/backend paths. Prioritize harm/escape, ATP recovery, biomass, then opportunistic hunt/light/search. Never look up live sources or remote family positions; dispersion uses fresh received immutable family chemistry. Respect actual sensory/motor organs and ordinary ATP/material/contact costs; resting only stops propulsion. Preserve legacy percentage fields inert and reject retired commands. Hunter/Producer/Grazer investments use complementary, diverse supporting anatomy and own condition; retain NPC10%Hunter quotas, saved opt-in/manual semantics and ordinary AP fitting/accounting. Sanctuary was subsequently withdrawn; see the final correction below. With every organelle/chemistry addition, explicitly maintain behavior capabilities, investment roles or deliberate manual-only exclusions, targeted tests, scientific abstractions, player guide and audience-filtered release text. This is standing development upkeep, not authorization for a schedule or a stable promotion.
 
 October17 final owner correction: remove Sanctuary entirely; it must not be deployed as an available organ or active immunity/growth rule. Family menus list living relatives/reserves and retain only highest generation and total cells ever; deceased records leave the active ledger. The owner explicitly authorizes this large update to reset pond state and remove incompatible history. For the current experimental deployment only, use the explicit reset_pond dispatch input, retain keys/accounts/names/private feedback and rollback predecessor, verify a genuinely new experimental pond and its normal subsequent restart. Stable stays untouched pending promotion. This supersedes strict old-cell/anatomy retention for this one reset, not the ordinary update default. Do not keep a hidden functioning Sanctuary or silently enable reset on pushes/future updates.
+
+October17 division correction: daughters inherit only the effective investment
+strategy, not purchased organs, mutations or the parent's sampled cytoskeleton.
+New bodies have one ordinary inherent oral groove and their own sampled shape.
+Quote only this basic body/tissue; retain paid material/ATP transfer, parent
+anatomy, lineage identity and 2AP per committed division. A Manual parent assigns
+a uniformly random Hunter/Producer/Grazer only after a birth can commit. Save the
+daughter's strategy as a body override; NPC quota balancing must respect it.
+Quotas continue to guide unassigned NPCs, while reproduction may change the mix.
+Failed/blocked births neither draw strategy randomness nor leave overrides.
+Death removes obsolete body investment entries. Existing bodies and banked
+reserves are not rewritten; ordinary persistent experimental rollout only.
+
+October17 mobile font correction: Comic Neue lacks the investment checkmark
+glyph. Investment scope, Manual/Inherit and strategy cards use a shared authored
+vector selection-mark texture, never a font-dependent tick. Retain the active
+card highlight and verify actual touch choices and marker textures on target.
+
+October17 AP pricing correction: each cell's next added/restored organ costs
+the number of currently installed non-inherent organs (0,1,2,...). The inherent
+oral groove is excluded. Selling, loss or removal lowers that current count;
+Selling refunds max(0,actual installation AP paid minus1). Store construction_ap
+on each newly installed/restored organ; unknown legacy normal prices refund0.
+Do not use a lifetime construction counter. Automatic
+investment and both desktop/mobile factory, placement, resource and restoration
+previews use this same Cell.construction_price. Zero AP must allow a first free
+build. Existing cells derive price from actual anatomy without a save migration.

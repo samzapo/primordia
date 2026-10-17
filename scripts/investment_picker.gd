@@ -1,5 +1,6 @@
 extends PanelContainer
 ## Direct strategy selection, shared by desktop and touch; the pond stays live.
+const SELECTION_MARK=preload("res://assets/ui/selection-mark.svg")
 const Choice=preload("res://scripts/investment_choice.gd")
 var game
 var scope:="lineage"
@@ -21,6 +22,8 @@ func initialize(owner_game) -> void:
  title.text="Investment";box.add_child(title)
  var scopes:=HBoxContainer.new();box.add_child(scopes)
  for button in [family,body]:scopes.add_child(button);button.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+ for button in [family,body,manual,inherit]:
+  button.expand_icon=true;button.icon_alignment=HORIZONTAL_ALIGNMENT_RIGHT
  family.text="Family";body.text="This cell"
  family.pressed.connect(_scope.bind("lineage"));body.pressed.connect(_scope.bind("cell"))
  var row:=HBoxContainer.new();box.add_child(row)
@@ -51,13 +54,16 @@ func sync() -> void:
  # Keep the three choices together even with large UI text on a short phone.
  var s: float=minf(game.cell_ui.ui_scale(),minf(viewport.x/330.0,viewport.y/350.0))
  var width:=minf(540*s,viewport.x-16*s)
- family.text="Family"+(" ✓" if scope=="lineage" else "");body.text="This cell"+(" ✓" if scope=="cell" else "")
+ family.text="Family";body.text="This cell"
+ family.icon=SELECTION_MARK if scope=="lineage" else null
+ body.icon=SELECTION_MARK if scope=="cell" else null
  var value:=current()
  for card in cards:
   if card.active!=(card.strategy==value):
    card.active=card.strategy==value;card.queue_redraw()
- manual.text="Manual"+(" ✓" if value=="manual" else "")
- inherit.visible=scope=="cell";inherit.text="Inherit"+(" ✓" if value=="inherit" else "")
+ manual.text="Manual";manual.icon=SELECTION_MARK if value=="manual" else null
+ inherit.visible=scope=="cell";inherit.text="Inherit"
+ inherit.icon=SELECTION_MARK if value=="inherit" else null
  var inherited: String=game.world.investment.lineages.get(game.world.player.lineage_id(),"manual")
  status.text=("Family: "+value.capitalize()) if scope=="lineage" else ("This cell: "+value.capitalize()+(" ("+inherited.capitalize()+")" if value=="inherit" else ""))
  if layout_scale!=s or layout_viewport!=viewport:
@@ -70,7 +76,9 @@ func sync() -> void:
   box.add_theme_constant_override("separation",roundi(6*s))
   for card in cards:
    card.text_scale=s;card.custom_minimum_size=Vector2(88,126)*s;card.queue_redraw()
-  for button in [family,body,manual,inherit,back]:button.custom_minimum_size.y=30*s
+  for button in [family,body,manual,inherit,back]:
+   button.custom_minimum_size.y=30*s
+   button.add_theme_constant_override("icon_max_width",roundi(16*s))
   for label in [note,status]:label.add_theme_font_size_override("font_size",roundi(13*s));label.custom_minimum_size.x=width-20*s
   title.add_theme_font_size_override("font_size",roundi(18*s))
  size=Vector2(width,0);reset_size()

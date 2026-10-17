@@ -60,4 +60,4 @@ static func run(check: Callable) -> void:
 	check.call(cell.target==heading,"World food intentions stay independent of body rotation")
 	check.call(not cell.set_response_cycle(3) and not cell.set_exploration(1) and not cell.set_steering_strength(pore.id,2),"Retired behavior settings reject all edits")
 	var child=sim.make_offspring(cell,sim.offspring_quote())
-	check.call(child.exploration==4 and child.response_cycle==2 and child.organs[0].steering==0,"Old saved behavior fields remain intact through paid inheritance, but inactive")
+	check.call(cell.exploration==4 and cell.response_cycle==2 and pore.steering==0 and child.exploration==.25 and child.response_cycle==4 and child.organs[0].steering==1,"Parent legacy fields stay intact while a basic daughter starts fresh, with all retired controls inactive")

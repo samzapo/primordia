@@ -1,6 +1,7 @@
 extends Button
 ## Illustrative anatomy only: these pictures never create simulated cells.
 const Art=preload("res://scripts/visuals.gd")
+const SELECTION_MARK=preload("res://assets/ui/selection-mark.svg")
 const FONT=preload("res://assets/fonts/ComicNeue-Regular.ttf")
 var strategy:="hunter"
 var active:=false
@@ -17,8 +18,9 @@ func _draw() -> void:
  var box:=StyleBoxFlat.new();box.bg_color=Color("2d615f") if active else Color("1b304f")
  box.border_color=Color("a9ffe1") if active else Color("618d9b")
  box.set_border_width_all(roundi((3 if active or has_focus() else 1)*text_scale));box.set_corner_radius_all(roundi(10*text_scale));draw_style_box(box,rect)
+ if active:draw_texture_rect(SELECTION_MARK,Rect2(Vector2(size.x-25*text_scale,10*text_scale),Vector2.ONE*16*text_scale),false)
  var font_size:=roundi(16*text_scale)
- draw_string(FONT,Vector2(4*text_scale,size.y-31*text_scale),strategy.capitalize()+(" ✓" if active else ""),HORIZONTAL_ALIGNMENT_CENTER,size.x-8*text_scale,font_size,Color("e6fff6"))
+ draw_string(FONT,Vector2(4*text_scale,size.y-31*text_scale),strategy.capitalize(),HORIZONTAL_ALIGNMENT_CENTER,size.x-8*text_scale,font_size,Color("e6fff6"))
  draw_string(FONT,Vector2(4*text_scale,size.y-12*text_scale),DETAILS[strategy],HORIZONTAL_ALIGNMENT_CENTER,size.x-8*text_scale,roundi(11*text_scale),Color("c3d8e4"))
  picture.position=Vector2(size.x*.5,(size.y-43*text_scale)*.5);picture.queue_redraw()
 func _picture() -> void:

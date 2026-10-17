@@ -17,20 +17,38 @@ static func npc_assignments(sim) -> void:
  var quotas: Dictionary={"hunter":hunters,"producer":ceili(remaining*.5),"grazer":floori(remaining*.5)}
  var assigned: Dictionary={}
  var waiting: Array=[]
+ # Birth intent is explicit: descendants keep their inherited choice even when
+ # reproduction changes the population mix. Quotas guide unassigned NPCs.
  for cell in bodies:
+  var inherited: String=sim.investment.cells.get(cell.id,"")
+  if inherited in ["hunter","producer","grazer"]:
+   assigned[cell.id]=inherited;quotas[inherited]-=1
+  else:waiting.append(cell)
+ var unassigned: Array=[]
+ for cell in waiting:
   var strategy: String=sim.investment.npc.get(cell.id,"")
   if quotas.get(strategy,0)>0:assigned[cell.id]=strategy;quotas[strategy]-=1
-  else:waiting.append(cell)
- for cell in waiting:
+  else:unassigned.append(cell)
+ for cell in unassigned:
   for strategy in ["hunter","producer","grazer"]:
    if quotas[strategy]>0:
     assigned[cell.id]=strategy;quotas[strategy]-=1;break
  sim.investment.npc=assigned
 
 static func strategy(sim,cell) -> String:
+ if sim.investment.cells.has(cell.id):return sim.investment.cells[cell.id]
  var root: int=cell.lineage_id()
  if root!=sim.lineage.root_id and root not in sim.managed_lineages:return sim.investment.npc.get(cell.id,"manual")
- return sim.investment.cells.get(cell.id,sim.investment.lineages.get(root,"manual"))
+ return sim.investment.lineages.get(root,"manual")
+
+# Commit only after placement succeeds. Failed proposals never consume RNG or
+# leave an override for an identity that has not been born.
+static func inherit_strategy(sim,parent,child) -> void:
+ var inherited: String=strategy(sim,parent)
+ if inherited=="manual":inherited=STRATEGIES[sim.rng.randi_range(1,3)]
+ sim.investment.cells[child.id]=inherited
+ if child.lineage_id()!=sim.lineage.root_id and child.lineage_id() not in sim.managed_lineages:
+  sim.investment.npc[child.id]=inherited
 
 # Variants are deterministic preferences, never free organs or hidden ecology knowledge.
 const VARIANTS:={

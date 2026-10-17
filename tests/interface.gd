@@ -160,10 +160,11 @@ func run(test_host) -> void:
 	scene.cell_ui.open_context({"kind":"organ","id":organ_id})
 	expect(scene.cell_ui.choices.size() == 2 and scene.cell_ui.choices[0].caption == "Move" and scene.cell_ui.choices[1].caption == "Recycle","An unmodified organ exposes Move and Recycle without retired output")
 	var points: int = scene.world.evolution.points
+	var refund: int = cell.construction_refund(cell.organ_by_id(organ_id))
 	scene.cell_ui.choices[1].pressed.emit()
 	scene._update_world(1)
 	expect(cell.count("protection") == 0 and scene.views[cell.id].seen_revision > seen,"Recycling refreshes the paused drawing before resuming")
-	expect(scene.world.evolution.points == points,"Recycling does not refund AP")
+	expect(scene.world.evolution.points == points+refund,"Recycling returns the actual installation AP minus one")
 	scene.cell_ui.open_context({"kind":"behavior"})
 	expect(scene.cell_ui.choices.size()==2 and scene.cell_ui.choices[0].caption=="Cell instincts","The nucleus describes shared instincts without manual exploration controls")
 	expect(scene.cell_ui.choices[0].description.contains("Current intention:") and scene.cell_ui.choices[0].description.contains("local"),"The existing temporary menu explains the current intention and local-signal rule")
@@ -209,7 +210,7 @@ func run(test_host) -> void:
 	scene.cell_ui.sync(0)
 	var stock = scene.cell_ui.biomass_view
 	var quote: Dictionary = stock.quote
-	expect(stock.visible and quote.available == cell.biomass and quote.cost == 0 and quote.ap_needed == 1,"The build preview shows AP-only construction alongside usable biomass")
+	expect(stock.visible and quote.available == cell.biomass and quote.cost == 0 and quote.ap_needed == cell.construction_price(),"The build preview shows the current progressive AP price alongside usable biomass")
 	expect(is_equal_approx(pow(quote.cost_radius/quote.stock_radius,2),quote.cost/quote.available),"Available and required blobs use the same area scale")
 	var usable: float = cell.biomass
 	cell.biomass = 100000

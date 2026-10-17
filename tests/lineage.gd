@@ -51,7 +51,7 @@ static func run(check: Callable) -> void:
 	var parent = sim.player
 	check.call(sim.divide_lineage(false,false) and sim.player == parent,"Early division releases a living successor without taking direct control")
 	var child = sim.cells[-1]
-	check.call(child.generation == 1 and absf(mass(sim)-initial) < 0.01,"A real successor inherits anatomy and consumes funded parental material")
+	check.call(child.generation == 1 and child.organs.size()==1 and child.count("feeding")==1 and absf(mass(sim)-initial) < 0.01,"A real successor starts with a basic oral groove and consumes only its funded material")
 	var child_position: Vector2 = child.position
 	var child_health: float = child.health
 	sim._die(parent)

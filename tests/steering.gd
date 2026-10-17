@@ -35,6 +35,7 @@ static func _family(check: Callable) -> void:
 	Family.fund(sim)
 	check.call(sim.divide_lineage(false,false),"Family safety fixture releases an actual paid child")
 	var child = sim.cells[-1]
+	check.call(sim._install_for(child,sim.evolution,"hunting",0),"Family safety fixture explicitly buys a hunting receptor for its basic daughter")
 	check.call(child.lineage_id() == parent.lineage_id(),"Paid offspring inherit the founder signature independently of role")
 	# Read actual emitted snapshots in both directions, including after adoption.
 	for adopted in [false,true]:

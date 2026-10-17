@@ -4,6 +4,7 @@ const Codec=preload("res://scripts/network/state_codec.gd")
 static func run(check: Callable) -> void:
  preload("res://tests/shade_steering.gd").run(check)
  preload("res://tests/behavior_tree.gd").run(check)
+ preload("res://tests/division_investment.gd").run(check)
  var sim=Sim.new(591,0,false);sim.server_mode=true;sim.cells=[sim.player]
  sim.player.add_organ("feeding",0,"graze",false)
  var bodies: Array=[]
@@ -23,8 +24,10 @@ static func run(check: Callable) -> void:
  for body in bodies:sim._family_ledger(body).progression.points=0
  var ledger=sim._family_ledger(bodies[0]);ledger.progression.points=1
  var input: float=sim.external_input;var mass: float=bodies[0].organic_mass()
+ sim.managed_cells=bodies.slice(1).map(func(cell):return cell.id)
  sim.step_autonomous_builds()
- check.call(ledger.progression.points==0 and is_equal_approx(bodies[0].organic_mass()-mass,sim.external_input-input),"Strategy buys exactly one ordinary AP-funded organ with conserved construction input")
+ sim.managed_cells=[]
+ check.call(ledger.progression.points==1 and is_equal_approx(bodies[0].organic_mass()-mass,sim.external_input-input),"Strategy buys one ordinary first-free organ with conserved construction input")
  sim.managed_lineages=[bodies[1].lineage_id()]
  sim.player=bodies[1]
  check.call(sim.Investment.set_strategy(sim,"lineage","producer"),"Owner can save a family investment strategy")

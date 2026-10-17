@@ -107,15 +107,17 @@ func choose(identity: String) -> bool:
 	chosen = true
 	return true
 
-static func install_price(size: float) -> int:
-	return maxi(1,ceili(size*size-0.000001))
-
 func spend(amount: int, action: String) -> bool:
 	if amount < 0 or (enabled and (terminal() or points < amount)): return false
 	if enabled:
 		points -= amount
 		spending.append({"time":clock,"action":action,"points":amount})
 	return true
+
+func refund(amount: int, action: String) -> void:
+	if not enabled or amount<=0:return
+	points+=amount
+	spending.append({"time":clock,"action":action,"points":-amount})
 
 func accept_challenge(kind: String, cell) -> bool:
 	if not enabled or terminal() or tide >= 6 or challenge != "" or clock-tide*TIDE_SECONDS >= 90: return false
