@@ -457,3 +457,12 @@ follows main; feature branches remain experimental until explicitly promoted.
 Preserve each instance's independent saved cells, accounts, five-key registry and
 private feedback. Check the experimental process/pond identity across stable
 updates as well as the stable all-cell retention and saved-world restart.
+
+
+October17 notice separation correction: an experimental-pond announcement leaked
+into main when source branches merged. ReleaseNotes entries must declare an
+audience (shared/stable/experimental). Main must never queue experimental-only
+notices; stable promotion announcements must not appear in the experimental pond.
+Keep historical IDs and saved acknowledgement positions, skipping hidden entries
+when validating the next acknowledgement. The service selects the audience;
+clients cannot choose it. Promotion must explicitly review notice audiences.

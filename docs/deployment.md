@@ -177,3 +177,14 @@ that candidate. CI never runs it with sudo or resumes earlier stopped helpers.
 Sources: [Caddy path routing](https://caddyserver.com/docs/caddyfile/directives/handle),
 [conditional configuration API](https://caddyserver.com/docs/api),
 [Web persistence](https://docs.godotengine.org/en/stable/tutorials/export/exporting_for_web.html).
+
+### Pond-specific update messages
+
+Every authored release notice declares its audience: shared, stable, or
+experimental. Stable sign-ins skip experimental-only announcements, and
+experimental sign-ins skip stable-only promotion messages. Keep historical notice
+IDs so existing seen_release values stay valid. Acknowledgements advance to the
+next visible notice, oldest first, across hidden entries; filtering never rewinds
+an account or clears a visible message. The supervisor selects the audience from
+its configured pond before launching the authority, independently of inherited
+build variables or browser input. Review these audiences during every promotion.

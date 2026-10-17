@@ -11,6 +11,7 @@ const Delivery=preload("res://scripts/network/camera_delivery.gd")
 var world
 var accounts: Dictionary = {}
 const ReleaseNotes=preload("res://scripts/network/release_notes.gd")
+var release_instance: String="experimental" if OS.get_environment("PRIMORDIA_INSTANCE")=="experimental" else "stable"
 var peers: Dictionary = {}
 var queued: Array = []
 var listener := TCPServer.new()
@@ -316,7 +317,7 @@ func _update_seen(peer: Dictionary,message: Dictionary) -> void:
 	var account: Dictionary=accounts[peer.account]
 	var previous: String=str(account.get("seen_release",""))
 	var id=message.get("id")
-	var ok:=ReleaseNotes.acknowledge(account,id)
+	var ok:=ReleaseNotes.acknowledge(account,id,release_instance)
 	if ok and previous!=str(account.get("seen_release","")) and not checkpoint():
 		if previous=="":account.erase("seen_release")
 		else:account.seen_release=previous
@@ -468,7 +469,7 @@ func _hello(id: int,message: Dictionary) -> void:
 	var center: Vector2=focus.position if focus!=null else cell.position
 	peer.view=Vector4(center.x,center.y,Sim.VIEW.x/.8/2,Sim.VIEW.y/.8/2)
 	peer.view_tick=world.revision
-	_send(peer,{"kind":"welcome","release_notes":ReleaseNotes.pending(account),"release_updates":ReleaseNotes.pending_all(account),"token":token,"world_id":world_id,"epoch":epoch,"sequence":account.sequence,"edit":account.edit,"seed":world.seed_value,"habitat":Codec.new().capture(world.habitat_geometry),"cell":cell.id,"player_name":str(account.get("display_name","")),"death_serial":world.death_serial})
+	_send(peer,{"kind":"welcome","release_notes":ReleaseNotes.pending(account,release_instance),"release_updates":ReleaseNotes.pending_all(account,release_instance),"token":token,"world_id":world_id,"epoch":epoch,"sequence":account.sequence,"edit":account.edit,"seed":world.seed_value,"habitat":Codec.new().capture(world.habitat_geometry),"cell":cell.id,"player_name":str(account.get("display_name","")),"death_serial":world.death_serial})
 	var initial:=_frame(peer)
 	initial.warming=true
 	_send(peer,initial)
