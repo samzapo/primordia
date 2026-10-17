@@ -5,6 +5,7 @@ const Interior = preload("res://scripts/cell_interior.gd")
 const Action = preload("res://scripts/cell_action.gd")
 const Biomass = preload("res://scripts/biomass_preview.gd")
 var game
+var family_picker:=preload("res://scripts/family_picker.gd").new()
 var investment_picker:=preload("res://scripts/investment_picker.gd").new()
 var mobile_menu_height:=0.0
 var mobile_tray:=PanelContainer.new()
@@ -42,6 +43,7 @@ var last_goal := ""
 
 func initialize(owner_game) -> void:
 	game = owner_game
+	game.ui.add_child(family_picker);family_picker.initialize(self)
 	add_child(investment_picker);investment_picker.initialize(game)
 	mobile_tray.z_index=90;add_child(mobile_tray)
 	var tray_row:=HBoxContainer.new();mobile_tray.add_child(tray_row)
@@ -97,6 +99,7 @@ func reset() -> void:
 func close_context() -> void:
 	pathways.hide()
 	investment_picker.hide()
+	family_picker.hide()
 	context.clear()
 	mobile_tray.hide();mobile_menu_height=0.0
 	if mobile():game.touch_zoom.layout()
@@ -159,7 +162,7 @@ func target_title(target: Dictionary) -> String:
 	if target.kind == "organ":
 		var organ: Dictionary = game.world.player.organ_by_id(target.id)
 		return game.TITLES[game.Simulation.KINDS.find(organ.kind)] if not organ.is_empty() else "Organelle"
-	return {"assembly":"Assembly factory","chemistry":"Chemistry factory","nucleus":"Nucleus","bud":"Offspring reserve","atp":"ATP","scar":"Restore organelle"}.get(target.kind,"Cell")
+	return {"assembly":"Assembly factory","chemistry":"Chemistry factory","nucleus":"Nucleus","bud":"Division","atp":"ATP","scar":"Restore organelle"}.get(target.kind,"Cell")
 
 func _choice(title: String, description: String, action: Callable, organ_kind: String = "", symbol: String = "", affordable: bool = true, tissue_cost: float = -1.0, ap_cost: int = 0, rate_model: Dictionary = {}) -> void:
 	var node = Action.new()
@@ -172,7 +175,8 @@ func _choice(title: String, description: String, action: Callable, organ_kind: S
 	node.ap_cost = ap_cost
 	node.rate_model = rate_model
 	node.pressed.connect(action)
-	if mobile():mobile_flow.add_child(node)
+	if context.get("kind","")=="lineage":family_picker.grid.add_child(node)
+	elif mobile():mobile_flow.add_child(node)
 	else:add_child(node)
 	choices.append(node)
 
@@ -273,33 +277,18 @@ func open_context(target: Dictionary) -> void:
 			_choice("Cell instincts",sim.Behavior.summary(cell),func():game._message(sim.Behavior.summary(cell)),"","Instinct")
 			_choice("Nucleus","Return to goals and blueprints.",open_context.bind({"kind":"nucleus"}),"","Back")
 		"bud":
-			_choice("Fund offspring","Automatic investment uses surplus tissue and ATP. This adds up to 10 of each now.",func():
-				sim.edit("reserve",{"value":10})
-				game._message(run.objective(sim)),"","+10")
-			_choice("Reclaim reserves","Withdraw up to 10 tissue and 10 ATP.",func():
-				sim.edit("reserve",{"value":-10})
-				game._message(run.objective(sim)),"","−10")
 			var funded: bool = cell.brood_mass >= sim.offspring_quote().material and cell.brood_energy >= 60
-			_choice("Release successor","A fully funded bud releases automatically when there is room. This releases it now; you keep this body.",_reproduce.bind(false),"","Divide",funded and sim.lineage.active_family(sim).size() < sim.Lineage.MAX_ACTIVE)
-			_choice("Store dormant successor","Same tissue and ATP cost. A prepaid dormant body hatches if the active family is lost.",_reproduce.bind(true),"","Cyst",funded and sim.lineage.dormant.size() < sim.Lineage.MAX_DORMANT)
-			var family: Array = sim.lineage.active_family(sim)
-			for relative in family:
-				if relative != cell:
-					_choice("Follow generation %d" % relative.generation,"Continue managing this existing family member; the current body stays alive.",_follow.bind(relative.id),"","G%d" % relative.generation)
-					break
+			_choice("Divide now","Surplus tissue and ATP grow a daughter automatically. When fully grown and there is room, it joins the pond as a living cell.",_reproduce,"","Divide",funded and sim.lineage.active_family(sim).size() < sim.Lineage.MAX_ACTIVE)
 		"lineage":
 			context["roster"]=hash(sim.lineage.records)
-			var records: Array=sim.lineage.records.filter(func(record):return record.state!="dead")
-			var page: int=clampi(int(target.get("page",0)),0,maxi(0,ceili(records.size()/3.0)-1))
-			var stats: Dictionary=sim.lineage.statistics()
-			_choice("Generation %d" % stats.generation,"%d total cells in this lineage." % stats.total,game._message.bind("Generation %d · %d total cells in this lineage." % [stats.generation,stats.total]),"","G%d" % stats.generation)
-			for record in records.slice(page*3,page*3+3):
+			var records: Array=sim.lineage.records.filter(func(record):return record.state in ["living","active"])
+			family_picker.layout_key=[]
+			for record in records:
 				var can_follow: bool=record.state=="living" and not run.terminal()
 				_choice("Cell %d · %s" % [record.id,record.state],sim.lineage.biography(record),_follow.bind(record.id) if can_follow else game._message.bind(sim.lineage.biography(record)),"","%d" % record.generation)
 				choices[-1].selected=record.state=="active"
 				choices[-1].set_meta("family_id",record.id)
 				choices[-1].set_meta("parent_id",record.parent)
-			if records.size()>3:_choice("More relatives","Other living relatives and dormant reserves.",open_context.bind({"kind":"lineage","page":(page+1)%ceili(records.size()/3.0)}),"","More")
 		"archive":
 			var known: Array = game.archive.discovered.filter(func(gene): return gene not in run.learned and sim.Genes.DATA[gene].kind != "feeding")
 			var page: int = int(target.get("page",0))
@@ -311,7 +300,7 @@ func open_context(target: Dictionary) -> void:
 			if known.size() > 3: _choice("More blueprints","Next page.",open_context.bind({"kind":"archive","page":(page+1)%ceili(known.size()/3.0)}),"","More")
 			_choice("Nucleus","Return to the nucleus.",open_context.bind({"kind":"nucleus"}),"","Back")
 	# At most four actions plus a next-page node around any structure.
-	if choices.size() > 5 and not mobile():
+	if choices.size() > 5 and not mobile() and target.kind!="lineage":
 		var all_choices: Array[Button] = choices.duplicate()
 		var page := posmod(int(target.get("menu_page",0)),ceili(all_choices.size()/4.0))
 		choices = []
@@ -331,13 +320,13 @@ func open_context(target: Dictionary) -> void:
 			choices[i].focus_neighbor_bottom = choices[i].focus_neighbor_right
 	sync(0)
 
-func _reproduce(dormant: bool) -> void:
+func _reproduce() -> void:
 	# Commit the parent's edits before transferring tissue into a separate body.
 	game.world.commit_build()
-	var success: bool = game.world.divide_lineage(dormant,false)
+	var success: bool = game.world.divide_lineage(false,false)
 	game.world.begin_build()
 	close_context()
-	game._message(("Dormant successor secured." if dormant else "Successor released. The family menu lets you follow it.") if success else "Needs full tissue/ATP reserves, feeding anatomy and room for another family member.")
+	game._message("Cell divided. Choose your daughter from Family." if success else "Needs full tissue/ATP reserves, feeding anatomy and room for another family member.")
 
 func _follow(identity: int) -> void:
 	var keep_editing: bool=game.build_open and not game.world.remote_client
@@ -369,7 +358,7 @@ func describe(target: Dictionary) -> String:
 		"lineage": return "FAMILY TREE\n"+sim.lineage.summary(sim)+"\n"+run.forecast()
 		"archive": return "Known blueprints · %d\nOne draft choice per tide; recalling grants no free anatomy." % game.archive.discovered.size()
 		"past": return "Expedition history · %d recorded\nYour next expedition retains these discoveries, not extra stats." % game.archive.expeditions.size()
-		"bud": return "Offspring reserve\n%.0f / %.0f tissue · %.0f / 60 ATP\n%d living family · %d dormant\nSurplus is invested automatically; a funded bud releases when there is room.\nDescendant viability: %.0f / 60 s" % [cell.brood_mass,sim.offspring_quote().material,cell.brood_energy,sim.lineage.active_family(sim).size(),sim.lineage.dormant.size(),run.viable_seconds]
+		"bud": return "Division\n%.0f / %.0f tissue · %.0f / 60 ATP\nSurplus grows a daughter automatically. It joins the pond when ready and there is room." % [cell.brood_mass,sim.offspring_quote().material,cell.brood_energy]
 		"organ":
 			var organ: Dictionary = cell.organ_by_id(target.id)
 			if organ.is_empty(): return ""
@@ -460,7 +449,8 @@ func sync(_dt: float) -> void:
 	biomass_view.sync()
 	var active: bool = not game.settings_panel.visible
 	visible = active
-	if not active: return
+	if not active:
+		family_picker.hide();return
 	if context.get("kind","")=="lineage" and context.get("roster",0)!=hash(game.world.lineage.records):
 		open_context(context.duplicate());return
 	_sync_family_portraits()
@@ -473,21 +463,21 @@ func sync(_dt: float) -> void:
 	message.size.x = message.custom_minimum_size.x
 	message.add_theme_font_size_override("font_size",roundi((22 if mobile() else 20)*s))
 	message.position = (cell_screen+Vector2(-message.size.x*0.5,game.world.player.radius*game.zoom+35)).clamp(Vector2(16,16),size-message.size-Vector2(16,16))
-	edit_hint.visible = game.build_open and not mobile() and (game.selected>=0 or game.moving_id>=0 or not context.is_empty())
+	edit_hint.visible = game.build_open and not mobile() and context.get("kind","")!="lineage" and (game.selected>=0 or game.moving_id>=0 or not context.is_empty())
 	var placing_kind: String=game.Simulation.KINDS[game.selected] if game.selected>=0 else game.world.player.organ_by_id(game.moving_id).get("kind","")
 	edit_hint.text = "Tab · return to habitat" if placing_kind=="" else ("Place inside the cell · right-click cancels" if game.world.player.internal_organ(placing_kind) else "Place on membrane · right-click cancels")
 	edit_hint.add_theme_font_size_override("font_size",roundi(14*s))
 	edit_hint.size = Vector2(minf(540*s,size.x-32),0)
 	edit_hint.position = Vector2((size.x-edit_hint.size.x)*0.5,14)
 	if not game.build_open and not context.is_empty() and context.kind not in ["lineage","archive","past"]: close_context()
-	if context.get("kind","") == "bud" and choices.size() >= 4:
+	if context.get("kind","") == "bud" and not choices.is_empty():
 		var sim = game.world
 		var funded: bool = sim.player.brood_mass+0.000001 >= sim.offspring_quote().material and sim.player.brood_energy >= 60
-		choices[2].affordable = funded and sim.lineage.active_family(sim).size() < sim.Lineage.MAX_ACTIVE
-		choices[3].affordable = funded and sim.lineage.dormant.size() < sim.Lineage.MAX_DORMANT
+		choices[0].affordable = funded and sim.lineage.active_family(sim).size() < sim.Lineage.MAX_ACTIVE
+	if context.get("kind","")=="lineage":family_picker.sync()
 	_layout_mobile()
 	if investment_picker.visible:investment_picker.sync()
-	if not context.is_empty():
+	if not context.is_empty() and context.kind!="lineage":
 		if mobile():
 			for choice in choices:
 				choice.text_scale=s*.85
@@ -551,9 +541,10 @@ func sync(_dt: float) -> void:
 func _layout_mobile() -> void:
 	var prior_height:=mobile_menu_height
 	var s:=ui_scale();var size:=get_viewport_rect().size
-	mobile_tray.visible=mobile() and not context.is_empty() and not choices.is_empty()
+	mobile_tray.visible=mobile() and not context.is_empty() and context.kind!="lineage" and not choices.is_empty()
 	mobile_resources.visible=not game.world.player.dead and ((mobile() and game.touch_controls_available()) or (not mobile() and game.build_open))
 	mobile_menu_height=investment_picker.size.y+16*s if mobile() and investment_picker.visible else 0.0
+	if mobile() and family_picker.visible:mobile_menu_height=family_picker.position.y+family_picker.size.y+8*s
 	cancel_icon.visible=mobile() and (game.selected>=0 or game.moving_id>=0) and not game.settings_panel.visible
 	if cancel_icon.visible:
 		var organ: Dictionary=game.world.player.organ_by_id(game.moving_id)
@@ -619,7 +610,7 @@ func activate_keyboard() -> bool:
 
 func _draw() -> void:
 	if game == null or game.settings_panel.visible: return
-	if not context.is_empty() and context.kind!="investment" and not mobile():
+	if not context.is_empty() and context.kind not in ["investment","lineage"] and not mobile():
 		draw_line(screen_at(context),menu_center,Color(0.5,0.91,0.85,0.35),1.5,true)
 		for choice in choices:
 			var origin := menu_center

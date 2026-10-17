@@ -46,14 +46,14 @@
       },
       {
         "id": "offspring",
-        "title": "Manage offspring",
-        "text": "Open the offspring reserve to add or reclaim resources, release a funded successor, or store one dormant. Surplus investment and splitting also happen automatically. Daughters begin with a basic oral groove instead of copies of the parent’s organs. They inherit its investment strategy; a Manual parent gives a random Hunter, Producer or Grazer strategy.",
+        "title": "Cell division",
+        "text": "Surplus tissue and ATP grow a daughter automatically. When ready and there is room, the cell divides and its daughter joins the pond. Open the growing bud to check progress or divide now when ready. Daughters begin with a basic oral groove and inherit the parent’s investment strategy; a Manual parent gives a random Hunter, Producer or Grazer.",
         "sources": []
       },
       {
         "id": "history",
         "title": "View your family",
-        "text": "Nucleus → Family shows each living relative and dormant reserve as a picture of its current cell. The tiny number in the bottom corner is its generation. Choose a living relative to manage it; your previous cell stays alive. More relatives shows another page. The summary keeps the highest generation and total cells ever; deceased relatives leave the list.",
+        "text": "Nucleus → Family shows all living relatives together as pictures of their current cells. The tiny corner number is each cell’s generation. Choose a living relative to manage it; your previous cell stays alive. The menu grows to fit your screen; scroll if your family needs more room. The header keeps the highest generation and lifetime cell count. Deceased relatives leave the list.",
         "sources": []
       },
       {
@@ -103,7 +103,7 @@
       {
         "id": "select",
         "title": "Open cell controls",
-        "text": "Tap a factory, nucleus, offspring reserve, ATP store or installed organelle. Choices appear along the top. Tap × or empty water to close choices.",
+        "text": "Tap a factory, nucleus, growing bud, ATP store or installed organelle. Choices appear along the top. Tap × or empty water to close choices.",
         "sources": []
       },
       {
@@ -153,7 +153,7 @@
       {
         "id": "select",
         "title": "Open cell controls",
-        "text": "Click a factory, nucleus, offspring reserve, ATP store or organelle. Tab enters or leaves cell editing.",
+        "text": "Click a factory, nucleus, growing bud, ATP store or organelle. Tab enters or leaves cell editing.",
         "sources": []
       },
       {
@@ -237,7 +237,7 @@
         {
           "id": "emergency",
           "title": "Emergency fuel",
-          "text": "When ATP is low, a cell can reclaim uncommitted offspring reserves and use spare biomass as fuel. It cannot live indefinitely without food or light and carbon.",
+          "text": "When ATP is low, a cell can reclaim uncommitted division investment and use spare biomass as fuel. It cannot live indefinitely without food or light and carbon.",
           "sources": [
             {
               "title": "Microbial energy reserves",
@@ -626,7 +626,7 @@
         {
           "id": "division",
           "title": "Reproduction and AP",
-          "text": "Surplus biomass and ATP go into offspring reserves automatically. A funded cell divides when there is room. Each committed division awards 2 AP; each cell’s first added organelle costs 0 AP, its second 1 AP, its third 2 AP, and so on. The oral groove does not count. Selling lowers the next price and returns the AP you paid minus 1, with a minimum return of 0; restoring an absent organ uses the next price. AP is a game resource. Daughters start with a basic oral groove and rebuild their own organs. They inherit the parent’s investment choice; Manual gives a random Hunter, Producer or Grazer.",
+          "text": "Surplus biomass and ATP automatically grow a daughter inside the cell. A funded cell divides when there is room. Each committed division awards 2 AP; each cell’s first added organelle costs 0 AP, its second 1 AP, its third 2 AP, and so on. The oral groove does not count. Selling lowers the next price and returns the AP you paid minus 1, with a minimum return of 0; restoring an absent organ uses the next price. AP is a game resource. Daughters start with a basic oral groove and rebuild their own organs. They inherit the parent’s investment choice; Manual gives a random Hunter, Producer or Grazer.",
           "sources": [
             {
               "title": "Cell division",
@@ -637,22 +637,11 @@
         {
           "id": "mutations",
           "title": "Mutations and inheritance",
-          "text": "Division has a 10% chance to offer a free mutation. Keep it through the nucleus, then apply it to a matching organelle. Descendants inherit their lineage’s anatomy. The chance and choices are game rules.",
+          "text": "Division has a 10% chance to offer a free mutation. Keep it through the nucleus, then apply it to a matching organelle. Daughters start with a basic oral groove and inherit the investment strategy, rather than the parent’s organs or mutations. The chance and choices are game rules.",
           "sources": [
             {
               "title": "Cell division",
               "url": "https://www.ncbi.nlm.nih.gov/books/NBK26831/"
-            }
-          ]
-        },
-        {
-          "id": "dormant",
-          "title": "Stored successors",
-          "text": "A fully paid dormant successor can preserve the lineage if its active cells die. Storing one still needs real offspring reserves.",
-          "sources": [
-            {
-              "title": "Microbial dormancy",
-              "url": "https://pubmed.ncbi.nlm.nih.gov/20231463/"
             }
           ]
         },

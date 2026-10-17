@@ -1999,27 +1999,26 @@ func make_offspring(parent, quote: Dictionary):
 	return child
 
 func divide_lineage(dormant: bool = false, follow: bool = true) -> bool:
-	if remote_client: return edit("divide",{"dormant":dormant})
+	if dormant:return false # Retired command: never fund a stored body.
+	if remote_client: return edit("divide",{})
 	if player.dead or evolution.terminal() or build_original != null: return false
 	return _divide_paid(player,lineage,dormant,follow,true)
 
 func _divide_paid(parent,ledger,dormant: bool=false,follow: bool=false,progress: bool=false) -> bool:
-	if parent.dead or parent.health<=0 or parent.lineage_id()!=ledger.root_id:return false
-	if not dormant and cells.filter(func(cell):return not cell.dead).size()>=MAX_LIVE_CELLS:return false
-	if dormant and ledger.dormant.size() >= Lineage.MAX_DORMANT: return false
-	if not dormant and ledger.active_family(self).size() >= Lineage.MAX_ACTIVE: return false
+	if dormant or parent.dead or parent.health<=0 or parent.lineage_id()!=ledger.root_id:return false
+	if cells.filter(func(cell):return not cell.dead).size()>=MAX_LIVE_CELLS:return false
+	if ledger.active_family(self).size() >= Lineage.MAX_ACTIVE: return false
 	var quote := offspring_quote(parent)
 	if parent.brood_mass+0.000001 < quote.material or parent.brood_energy < quote.energy: return false
 	if parent.count("feeding")+parent.count("photosynthesis") == 0: return false
 	var child = make_offspring(parent,quote)
 	child.position = parent.position
-	var found := dormant
-	if not dormant:
-		for i in 32:
-			child.position = Medium.wrap_position(parent.position+Vector2.from_angle(parent.angle+TAU*i/32)*(parent.extent()+child.extent()+45))
-			if safe_birth_position(child.position,child.extent()):
-				found = true
-				break
+	var found := false
+	for i in 32:
+		child.position = Medium.wrap_position(parent.position+Vector2.from_angle(parent.angle+TAU*i/32)*(parent.extent()+child.extent()+45))
+		if safe_birth_position(child.position,child.extent()):
+			found = true
+			break
 	if not found: return false
 	Investment.inherit_strategy(self,parent,child)
 	child.chemistry.partition(parent.chemistry,0.25)
@@ -2037,22 +2036,19 @@ func _divide_paid(parent,ledger,dormant: bool=false,follow: bool=false,progress:
 	ledger.births += 1
 	var mutation_offer:=false
 	if ledger.progression!=null:mutation_offer=ledger.progression.divided(parent)
-	ledger.register(child,parent.id,child.generation,"dormant" if dormant else "active" if follow else "living",time)
-	if dormant:
-		ledger.dormant.append(child)
-	else:
-		cells.append(child)
-		if follow:
-			var record: Dictionary = ledger.record_for(parent.id)
-			if not record.is_empty(): record.state = "living"
-			parent.role = "ancestor"
-			child.role = "player"
-			player = child
-			evolution.observe_successor(child)
-	if progress:evolution.offspring_id = child.id if not dormant else evolution.offspring_id
+	ledger.register(child,parent.id,child.generation,"active" if follow else "living",time)
+	cells.append(child)
+	if follow:
+		var record: Dictionary = ledger.record_for(parent.id)
+		if not record.is_empty(): record.state = "living"
+		parent.role = "ancestor"
+		child.role = "player"
+		player = child
+		evolution.observe_successor(child)
+	if progress:evolution.offspring_id = child.id
 	_record_sound("division",parent.position,parent.id)
-	ledger.notify(("Dormant successor funded." if dormant else "Successor released.")+(" +2 AP." if ledger.progression!=null else "")+(" Free mutation available in the nucleus." if mutation_offer else ""))
-	events.append({"type":"division","id":child.id,"parent":parent.id,"dormant":dormant,"time":time,"material":quote.total_material,"reserve_used":quote.material,"body_transferred":quote.body_transfer,"oxygen_transferred":child.oxygen,"atp_used":20})
+	ledger.notify("Cell divided."+(" +2 AP." if ledger.progression!=null else "")+(" Free mutation available in the nucleus." if mutation_offer else ""))
+	events.append({"type":"division","id":child.id,"parent":parent.id,"time":time,"material":quote.total_material,"reserve_used":quote.material,"body_transferred":quote.body_transfer,"oxygen_transferred":child.oxygen,"atp_used":20})
 	return true
 
 func follow_family(identity: int) -> bool:
@@ -2100,7 +2096,10 @@ func _family_ledger(cell):
 	return ledger
 
 func _step_reproduction() -> void:
-	if not automatic_reproduction or remote_client:return
+	if remote_client:return
+	lineage.discard_stored(self)
+	for ledger in family_ledgers:ledger.discard_stored(self)
+	if not automatic_reproduction:return
 	for cell in cells.duplicate():
 		if cell.dead or cell.health<=0 or cell.brood_mass<=0 or cell.brood_energy<60 or time<cell.reproduction_retry_at:continue
 		if cell==player and (build_original!=null or (not server_mode and evolution.terminal())):continue

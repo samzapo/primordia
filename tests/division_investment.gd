@@ -33,23 +33,22 @@ static func run(check: Callable) -> void:
  check.call(var_to_bytes(Codec.new().capture(parent))==before,"Preparing a daughter never edits the parent's anatomy")
  check.call(proposal.membrane.skeleton!=parent.membrane.skeleton,"The daughter owns its own sampled skeleton")
  for role in ["hunter","producer","grazer"]:
-  for dormant in [false,true]:
-   sim=fixture();parent=sim.player
-   sim.investment.lineages[parent.lineage_id()]="producer"
-   sim.investment.cells[parent.id]=role
-   parent.add_organ("photosynthesis",1,"graze",false)
-   fund(sim,parent)
-   var mass: float=material(sim);var energy: float=parent.energy+parent.brood_energy
-   var points: int=sim.evolution.points
-   check.call(sim.divide_lineage(dormant,false),"Funded active/dormant division commits")
-   var child=sim.lineage.dormant[-1] if dormant else sim.cells[-1]
-   check.call(sim.Investment.strategy(sim,child)==role and sim.investment.cells[child.id]==role,"Daughter inherits the effective body strategy, including a family override")
-   check.call(child.organs.size()==1 and child.count("photosynthesis")==0 and parent.count("photosynthesis")==1,"Division keeps parent organs and lets the daughter build its own")
-   check.call(absf(material(sim)-mass)<.00001 and absf(parent.energy+parent.brood_energy+child.energy-(energy-20))<.00001,"Basic daughter conserves paid tissue and the existing division ATP transfer")
-   check.call(sim.evolution.points==points+2,"Committed division still awards two AP")
-   var restored=Codec.new().restore(Codec.new().capture(sim))
-   var saved=restored.lineage.dormant[-1] if dormant else restored.cells[-1]
-   check.call(restored.Investment.strategy(restored,saved)==role and saved.organs.size()==1,"Daughter strategy and basic anatomy survive checkpoint recovery")
+  sim=fixture();parent=sim.player
+  sim.investment.lineages[parent.lineage_id()]="producer"
+  sim.investment.cells[parent.id]=role
+  parent.add_organ("photosynthesis",1,"graze",false)
+  fund(sim,parent)
+  var mass: float=material(sim);var energy: float=parent.energy+parent.brood_energy
+  var points: int=sim.evolution.points
+  check.call(sim.divide_lineage(false,false),"Funded living division commits")
+  var child=sim.cells[-1]
+  check.call(sim.Investment.strategy(sim,child)==role and sim.investment.cells[child.id]==role,"Daughter inherits the effective body strategy, including a family override")
+  check.call(child.organs.size()==1 and child.count("photosynthesis")==0 and parent.count("photosynthesis")==1,"Division keeps parent organs and lets the daughter build its own")
+  check.call(absf(material(sim)-mass)<.00001 and absf(parent.energy+parent.brood_energy+child.energy-(energy-20))<.00001,"Basic daughter conserves paid tissue and the existing division ATP transfer")
+  check.call(sim.evolution.points==points+2,"Committed division still awards two AP")
+  var restored=Codec.new().restore(Codec.new().capture(sim))
+  var saved=restored.cells[-1]
+  check.call(restored.Investment.strategy(restored,saved)==role and saved.organs.size()==1,"Daughter strategy and basic anatomy survive checkpoint recovery")
  # Randomize only children of a genuinely Manual parent, without changing it.
  var observed: Dictionary={}
  for seed_value in range(60):

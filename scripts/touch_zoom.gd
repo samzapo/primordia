@@ -97,7 +97,7 @@ func layout() -> void:
 	if not game.user_paused and game.world.player.dead:
 		var received_recovery=game.get("family_recovery") if game.world.remote_client else {}
 		var recovery: Dictionary=received_recovery if received_recovery is Dictionary else {}
-		state_label.text="Preparing your new lineage" if recovery.get("state","")=="restarting_lineage" else "Stored successor waiting for space" if recovery.get("state","")=="waiting_for_space" else "Lineage exhausted · observing" if game.can_follow() and recovery.get("state","")=="extinct" else "Lineage exhausted · no stored successor" if recovery.get("state","")=="extinct" else "Observing a living cell" if game.can_follow() else "No living cell to follow"
+		state_label.text="Preparing your new lineage" if recovery.get("state","")=="restarting_lineage" else "Waiting for a new cell" if recovery.get("state","")=="waiting_for_space" else "Lineage exhausted · observing" if game.can_follow() and recovery.get("state","")=="extinct" else "Lineage exhausted · no stored successor" if recovery.get("state","")=="extinct" else "Observing a living cell" if game.can_follow() else "No living cell to follow"
 	state_label.add_theme_font_size_override("font_size",roundi(14*pixels*.7))
 	state_label.position=Vector2(size.x-220*pixels*.7,228*pixels*.7+tray_offset);state_label.size=Vector2(208,44)*pixels*.7
 

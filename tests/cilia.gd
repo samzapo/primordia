@@ -28,7 +28,7 @@ static func run(check: Callable) -> void:
 	stress(check)
 	var sim = Sim.new(77)
 	check.call(sim.player.count("propulsion") == 0 and sim.player.count("cilia") == 0 and sim.player.count("feeding") == 1,"Starter has a pore and no free locomotion organ")
-	check.call(sim.lineage.dormant[0].count("propulsion")+sim.lineage.dormant[0].count("cilia") == 0,"Founder reserve preserves the same bare starter anatomy")
+	check.call(sim.lineage.dormant.is_empty(),"Founder has no hidden reserve body")
 	var material: float = sim.player.organic_mass()
 	var tissue: float = sim.player.biomass
 	var ap: int = sim.evolution.points

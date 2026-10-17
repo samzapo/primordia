@@ -100,8 +100,8 @@ func run(test_host) -> void:
 	# The only permanent pane is settings, which starts hidden.
 	var panes := 0
 	for node in scene.ui.get_children():
-		if node is PanelContainer: panes += 1
-	expect(panes == 1 and not scene.settings_panel.visible,"No top, bottom or assembly panes remain")
+		if node is PanelContainer and node.visible: panes += 1
+	expect(panes == 0 and not scene.settings_panel.visible and not scene.cell_ui.family_picker.visible,"Settings and contextual family panes start hidden")
 	expect(scene.batches.size() == Sim.SPECIES_COUNT,"Renderer retains all chemistry species")
 	key(KEY_M)
 	var identity = scene.world.player
@@ -269,15 +269,15 @@ func run(test_host) -> void:
 	scene.cell_ui.choices[0].pressed.emit()
 	expect(scene.world.evolution.chosen and offered in scene.world.evolution.learned,"Nucleus keeps a blueprint using the existing run rules")
 	scene.cell_ui.open_context({"kind":"bud"})
-	var reserved: float = cell.brood_mass
-	var reserved_atp: float = cell.brood_energy
+	expect(scene.cell_ui.choices.size()==1 and scene.cell_ui.choices[0].caption=="Divide now","The bud offers direct division without banking controls")
+	cell.brood_mass=0;cell.brood_energy=0
+	var population: int=scene.world.cells.size()
 	scene.cell_ui.choices[0].pressed.emit()
-	expect(cell.brood_mass > reserved and cell.brood_energy > reserved_atp,"Offspring bud funds existing tissue and energy reserves")
-	scene.cell_ui.choices[1].pressed.emit()
-	expect(cell.brood_mass == reserved and cell.brood_energy == reserved_atp,"Offspring reserves can still be reclaimed")
+	cell=scene.world.player # Division commits/re-enters the editor; use its current body.
+	expect(scene.world.cells.size()==population and cell.brood_mass==0 and cell.brood_energy==0,"An unfunded division cannot grant tissue, ATP or a free daughter")
 	scene.world.evolution.offspring_id = cell.id
 	scene.cell_ui.open_context({"kind":"bud"})
-	expect(scene.cell_ui.choices.size() >= 4 and "viability" in scene.cell_ui.describe({"kind":"bud"}),"The bud retains reproduction choices and reports independent viability after division")
+	expect(scene.cell_ui.choices.size()==1 and "tissue" in scene.cell_ui.describe({"kind":"bud"}),"The bud reports automatic division growth after a prior birth")
 	scene.world.evolution.offspring_id = -1
 	scene.cell_ui.close_context()
 	cell.energy = 0
@@ -599,18 +599,19 @@ func _lineage() -> void:
 	scene.cell_ui.open_context({"kind":"bud"})
 	parent.brood_energy = 50
 	scene.cell_ui.sync(0)
-	expect(not scene.cell_ui.choices[2].affordable,"The bud marks an unfunded successor")
+	expect(not scene.cell_ui.choices[0].affordable,"The bud marks an unfunded successor")
 	parent.brood_energy = 60
 	scene.cell_ui.sync(0)
-	expect(scene.cell_ui.choices[2].affordable,"Funding refreshes readiness while the bud choices remain open")
-	scene.cell_ui.choices[2].pressed.emit()
+	expect(scene.cell_ui.choices[0].affordable,"Funding refreshes readiness while the bud choices remain open")
+	scene.cell_ui.choices[0].pressed.emit()
 	scene._update_world(1)
 	expect(sim.lineage.births == 1 and sim.cells.size() == 2 and sim.player.id == parent.id,"Release from the bud creates a real autonomous family member")
 	expect(scene.build_open and sim.build_original != null and sim.player.organic_mass() < mass and sim.evolution.points == points+2,"Birth awards two AP, commits paid anatomy and resumes editing the depleted parent")
 	var child = sim.cells[-1]
 	expect(scene.views.has(child.id) and scene.views[sim.player.id].cell == sim.player,"Parent and offspring drawings update immediately during editing")
-	scene.cell_ui.open_context({"kind":"bud"})
-	scene.cell_ui.choices[-1].pressed.emit()
+	scene.cell_ui.open_context({"kind":"lineage"})
+	for choice in scene.cell_ui.choices:
+		if choice.get_meta("family_id",-1)==child.id:choice.pressed.emit();break
 	expect(sim.player.id == child.id and scene.camera_locked and sim.build_original != null,"Following a released successor attaches the camera and correct build clone")
 	key(KEY_TAB)
 	settle()

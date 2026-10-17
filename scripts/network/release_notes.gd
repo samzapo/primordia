@@ -202,6 +202,18 @@ const RELEASES=[
  "footer":"Your cells and their progress carry on between updates.",
  "button":"Back to the pond",
 },
+{
+ "id":"2026-10-17-family-grid",
+ "audience":"experimental",
+ "title":"What’s new in the pond",
+ "items":[
+  "The family menu shows all living relatives in a larger grid. Scroll when your family needs more room.",
+  "Choose a living relative directly, even if it’s outside your current view.",
+  "Cells now divide into living daughters instead of storing offspring for later.",
+ ],
+ "footer":"Your cells and their progress carry on between updates.",
+ "button":"Back to the pond",
+},
 ]
 const CURRENT=RELEASES[-1]
 static func seen_index(account: Dictionary) -> int:

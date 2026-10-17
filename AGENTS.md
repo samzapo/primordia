@@ -537,3 +537,21 @@ while open; remove deceased entries. Owned off-camera portraits travel as small,
 data-only presentation snapshots, never extra camera interests, chemistry poses
 or simulated client bodies. Capture/drawing must not alter ecology or RNG.
 Validate actual desktop/touch pixels and pointer selection; preserve both ponds.
+
+October 17 family-grid correction: show all current relative/reserve portraits
+in one responsive desktop/touch grid. Remove the G-generation summary action
+and More pagination, including the generic desktop five-choice limit. Keep
+highest-generation/lifetime totals as small header text and per-cell generation
+as a tiny corner badge. Allow the family menu to use the screen; scroll only
+when its contents exceed the viewport. Close remains fixed and reachable while
+scrolling. Preserve live portraits, validated follow and ordinary pond retention.
+
+October 17 direct-division correction: banked/dormant offspring are retired.
+Do not create founder reserves, store paid bodies or hatch old backups. The
+owner explicitly waives reserve/history retention for this update: discard old
+stored bodies on the next authority tick, recording their material as removed;
+do not release them or reset the living pond. Preserve ordinary living cells,
+accounts, five keys and feedback. Keep paid automatic growth and actual safe
+live division, basic daughter/strategy inheritance, 2AP awards and normal
+living-family succession. The bud offers only Divide now. Show only living
+relatives in portraits/help; there is no storage bank or dormant recovery.

@@ -35,70 +35,61 @@ static func run(check: Callable) -> void:
 	run.spend(1,"fixture purchase")
 	run.clock = 170
 	run.crisis_seconds[0] = 21
-	var initial: float = mass(sim)
-	var founder = sim.player
-	var motif: Array = Score.lineage_motif(sim.seed_value,founder.lineage_id())
-	founder.death_hint = "Fixture toxin exposure"
-	sim._die(founder)
-	check.call(sim.lineage.recover(sim,0.01),"A dead founder hatches its prepaid reserve")
-	check.call(sim.player != founder and sim.player.generation == 0 and sim.lineage.dormant.is_empty(),"The reserve is a different existing body and cannot fake a descendant victory")
-	check.call(absf(mass(sim)-initial) < 0.01 and sim.external_input == 0,"Death and hatching conserve the initial bank and released tissue")
-	check.call(run.clock == 170 and run.points == 2 and run.learned == [offered[0]] and run.offers == offered and run.chosen and run.crisis_seconds[0] == 21,"Death preserves clock, AP spending, draft and crisis progress")
-	check.call(Score.lineage_motif(sim.seed_value,sim.player.lineage_id()) == motif,"The family theme continues through reserve recovery")
-	check.call(sim.lineage.record_for(founder.id).is_empty() and sim.lineage.total_cells==2,"Deceased records leave the living family ledger while the lifetime total remains")
+	check.call(sim.lineage.dormant.is_empty() and sim.lineage.total_cells==1,"Founders start without a stored backup")
 	fund(sim)
-	initial = mass(sim)
+	var initial: float = mass(sim)
 	var parent = sim.player
-	check.call(sim.divide_lineage(false,false) and sim.player == parent,"Early division releases a living successor without taking direct control")
+	var motif: Array = Score.lineage_motif(sim.seed_value,parent.lineage_id())
+	check.call(sim.divide_lineage(false,false) and sim.player == parent,"Division creates a living daughter without taking control")
 	var child = sim.cells[-1]
-	check.call(child.generation == 1 and child.organs.size()==1 and child.count("feeding")==1 and absf(mass(sim)-initial) < 0.01,"A real successor starts with a basic oral groove and consumes only its funded material")
+	check.call(child.generation == 1 and child.organs.size()==1 and child.count("feeding")==1 and absf(mass(sim)-initial) < 0.01,"A daughter starts with a basic oral groove and consumes only funded material")
 	var child_position: Vector2 = child.position
 	var child_health: float = child.health
+	parent.death_hint="Fixture toxin exposure"
 	sim._die(parent)
-	check.call(sim.lineage.recover(sim,0.01) and sim.player == child,"Death prefers a living family member")
-	check.call(child.position == child_position and child.health == child_health,"Handoff neither teleports nor heals an existing descendant")
-	check.call(not run.terminal() and run.points == 4,"Ordinary death is continuation without a fresh AP allowance")
+	check.call(sim.lineage.recover(sim,0.01) and sim.player == child,"Death continues through an existing living family member")
+	check.call(child.position == child_position and child.health == child_health,"Handoff neither teleports nor heals a descendant")
+	check.call(run.clock == 170 and run.points == 4 and run.learned == [offered[0]] and run.offers == offered and run.chosen and run.crisis_seconds[0] == 21,"Death preserves clock, earned AP, drafts and crisis progress")
+	check.call(Score.lineage_motif(sim.seed_value,child.lineage_id()) == motif,"The family theme continues through living succession")
+	check.call(sim.lineage.record_for(parent.id).is_empty() and sim.lineage.total_cells==2,"Dead records leave the menu while lifetime total remains")
 	fund(sim)
-	initial = mass(sim)
-	var oxygen: float = child.oxygen
-	var energy: float = child.energy+child.brood_energy
-	check.call(sim.divide_lineage(true,false),"An additional dormant successor can be bought")
-	var cyst = sim.lineage.dormant[0]
-	check.call(absf(mass(sim)-initial) < 0.01 and child.oxygen+cyst.oxygen == oxygen and is_equal_approx(child.energy+child.brood_energy+cyst.energy,energy-20),"Dormant offspring conserves tissue/oxygen and pays division ATP")
-	var atp: float = cyst.energy
-	var tissue: float = cyst.organic_mass()
-	for i in 10: sim.step(1.0/60)
-	check.call(cyst.energy == atp and cyst.organic_mass() == tissue,"Stored cysts neither farm resources nor run hidden physiology")
+	var next_id: int=sim.next_id
+	initial=mass(sim)
+	var rng_state: int=sim.rng.state
+	var points: int=run.points
+	check.call(not sim.divide_lineage(true,false) and not sim.edit("reserve",{"value":10}),"Retired store-offspring and manual banking commands are rejected")
+	check.call(sim.next_id==next_id and mass(sim)==initial and sim.rng.state==rng_state and run.points==points and sim.lineage.dormant.is_empty(),"Rejected storage cannot consume resources, award AP or create a body")
 	sim._die(child)
-	check.call(sim.lineage.recover(sim,1) and sim.player == cyst and cyst.generation == 2,"A purchased reserve carries its actual generation and anatomy")
-	sim._die(cyst)
-	check.call(not sim.lineage.recover(sim,1) and run.status == "lost","Only exhausting all family and reserves ends the expedition")
+	check.call(not sim.lineage.recover(sim,1) and run.status=="lost","Exhausting the living family cannot hatch a hidden backup")
 
 	sim = world()
 	fund(sim)
 	sim.begin_build()
-	check.call(not sim.divide_lineage(),"A draft cannot leak an independently funded body before commit")
+	check.call(not sim.divide_lineage(),"A draft cannot leak a daughter before commit")
 	sim.evolution.accept_challenge("metabolism",sim.player)
 	sim.evolution.offers.append("fixture")
 	sim.cancel_build()
-	check.call(sim.evolution.challenge == "" and sim.evolution.challenge_cell == -1 and "fixture" not in sim.evolution.offers,"Internal preview cancellation restores all challenge and draft state")
-	for i in 2:
-		fund(sim)
-		check.call(sim.divide_lineage(true,false),"Additional reserves are separately funded")
-	fund(sim)
-	initial = mass(sim)
-	check.call(not sim.divide_lineage(true,false) and mass(sim) == initial,"The bounded bank rejects additional bodies atomically")
-	# Recovery can wait for space without consuming or losing the reserve.
-	sim = world()
-	sim._die(sim.player)
+	check.call(sim.evolution.challenge == "" and sim.evolution.challenge_cell == -1 and "fixture" not in sim.evolution.offers,"Cancelling restores challenge and draft state")
+	# A funded live birth waits for real space, with no separate stored body.
 	var blocker = Sim.Cell.new(999,sim.player.position)
-	blocker.body = 10000000
-	blocker.update_geometry()
-	blocker.membrane = Sim.Cell.Membrane.new(blocker.radius)
+	blocker.body=10000000;blocker.update_geometry()
+	blocker.membrane=Sim.Cell.Membrane.new(blocker.radius)
 	sim.cells.append(blocker)
-	check.call(not sim.lineage.recover(sim,1) and not sim.evolution.terminal() and sim.lineage.dormant.size() == 1,"A blocked hatch waits without discarding funded material")
+	initial=mass(sim);next_id=sim.next_id
+	check.call(not sim.divide_lineage(false,false) and sim.next_id==next_id and mass(sim)==initial,"A blocked division preserves paid growth without creating a banked body")
 	sim.cells.erase(blocker)
-	check.call(sim.lineage.recover(sim,1),"A waiting reserve hatches when a real opening exists")
+	check.call(sim.divide_lineage(false,false) and sim.cells.size()==2,"A ready daughter joins the pond when space opens")
+	# Old checkpoint bodies are discarded by explicit owner direction, never released.
+	var legacy=sim.make_offspring(sim.player,sim.offspring_quote())
+	legacy.id=9999;sim.lineage.dormant.append(legacy)
+	sim.lineage.register(legacy,sim.player.id,2,"dormant",sim.time)
+	var waste: float=sim.build_waste
+	var legacy_mass: float=legacy.organic_mass()
+	var count: int=sim.cells.size();next_id=sim.next_id;points=sim.evolution.points
+	sim.lineage.discard_stored(sim)
+	sim.lineage.discard_stored(sim)
+	check.call(sim.lineage.dormant.is_empty() and sim.lineage.record_for(legacy.id).is_empty() and sim.cells.size()==count,"Retired checkpoint reserves leave the ledger without hatching")
+	check.call(sim.next_id==next_id and sim.evolution.points==points and is_equal_approx(sim.build_waste,waste+legacy_mass),"Discarding reserves is idempotent, records removed tissue and grants nothing")
 	if preload("res://tests/test_policy.gd").GAMEPLAY_OBJECTIVES_ENABLED:
 		# Three crises, not three instants alive or a timer alone.
 		sim = world()

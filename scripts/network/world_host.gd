@@ -525,8 +525,6 @@ func _view(peer: Dictionary,message: Dictionary) -> void:
 func _selected(account: Dictionary):
 	for cell in world.cells:
 		if cell.id==account.selected: account.current=cell;return cell
-	for cell in account.lineage.dormant:
-		if cell.id==account.selected: account.current=cell;return cell
 	if account.has("current") and account.current.id==account.selected: return account.current
 	var ghost=Sim.Cell.new(account.selected)
 	ghost.lineage=account.root;ghost.dead=true;ghost.health=0
@@ -603,12 +601,13 @@ func _retain_receipt(account: Dictionary,seq: int,result: Dictionary) -> void:
 func _recover_families(dt: float) -> void:
 	var prior_player=world.player;var prior_lineage=world.lineage;var prior_evolution=world.evolution
 	for account in accounts.values():
+		account.lineage.discard_stored(world)
 		var selected=_selected(account)
 		account.evolution.clock=world.time
 		if not selected.dead: continue
 		world.player=selected;world.lineage=account.lineage;world.evolution=account.evolution
 		if account.lineage.recover(world,dt): account.selected=world.player.id;account.current=world.player;account.edit+=1
-		elif account.lineage.dormant.is_empty() and account.lineage.active_family(world).is_empty() and world.time>=float(account.get("restart_at",0)):
+		elif account.lineage.active_family(world).is_empty() and world.time>=float(account.get("restart_at",0)):
 			var founder=Population.introduce(world,true)
 			account.restart_at=world.time+.5
 			if founder!=null:
@@ -626,7 +625,7 @@ func _recover_families(dt: float) -> void:
 			world.cells.erase(world.player);world.player=candidates[0]
 			world.lineage=world._family_ledger(world.player)
 	# Histories retained by accounts remain serialized through previous_lineages.
-	world.family_ledgers=world.family_ledgers.filter(func(ledger):return not ledger.dormant.is_empty() or not ledger.active_family(world).is_empty())
+	world.family_ledgers=world.family_ledgers.filter(func(ledger):return not ledger.active_family(world).is_empty())
 
 func checkpoint() -> bool:
 	if world==null: return false
@@ -927,6 +926,5 @@ func _view_covered(old: Vector4,current: Vector4) -> bool:
 
 func _family_recovery(account: Dictionary) -> Dictionary:
 	var living: int=account.lineage.active_family(world).size()
-	var stored: int=account.lineage.dormant.size()
 	var selected=_selected(account)
-	return {"living":living,"stored":stored,"state":"active" if not selected.dead else "recovering" if living>0 else "waiting_for_space" if stored>0 else "restarting_lineage"}
+	return {"living":living,"stored":0,"state":"active" if not selected.dead else "recovering" if living>0 else "restarting_lineage"}

@@ -58,6 +58,7 @@ func run() -> void:
  check(scene.views[cell.id].art.colors[1].is_equal_approx(Color("#23dc7e")),"Every viewed member reads its lineage’s chosen body color")
  await investment_input(scene)
  await family_portraits(scene)
+ await family_grid(scene)
  vp.queue_free();scene.queue_free();await process_frame
  print("FEEDBACK LATEST GPU: %d assertions, %d failures" % [assertions,failures]);quit(0 if failures==0 else 1)
 
@@ -198,7 +199,18 @@ func family_portraits(scene) -> void:
  scene.family_portraits=preload("res://scripts/cell_portrait.gd").family(scene.world,scene.world.lineage)
  scene.world.cells=[cell];ui.sync(0)
  check(not card.portrait.is_empty() and card.portrait.id==42,"A remote relative stays illustrated even outside the camera's simulation models")
- scene.world.remote_client=false;scene.world.cells=[cell,child]
+ var commands: Array=[]
+ scene.world.command_sink=func(action,args):commands.append({"action":action,"args":args})
+ var selected_id: int=scene.world.player.id
+ click(card.get_global_rect().get_center())
+ for frame in 3:await process_frame
+ check(commands.any(func(command):return command.action=="follow" and command.args.id==42),"An off-camera portrait submits the ordinary authoritative follow command")
+ check(scene.world.player.id==selected_id and not scene.world.cells.has(child),"Remote selection waits for the server instead of manufacturing a client body")
+ check(not scene._switch_family(99999),"Remote family switching rejects unknown IDs before sending")
+ scene.world.remote_client=false;scene.world.command_sink=Callable();scene.world.cells=[cell,child]
+ scene.build_open=true;ui.open_context({"kind":"lineage"})
+ for frame in 3:ui.sync(0);await process_frame
+ card=ui.choices.filter(func(choice):return choice.get_meta("family_id",-1)==42)[0]
  click(card.get_global_rect().get_center())
  for frame in 3:await process_frame
  check(scene.world.player.id==42,"Actual pointer selects a relative through its portrait without the art intercepting input")
@@ -206,4 +218,79 @@ func family_portraits(scene) -> void:
  child=cell;child.dead=true;child.health=0;scene.world.lineage.died(child,scene.world)
  ui.sync(0)
  check(not ui.choices.any(func(choice):return choice.get_meta("family_id",-1)==41),"A dead relative is removed even while the family menu stays open")
+ ui.close_context()
+
+
+func family_fixture(scene,count: int) -> void:
+ var Sim=scene.Simulation
+ scene.cell_ui.close_context();scene.world.cells=[]
+ scene.world.lineage=Sim.Lineage.new();scene.world.lineage.root_id=4000
+ for i in count:
+  var cell=Sim.Cell.new(4000+i);cell.lineage=4000
+  cell.position=Vector2(1500+(i%8)*150,1000+floori(i/8.0)*150)
+  cell.previous_position=cell.position;cell.add_organ("feeding",0,"graze",false)
+  cell.add_organ("photosynthesis",1,"graze",false)
+  scene.world.cells.append(cell)
+  scene.world.lineage.register(cell,-1 if i==0 else 4000,i%7,"active" if i==0 else "living",i)
+ scene.world.player=scene.world.cells[0];scene.world.remote_client=false
+ scene.lineage_names=[{"root":4000,"color":"#2885ea","name":"Fixture","online":true}]
+ scene.world.evolution.sandbox=true;scene.build_open=false;scene.selected=-1;scene.moving_id=-1;scene.world.commit_build()
+ scene.cell_ui.reset()
+
+func family_grid(scene) -> void:
+ var ui=scene.cell_ui
+ family_fixture(scene,16)
+ for setting in [{"logical":Vector2i(390,844),"pixels":1.0,"mobile":true},{"logical":Vector2i(1170,2100),"pixels":3.0,"mobile":true},{"logical":Vector2i(760,360),"pixels":1.0,"mobile":true},{"logical":Vector2i(1280,800),"pixels":1.0,"mobile":false},{"logical":Vector2i(390,844),"pixels":1.0,"mobile":true,"scale":1.5},{"logical":Vector2i(1280,800),"pixels":1.0,"mobile":false,"scale":2.0}]:
+  root.size=Vector2i(Vector2(setting.logical)/setting.pixels);root.content_scale_size=setting.logical
+  scene.touch_zoom.enabled=setting.mobile;scene.touch_zoom.pixels=setting.pixels
+  scene.preferences.hud_scale=setting.get("scale",1.0)
+  scene._update_world(1);ui.open_context({"kind":"lineage"})
+  for frame in 6:ui.sync(0);await process_frame
+  var picker=ui.family_picker
+  check(ui.choices.size()==16 and ui.choices.all(func(choice):return choice.has_meta("family_id") and not choice.portrait.is_empty()),"All current portraits share one grid without summary/More action slots on either platform")
+  check(not ui.choices.any(func(choice):return choice.symbol.begins_with("G") or choice.symbol=="More"),"Family navigation has no G-generation tile or pagination")
+  check(picker.visible and Rect2(Vector2.ZERO,Vector2(setting.logical)).encloses(picker.get_global_rect()),"The expanded family panel fits every screen and UI scale: %s bounds=%s" % [setting,picker.get_global_rect()])
+  check(picker.get_global_rect().encloses(picker.close_button.get_global_rect()) and picker.close_button.is_visible_in_tree(),"Family Close stays inside the fixed header")
+  check(picker.summary.text.contains("6") and picker.summary.text.contains("16"),"Highest generation and lifetime totals remain small header text")
+  check(ui.choices.all(func(choice):return choice.size.x>=60*minf(ui.ui_scale(),float(setting.logical.x)/220)),"Family pictures keep a useful selectable size")
+  if setting.logical==Vector2i(390,844) and setting.get("scale",1.0)==1:
+   check(picker.size.y>setting.logical.y*.32 and picker.scroll.get_v_scroll_bar().max_value<=picker.scroll.size.y+1,"An ordinary large family expands beyond the old tray cap and fits without paging or scrolling")
+   if capture!="":root.get_texture().get_image().save_png(capture+"/family-grid-portrait.png")
+  # Every visible picture occupies a distinct, non-overlapping grid cell.
+  for i in range(1,ui.choices.size()):
+   check(not ui.choices[i].get_global_rect().intersects(ui.choices[i-1].get_global_rect()),"Portrait grid cells do not overlap")
+  click(picker.close_button.get_global_rect().get_center())
+  for frame in 2:await process_frame
+  check(ui.context.is_empty() and not picker.visible,"Actual pointer closes the family grid without a server response: %s context=%s viewport=%s close=%s hovered=%s" % [setting,ui.context,scene.get_viewport_rect(),picker.close_button.get_global_rect(),root.gui_get_hovered_control()])
+ # A very large family keeps every entry while only its portrait area scrolls.
+ family_fixture(scene,64)
+ root.size=Vector2i(390,500);root.content_scale_size=Vector2i(390,500)
+ scene.touch_zoom.enabled=true;scene.touch_zoom.pixels=1;scene.preferences.hud_scale=1
+ scene._update_world(1);ui.open_context({"kind":"lineage"})
+ for frame in 6:ui.sync(0);await process_frame
+ var picker=ui.family_picker
+ check(ui.choices.size()==64 and picker.scroll.get_v_scroll_bar().max_value>picker.scroll.size.y,"An overflowing family keeps all 64 entries in one scrollable menu: count=%d viewport=%s columns=%d panel=%s max=%f page=%f" % [ui.choices.size(),scene.get_viewport_rect(),picker.grid.columns,picker.get_global_rect(),picker.scroll.get_v_scroll_bar().max_value,picker.scroll.get_v_scroll_bar().page])
+ var close_at: Vector2=picker.close_button.global_position
+ var at: Vector2=picker.scroll.get_global_rect().get_center()
+ for i in 6:
+  var wheel:=InputEventMouseButton.new();wheel.button_index=MOUSE_BUTTON_WHEEL_DOWN;wheel.pressed=true;wheel.position=at;wheel.global_position=at
+  root.push_input(wheel,true)
+  var up: InputEventMouseButton=wheel.duplicate();up.pressed=false;root.push_input(up,true)
+  await process_frame
+ check(picker.scroll.scroll_vertical>0,"Real scroll input reaches the family list: scroll=%d max=%f page=%f hovered=%s" % [picker.scroll.scroll_vertical,picker.scroll.get_v_scroll_bar().max_value,picker.scroll.get_v_scroll_bar().page,root.gui_get_hovered_control()])
+ ui.choices[-1].grab_focus()
+ for frame in 8:ui.sync(0);await process_frame
+ check(picker.scroll.get_global_rect().encloses(ui.choices[-1].get_global_rect()),"Keyboard focus can reveal the last relative without another page")
+ check(picker.close_button.global_position==close_at,"Scrolling portraits never moves the Close button")
+ if capture!="":root.get_texture().get_image().save_png(capture+"/family-grid-scrolled.png")
+ var relative_id: int=ui.choices[-1].get_meta("family_id")
+ var last=ui.choices[-1]
+ var press:=InputEventMouseButton.new();press.button_index=MOUSE_BUTTON_LEFT;press.pressed=true
+ press.position=last.get_global_rect().get_center();press.global_position=press.position
+ root.push_input(press,true)
+ for frame in 3:await process_frame
+ var release: InputEventMouseButton=press.duplicate();release.pressed=false;root.push_input(release,true)
+ for frame in 3:await process_frame
+
+ check(scene.world.player.id==relative_id,"The last scrolled portrait still switches through the validated family action")
  ui.close_context()

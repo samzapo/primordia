@@ -1233,7 +1233,11 @@ func _family_at(screen: Vector2) -> int:
 
 func _switch_family(identity: int) -> bool:
 	if identity < 0 or identity == world.player.id or selected >= 0 or moving_id >= 0: return false
-	if not world.lineage.active_family(world).any(func(cell):return cell.id == identity): return false
+	if world.remote_client:
+		# Owned off-camera relatives have ledger/portrait data, not client bodies.
+		var record: Dictionary=world.lineage.record_for(identity)
+		if record.is_empty() or record.state!="living":return false
+	elif not world.lineage.active_family(world).any(func(cell):return cell.id == identity): return false
 	if build_open:
 		world.commit_build();build_open=false;selected=-1;moving_id=-1 # Keep the displayed pose, not the old edit-entry camera.
 	cell_ui.close_context()

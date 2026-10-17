@@ -21,7 +21,7 @@ static func capture(cell) -> Dictionary:
 
 static func family(sim,ledger) -> Dictionary:
  var result: Dictionary={}
- for cell in ledger.active_family(sim)+ledger.dormant:
+ for cell in ledger.active_family(sim):
   if not cell.dead and cell.health>0 and cell.lineage_id()==ledger.root_id:result[cell.id]=capture(cell)
  return result
 

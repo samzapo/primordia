@@ -89,7 +89,10 @@ func internal_and_investment(scene) -> void:
   var lifetime: int=ledger.total_cells;ledger.died(departed,sim)
   scene.cell_ui.open_context({"kind":"lineage"})
   check(scene.cell_ui.choices.all(func(choice):return choice.get_meta("family_id",-1)!=departed.id),"Desktop and mobile family menus never list deceased relatives")
-  check(scene.cell_ui.choices[0].caption=="Generation 4" and scene.cell_ui.choices[0].description.contains("%d total" % lifetime),"Both platforms show generation and lifetime count after a death")
+  check(scene.cell_ui.family_picker.summary.text.contains("generation 4") and scene.cell_ui.family_picker.summary.text.contains("%d cells ever" % lifetime),"Both platforms show generation and lifetime count after a death")
+  scene.cell_ui.close_context()
+  scene.cell_ui.open_context({"kind":"bud"})
+  check(scene.cell_ui.choices.size()==1 and scene.cell_ui.choices[0].caption=="Divide now","Both platforms offer direct division without storing, funding or reclaiming buttons")
   scene.cell_ui.close_context()
   scene._finish_build()
  scene.touch_zoom.enabled=false;scene.build_open=false

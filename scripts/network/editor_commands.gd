@@ -25,9 +25,7 @@ static func execute(sim, action: String, args: Dictionary):
 		"restore": return sim.restore(identity)
 		"steering","exploration","cycle": return false # Retired tuning; the shared behavior tree decides.
 		"output": return false # Retired command; never alter a saved organ.
-		"reserve":
-			if value not in [-10.0,10.0]: return false
-			cell.reserve(value,sim.offspring_quote().material); return true
+		"reserve": return false # Growth is automatic; old manual banking controls are retired.
 		"divide": return sim.divide_lineage(bool(args.get("dormant",false)),false)
 		"follow": return sim.follow_family(identity)
 		"module_add","module_remove","module_config","route_add","route_remove","configuration": return false

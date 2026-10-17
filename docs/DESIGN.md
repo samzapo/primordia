@@ -692,3 +692,19 @@ Revision61 AP continuation: each cell's next added/restored organ costs its curr
 ### Family portraits (October 17, 2026)
 
 The family menu pictures each current relative or dormant reserve with its actual membrane shape, lineage color, nucleus and installed organs. A tiny generation number sits in the bottom corner, like a factory badge, and the selected body stays marked. Pictures update while the menu is open; deceased relatives leave it. Off-camera owned anatomy is a compact presentation snapshot, separate from simulation models and camera interests. Rendering does not advance biology, grant resources or consume ecology RNG. Existing lineage counters, follow validation and ordinary persistent updates remain.
+
+October 17 family-menu continuation: all current relatives and reserves appear in one responsive portrait grid on desktop and touch. The standalone G-generation tile and More pages are removed. Small header text keeps highest generation and lifetime total; each portrait keeps its tiny corner generation badge. The panel grows up to the screen bounds and scrolls only when needed, with Close fixed above the scrolling portraits. This changes presentation only.
+
+### Direct living division (October 17, 2026)
+
+Banked offspring are removed. A founder has no free hidden backup. Surplus
+tissue and ATP still fund growth; a ready cell divides directly into a living
+daughter when space and population limits allow. The growing bud has only
+Divide now, with no fund/reclaim/store menu. A failed birth retains its numeric
+growth investment and does not create a separate body. Basic daughter anatomy,
+investment inheritance, 2AP per birth and living-family succession remain.
+The owner waives old reserve/history retention for this revision: previously
+stored bodies are discarded during ordinary authority ticking, with tissue
+recorded in build_waste, rather than hatched or migrated. Save/reload boundaries
+still preserve all actual living cells and both pond identities. The retired
+checkpoint array is readable only to discard it; it has no gameplay use.

@@ -1,9 +1,8 @@
 extends RefCounted
-## A bounded family ledger and actual prepaid dormant bodies, never respawn credit.
-const MAX_DORMANT := 3
+## Current living family and lifetime counters; reproduction makes living daughters.
 const MAX_ACTIVE := 4
 var root_id := 0
-var dormant: Array = []
+var dormant: Array = [] # Retired checkpoint field; discarded on the next authority tick.
 var records: Array = []
 var notices: Array[String] = []
 var serial := 0
@@ -17,23 +16,21 @@ var highest_generation:=0
 
 func initialize(sim) -> void:
 	register(sim.player,-1,0,"active",sim.time)
-	# Part of the initial population inventory, separate from the active founder.
-	var reserve = sim.make_offspring(sim.player,sim.offspring_quote())
-	reserve.id = sim.next_id
-	sim.next_id += 1
-	reserve.generation = 0
-	reserve.position = sim.player.position
-	reserve.previous_position = reserve.position
-	reserve.oxygen = 0
-	dormant.append(reserve)
-	founder_material = reserve.organic_mass()
-	sim.inherited_lineages[reserve.id] = reserve.lineage_id()
-	register(reserve,-1,0,"dormant",sim.time)
 
 func stored_material() -> float:
 	var amount := 0.0
 	for cell in dormant: amount += cell.organic_mass()
 	return amount
+
+func discard_stored(sim) -> void:
+	# Owner retires old banked bodies without hatching or replacing them.
+	if dormant.is_empty():return
+	for cell in dormant:
+		sim.build_waste+=cell.organic_mass()
+		records.erase(record_for(cell.id))
+		sim.inherited_lineages.erase(cell.id)
+		sim.investment.cells.erase(cell.id);sim.investment.npc.erase(cell.id)
+	dormant.clear()
 
 func active_family(sim) -> Array:
 	var family: Array = []
@@ -46,7 +43,7 @@ func register(cell, parent: int, generation: int, state: String, now: float) -> 
 	if not record_for(cell.id).is_empty():return
 	total_cells+=1;highest_generation=maxi(highest_generation,generation)
 	records.append({"id":cell.id,"parent":parent,"generation":generation,"state":state,"born":now})
-	# Only current living/reserve records remain; totals outlive individual cells.
+	# Only current living records remain; totals outlive individual cells.
 
 func record_for(identity: int) -> Dictionary:
 	for record in records:
@@ -66,7 +63,7 @@ func died(cell, sim) -> void:
 	deaths += 1
 	notify("Generation %d lost · %s\nIts family and habitat continue." % [cell.generation,cell.death_hint])
 
-func adopted(cell, sim, hatched: bool) -> void:
+func adopted(cell, sim, _hatched: bool) -> void:
 	if sim.player.dead: sim.cells.erase(sim.player)
 	else:
 		sim.player.role = "ancestor"
@@ -80,36 +77,17 @@ func adopted(cell, sim, hatched: bool) -> void:
 	var record := record_for(cell.id)
 	if not record.is_empty(): record.state = "active"
 	sim.evolution.observe_successor(cell)
-	notify("%s · generation %d\n%s" % ["Reserve hatched" if hatched else "Family continues",cell.generation,sim.evolution.objective(sim)])
+	notify("%s · generation %d\n%s" % ["Family continues",cell.generation,sim.evolution.objective(sim)])
 	sim._record_sound("division",cell.position,cell.id)
 
-func recover(sim, dt: float) -> bool:
+func recover(sim, _dt: float) -> bool:
 	if not sim.player.dead and sim.player.health > 0: return true
 	var family := active_family(sim)
 	if not family.is_empty():
-		# Prefer the youngest generation, then the healthiest known family member.
 		family.sort_custom(func(a,b): return a.generation > b.generation if a.generation != b.generation else a.health > b.health)
 		adopted(family[0],sim,false)
 		return true
-	if dormant.is_empty():
-		sim.evolution.fail("EXPEDITION ENDED · No living family or dormant reserves remain.\nYour family history and discovered blueprints are retained.")
-		return false
-	recovery_clock -= dt
-	if recovery_clock > 0: return false
-	recovery_clock = 0.5
-	var child = dormant[0]
-	var origin: Vector2 = child.position
-	for ring in range(0,6):
-		for i in 16:
-			var at: Vector2 = sim.Medium.wrap_position(origin+Vector2.from_angle(TAU*i/16)*(ring*110))
-			if not sim.safe_birth_position(at,child.extent()): continue
-			child.position = at
-			child.previous_position = at
-			dormant.pop_front()
-			sim.cells.append(child)
-			adopted(child,sim,true)
-			return true
-	# Remain in the same world until there is room; never discard a funded body.
+	sim.evolution.fail("EXPEDITION ENDED · No living family remains.\nYour lineage's generation and lifetime total are retained.")
 	return false
 
 func statistics() -> Dictionary:
@@ -117,7 +95,7 @@ func statistics() -> Dictionary:
 
 func summary(sim) -> String:
 	var stats:=statistics()
-	return "Generation %d · %d total cells\n%d living family · %d dormant reserves" % [stats.generation,stats.total,active_family(sim).size(),dormant.size()]
+	return "Generation %d · %d total cells\n%d living family" % [stats.generation,stats.total,active_family(sim).size()]
 
 func biography(record: Dictionary) -> String:
 	return "Generation %d · cell %d · %s" % [record.generation,record.id,record.state]
