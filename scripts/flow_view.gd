@@ -1,6 +1,7 @@
 extends Node2D
 ## Two bounded GPU batches. Reads the fluid cache; no ecological particles or RNG.
 const Medium = preload("res://scripts/medium.gd")
+const Currents=preload("res://scripts/induced_currents.gd")
 const MAX_STREAMERS := 640
 const SEED_STRIDE := 4
 const MAX_WAKE_ANCHORS := 30
@@ -17,6 +18,8 @@ var spacing := 0
 var habitat_cache
 var anchor_data: Array[Color] = []
 var prepare_usec := 0
+var streamer_data: Array[Color]=[]
+var base_count:=-1
 
 func _ready() -> void:
 	z_index = 0
@@ -136,8 +139,7 @@ func sync(world, camera: Vector2, half_view: Vector2, zoom: float, show_streams:
 		var generated := seeds(camera,half_view)
 		bounds = generated.bounds
 		spacing = generated.spacing
-		streamers.multimesh.visible_instance_count = generated.data.size()
-		for i in generated.data.size(): streamers.multimesh.set_instance_custom_data(i,generated.data[i])
+		streamer_data=generated.data;base_count=-1
 	if reset:
 		habitat_cache = world.habitat_geometry
 		anchor_data.clear()
@@ -150,8 +152,30 @@ func sync(world, camera: Vector2, half_view: Vector2, zoom: float, show_streams:
 		view.material.set_shader_parameter("clock",world.time)
 		view.material.set_shader_parameter("field_mix",clampf((world.time-last_field_time)*15.0,0,1))
 	var sources:=PackedVector4Array()
-	for source in preload("res://scripts/induced_currents.gd").sources(world.seed_value,world.time):
-		sources.append(Vector4(source.p.x,source.p.y,source.radius*.22,source.envelope))
+	var events:=Currents.sources(world.seed_value,world.time)
+	for source in events:
+		sources.append(Vector4(source.p.x,source.p.y,source.radius*Currents.GOLD_CORE,source.envelope))
 	streamers.material.set_shader_parameter("eddy_sources",sources)
 	streamers.material.set_shader_parameter("zoom",zoom)
+	# Reserve a few existing strips at real sources so narrow cues cannot fall
+	# between the ordinary seed grid. They keep the full 8.4s fluid-field trail.
+	var local_seeds: Array[Color]=[]
+	for source in events:
+		if source.envelope<.1:continue
+		var beyond: Vector2=Medium.offset(camera,source.p).abs()-half_view-Vector2.ONE*source.radius
+		if beyond.x>0 or beyond.y>0:continue
+		var origin: Vector2=source.p
+		for step in 16:
+			var v: Vector2=world.fluid.sample(origin)
+			origin-=world.fluid.sample(origin-v*.375)*.75
+		var side: Vector2=world.fluid.sample(source.p).orthogonal().normalized()*minf(8,source.radius*.06)
+		for lane in [-1,0,1]:
+			var at:=Medium.wrap_position(origin+side*lane)
+			local_seeds.append(Color(at.x,at.y,fposmod(.6-world.time/20.0,1.0),1))
+	var desired_count:=mini(streamer_data.size(),MAX_STREAMERS-local_seeds.size())
+	if desired_count!=base_count:
+		base_count=desired_count
+		for i in base_count:streamers.multimesh.set_instance_custom_data(i,streamer_data[i])
+	streamers.multimesh.visible_instance_count=base_count+local_seeds.size()
+	for i in local_seeds.size():streamers.multimesh.set_instance_custom_data(base_count+i,local_seeds[i])
 	prepare_usec = Time.get_ticks_usec()-started

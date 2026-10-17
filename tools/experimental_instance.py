@@ -141,6 +141,7 @@ def main():
     for script,flags,marker in [
         ("lineage_start_network",["--gpu"],"LINEAGE START NETWORK"),
         ("feedback_visual_gpu",["--particle-backend=cpu"],"FEEDBACK VISUAL GPU"),
+        ("resident_plant_flow_gpu",[],"RESIDENT PLANT FLOW"),
     ]:
         path=root/(script+"-fixture.log")
         with path.open("w") as output:

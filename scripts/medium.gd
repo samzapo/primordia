@@ -5,6 +5,7 @@ const COLS := 64
 const ROWS := 40
 const WORLD := Vector2(COLS * SIZE, ROWS * SIZE)
 const NODE_MASS := 22.0
+const PLANT_DAMPING := .5 # Owner: halve vegetation dissipation, retaining its geometry.
 # Keep the rectangular view and a full grid-cell halo at full speed. Only the
 # next offscreen grid cell fades to dormancy; edge blur is presentation only.
 const ACTIVE_PAD := 64.0
@@ -13,6 +14,8 @@ var velocity := PackedVector2Array()
 var activity := PackedFloat32Array()
 var driven := true
 var induced_key := "" # Derived target cache; never a retained physical velocity.
+var induced_base := PackedVector2Array()
+var induced_base_key := ""
 # Only the serial coarse cell integrator may couple to distant cached nodes.
 var global_coupling := false
 var local_suction := true
@@ -246,4 +249,4 @@ func set_plants(habitat) -> void:
 					var closest: Vector2=a+edge*clampf((at-a).dot(edge)/maxf(edge.length_squared(),.00001),0,1)
 					var coverage:=clampf((radius+halo-at.distance_to(closest))/halo,0,1)
 					var i:=index(x,y)
-					plant_drag[i]=minf(2.0,plant_drag[i]+.9*minf(1,2*radius/SIZE)*coverage)
+					plant_drag[i]=minf(2.0*PLANT_DAMPING,plant_drag[i]+.9*PLANT_DAMPING*minf(1,2*radius/SIZE)*coverage)

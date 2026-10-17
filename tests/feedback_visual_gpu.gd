@@ -56,7 +56,8 @@ func run() -> void:
 	var material: ShaderMaterial=flow.streamers.material
 	material.set_shader_parameter("flow_map",texture);material.set_shader_parameter("flow_map_old",texture)
 	material.set_shader_parameter("camera",Vector2(200,200));material.set_shader_parameter("clock",15.0);material.set_shader_parameter("zoom",3.0)
-	var sources:=PackedVector4Array([Vector4(400,200,40,1),Vector4(0,0,1,0),Vector4(0,0,1,0),Vector4(0,0,1,0),Vector4(0,0,1,0),Vector4(0,0,1,0)])
+	var sources:=PackedVector4Array([Vector4(400,200,40,1)])
+	for i in range(1,preload("res://scripts/induced_currents.gd").COUNT):sources.append(Vector4(0,0,1,0))
 	material.set_shader_parameter("eddy_sources",sources)
 	flow.streamers.multimesh.visible_instance_count=2
 	flow.streamers.multimesh.set_instance_custom_data(0,Color(200,200,0,1))
@@ -76,5 +77,42 @@ func run() -> void:
 	check(gold>10 and gold_outside==0,"Actual shader pixels turn gold only immediately around the induced source")
 	check(ordinary>10,"A separate ordinary streamline retains its pale color")
 	if OS.has_environment("PRIMORDIA_FEEDBACK_FLOW_CAPTURE"):capture.save_png(OS.get_environment("PRIMORDIA_FEEDBACK_FLOW_CAPTURE"))
+	flow.queue_free();background.queue_free();await process_frame
+	# Actual portrait scene at the widest playable view, including its default art.
+	root.size=Vector2i(412,915)
+	game=load("res://scenes/pond.tscn").instantiate();game.use_particle_pool=false
+	root.add_child(game);game.set_process(false);game.set_physics_process(false)
+	game.music.enabled=false;game.music.player.stop()
+	var currents=preload("res://scripts/induced_currents.gd")
+	game.world.time=10;game.manual_zoom=.8;game.camera_locked=false
+	var events:=currents.sources(game.world.seed_value,game.world.time)
+	game.free_camera=events[0].p
+	game.world.environment.light=.12;game._refresh_light_texture()
+	game.world.fluid.activity.fill(1);game.world.fluid.set_plants(game.world.habitat_geometry)
+	currents.update(game.world)
+	for i in 12:game.world.fluid.step(.25)
+	game._update_world(1);await settle()
+	var shown:=root.get_texture().get_image()
+	var blank:=PackedVector4Array()
+	for i in currents.COUNT:blank.append(Vector4(0,0,1,0))
+	game.flow_view.streamers.material.set_shader_parameter("eddy_sources",blank)
+	await settle()
+	var plain:=root.get_texture().get_image()
+	var source_pixels:=0;var distant_pixels:=0
+	for y in shown.get_height():
+		for x in shown.get_width():
+			var on:=shown.get_pixel(x,y);var off:=plain.get_pixel(x,y)
+			if on.r<=off.r+.006 or on.b>=off.b-.005:continue
+			source_pixels+=1
+			var at: Vector2=game._screen_world(root.get_final_transform().affine_inverse()*Vector2(x+.5,y+.5))
+			var local:=false
+			for event in events:
+				if event.envelope>.001 and game.Simulation.Medium.offset(event.p,at).length()<=event.radius*currents.GOLD_CORE+16/game.zoom:local=true;break
+			if not local:distant_pixels+=1
+	check(source_pixels>8 and distant_pixels==0,"Actual dim portrait scene shows source-local gold at the widest playable view")
+	check(game.flow_view.streamers.multimesh.visible_instance_count<=game.flow_view.MAX_STREAMERS,"Visible event cues share the existing bounded strip budget")
+	if OS.has_environment("PRIMORDIA_CURRENT_PORTRAIT_CAPTURE"):shown.save_png(OS.get_environment("PRIMORDIA_CURRENT_PORTRAIT_CAPTURE"))
+	print("CURRENT_PORTRAIT source_pixels=%d distant_pixels=%d strips=%d" % [source_pixels,distant_pixels,game.flow_view.streamers.multimesh.visible_instance_count])
+	game.queue_free();await process_frame
 	print("FEEDBACK VISUAL GPU: %d assertions, %d failures; gold=%d outside=%d ordinary=%d GPU=%s" % [assertions,failures,gold,gold_outside,ordinary,RenderingServer.get_video_adapter_name()])
 	quit(0 if failures==0 else 1)

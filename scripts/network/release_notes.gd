@@ -79,6 +79,17 @@ const RELEASES=[
 	"footer":"Your cell and its progress carry on between updates.",
 	"button":"Back to the pond",
 },
+{
+	"id":"2026-10-16-more-pond-currents",
+	"title":"What’s new in the pond",
+	"items":[
+		"Spiral eddies and directional currents now travel through the pond in short bursts, with at least one always active.",
+		"Plants still soften passing currents, with half their previous damping.",
+		"Gold still marks only the water near a current source.",
+	],
+	"footer":"Your cell and its progress carry on between updates.",
+	"button":"Back to the pond",
+},
 ]
 const CURRENT=RELEASES[-1]
 static func seen_index(account: Dictionary) -> int:
