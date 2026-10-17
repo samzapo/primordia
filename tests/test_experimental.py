@@ -8,6 +8,8 @@ from experimental_routing import experimental_route,with_experimental,scope,cadd
 from experimental_instance import isolated_root,unit_text
 from web_gateway import create
 from verify_experimental import music_manifest
+import run_service
+from unittest.mock import patch,Mock
 
 class ExperimentalTests(unittest.TestCase):
     def test_only_experimental_routes_are_added_and_existing_routes_are_unchanged(self):
@@ -45,6 +47,24 @@ class ExperimentalTests(unittest.TestCase):
             result=subprocess.run(["systemd-analyze","--user","verify",str(unit)],capture_output=True,text=True,
                 env={**os.environ,"XDG_RUNTIME_DIR":f"/run/user/{os.getuid()}"})
             self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+
+    def test_service_selects_notice_audience_before_starting_the_authority(self):
+        for experimental in [False,True]:
+            with tempfile.TemporaryDirectory(prefix="primordia-notice-service-") as directory:
+                gateway=Mock();gateway.tls_directory=None
+                child=Mock();child.poll.return_value=0;child.returncode=0
+                args=["run_service.py","--godot",str(Path(directory)/"fixture-godot"),"--state",str(Path(directory)/"state"),"--cpu"]
+                if experimental:args.append("--proxy-loopback")
+                expected="experimental" if experimental else "stable"
+                inherited="stable" if experimental else "experimental"
+                with patch.object(sys,"argv",args),patch.dict(os.environ,{"PRIMORDIA_INSTANCE":inherited,"RUNNER_TRACKING_ID":"fixture"}),patch.object(run_service,"create",return_value=gateway),patch.object(run_service.subprocess,"Popen",return_value=child) as launch,patch.object(run_service.signal,"signal"):
+                    self.assertEqual(run_service.main(),0)
+                    environment=launch.call_args.kwargs["env"]
+                    self.assertEqual(environment["PRIMORDIA_INSTANCE"],expected)
+                    self.assertNotIn("RUNNER_TRACKING_ID",environment)
+                    self.assertEqual(os.environ["PRIMORDIA_INSTANCE"],inherited)
+                    gateway.shutdown.assert_called_once()
+                    gateway.server_close.assert_called_once()
 
     def test_music_manifest_accepts_real_names_and_rejects_path_escape(self):
         name="music-bank-"+24*"a"+".bin"

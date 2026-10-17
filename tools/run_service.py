@@ -46,6 +46,9 @@ def main():
         command += ["--cpu"]
     environment = os.environ.copy()
     environment.pop("RUNNER_TRACKING_ID", None)
+    # The service configuration, never a browser request or inherited build env,
+    # selects which pond’s update notices the authority can offer.
+    environment["PRIMORDIA_INSTANCE"] = "experimental" if args.proxy_loopback else "stable"
     child = subprocess.Popen(command, cwd=source, env=environment, start_new_session=True)
     stopping = threading.Event()
     def renew_certificates():
@@ -78,6 +81,7 @@ def main():
                     child.wait()
         gateway.shutdown()
         gateway.server_close()
+        lock.close()
     return child.returncode
 
 if __name__ == "__main__":

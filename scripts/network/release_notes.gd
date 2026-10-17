@@ -1,8 +1,10 @@
 extends RefCounted
-## Append player-facing releases in publication order. Never replace old entries.
+## Append releases in publication order with an explicit shared/stable/experimental audience.
+## Preserve historical IDs so filtering cannot invalidate saved acknowledgements.
 const RELEASES=[
 {
 	"id":"2026-10-16-clearer-pond",
+	"audience":"shared",
 	"title":"What’s new in the pond",
 	"items":[
 		"Pause now includes Gameplay for your controls and Mechanics for the science behind the pond.",
@@ -15,6 +17,7 @@ const RELEASES=[
 },
 {
 	"id":"2026-10-16-readable-panels",
+	"audience":"shared",
 	"title":"What’s new in the pond",
 	"items":[
 		"Fixed the blank update message. You can close it straight away and return to your cell.",
@@ -26,6 +29,7 @@ const RELEASES=[
 },
 {
 	"id":"2026-10-16-smoother-motion",
+	"audience":"shared",
 	"title":"What’s new in the pond",
 	"items":[
 		"Cells, particles and the Follow view move more smoothly when your connection is uneven.",
@@ -36,6 +40,7 @@ const RELEASES=[
 },
 {
 	"id":"2026-10-16-diffuse-light",
+	"audience":"shared",
 	"title":"What’s new in the pond",
 	"items":[
 		"Sunlit and shady water now form broad, soft-edged patches with irregular shapes.",
@@ -46,6 +51,7 @@ const RELEASES=[
 },
 {
 	"id":"2026-10-16-rippling-sunlight",
+	"audience":"shared",
 	"title":"What’s new in the pond",
 	"items":[
 		"Sunlit water is much brighter, with deeper shade and soft, irregular edges.",
@@ -57,6 +63,7 @@ const RELEASES=[
 },
 {
 	"id":"2026-10-16-experimental-pond",
+	"audience":"experimental",
 	"title":"What’s new in the pond",
 	"items":[
 		"The experimental pond is a separate place to try new features.",
@@ -67,6 +74,7 @@ const RELEASES=[
 },
 {
 	"id":"2026-10-16-pond-feedback",
+	"audience":"shared",
 	"title":"What’s new in the pond",
 	"items":[
 		"Start a new lineage from Pause. Your former family stays in the pond under computer control.",
@@ -81,6 +89,7 @@ const RELEASES=[
 },
 {
 	"id":"2026-10-16-more-pond-currents",
+	"audience":"shared",
 	"title":"What’s new in the pond",
 	"items":[
 		"Spiral eddies and directional currents now travel through the pond in short bursts, with at least one always active.",
@@ -92,6 +101,7 @@ const RELEASES=[
 },
 {
 	"id":"2026-10-17-camera-particles",
+	"audience":"shared",
 	"title":"What’s new in the pond",
 	"items":[
 		"Nearby particles arrive ahead of your camera, reducing empty patches while you explore.",
@@ -102,6 +112,7 @@ const RELEASES=[
 },
 {
 	"id":"2026-10-17-pond-exploration",
+	"audience":"stable",
 	"title":"What’s new in the pond",
 	"items":[
 		"Explore more smoothly: nearby particles arrive ahead of your camera, and Follow glides into place.",
@@ -118,17 +129,25 @@ static func seen_index(account: Dictionary) -> int:
 	for i in RELEASES.size():
 		if RELEASES[i].id==account.get("seen_release",""):return i
 	return -1
-static func pending_all(account: Dictionary) -> Array:
-	return RELEASES.slice(seen_index(account)+1).duplicate(true)
-static func pending(account: Dictionary) -> Dictionary:
-	var updates:=pending_all(account)
+static func applies(update: Dictionary,instance: String) -> bool:
+	var audience: String=update.get("audience","")
+	return audience=="shared" or audience==instance
+static func pending_all(account: Dictionary,instance: String="stable") -> Array:
+	var updates: Array=[]
+	for update in RELEASES.slice(seen_index(account)+1):
+		if applies(update,instance):updates.append(update.duplicate(true))
+	return updates
+static func pending(account: Dictionary,instance: String="stable") -> Dictionary:
+	var updates:=pending_all(account,instance)
 	return {} if updates.is_empty() else updates[0]
-static func acknowledge(account: Dictionary,id) -> bool:
+static func acknowledge(account: Dictionary,id,instance: String="stable") -> bool:
 	if not id is String:return false
 	for i in RELEASES.size():
 		if RELEASES[i].id!=id:continue
+		if not applies(RELEASES[i],instance):return false
 		var seen:=seen_index(account)
 		if i<=seen:return true # Duplicate acknowledgements cannot move backwards.
-		if i!=seen+1:return false
+		var updates:=pending_all(account,instance)
+		if updates.is_empty() or updates[0].id!=id:return false
 		account.seen_release=id;return true
 	return false

@@ -19,7 +19,25 @@ func run() -> void:
 	check(Notes.pending_all(account).is_empty(),"All cleared updates stay cleared")
 	check(Notes.acknowledge(account,missed[0].id) and account.seen_release==Notes.CURRENT.id,"A duplicate old acknowledgement cannot move progress backwards")
 	account.seen_release=Notes.RELEASES[0].id
-	check(Notes.pending_all(account).size()==Notes.RELEASES.size()-1,"Existing seen-release accounts migrate without replaying cleared updates")
+	check(Notes.pending_all(account).size()==Notes.pending_all({}).size()-1,"Existing seen-release accounts migrate without replaying cleared updates")
+	for update in Notes.RELEASES:
+		check(update.get("audience","") in ["shared","stable","experimental"],"Every release declares its pond audience")
+	var stable_ids:=Notes.pending_all({},"stable").map(func(update):return update.id)
+	var experimental_ids:=Notes.pending_all({},"experimental").map(func(update):return update.id)
+	var experimental_id: String="2026-10-16-experimental-pond"
+	check(experimental_id not in stable_ids and experimental_id in experimental_ids,"The experimental pond announcement never enters main’s queue")
+	check("2026-10-17-pond-exploration" in stable_ids and "2026-10-17-pond-exploration" not in experimental_ids,"Stable promotion messages stay in the main pond")
+	var before_hidden: Dictionary={"seen_release":"2026-10-16-rippling-sunlight"}
+	check(Notes.pending(before_hidden,"stable").id=="2026-10-16-pond-feedback","Main skips the hidden announcement in order")
+	check(not Notes.acknowledge(before_hidden,experimental_id,"stable") and before_hidden.seen_release=="2026-10-16-rippling-sunlight","A hidden notice cannot mutate main acknowledgement progress")
+	check(Notes.acknowledge(before_hidden,"2026-10-16-pond-feedback","stable"),"Main can acknowledge the next visible notice across a hidden entry")
+	var legacy: Dictionary={"seen_release":experimental_id}
+	check(Notes.pending(legacy,"stable").id=="2026-10-16-pond-feedback","Accounts that cleared the leaked notice do not replay earlier updates")
+	for instance in ["stable","experimental"]:
+		var migrated: Dictionary={}
+		for update in Notes.pending_all(migrated,instance):
+			check(Notes.acknowledge(migrated,update.id,instance),"Each pond clears every applicable notice oldest first")
+		check(Notes.pending_all(migrated,instance).is_empty(),"Hidden notices cannot leave either pond queue stuck")
 	var parent:=Control.new();root.add_child(parent);parent.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var popup=NoticePopup.new();popup.initialize(parent)
 	var clicked: Array=[];popup.dismissed.connect(func(id):clicked.append(id))
