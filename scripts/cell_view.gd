@@ -6,6 +6,7 @@ const Visuals = preload("res://scripts/visuals.gd")
 var cell
 var art: Dictionary = {}
 var art_lineage := -2147483648
+var art_color:=""
 var nucleus_lag := Vector2.ZERO
 var last_age := 0.0
 var game
@@ -57,9 +58,10 @@ func _ready() -> void:
 	sound_waves.draw.connect(_draw_sound_waves)
 
 func sync(render_position: Vector2, render_angle: float, zoom: float, alpha: float) -> void:
-	if art_lineage != cell.lineage_id():
-		art_lineage = cell.lineage_id()
-		art = Art.make(game.world.seed_value,art_lineage)
+	var paint: String=game.lineage_color(cell.lineage_id())
+	if art_lineage != cell.lineage_id() or paint!=art_color:
+		art_lineage = cell.lineage_id();art_color=paint;surface_revision=-1
+		art = Art.make(game.world.seed_value,art_lineage,paint)
 		art["core"] = Art.nucleus_outline(art.nucleus,art.phase)
 		seen_revision = -1
 	# Bounded presentation lag follows existing acceleration/turns, never physics.
@@ -183,11 +185,7 @@ func _draw() -> void:
 	var size := safe_radius*0.28
 	nucleus_center = nucleus
 	nucleus_size = size
-	draw_colored_polygon(Transform2D(0,Vector2.ONE*size*1.18,0,nucleus+Vector2(0,size*0.1))*core,palette[0])
-	draw_colored_polygon(Transform2D(0,Vector2.ONE*size,0,nucleus)*core,palette[5].darkened(0.2))
-	draw_colored_polygon(Transform2D(0,Vector2.ONE*size*0.74,0,nucleus-Vector2.ONE*size*0.08)*core,palette[5])
-	if not simple_view:
-		draw_colored_polygon(Transform2D(-0.3,Vector2(0.30,0.38)*size,0,nucleus-Vector2.ONE*size*0.22)*core,palette[6])
+	Visuals.nucleus_art(self,nucleus,size,core,palette,not simple_view)
 	for packet in (cell.signals if game.internal_visible(cell) else []): draw_circle(packet.p,3*Visuals.INTERNAL_PARTICLE_SCALE,Color("fc8c90") if packet.fear else Color("b5a3f4"))
 	for hole in cell.holes:
 		var at: Vector2 = cell.local_point(hole.a)
@@ -207,7 +205,7 @@ func _draw_organs() -> void:
 	for organ in cell.organs:
 		var point: Vector2 = cell.local_point(organ.a)
 		var normal: Vector2 = cell.organ_normal(organ)
-		var at: Vector2 = point+normal*5*organ.scale
+		var at: Vector2 = cell.organ_local_position(organ)
 		var heading := normal.angle()
 		var serial: int=int(organ.get("emission_serial",0))
 		if not emission_seen.has(organ.id) and cell.age-float(organ.get("emission_age",-100))>.3:emission_seen[organ.id]=serial
@@ -218,13 +216,16 @@ func _draw_organs() -> void:
 		var bounce:=sin(elapsed*TAU*3)*exp(-elapsed*7) if elapsed<.65 else 0.0
 		at+=normal*bounce*5*organ.scale
 		var drawn_scale: float=organ.scale*(1+.12*bounce)
+		var readiness: Dictionary=preload("res://scripts/organelle_status.gd").state(game.world,cell,organ)
 		var charge: float = organ.charge_flash
-		if organ.kind == "toxin" and cell.target_id >= 0 and cell.threat.length_squared() > 0.01 and cell.energy >= 12 and cell.biomass >= 0.18*organ.scale*organ.scale*cell.Genes.factor(organ,"burst"):
+		if organ.kind == "toxin" and cell.target_id >= 0 and cell.threat.length_squared() > 0.01 and cell.biomass >= 0.18*organ.scale*organ.scale*cell.Genes.factor(organ,"burst"):
 			charge = maxf(charge,clampf(1-float(organ.get("burst_clock",0))/(0.75*cell.Genes.factor(organ,"cooldown")),0,1))
 		if cell.inherent(organ):
 			Visuals.oral_groove(appendages,cell,organ,cell.age,not simple_view)
 		else:
-			Visuals.icon(appendages,at,organ.kind,heading,drawn_scale,cell.age,organ.mode,organ.consume_flash,not simple_view,charge)
+			Visuals.icon(appendages,at,organ.kind,heading,drawn_scale,cell.age,organ.mode,organ.consume_flash,not simple_view,charge,readiness.depleted)
+		if readiness.progress>=0:
+			appendages.draw_arc(at,19*organ.scale,-PI/2,-PI/2+TAU*maxf(.001,readiness.progress),28,Color("fff0ac") if not readiness.depleted else Color("8c969f"),1.8*organ.scale,true)
 		if organ.get("mutation","") != "": appendages.draw_circle(at,3.5*organ.scale,Color("fff2a3"))
 		if organ.blocked > 0:
 			appendages.draw_arc(at,15*organ.scale,-PI/2,-PI/2+TAU*organ.blocked,28,Color("cf92e8"),4*organ.scale,true)

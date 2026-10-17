@@ -17,6 +17,8 @@ func _initialize() -> void:
 	_run.call_deferred()
 
 func _run() -> void:
+	print("CHECKS: feedback_pass_two.gd")
+	preload("res://tests/feedback_pass_two.gd").run(expect)
 	print("CHECKS: acceleration.gd")
 	preload("res://tests/acceleration.gd").run(expect)
 	print("CHECKS: performance.gd")
@@ -882,6 +884,9 @@ func _test_autonomous_hunting() -> void:
 	cell.add_organ("propulsion",PI,"graze",false)
 	# Explicit finite meal funds sustained chemical predation; no retired emergency tissue burning.
 	cell.chemistry.emit("food",120,cell.local_point(1.3)*.6)
+	# Pin this pursuit fixture to its original sampled prey anatomy; retired
+	# founder-reserve allocation must not silently choose a different ID/shape.
+	sim.next_id = 17
 	var prey = sim._make_cell(cell.position+Vector2(190,0),"grazer")
 	prey.organs.clear()
 	prey.body = 25

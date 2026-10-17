@@ -8,11 +8,15 @@ const PALETTES := [
 	["351543","b73987","732c69","f373ae","ffc7c9","39b5e9","b8f1ff"],
 	["211d4c","6856cb","3d398f","ac85ef","ded1ff","f6a942","ffe980"]
 ]
-static func make(seed_value: int, lineage: int) -> Dictionary:
+static func make(seed_value: int, lineage: int, paint: String="") -> Dictionary:
 	var random := RandomNumberGenerator.new()
 	random.seed = seed_value ^ (lineage*1640531527)
 	var colors: Array[Color] = []
 	for hex in PALETTES[random.randi_range(0,PALETTES.size()-1)]: colors.append(Color(hex))
+	if paint!="" and Color.html_is_valid(paint):
+		var base:=Color(paint)
+		colors[0]=base.darkened(.72);colors[1]=base;colors[2]=base.darkened(.38)
+		colors[3]=base.lightened(.28);colors[4]=base.lightened(.72)
 	var vesicles: Array = []
 	for i in 6:
 		vesicles.append({"angle":TAU*i/6+random.randf_range(-0.2,0.2),"distance":random.randf_range(0.5,0.67),"radius":random.randf_range(0.065,0.11),"tone":i%3})

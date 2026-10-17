@@ -49,7 +49,7 @@ func run() -> void:
 	game._toggle_build();game.cell_ui.open_context({"kind":"assembly"})
 	await process_frame
 	game.cell_ui.sync(0)
-	check(game.cell_ui.choices.size()==7 and game.cell_ui.choices.all(func(choice):return choice.get_parent()==game.cell_ui.mobile_flow),"Mobile assembly exposes every available organ in the top tray")
+	check(game.cell_ui.choices.size()==8 and game.cell_ui.choices.all(func(choice):return choice.get_parent()==game.cell_ui.mobile_flow),"Mobile assembly exposes every available organ in the top tray")
 	check(game.touch_zoom.pause_button.get_global_rect().position.y>=game.cell_ui.mobile_menu_height,"Opening a top tray moves the utility controls below it immediately")
 	check(game.cell_ui.mobile_menu_height>0 and game.cell_ui.mobile_tray.position.y<30,"Mobile action menus are attached to the top of the screen")
 	check(game.cell_ui.mobile_resources.visible and game.cell_ui.mobile_stocks.text.contains("AP") and game.cell_ui.mobile_stocks.text.contains("ATP"),"Mobile stock display is visible without hovering")
@@ -58,9 +58,9 @@ func run() -> void:
 	game.cell_ui.mobile_hide.pressed.emit();game.cell_ui.sync(0)
 	check(game.cell_ui.mobile_stocks.visible,"The same resource button restores current numerical stocks")
 	game.cell_ui.open_context({"kind":"chemistry"});await process_frame;game.cell_ui.sync(0)
-	check(game.cell_ui.choices.size()==6 and game.cell_ui.choices.all(func(choice):return choice.get_parent()==game.cell_ui.mobile_flow),"Mobile chemistry factory exposes all glands and food inspection in the top tray")
+	check(game.cell_ui.choices.map(func(choice):return choice.kind)==["mitochondrion","photosynthesis","toxin","acidifying","regenerative","neutralizing",""] and game.cell_ui.choices.all(func(choice):return choice.get_parent()==game.cell_ui.mobile_flow),"Mobile chemistry tray exposes the active catalog and food inspection, without Sanctuary")
 	check(game.cell_ui.describe({"kind":"chemistry"}).contains("buffer/repair") and game.cell_ui.describe({"kind":"chemistry"}).to_lower().contains("photosynthesis"),"Factory description matches the active simplified chemistry")
-	game.world.player.biomass=100;game.world.player.update_geometry();game.world.evolution.points=8
+	game.world.player.biomass=100;game.world.player.update_geometry();game.world.evolution.points=100
 	for index in [7,9,3,8]:
 		game.cell_ui.open_context({"kind":"chemistry"});game.cell_ui.sync(0)
 		var options: Array=game.cell_ui.choices.filter(func(choice):return choice.kind==game.Simulation.KINDS[index])
@@ -68,9 +68,9 @@ func run() -> void:
 		var before_biomass: float=game.world.player.biomass;var before_ap: int=game.world.evolution.points
 		options[0].pressed.emit();game.cell_ui.sync(0)
 		check(game.selected==index and not game.cell_ui.mobile_tray.visible and game.cell_ui.mobile_stocks.text.contains("Cost"),"Choosing each gland enters the existing placement flow with visible resource cost")
-		var price: float=game.Simulation.Cell.organ_cost(game.Simulation.KINDS[index])
+		var price: int=game.world.player.construction_price()
 		check(game._place_at(1.0+[7,9,3,8].find(index)),"Each restored gland can be placed on the membrane")
-		check(game.world.player.biomass==before_biomass and before_ap-game.world.evolution.points==1,"Gland placement charges AP exactly once without debiting biomass")
+		check(game.world.player.biomass==before_biomass and before_ap-game.world.evolution.points==price,"Gland placement charges AP exactly once without debiting biomass")
 	game._select(6);game.cell_ui.sync(0)
 	check(game.cell_ui.cancel_icon.visible and game.cell_ui.cancel_icon.kind=="photosynthesis" and game.cell_ui.cancel_icon.position.x<30,"Selected organ remains as a circular top-left cancel action")
 	game.cell_ui.cancel_icon.pressed.emit();game.cell_ui.sync(0)

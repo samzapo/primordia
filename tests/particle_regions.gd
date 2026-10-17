@@ -39,7 +39,7 @@ static func run(expect: Callable) -> void:
 			expect.call(scalar.chunks[key].transport_due==native_chunks.chunks[key].transport_due and scalar.chunks[key].chemical_due==native_chunks.chunks[key].chemical_due,"Native chunk deadlines match the reference")
 		for cell in sim.cells: sim._emit_pheromone(cell)
 		for cell in sim.cells:
-			for mode in ["graze","hunt","flee"]:
+			for mode in ["graze","hunt","flee","family"]:
 				var query: Dictionary={"at":cell.position,"center":cell.position,"reach":700.,"id":cell.id,"lineage":cell.lineage_id(),"mode":mode}
 				var native: Dictionary=streaming.sense(sim,query)
 				var kernels=sim.kernels;sim.kernels=null

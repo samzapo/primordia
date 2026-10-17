@@ -34,7 +34,7 @@ func run(owner_suite) -> void:
 	check(sim.player != original and sim.player.membrane != original.membrane,"planning clones anatomy and membrane")
 	check(sim.player.membrane.skeleton != original.membrane.skeleton,"planning clones tension network")
 	check(sim.install("neutralizing",2.0),"affordable installation accepted")
-	check(sim.evolution.points == 2,"one normal organ spends one AP")
+	check(sim.evolution.points == 3,"A cell’s first added organ is free")
 	sim.player.membrane.skeleton.set_tension(0,0.9)
 	sim.evolution.choose(offers[0])
 	sim.evolution.accept_challenge("stability",sim.player)
@@ -57,7 +57,7 @@ func run(owner_suite) -> void:
 	check(sim.player.brood_mass == 0 and sim.player.brood_energy == 0,"undo restores reserves")
 	sim.install("neutralizing",2.0)
 	sim.commit_build()
-	check(sim.player.count("neutralizing") == 1 and sim.evolution.points == 2,"apply keeps paid anatomy")
+	check(sim.player.count("neutralizing") == 1 and sim.evolution.points == 3,"apply keeps paid anatomy")
 	var before: float = sim.player.biomass
 	sim.evolution.points = 0
 	check(not sim.install("poreforming",1.0) and sim.player.biomass == before,"insufficient AP is atomic")

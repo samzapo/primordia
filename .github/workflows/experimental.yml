@@ -4,6 +4,17 @@ name: Primordia experimental instance
     branches: [samzapo/experimental-server]
     paths-ignore: [docs/**, README.md, AGENTS.md]
   workflow_dispatch:
+    inputs:
+      operation:
+        description: Deploy an update, or preserve and suspend the experimental pond
+        type: choice
+        options: [deploy, standby]
+        default: deploy
+      reset_pond:
+        description: "Start a fresh experimental pond, retaining accounts, keys and private feedback"
+        type: boolean
+        required: false
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -11,7 +22,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   deploy:
-    if: github.repository == 'samzapo/primordia' && github.actor == 'samzapo'
+    if: github.repository == 'samzapo/primordia' && github.actor == 'samzapo' && inputs.operation != 'standby'
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 50
     steps:
@@ -50,6 +61,7 @@ jobs:
         shell: bash
         env:
           PRIMORDIA_PERFORMANCE_WARNINGS: "1"
+          PRIMORDIA_RESET_POND: "${{ inputs.reset_pond && '1' || '0' }}"
           PRIMORDIA_SOURCE_DIRECTORY: ${{ steps.source.outputs.path }}
         run: |
           cd "$GITHUB_WORKSPACE/$PRIMORDIA_SOURCE_DIRECTORY"
@@ -58,6 +70,21 @@ jobs:
           python3 tests/test_web_version.py
           python3 tests/test_web_gateway.py
           python3 tools/experimental_instance.py
+  standby:
+    if: github.repository == 'samzapo/primordia' && github.actor == 'samzapo' && inputs.operation == 'standby'
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 3
+    steps:
+      - name: Preserve and suspend only the experimental pond
+        shell: bash
+        env:
+          EXPECTED_STABLE_SHA: ${{ github.sha }}
+          RESET_REQUESTED: ${{ inputs.reset_pond }}
+        run: |
+          test "$RUNNER_NAME" = samzapo-desktop
+          test "$(hostname)" = samzapo-desktop
+          test "$RESET_REQUESTED" != true
+          python3 "$HOME/.local/share/primordia-deploy/current/tools/experimental_standby.py"
   verify:
     needs: deploy
     runs-on: [self-hosted, Linux, X64]

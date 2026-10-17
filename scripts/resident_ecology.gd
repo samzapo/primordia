@@ -80,6 +80,11 @@ static func encode(p: Dictionary,sim) -> Dictionary:
 	return data
 
 func enqueue(packet: Dictionary) -> void:
+	if not packet.alive:return
+	# Cold/checkpoint packets can retain an exhausted slot. No material or fuel
+	# remains to transfer; do not submit an invalid zero-dose GPU emission.
+	if packet.amount==0 and packet.get("capacity",0)==0:
+		packet.alive=false;return
 	# Photosynthesis can release a double-precision remainder smaller than one
 	# float32 packet. Retain that paid material until another release makes a
 	# representable packet; never create a minimum dose or silently discard it.
@@ -353,6 +358,12 @@ func step(dt: float) -> void:
 				if queries[i].id!=cell.id or queries[i].mode not in ["graze","hunt","flee"]: continue
 				combined[i]["patch"]=sim._food_patch(combined[i].food,queries[i].reach,cell)
 				received[queries[i].organ_id]=combined[i]
+		if streaming!=null:
+			for i in queries.size():
+				if queries[i].id!=cell.id or queries[i].mode!="family":continue
+				var id: int=queries[i].organ_id
+				if not received.has(id):received[id]={"food":{},"reports":{},"patch":{}}
+				received[id]["families"]=combined[i].reports
 		sim._sense(cell,h,received)
 		sim.profile_usec["sensing"]+=Time.get_ticks_usec()-sense_start
 		if delayed:
@@ -424,7 +435,7 @@ func _apply_exposure(cells: Array,exposure: Dictionary) -> void:
 			if event.get("kind",4)!=4:
 				if not cell.accept_surface(event.kind,event.amount,event.angle,event.owner): cell.waste+=event.amount
 				continue
-			cell.waste+=cell.damage(event.amount*sim.Catalog.data().combat.toxin_damage_per_unit,event.angle)+event.amount
+			cell.waste+=cell.damage(event.amount*sim.Catalog.data().combat.toxin_damage_per_unit,event.angle,event.owner)+event.amount
 			cell.death_hint="Membrane failed after toxin exposure"
 			if event.owner==sim.player.id: sim.evolution.record("toxin",event.amount*sim.Catalog.data().combat.toxin_damage_per_unit)
 	for event in exposure.decoys:

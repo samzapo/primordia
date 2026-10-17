@@ -97,7 +97,7 @@ func layout() -> void:
 	if not game.user_paused and game.world.player.dead:
 		var received_recovery=game.get("family_recovery") if game.world.remote_client else {}
 		var recovery: Dictionary=received_recovery if received_recovery is Dictionary else {}
-		state_label.text="Preparing your new lineage" if recovery.get("state","")=="restarting_lineage" else "Stored successor waiting for space" if recovery.get("state","")=="waiting_for_space" else "Lineage exhausted · observing" if game.can_follow() and recovery.get("state","")=="extinct" else "Lineage exhausted · no stored successor" if recovery.get("state","")=="extinct" else "Observing a living cell" if game.can_follow() else "No living cell to follow"
+		state_label.text="Preparing your new lineage" if recovery.get("state","")=="restarting_lineage" else "Waiting for a new cell" if recovery.get("state","")=="waiting_for_space" else "Lineage exhausted · observing" if game.can_follow() and recovery.get("state","")=="extinct" else "Lineage exhausted · no stored successor" if recovery.get("state","")=="extinct" else "Observing a living cell" if game.can_follow() else "No living cell to follow"
 	state_label.add_theme_font_size_override("font_size",roundi(14*pixels*.7))
 	state_label.position=Vector2(size.x-220*pixels*.7,228*pixels*.7+tray_offset);state_label.size=Vector2(208,44)*pixels*.7
 
@@ -105,7 +105,7 @@ func layout() -> void:
 	if OS.has_feature("web") and enabled:
 		var conversion:=Vector2(float(JavaScriptBridge.eval("window.innerWidth")),float(JavaScriptBridge.eval("window.innerHeight")))/size
 		var bounds: Dictionary={}
-		for pair in [["pause",pause_button],["feedback",game.feedback_menu_button],["profile",game.profile_menu_button],["gameplay",game.gameplay_menu_button],["mechanics",game.mechanics_menu_button],["zoom_out",minus_button],["zoom_in",plus_button],["follow",follow_button],["perception",perception_button],["music",music_button],["music_volume",music_volume]]:
+		for pair in [["pause",pause_button],["feedback",game.feedback_menu_button],["profile",game.profile_menu_button],["palette",game.palette_menu_button],["gameplay",game.gameplay_menu_button],["mechanics",game.mechanics_menu_button],["zoom_out",minus_button],["zoom_in",plus_button],["follow",follow_button],["perception",perception_button],["music",music_button],["music_volume",music_volume]]:
 			var rect: Rect2=pair[1].get_global_rect()
 			bounds[pair[0]]=[rect.position.x*conversion.x,rect.position.y*conversion.y,rect.size.x*conversion.x,rect.size.y*conversion.y]
 		JavaScriptBridge.eval("window.primordiaTouchControls="+JSON.stringify({"visible":bar.visible,"paused":game.user_paused,"zoom":game.manual_zoom,"editing":game.build_open,"locked":game.camera_locked,"rotation":game.render_rotation,"camera":[game.render_camera.x,game.render_camera.y],"player_screen":_body_screen(game.world.player,conversion),"focus_screen":_body_screen(game._follow_cell(),conversion),"focus_alive":game.can_follow(),"perception":game.perception,"internal_packets":game._follow_cell().chemistry.particle_count(),"mask_enabled":game.perception_mask.enabled,"bounds":bounds,"cell_ui":game.cell_ui.mobile_diagnostics(conversion),"buffered_tick":game.paused_snapshot.get("tick",0) if game.world.remote_client else 0}))

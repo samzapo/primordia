@@ -466,3 +466,109 @@ notices; stable promotion announcements must not appear in the experimental pond
 Keep historical IDs and saved acknowledgement positions, skipping hidden entries
 when validating the next acknowledgement. The service selects the audience;
 clients cannot choose it. Promotion must explicitly review notice audiences.
+
+October17 approved feedback R9–R15: read docs/REVISION_59.md. Stage all on experimental; stable promotion awaits owner playtest. NPC strategies globally replace random buying:floor(10%)Hunter, remainder evenly Producer/Grazer; preserve existing anatomy. Player family/body opt-in investment persists; connected selected cells remain manual. Keep75/25new photosynthetic food partition, finite mitochondrial ATP allocation and native/resident/coarse parity. Counterattack perception uses immutable local reports; contact permissions enforce peaceful/player immunity. Sanctuary is fictional, prevents death/organ destruction and offspring, and gives2AP only after a fully paid full-material/ATP cycle. Disable its indiscriminate acid/decoys. Preserve saved bodies, source permissions and current family history.
+Pinned godot-cpp Dictionary move assignment leaks initialized owners; the verified build backport must run before binding generation in both recipes. Keep minimal lifetime and sustained authority evidence separate; don't repeat the disproven GPU-upload diagnosis or claim every historical allocation was attributed. No copied generated SDK/build artifacts, no rendering-speed campaign.
+
+October17 final pre-experimental collection adds R16–R20 by explicit owner approval. Preserve the current camera until a family command commits, show desktop AP supply only while building, suppress stale editing hints, derive organ readiness without modifying work, and keep lineage HSV color purely presentational and owner-scoped/durable. Validate actual portrait pixels and touch-density scaling; the color picker must retain accessible Save/Back. Keep player guide and experimental-only notice current.
+
+Color-modal validation correction: Canvas z-index does not change Control GUI picking order. Raise the modal in the UI tree on open; test actual clicks/touches over the visible Pause menu. Direct wheel.choose calls and bounds/pixel checks alone missed this input-layer defect. Exported browser acceptance must use isolated fixture accounts/state, never synthetic production sign-ins or feedback.
+
+October17 owner playtest correction: internal construction needs a recognizable cell-local factory, with a raised chamber plate and build-symbol badge, never a new screen label in both desktop/mobile and exterior/interior views. Selecting or moving an internal organ automatically uses the existing smooth Interoception camera transition. Investment presents Hunter/Producer/Grazer illustrated cells simultaneously for direct choice, with explicit scope, Manual and Inherit; do not restore strategy cycling. Keep both guides and experimental-only release notices current.
+
+Owner overlap-picker correction: prefer matching artwork over names/abbreviations. Both factories, the actual lineage nucleus, ATP/offspring stores and installed/lost organs use shared world artwork in overlap choices; pink rings identify lost organs. Keep captions for descriptions and accessibility, with no new permanent labels.
+
+Investment-panel target acceptance caught overflow at large UI scale. Bound the temporary panel’s effective scale by both viewport dimensions; verify desktop, portrait, dense touch, short landscape and enlarged UI settings with actual pointer input. Preserve all three pictures and explicit controls. Experimental fixture subprocess failures must print their retained assertion output before propagating the failure, without bypassing any gate.
+
+October17 owner correction: read Revision60. Shade leaves seek soft light using the local gradient (darker above0.45, brighter below0.35; no drive inside the band); Sun retains light seeking. Reject stale opposing light intentions without changing ecology RNG; later owner direction below replaces manual Steering. Output/overdrive is removed: hide controls/readouts, reject the old command, ignore retained legacy percentages across all backends, and keep mutation effects. Preserve exact saved anatomy instead of migrating/deleting old output fields. Update the player guide and experimental notice; validate normal-output parity and deploy experimental only.
+
+October17 final owner continuation supersedes manual Exploration/response-cycle and per-organ Steering. Read Revision60. Use one shared local-signal behavior tree for selected/unattended player cells, NPCs and all activity/backend paths. Prioritize harm/escape, ATP recovery, biomass, then opportunistic hunt/light/search. Never look up live sources or remote family positions; dispersion uses fresh received immutable family chemistry. Respect actual sensory/motor organs and ordinary ATP/material/contact costs; resting only stops propulsion. Preserve legacy percentage fields inert and reject retired commands. Hunter/Producer/Grazer investments use complementary, diverse supporting anatomy and own condition; retain NPC10%Hunter quotas, saved opt-in/manual semantics and ordinary AP fitting/accounting. Sanctuary was subsequently withdrawn; see the final correction below. With every organelle/chemistry addition, explicitly maintain behavior capabilities, investment roles or deliberate manual-only exclusions, targeted tests, scientific abstractions, player guide and audience-filtered release text. This is standing development upkeep, not authorization for a schedule or a stable promotion.
+
+October17 final owner correction: remove Sanctuary entirely; it must not be deployed as an available organ or active immunity/growth rule. Family menus list living relatives/reserves and retain only highest generation and total cells ever; deceased records leave the active ledger. The owner explicitly authorizes this large update to reset pond state and remove incompatible history. For the current experimental deployment only, use the explicit reset_pond dispatch input, retain keys/accounts/names/private feedback and rollback predecessor, verify a genuinely new experimental pond and its normal subsequent restart. Stable stays untouched pending promotion. This supersedes strict old-cell/anatomy retention for this one reset, not the ordinary update default. Do not keep a hidden functioning Sanctuary or silently enable reset on pushes/future updates.
+
+October17 division correction: daughters inherit only the effective investment
+strategy, not purchased organs, mutations or the parent's sampled cytoskeleton.
+New bodies have one ordinary inherent oral groove and their own sampled shape.
+Quote only this basic body/tissue; retain paid material/ATP transfer, parent
+anatomy, lineage identity and 2AP per committed division. A Manual parent assigns
+a uniformly random Hunter/Producer/Grazer only after a birth can commit. Save the
+daughter's strategy as a body override; NPC quota balancing must respect it.
+Quotas continue to guide unassigned NPCs, while reproduction may change the mix.
+Failed/blocked births neither draw strategy randomness nor leave overrides.
+Death removes obsolete body investment entries. Existing bodies and banked
+reserves are not rewritten; ordinary persistent experimental rollout only.
+
+October17 mobile font correction: Comic Neue lacks the investment checkmark
+glyph. Investment scope, Manual/Inherit and strategy cards use a shared authored
+vector selection-mark texture, never a font-dependent tick. Retain the active
+card highlight and verify actual touch choices and marker textures on target.
+
+October17 AP pricing correction: each cell's next added/restored organ costs
+the number of currently installed non-inherent organs (0,1,2,...). The inherent
+oral groove is excluded. Selling, loss or removal lowers that current count;
+Selling refunds max(0,actual installation AP paid minus1). Store construction_ap
+on each newly installed/restored organ; unknown legacy normal prices refund0.
+Do not use a lifetime construction counter. Automatic
+investment and both desktop/mobile factory, placement, resource and restoration
+previews use this same Cell.construction_price. Zero AP must allow a first free
+build. Existing cells derive price from actual anatomy without a save migration.
+
+October 17 low-power correction: read Revision 62. Replace ATP shutdowns with a
+shared 25% operating floor for functional motors/pumping, secretion, weapon
+recharge, active gland repair and receptor cleaning. Enter below 12 ATP, recover
+at 18 to avoid flicker; preserve the bounded low_power latch in behavior.
+Status/presentation reads must not change it. Passive photosynthesis/digestion,
+sensing and protection keep their existing ATP-independent rules. Keep finite
+material, valid targets/needed secretion and broken-organ gates; charge only
+actual available ATP, never invent ATP or negative stocks. Quarter baseline
+work without sufficient ATP is an explicit game allowance, not a biochemical
+conservation claim. Weapon parcels remain unchanged and recharge advances at
+quarter rate. Shared fine/resident/coarse helpers and offscreen intake estimates
+must agree. Low ATP no longer removes hunting intent when prey is the only cue;
+digestion/rest and emergency priority still apply. Feasible mitochondrial
+investment gains priority during shortage. Update guides/experimental notice
+and functional GPU/persistence tests; preserve the pond, keys and feedback.
+
+October 17 family-menu correction: each current relative/reserve uses a live
+anatomy portrait behind a tiny generation-number badge in the bottom corner,
+matching factory badges. Keep the selected body marked and ordinary follow
+validation/input. Refresh growth, installed/damaged organs and lineage color
+while open; remove deceased entries. Owned off-camera portraits travel as small,
+data-only presentation snapshots, never extra camera interests, chemistry poses
+or simulated client bodies. Capture/drawing must not alter ecology or RNG.
+Validate actual desktop/touch pixels and pointer selection; preserve both ponds.
+
+October 17 family-grid correction: show all current relative/reserve portraits
+in one responsive desktop/touch grid. Remove the G-generation summary action
+and More pagination, including the generic desktop five-choice limit. Keep
+highest-generation/lifetime totals as small header text and per-cell generation
+as a tiny corner badge. Allow the family menu to use the screen; scroll only
+when its contents exceed the viewport. Close remains fixed and reachable while
+scrolling. Preserve live portraits, validated follow and ordinary pond retention.
+
+October 17 direct-division correction: banked/dormant offspring are retired.
+Do not create founder reserves, store paid bodies or hatch old backups. The
+owner explicitly waives reserve/history retention for this update: discard old
+stored bodies on the next authority tick, recording their material as removed;
+do not release them or reset the living pond. Preserve ordinary living cells,
+accounts, five keys and feedback. Keep paid automatic growth and actual safe
+live division, basic daughter/strategy inheritance, 2AP awards and normal
+living-family succession. The bud offers only Divide now. Show only living
+relatives in portraits/help; there is no storage bank or dormant recovery.
+
+October 17 restart acceptance found an exhausted/sub-float cold nutrient reaching
+resident GPU admission as a zero float32 dose. Keep strict exchange validation
+and hardware GPU gates. Cold promotion must pass through the same enqueue
+escrow as paid emissions, retaining positive sub-float material and food capacity.
+Retire only exactly empty material/capacity slots; never round up a dose or cull
+positive matter to make a deployment pass. Validate the real handoff and restart.
+
+October 17 stable family promotion and standby: the owner explicitly authorizes
+promoting the verified experimental build to main and suspending experimental
+until the next batch. Keep experimental release-notice IDs/audiences; add one
+stable-only gameplay notice instead of leaking playtest announcements. Preserve
+the living stable pond, accounts, five keys and private feedback. Only after
+stable CD and retention/delivery checks pass, use the explicit experimental
+standby operation. Keep its saved pond/keys/feedback and disable only its unit;
+future stable updates must preserve standby, and the next authorized experimental
+deploy resumes it without reset. Newly collected R21/R22 remain proposals only.

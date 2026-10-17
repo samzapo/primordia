@@ -14,7 +14,7 @@ if [[ "$native_opt" == pgo-use && -f build/native/.source_stamp ]] &&
 fi
 # Fast launches after a successful build. Source/config updates trigger a rebuild.
 if [[ "$profile_changed" == false && -f build/native/.optimization_stamp && "$(cat build/native/.optimization_stamp)" == "$native_opt" && -f build/native/primordia.gdextension && -f build/native/libprimordia.so && -f build/native/.source_stamp ]] &&
-   ! find native data tools/build_native.sh tools/compile_chemistry.py tools/fetch_liquidfun.py -type f -newer build/native/.source_stamp -print -quit | grep -q .; then
+   ! find native data tools/build_native.sh tools/compile_chemistry.py tools/fetch_liquidfun.py tools/patch_godot_cpp.py -type f -newer build/native/.source_stamp -print -quit | grep -q .; then
   exit 0
 fi
 # Pinned, reproducible dependency; generated bindings/binaries stay under build/.

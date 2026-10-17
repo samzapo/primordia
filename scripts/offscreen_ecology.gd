@@ -141,12 +141,11 @@ static func _functional(cell, kind: String) -> float:
 	return result
 
 static func _swim(cell) -> float:
-	if cell.energy <= 0: return 0.0
 	var thrust := 0.0
 	for organ in cell.organs:
 		if organ.kind in ["propulsion","cilia"]:
 			thrust += (2600.0 if organ.kind == "propulsion" else cell.CILIA_THRUST)*organ.scale*organ.scale*organ.hp/organ.max_hp*Genes.factor(organ,"thrust")
-	return thrust/(cell.fluid_drag()+cell.mass*0.2)
+	return thrust*cell.work_capacity()/(cell.fluid_drag()+cell.mass*0.2)
 
 static func feeding_request(sim, cell, dt: float, period: float) -> Dictionary:
 	# Same unresolved swept collection model as _feed; GPU consumption still
@@ -156,7 +155,7 @@ static func feeding_request(sim, cell, dt: float, period: float) -> Dictionary:
 	var radius: float=cell.extent()+FEED_MARGIN+minf(60,relative*period)
 	for organ in cell.organs:
 		if organ.kind!="feeding" or organ.hp<=0: continue
-		var pump: float=24*organ.scale*organ.hp/organ.max_hp*Genes.factor(organ,"suction") if cell.energy>0 else 0.0
+		var pump: float=24*organ.scale*organ.hp/organ.max_hp*Genes.factor(organ,"suction")*cell.work_capacity()
 		var center: Vector2=cell.pore_center(organ)
 		var arm: Vector2=Medium.offset(cell.position,center)
 		var local_flow: float=(cell.velocity+arm.orthogonal()*cell.angular_velocity-sim.fluid.sample(center)).length()
@@ -175,7 +174,7 @@ func _feed(sim, cell, dt: float) -> void:
 	for organ in cell.organs:
 		if organ.kind != "feeding" or organ.hp <= 0: continue
 		if mouth.is_empty(): mouth = organ
-		var pump: float = 24*organ.scale*organ.hp/organ.max_hp*Genes.factor(organ,"suction") if cell.energy > 0 else 0.0
+		var pump: float = 24*organ.scale*organ.hp/organ.max_hp*Genes.factor(organ,"suction")*cell.work_capacity()
 		var center: Vector2 = cell.pore_center(organ)
 		var arm: Vector2 = Medium.offset(cell.position,center)
 		var local_flow: float = (cell.velocity+arm.orthogonal()*cell.angular_velocity-sim.fluid.sample(center)).length()
@@ -263,7 +262,7 @@ func _exposure(sim, cell, dt: float) -> void:
 		p.alive = false
 		cell.waste += p.amount
 		if p.kind == sim.TOXIN:
-			cell.waste += cell.damage(p.amount*sim.Catalog.data().combat.toxin_damage_per_unit,delta.angle())
+			cell.waste += cell.damage(p.amount*sim.Catalog.data().combat.toxin_damage_per_unit,delta.angle(),p.owner)
 			cell.death_hint = "Membrane failed after toxin exposure"
 
 func _hunt(_sim, _attacker, _dt: float) -> void:

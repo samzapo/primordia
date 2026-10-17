@@ -30,6 +30,7 @@ func run() -> void:
 	await promotion()
 	await lifecycle()
 	await escrow()
+	await exhausted_admission()
 	print("RESIDENT_GAMEPLAY_VALIDATION ",checks," checks")
 	quit()
 func play(change_camera: bool) -> Dictionary:
@@ -71,6 +72,10 @@ func lifecycle() -> void:
 	check(sim.player.organ_by_id(id).is_empty(),"Build anatomy updates immediately")
 	sim.commit_build()
 	sim.step(1.0/60)
+	var quote: Dictionary=sim.offspring_quote()
+	sim.player.biomass+=quote.material;sim.player.energy=100
+	sim.player.reserve(maxf(60,quote.material),quote.material)
+	check(sim.divide_lineage(false,false),"A paid living daughter exists before succession")
 	var before:=organic(sim,bridge.snapshots())
 	var old_id: int=sim.player.id
 	var points: int=sim.evolution.points
@@ -80,7 +85,7 @@ func lifecycle() -> void:
 	check(sim.death_bursts.size()>0 and sim.death_bursts[-1].player,"Player lysis remains visible")
 	check(sim.evolution.points==points,"Death does not reset adaptation points")
 	var after:=organic(sim,bridge.snapshots())
-	check(absf(before-after)<.002,"Lysis and reserve recovery conserve organic inventory")
+	check(absf(before-after)<.002,"Lysis and living succession conserve organic inventory")
 	sim.step(1.0/60)
 	check(sim.resident!=null and bridge.pending.is_empty(),"Large death release reaches resident pool")
 	# A stable generation handle follows the same packet; no full pool picking.
@@ -134,4 +139,28 @@ func promotion() -> void:
 	check(absf(distant.age-sim.time)<.00001,"Detailed age resumes without a frozen interval")
 	check(sim.profile_counts.get("membrane_updates",0)==sim.active_cells,"Only detailed cells solve membranes after promotion")
 	check(sim.particles.is_empty() and bridge.gpu.readbacks==0,"Promotion never downloads or mirrors the particle pool")
+	bridge.close();await bridge.gpu.closed
+
+
+func exhausted_admission() -> void:
+	var sim=Simulation.new(390017)
+	sim.cells=[sim.player];sim.particles=[];sim.pheromones=[];sim.grid.rebuild([])
+	sim.spawn_particle(sim.NUTRIENT,sim.player.position,Vector2.ZERO,.3,7)
+	var sample: Dictionary=sim.particles[0].duplicate(true)
+	sim.particles=[];sim.grid.rebuild([])
+	var bridge=await start(sim,64)
+	var empty: Dictionary=sample.duplicate(true);empty.amount=0.0;empty.capacity=0.0
+	var tiny: Dictionary=sample.duplicate(true);tiny.amount=1e-100;tiny.capacity=2e-100;tiny.owner=8
+	var normal: Dictionary=sample.duplicate(true)
+	for packet in [empty,tiny,normal]:
+		packet["chemical_at"]=sim.time;packet["transport_at"]=sim.time
+		bridge.streaming.cold.put(packet,sim.time)
+	check(bridge.streaming.service(sim),"Cold checkpoint packets can enter the camera")
+	var receipt: Dictionary=bridge._receipt([],[],{"feeding":false,"projection":false,"chemistry":false})
+	check(not receipt.has("error") and sim.resident==bridge,"An exhausted nutrient cannot force resident CPU fallback")
+	check(not empty.alive and bridge.pending.is_empty(),"Only exactly empty slots retire; ordinary material completes admission")
+	var held: Dictionary=bridge.trace_emissions[Vector2i(8,sim.NUTRIENT)]
+	check(held.amount==1e-100 and held.capacity==2e-100,"Positive sub-float tissue and food yield remain escrowed exactly")
+	var packets: Array=bridge.snapshots()
+	check(packets.filter(func(packet):return packet.alive and packet.amount>.01).size()==1,"The normal nutrient is admitted once without an invented minimum dose")
 	bridge.close();await bridge.gpu.closed

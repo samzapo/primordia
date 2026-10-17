@@ -72,6 +72,7 @@ jobs:
           sys.path.insert(0,str(pathlib.Path.cwd()/"tools"))
           from deploy import main
           from experimental_instance import get_json
+          from experimental_standby import standby_identity
           stable=pathlib.Path.home()/".local/share/primordia-deploy"
           experimental=pathlib.Path.home()/".local/share/primordia-experimental"
           def retained_files(root):
@@ -79,6 +80,8 @@ jobs:
               return {str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in paths if p.is_file()}
           retained={**retained_files(stable),**retained_files(experimental)}
           def experimental_identity():
+              standby=standby_identity(experimental)
+              if standby is not None:return standby
               value=get_json("http://127.0.0.1:8768/health")
               return {**{k:value[k] for k in ["build","world_id","epoch","tick","accounts"]},
                   "pid":subprocess.check_output(["systemctl","--user","show","primordia-experimental.service","-p","MainPID","--value"],text=True).strip()}
@@ -86,7 +89,9 @@ jobs:
           main()
           assert all(pathlib.Path(p).is_file() and hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()==digest for p,digest in retained.items()),"A retained key registry or feedback report changed"
           after=experimental_identity() if before else None
-          if before:
+          if before and before.get("state")=="standby":
+              assert before==after,"Experimental standby state changed"
+          elif before:
               assert all(before[k]==after[k] for k in ["build","world_id","epoch","pid"]),"Experimental service identity changed"
               assert after["tick"]>before["tick"] and after["accounts"]>=before["accounts"],"Experimental world stopped or lost accounts"
           report={"experimental_before":before,"experimental_after":after,"retained_files_verified":len(retained)}
@@ -154,8 +159,14 @@ jobs:
           import json,os,pathlib,sys
           root=pathlib.Path.home()/".local/share/primordia-experimental"
           if (root/"current").is_dir():
-              sys.path.insert(0,str(root/"current/tools"))
-              os.environ["GITHUB_SHA"]=json.loads((root/"last-deploy.json").read_text())["revision"]
-              from verify_experimental import main
-              main(restart=False)
+              stable=pathlib.Path.home()/".local/share/primordia-deploy"
+              sys.path.insert(0,str(stable/"current/tools"))
+              from experimental_standby import standby_identity
+              standby=standby_identity(root)
+              if standby is not None:
+                  print("EXPERIMENTAL_STANDBY_PRESERVED "+json.dumps(standby))
+              else:
+                  os.environ["GITHUB_SHA"]=json.loads((root/"last-deploy.json").read_text())["revision"]
+                  from verify_experimental import main
+                  main(restart=False)
           PYTHON

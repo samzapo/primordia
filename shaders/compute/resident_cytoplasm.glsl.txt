@@ -82,7 +82,8 @@ void advance(){
    double fueled=min(used,fuel/7.5),tissue=fueled*(.7*aerobic+.3*anaerobic)/max(0.00000001,used);
    double work=min(max(0.0,fuel-tissue*7.5),fueled*(2.25*aerobic+1.0*anaerobic)/max(0.00000001,used));
    double bonus=clamp(meal.clock.y/max(EPS,meal.q.x),0.0,NUTRIENT_BONUS_LIMIT);
-   if(bonus>0.0){double extra=min(work*bonus,max(0.0,fuel-work));double recovered_heat=max(0.0,fuel-tissue*7.5-work);tissue-=max(0.0,extra-recovered_heat)/7.5;work+=extra;}
+   double allocation_gain=bonus+max(0.0,op[20]-1.0)*aerobic/max(0.00000001,used);
+   if(allocation_gain>0.0){double extra=min(work*allocation_gain,max(0.0,fuel-work));double recovered_heat=max(0.0,fuel-tissue*7.5-work);tissue-=max(0.0,extra-recovered_heat)/7.5;work+=extra;}
    budget-=used;consume(i,used);c[80]+=tissue;c[82]+=work;c[83]+=used;c[84]+=anaerobic;
    c[20]+=max(0.0,fuel-tissue*7.5-work);
    emit_packet(CARBON,used*.1,meal.pose.xy,-1,0xffffffffu,-1,0xffffffffu,0.0,0.0);
@@ -134,7 +135,7 @@ void main(){
  else if(code==10){
   double used=near_consume(CARBON,op[1],at,float(op[4]));c[70]=used;
   if(used>0.0){
-   emit_packet(FOOD,used*.65,at,-1,0xffffffffu,-1,0xffffffffu,used*.65*7.5,0.0);
+   emit_packet(FOOD,used*.65*.75,at,-1,0xffffffffu,-1,0xffffffffu,used*.65*.75*7.5,0.0);
    emit_packet(OXYGEN,used*2.5,at,-1,0xffffffffu,-1,0xffffffffu,0.0,0.0);
    c[80]+=used*.35;c[82]+=used*4.0;c[21]+=used*11.5;
   }

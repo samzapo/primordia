@@ -156,14 +156,15 @@ func run() -> void:
 	check(await until(func():return host.world.camera_views.size()==2 and host.world.interoceptive_cells.is_empty()),"Returning outside restores the external camera union and coarsens hidden interiors")
 	var account: Dictionary=host.accounts[welcome0.token.sha256_text()]
 	var before_points: int=account.evolution.points
+	var build_price: int=host._selected(account).construction_price()
 	var command={"op":"command","epoch":host.epoch,"sequence":1,"edit":0,"cell":welcome0.cell,"action":"install","args":{"kind":"propulsion","angle":2.0}}
 	sockets[0].send_text(JSON.stringify(command))
 	check(await until(func():return not find_message(0,"result",1).is_empty()),"paid edit acknowledged")
 	check(find_message(0,"result",1).ok,"paid anatomy installed")
-	check(account.evolution.points==before_points-1,"ordinary AP debit occurs exactly once")
+	check(account.evolution.points==before_points-build_price,"ordinary AP debit occurs exactly once")
 	sockets[0].send_text(JSON.stringify(command))
 	check(await until(func():return messages[0].filter(func(m):return m.get("kind","")=="result" and m.get("sequence",-1)==1).size()>=2),"duplicate command receives retained receipt")
-	check(account.evolution.points==before_points-1,"retry does not debit AP twice")
+	check(account.evolution.points==before_points-build_price,"retry does not debit AP twice")
 	sockets[1].send_text(JSON.stringify({"op":"command","epoch":host.epoch,"sequence":1,"edit":0,"cell":welcome0.cell,"action":"remove","args":{"id":0}}))
 	check(await until(func():return not find_message(1,"result",1).is_empty()),"foreign-cell command answered")
 	check(not find_message(1,"result",1).ok,"another lineage cannot edit this cell")
@@ -224,7 +225,7 @@ func run() -> void:
 		var resumed:=find_message(3,"welcome")
 		check(host.accounts.size()==count_before and resumed.cell==selected_before,"a reused key does not claim a second lineage")
 		check(resumed.token!=welcome0.token and host.accounts[resumed.token.sha256_text()]==account,"resume rotates the bearer and preserves the account")
-		check(account.sequence==1 and account.evolution.points==before_points-1,"resume preserves paid edit receipts and costs")
+		check(account.sequence==1 and account.evolution.points==before_points-build_price,"resume preserves paid edit receipts and costs")
 		var durable=preload("res://scripts/network/state_codec.gd").new().restore(host.store.load_latest().graph)
 		check(durable.accounts.has(resumed.token.sha256_text()) and not durable.accounts.has(welcome0.token.sha256_text()) and durable.accounts[resumed.token.sha256_text()].sequence==1,"rotated account and receipts are durable before welcome")
 		check(await until(func():return sockets[0].get_ready_state()==WebSocketPeer.STATE_CLOSED),"previous browser is disconnected on key resume")

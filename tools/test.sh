@@ -7,6 +7,16 @@ if [[ "${PRIMORDIA_BACKEND:-native}" != script ]]; then
   "$project_dir/tools/build_native.sh" >&2
   cmake --build "$project_dir/build/native" --target primordia_worker_test --parallel "${PRIMORDIA_BUILD_JOBS:-2}" >&2
   "$project_dir/build/native/primordia_worker_test"
+  cmake --build "$project_dir/build/native" --target primordia_dictionary_probe --parallel "${PRIMORDIA_BUILD_JOBS:-2}" >&2
+  memory_report="$(mktemp "${TMPDIR:-/tmp}/primordia-memory.XXXXXX")"
+  trap 'rm -f -- "$memory_report"' EXIT
+  "$godot_bin" --headless --path "$project_dir" --script tests/native_dictionary_lifetime.gd 2>&1 | tee "$memory_report"
+  if grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$memory_report" || ! grep -q 'DICTIONARY_RESULT: 8 assertions, 0 failures' "$memory_report"; then
+    echo "Native Dictionary lifetime regression failed." >&2
+    exit 1
+  fi
+  rm -f -- "$memory_report"
+  trap - EXIT
 fi
 report_file="$(mktemp "${TMPDIR:-/tmp}/primordia-test.XXXXXX")"
 trap 'rm -f -- "$report_file"' EXIT

@@ -52,7 +52,7 @@ func run() -> void:
 	sim.cells.append(other);sim.next_id=100;prepare(sim,other)
 	var original: PackedByteArray=var_to_bytes(Codec.new().capture(parent))
 	mass=material(sim);sim._step_reproduction()
-	check(sim.cells.size()==3 and sim.cells[-1].lineage_id()==other.lineage_id() and sim.cells[-1].count("photosynthesis")==other.count("photosynthesis"),"Unowned paid reproduction uses that parent's anatomy and family")
+	check(sim.cells.size()==3 and sim.cells[-1].lineage_id()==other.lineage_id() and sim.cells[-1].count("photosynthesis")==0 and sim.cells[-1].count("feeding")==1,"Unowned paid reproduction keeps that parent's family without cloning its paid anatomy")
 	check(sim.player==parent and var_to_bytes(Codec.new().capture(parent))==original and absf(material(sim)-mass)<.00001,"Another lineage cannot spend, mutate or replace the selected player")
 	var ledger=sim._family_ledger(other)
 	check(ledger.active_family(sim).size()==2 and sim._family_ledger(sim.cells[-1])==ledger,"An unclaimed family retains a shared ledger before enrollment")

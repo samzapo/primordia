@@ -4,6 +4,7 @@ var debug_census_usec:=0
 const Simulation = preload("res://scripts/simulation.gd")
 const FlowView = preload("res://scripts/flow_view.gd")
 const ReactionSparks = preload("res://scripts/reaction_sparks.gd")
+var family_portraits: Dictionary={} # Current owned-family thumbnail data, separate from camera/simulation cells.
 const CellView = preload("res://scripts/cell_view.gd")
 const Preferences = preload("res://scripts/preferences.gd")
 const Visuals = preload("res://scripts/visuals.gd")
@@ -15,8 +16,8 @@ const MINT := Color("80efce")
 const GOLD := Color("f5d47b")
 const TEXT := Color("e5f5ec")
 const MUTED := Color("a3bfc5")
-const TITLES := ["Flagellum","Protective cortex","Pore-forming gland","Buffer / repair gland","Oral groove","Flight receptor","Photosynthesis","Toxin gland","Toxin neutralizer","Acid gland","Hunting receptor","Cilia"]
-const HELP := ["Flagella provide thrust. Anatomy chooses travel direction.","Protects the membrane directly beneath it. Coverage follows its membrane attachment.","Spends tissue and ATP to emit surface tags and pore subunits toward a local pheromone report. Four aligned subunits assemble a membrane pore; inhibitors and repair can stop it.","Uses biomass and ATP to repair organs and close punctures faster. Releases buffers that neutralize local acidity and accelerates receptor cleaning.","Senses and pumps nutrients into its opening. Secretes reusable enzymes that turn waste into food when aligned.","Reads nearby pheromones reporting larger or armed cells and retreats from their last reported location. This is the only organ that triggers flight.","Seeks brighter water. Light fixes dissolved carbon into biomass and food, releasing oxygen. Works best in bright habitat patches.","Spends ATP and biomass to fire toxins and receptor-blocking decoys toward a pheromone report received by a hunting or flight receptor.","Releases complementary particles that bind toxin into harmless waste. Costs small amounts of biomass and ATP.","Releases acidifying particles. Moderate acidity helps nutrients bind for higher ATP yield and favors digestive enzymes; excess acidity costs ATP and damages cells. Repair bodies release buffers.","Reads local pheromones reporting smaller or undefended prey. Faces and pursues the last reported location. Undefended means no functional pore-forming gland, toxin vesicle or protective cortex at emission. Pair with secretory attack glands.","A short beating ciliary band provides propulsion and a strong local feeding current from the receptor-selected direction. Draws all particles with the water, including hazards; a grazing pore still consumes food."]
+const TITLES := ["Flagellum","Protective cortex","Pore-forming gland","Buffer / repair gland","Oral groove","Flight receptor","Photosynthesis","Toxin gland","Toxin neutralizer","Acid gland","Hunting receptor","Cilia","Mitochondrion","Counterattack gland"]
+const HELP := ["Flagella provide thrust. Anatomy chooses travel direction.","Protects the membrane directly beneath it. Coverage follows its membrane attachment.","Spends tissue and ATP to emit surface tags and pore subunits toward a local pheromone report. Four aligned subunits assemble a membrane pore; inhibitors and repair can stop it.","Uses biomass and ATP to repair organs and close punctures faster. Releases buffers that neutralize local acidity and accelerates receptor cleaning.","Senses and pumps nutrients into its opening. Secretes reusable enzymes that turn waste into food when aligned.","Reads nearby pheromones reporting larger or armed cells and retreats from their last reported location. It also senses harmful acidity; an actual hit can trigger a short escape reflex.","Seeks brighter water, or soft light with the Shade adaptation. Light fixes dissolved carbon into biomass and food, releasing oxygen. Works best in bright habitat patches.","Spends ATP and biomass to fire toxins and receptor-blocking decoys toward a pheromone report received by a hunting or flight receptor.","Releases complementary particles that bind toxin into harmless waste. Costs small amounts of biomass and ATP.","Releases acidifying particles. Moderate acidity helps nutrients bind for higher ATP yield and favors digestive enzymes; excess acidity costs ATP and damages cells. Repair bodies release buffers.","Reads local pheromones reporting smaller or undefended prey. Faces and pursues the last reported location. Undefended means no functional pore-forming gland, toxin vesicle or protective cortex at emission. Pair with secretory attack glands.","A short beating ciliary band provides propulsion and a strong local feeding current from the receptor-selected direction. Draws all particles with the water, including hazards; a grazing pore still consumes food.","An internal organelle that gets more ATP from food when oxygen is available. It redirects some food fuel from growth to energy.","Responds to locally received chemical warnings from armed cells. Its toxin spares cells without offensive organs."]
 var music := preload("res://scripts/music_director.gd").new()
 var music_slider := HSlider.new()
 var world: Simulation = Simulation.new()
@@ -78,6 +79,9 @@ var lineage_confirming:=false
 var feedback:=preload("res://scripts/feedback_form.gd").new()
 var feedback_menu_button: Button
 var profile:=preload("res://scripts/player_profile.gd").new()
+var palette:=preload("res://scripts/lineage_palette.gd").new()
+var player_color:=""
+var palette_menu_button: Button
 var nameplates:=preload("res://scripts/player_nameplates.gd").new()
 var profile_menu_button: Button
 var player_name:=""
@@ -633,8 +637,8 @@ func _draw_preview() -> void:
 	var size: float = organ.scale if not organ.is_empty() else 1.0
 	var kind: String = organ.kind if not organ.is_empty() else Simulation.KINDS[selected]
 	var normal: Vector2 = cell.local_normal(a)
-	var point: Vector2 = (local+normal*5*size).rotated(cell.angle)
-	var fits: bool = moving_id >= 0 or (cell.can_fit(kind,a,1,false) and world.evolution.points >= 1)
+	var point: Vector2 = cell.organ_local_position({"kind":kind,"a":a,"scale":size}).rotated(cell.angle)
+	var fits: bool = moving_id >= 0 or (cell.can_fit(kind,a,1,false) and world.evolution.points >= cell.construction_price())
 	Visuals.icon(preview,point,kind,normal.angle()+cell.angle,size,ui_time)
 	preview.draw_arc(point,22*size,0,TAU,32,MINT if fits else Color("fc8c90"),2/zoom,true)
 	if selected >= 0:
@@ -737,6 +741,13 @@ func _update_perception_menu() -> void:
 	if perception_menu_button!=null:
 		perception_menu_button.text=("Interoception" if perception=="exteroception" else "Exteroception")+" [I]"
 
+func lineage_color(root_id: int) -> String:
+	for row in lineage_names:
+		if row.root==root_id:return str(row.get("color",""))
+	return ""
+func _submit_lineage_color(_color: String) -> String:
+	return "Connect to the shared pond to save a lineage color."
+
 func _submit_profile(_name: String) -> String:
 	return "Connect to the shared pond to save a player name."
 
@@ -788,7 +799,7 @@ func _build_ui() -> void:
 	debug_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	debug_label.add_theme_color_override("font_outline_color",Color("142540"))
 	debug_label.add_theme_constant_override("outline_size",5)
-	feedback.initialize(self);profile.initialize(self);nameplates.initialize(self);player_help.initialize(self)
+	feedback.initialize(self);profile.initialize(self);palette.initialize(self);nameplates.initialize(self);player_help.initialize(self)
 	var options_box := _panel_box(settings_panel)
 	var settings_scroll := ScrollContainer.new()
 	settings_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -800,6 +811,7 @@ func _build_ui() -> void:
 	settings_scroll.add_child(options)
 	_label(options,"SETTINGS [M]",MINT)
 	profile_menu_button=_button(options,"Player name",profile.open)
+	palette_menu_button=_button(options,"Lineage color",palette.open)
 	feedback_menu_button=_button(options,"Feature request / Bug report",feedback.open)
 	gameplay_menu_button=_button(options,"Gameplay",player_help.open.bind("gameplay"))
 	mechanics_menu_button=_button(options,"Mechanics",player_help.open.bind("mechanics"))
@@ -1011,9 +1023,17 @@ func _finish_build() -> void:
 
 func placement_status() -> String:
 	if selected < 0: return ""
-	if world.evolution.points < 1: return "Needs an adaptation point."
+	if world.evolution.points < world.player.construction_price(): return "Needs %d AP." % world.player.construction_price()
 	if not world.player.can_fit(Simulation.KINDS[selected],0,1,false): return "Needs more membrane area."
-	return "Tap the membrane · tap the held icon to cancel." if touch_zoom.enabled else "Click the membrane · neighbors make room."
+	var place: String="inside the cell" if world.player.internal_organ(Simulation.KINDS[selected]) else "the membrane"
+	return "Tap "+place+" · tap the held icon to cancel." if touch_zoom.enabled else "Click "+place+" · right-click cancels."
+
+func _placement_hit(relative: Vector2) -> bool:
+	var organ: Dictionary=world.player.organ_by_id(moving_id)
+	var kind: String=organ.get("kind","") if moving_id>=0 else Simulation.KINDS[selected] if selected>=0 else ""
+	var reach: float=world.player.support(relative.angle())
+	if world.player.internal_organ(kind):return relative.length()<=reach+maxf(12,26/zoom)
+	return absf(relative.length()-reach)<=maxf(26/zoom,12)
 
 func _place_at(angle: float) -> bool:
 	if moving_id >= 0:
@@ -1043,13 +1063,21 @@ func _zoom_at(screen: Vector2, factor: float) -> void:
 
 func _select(index: int) -> void:
 	if settings_panel.visible or world.player.dead or world.evolution.terminal(): return
+	if index<0 or index>=Simulation.KINDS.size():return
 	if not build_open: _toggle_build()
+	if not build_open:return
 	cell_ui.close_context()
 	cell_ui.keyboard_target.clear()
 	moving_id = -1
 	selected = index
+	_prepare_placement(Simulation.KINDS[index])
 	placement_keyboard = false
 	tube_start.clear()
+
+func _prepare_placement(kind: String) -> void:
+	# Internal placement enters the existing attached/eased camera frame.
+	if world.player.internal_organ(kind) and perception!="interoception":
+		_toggle_perception()
 
 func _request_new_lineage() -> void:
 	if not world.remote_client or lineage_confirming:return
@@ -1131,7 +1159,7 @@ func _notification(what: int) -> void:
 	if what==NOTIFICATION_WM_WINDOW_FOCUS_OUT:touch_zoom.cancel()
 
 func _input(event: InputEvent) -> void:
-	if feedback.opened or profile.opened or player_help.opened or lineage_confirming:return
+	if feedback.opened or profile.opened or palette.opened or player_help.opened or lineage_confirming:return
 	if event is InputEventScreenTouch or event is InputEventScreenDrag:
 		if touch_zoom.handle(event):get_viewport().set_input_as_handled()
 		return
@@ -1205,17 +1233,24 @@ func _family_at(screen: Vector2) -> int:
 
 func _switch_family(identity: int) -> bool:
 	if identity < 0 or identity == world.player.id or selected >= 0 or moving_id >= 0: return false
-	if not world.lineage.active_family(world).any(func(cell):return cell.id == identity): return false
-	if build_open: _toggle_build() # Keep completed edits before adopting another body.
+	if world.remote_client:
+		# Owned off-camera relatives have ledger/portrait data, not client bodies.
+		var record: Dictionary=world.lineage.record_for(identity)
+		if record.is_empty() or record.state!="living":return false
+	elif not world.lineage.active_family(world).any(func(cell):return cell.id == identity): return false
+	if build_open:
+		world.commit_build();build_open=false;selected=-1;moving_id=-1 # Keep the displayed pose, not the old edit-entry camera.
 	cell_ui.close_context()
 	if not world.edit("follow",{"id":identity}): return false
+	if world.remote_client:return true # Reframe only after the authoritative selected body arrives.
+	_ease_camera()
 	camera_locked = true; camera_offset = Vector2.ZERO; intero_rotation = 0
 	touch_zoom.last_tap_family = -1
 	_update_world(1)
 	return true
 
 func _unhandled_input(event: InputEvent) -> void:
-	if feedback.opened or profile.opened or player_help.opened or lineage_confirming:return
+	if feedback.opened or profile.opened or palette.opened or player_help.opened or lineage_confirming:return
 	if touch_zoom.enabled and (event is InputEventMouseButton or event is InputEventMouseMotion) and event.device==-1:return
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT and not cell_ui.context.is_empty():
 		cell_ui.close_context()
@@ -1281,7 +1316,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.button_index == MOUSE_BUTTON_LEFT:
 		if event.double_click and _switch_family(_family_at(event.position)): return
 		if build_open and (selected >= 0 or moving_id >= 0):
-			if absf(relative.length()-world.player.support(relative.angle())) <= maxf(26/zoom,12):
+			if _placement_hit(relative):
 				_place_at(world.player.surface_parameter(local.angle()))
 				return
 		var target: Dictionary = cell_ui.pick(event.position)
