@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Exercise suspension with temporary state, never a live service."""
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -75,6 +76,14 @@ class StandbyTests(unittest.TestCase):
         run.assert_not_called();request.assert_not_called()
         self.assertEqual(standby.protected(self.root),before)
         self.assertEqual(value["state"],"standby")
+    def test_imported_service_query_supplies_user_bus_environment(self):
+        for inherited in [{},{"XDG_RUNTIME_DIR":"/fixture/runtime"}]:
+            with self.subTest(inherited=inherited),patch.dict(os.environ,inherited,clear=True),patch.object(standby.subprocess,"check_output",return_value="MainPID=0\nActiveState=inactive\nUnitFileState=disabled\n") as query:
+                value=standby.unit_status()
+                expected=inherited.get("XDG_RUNTIME_DIR",f"/run/user/{os.getuid()}")
+                self.assertEqual(query.call_args.kwargs["env"]["XDG_RUNTIME_DIR"],expected)
+                self.assertEqual(value,self.state)
+                self.assertEqual(dict(os.environ),inherited)
     def test_bad_backend_refuses_suspension(self):
         self.health["backend_error"]="fixture failure"
         with patch("pathlib.Path.home",return_value=self.home),patch.object(standby,"stable_identity",return_value=self.baseline),patch.object(standby,"get_json",return_value=self.health),patch.object(standby,"unit_status",return_value={"MainPID":"42","ActiveState":"active","UnitFileState":"enabled"}),patch.object(standby.subprocess,"run") as run:

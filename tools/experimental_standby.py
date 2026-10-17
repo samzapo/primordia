@@ -21,7 +21,9 @@ def protected(root):
             "feedback_count":len(feedback)}
 
 def unit_status():
-    output=subprocess.check_output(["systemctl","--user","show",UNIT,"-p","MainPID","-p","ActiveState","-p","UnitFileState"],text=True)
+    # Imported verification runs in a separate Python process, not CLI main().
+    environment={**os.environ,"XDG_RUNTIME_DIR":os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"}
+    output=subprocess.check_output(["systemctl","--user","show",UNIT,"-p","MainPID","-p","ActiveState","-p","UnitFileState"],text=True,env=environment)
     return dict(line.split("=",1) for line in output.splitlines() if "=" in line)
 
 def standby_identity(root):
