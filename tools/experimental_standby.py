@@ -45,18 +45,29 @@ def enter(root,stable,expected):
         fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
         existing=standby_identity(root)
         if existing is not None:return existing
-        before=get_json("http://127.0.0.1:8768/health")
+        status=unit_status()
+        stopped=status.get("MainPID")=="0" and status.get("ActiveState")=="inactive" and status.get("UnitFileState")=="disabled"
+        if stopped:
+            # Finish an interrupted standby without starting the saved simulation.
+            before=json.loads((root/"state/health.json").read_text())
+            revision=subprocess.check_output(["git","-C",str(root/"current"),"rev-parse","HEAD"],text=True).strip()
+            if before["build"]!=revision:raise RuntimeError("Stopped experimental release and saved health disagree")
+        else:
+            before=get_json("http://127.0.0.1:8768/health")
         if before["backend"]!="gpu" or before.get("backend_error") or before.get("checkpoint_error"):
             raise RuntimeError("Experimental service must be healthy before suspension")
         registry=sha(root/"access-keys.json");feedback=feedback_identity(root/"state")
         # SIGTERM makes run_service save a final checkpoint. Disable at boot too.
-        subprocess.run(["systemctl","--user","disable","--now",UNIT],check=True)
+        if not stopped:subprocess.run(["systemctl","--user","disable","--now",UNIT],check=True)
         contents=protected(root)
         if contents["registry_sha256"]!=registry or not all(feedback_identity(root/"state").get(name)==digest for name,digest in feedback.items()):
             raise RuntimeError("Experimental keys or private feedback changed during standby")
-        time.sleep(1)
-        after=guard(stable,baseline)
-        if after["tick"]<=baseline["tick"]:raise RuntimeError("Stable pond did not keep advancing")
+        # health.json is published periodically; repeated reads can share a tick.
+        for _ in range(15):
+            after=guard(stable,baseline)
+            if after["tick"]>baseline["tick"]:break
+            time.sleep(1)
+        else:raise RuntimeError("Stable pond did not keep advancing")
         value={"version":1,"instance":"experimental","state":"standby","build":before["build"],
                "world_id":before["world_id"],"accounts":before["accounts"],"access_keys":before["access_keys"],
                "stable_build":expected,**contents}

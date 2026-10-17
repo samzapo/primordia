@@ -572,3 +572,10 @@ stable CD and retention/delivery checks pass, use the explicit experimental
 standby operation. Keep its saved pond/keys/feedback and disable only its unit;
 future stable updates must preserve standby, and the next authorized experimental
 deploy resumes it without reset. Newly collected R21/R22 remain proposals only.
+
+Standby acceptance correction: /health reads a periodically published snapshot,
+not a fresh tick per HTTP request. Wait for a new tick with bounded polling;
+a one-second delay falsely failed after successful shutdown. Finish interrupted
+standby from the owned stopped release and matching saved health without starting
+it. Standby uses its task-owned source checkout, permitting a scoped repair
+against an explicitly supplied exact deployed stable revision.
