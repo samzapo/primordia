@@ -58,7 +58,7 @@ func run() -> void:
 	game.cell_ui.mobile_hide.pressed.emit();game.cell_ui.sync(0)
 	check(game.cell_ui.mobile_stocks.visible,"The same resource button restores current numerical stocks")
 	game.cell_ui.open_context({"kind":"chemistry"});await process_frame;game.cell_ui.sync(0)
-	check(game.cell_ui.choices.map(func(choice):return choice.kind)==["mitochondrion","photosynthesis","toxin","acidifying","regenerative","neutralizing",""] and game.cell_ui.choices.all(func(choice):return choice.get_parent()==game.cell_ui.mobile_flow),"Mobile chemistry tray exposes the active catalog and food inspection, without Sanctuary")
+	check(game.cell_ui.choices.map(func(choice):return choice.kind)==["mitochondrion","toxin_sac","photosynthesis","toxin","acidifying","regenerative","neutralizing",""] and game.cell_ui.choices.all(func(choice):return choice.get_parent()==game.cell_ui.mobile_flow),"Mobile chemistry tray exposes the active catalog and food inspection, without Sanctuary")
 	check(game.cell_ui.describe({"kind":"chemistry"}).contains("buffer/repair") and game.cell_ui.describe({"kind":"chemistry"}).to_lower().contains("photosynthesis"),"Factory description matches the active simplified chemistry")
 	game.world.player.biomass=100;game.world.player.update_geometry();game.world.evolution.points=100
 	for index in [7,9,3,8]:

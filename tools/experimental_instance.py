@@ -150,7 +150,7 @@ def main():
         raise RuntimeError("Native Dictionary lifetime fixture failed")
 
     call(str(godot),"--headless","--path",str(candidate),"--editor","--import","--quit",env=environment)
-    for script,marker in [("feedback_pass_run","FEEDBACK PASS"),("feedback_latest_run","FEEDBACK LATEST"),("normal_output_run","NORMAL OUTPUT")]:
+    for script,marker in [("feedback_pass_run","FEEDBACK PASS"),("feedback_latest_run","FEEDBACK LATEST"),("normal_output_run","NORMAL OUTPUT"),("division_access_run","DIVISION ACCESS")]:
         path=root/(script+"-fixture.log")
         with path.open("w") as output:
             call("timeout","90s",str(godot),"--headless","--path",str(candidate),"--script","tests/"+script+".gd","--","--particle-backend=cpu",env=environment,stdout=output,stderr=subprocess.STDOUT)
@@ -173,6 +173,7 @@ def main():
         ("resident_admission_gpu",[],"RESIDENT ADMISSION"),
         ("lineage_start_network",["--gpu"],"LINEAGE START NETWORK"),
         ("feedback_pass_gpu",[],"FEEDBACK PASS GPU"),
+        ("division_access_gpu",[],"DIVISION ACCESS GPU"),
         ("normal_output_run",["--particle-backend=cpu","--gpu"],"NORMAL OUTPUT"),
         ("feedback_pass_network",["--gpu"],"FEEDBACK PASS NETWORK"),
         ("feedback_latest_gpu",["--particle-backend=cpu"],"FEEDBACK LATEST GPU"),

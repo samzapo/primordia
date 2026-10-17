@@ -529,3 +529,11 @@ October17 Revision61: a daughter starting with only a basic oral groove, rebuild
 Revision61 progressive AP prices (current non-inherent organ count;0AP first build; selling lowers the next price and refunds paid AP minus1, floored at0) are explicit progression rules, not a biological cost law.
 
 October17 Revision62: the quarter-capacity operating floor,12/18ATP entry/recovery thresholds, slower weapon recharge and low-power investment priority are explicit game choices. They are not evidence that real organelles can perform ATP-dependent work without an energy source. The existing cellular-energy/respiration sources motivate ATP use and recovery; this revision keeps the finite food/oxygen/carbon and material model, but deliberately grants residual operating activity without creating ATP.
+
+## Revision 63 — finite toxin reserve and local pore attacks
+
+**Evidence:** [Weiß, Götz and Opitz (2020), Dynamics of ColicinE2 production and release determine the competitive success of a toxin-producing bacterial population](https://www.nature.com/articles/s41598-020-61086-z) experimentally separates toxin accumulation from release through producer-cell lysis. Later release allows greater intracellular accumulation; it is not a universal beneficial strategy.
+
+**Game model:** A fictional internal toxin sac converts a bounded amount of surplus biomass into stored toxin. Ordinary ATP and quarter-power filling rules apply. Death releases only those paid contents as ordinary external toxin particles, with existing lineage immunity, neutralization, transport, contact and decay. Recycling is safe dismantling, not death. There is no remote damage, hidden target lookup or suicide behavior. Artwork represents aggregate contents, not an extra intracellular particle simulation. Capacity, fill rate and biomass floor are balance choices.
+
+**Pores:** The existing [Savva et al. membrane-pore structure](https://www.nature.com/articles/s41467-019-10645-8) still motivates membrane-bound assembly. Faster loss of free tags/subunits is a game range choice, not a measured molecular lifetime. Bound complexes keep their existing assembly/damage/repair rules. No biological evidence is claimed for a four-cell family cap or the game’s pond capacity.

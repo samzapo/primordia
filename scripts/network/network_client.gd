@@ -454,6 +454,7 @@ func _snapshot(message: Dictionary) -> void:
 	for identity in cells_by_id.keys():
 		if not retained_ids.has(identity):cells_by_id.erase(identity)
 	world.lineage=data.lineage;world.evolution=data.evolution
+	world.remote_division=message.get("division",{}).duplicate(true)
 	world.investment=data.get("investment",{"npc":{},"lineages":{},"cells":{}})
 	family_portraits=message.get("family_portraits",{})
 	family_recovery=message.get("family_recovery",{})

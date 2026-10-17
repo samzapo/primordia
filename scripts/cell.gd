@@ -15,9 +15,9 @@ var raw_fuel: float:
 var surface_complexes: Array = []
 const Genes = preload("res://scripts/mutations.gd")
 const Membrane = preload("res://scripts/membrane.gd")
-const KINDS := ["propulsion", "protection", "poreforming", "regenerative", "feeding", "sensing", "photosynthesis", "toxin", "neutralizing", "acidifying", "hunting", "cilia", "mitochondrion", "counterattack"]
-const COST := [8.0, 10.0, 12.0, 10.0, 8.0, 6.0, 12.0, 12.0, 10.0, 12.0, 6.0, 8.0, 10.0, 12.0]
-const WIDTH := [19.0, 34.0, 26.0, 27.0, 36.0, 20.0, 30.0, 26.0, 26.0, 26.0, 20.0, 24.0, 0.0, 24.0]
+const KINDS := ["propulsion", "protection", "poreforming", "regenerative", "feeding", "sensing", "photosynthesis", "toxin", "neutralizing", "acidifying", "hunting", "cilia", "mitochondrion", "counterattack", "toxin_sac"]
+const COST := [8.0, 10.0, 12.0, 10.0, 8.0, 6.0, 12.0, 12.0, 10.0, 12.0, 6.0, 8.0, 10.0, 12.0, 10.0]
+const WIDTH := [19.0, 34.0, 26.0, 27.0, 36.0, 20.0, 30.0, 26.0, 26.0, 26.0, 20.0, 24.0, 0.0, 24.0, 0.0]
 const SENSE_MODES := ["flee"]
 const MODES := ["graze"]
 const BASAL_UPKEEP := 0.18
@@ -166,7 +166,7 @@ func has_mode(mode: String) -> bool:
 
 func organ_mass() -> float:
 	var result = 0.0
-	for organ in organs: result += organ.material
+	for organ in organs: result += organ.material+float(organ.get("stored_toxin",0))
 	return result
 
 func organic_mass() -> float:
@@ -191,7 +191,7 @@ func update_geometry() -> void:
 	inertia = (body + biomass + substrate + waste + carbon + brood_mass) * radius * radius * 0.5
 	for organ in organs:
 		var arm = local_point(organ.a)
-		inertia += organ.material * arm.length_squared()
+		inertia += organ.material * arm.length_squared()+float(organ.get("stored_toxin",0))*organ_local_position(organ).length_squared()
 	inertia = maxf(inertia*0.22, 50)
 	aspect = 1.6 # Broad-phase bound; shape is no longer an ellipse.
 
@@ -245,7 +245,7 @@ func arc_gap(a: float, b: float) -> float:
 	return wrapf(arc_coordinate(a)-arc_coordinate(b),-length*0.5,length*0.5)
 
 static func internal_organ(kind: String) -> bool:
-	return kind=="mitochondrion"
+	return kind in ["mitochondrion","toxin_sac"]
 
 func organ_local_position(organ: Dictionary) -> Vector2:
 	if internal_organ(organ.kind):return local_point(organ.a)*.55
@@ -415,6 +415,7 @@ func add_organ(kind: String, a: float, mode: String = "graze", paid: bool = true
 	if paid: biomass -= cost
 	var max_health := (70.0 if kind == "protection" else 25.0)*size*size
 	organs.append({"id":next_organ_id,"kind":kind,"a":fposmod(a,TAU),"scale":size,"mode":mode,"hp":max_health,"max_hp":max_health,"material":cost,"max_material":cost,"mutation":"","steering":1.0,"growth_spent":size*size,"ap_spent":maxi(1,ceili(size*size-0.000001)),"target_id":-1,"progress":0.0,"coverage":0.0,"feeding":false,"link":Vector2.ZERO,"feedback":"","consume_flash":0.0,"consume_clock":0.0,"charge_flash":0.0,"consumed_total":0.0,"blocked":0.0})
+	if kind=="toxin_sac":organs[-1]["stored_toxin"]=0.0
 	if kind == "feeding":
 		organs[-1]["inherent"] = true
 		organs[-1].ap_spent = 0
@@ -479,6 +480,9 @@ static func organ_upkeep(organ: Dictionary) -> float:
 	if organ.kind == "propulsion": rate += MOTION_UPKEEP*area*Genes.factor(organ,"motion_cost")
 	elif organ.kind == "feeding": rate += PUMP_UPKEEP*area*Genes.output_cost(organ)
 	elif organ.kind == "cilia": rate += (CILIA_MOTION+CILIA_PUMP)*area*Genes.output_cost(organ)
+	if organ.kind=="toxin_sac" and float(organ.get("stored_toxin",0))<preload("res://scripts/toxin_sac.gd").capacity(organ):
+		var rule: Dictionary=preload("res://scripts/chemistry_catalog.gd").data().combat.toxin_sac
+		rate+=float(rule.fill_rate)*float(rule.atp_per_unit)*area
 	if organ.kind in ["feeding","sensing","hunting","photosynthesis"]:
 		rate += .1*(Genes.output(organ)-1)*Genes.inefficiency(organ)*area
 	if organ.kind in ["feeding","neutralizing","acidifying","regenerative"]:
@@ -516,7 +520,7 @@ func animate_resources(dt: float) -> void:
 
 func recycle(index: int) -> float:
 	if dead or index < 0 or index >= organs.size() or inherent(organs[index]): return -1.0
-	var material: float = organs[index].material
+	var material: float = organs[index].material+float(organs[index].get("stored_toxin",0))
 	biomass += material * 0.5
 	organs.remove_at(index)
 	update_geometry()
@@ -561,6 +565,8 @@ func damage(amount: float, world_angle: float, source: int=-1) -> float:
 		released += lost
 		amount -= absorbed
 		if organ.hp <= 0:
+			released+=float(organ.get("stored_toxin",0))
+			if organ.has("stored_toxin"):organ.stored_toxin=0.0
 			lost_organs.append(organ.duplicate(true))
 			organs.remove_at(hit)
 	if amount > 0:
@@ -712,6 +718,7 @@ func restore_organ(identity: int, paid: bool = true) -> bool:
 		_make_room(organ.a,organ_width(organ),available)
 		if paid: biomass -= cost
 		organ.material = cost
+		if organ.has("stored_toxin"):organ.stored_toxin=0.0
 		organ.hp = organ.max_hp
 		organ.id = next_organ_id
 		next_organ_id += 1

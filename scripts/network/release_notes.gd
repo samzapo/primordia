@@ -240,6 +240,18 @@ const RELEASES=[
  "footer":"Your living cells and their progress carry on between updates.",
  "button":"Back to the pond",
 },
+{
+	"id":"2026-10-17-growing-families-and-toxin-sacs",
+	"audience":"experimental",
+	"title":"What’s new in the pond",
+	"items":[
+		"Families can grow beyond four cells. The ring around Divide shows progress and turns green when ready. The bud also opens Investment and Family.",
+		"Toxin sacs store a little surplus biomass as toxin, then spill it into nearby water when the cell dies.",
+		"Pore-forming attacks stay closer to their source. Pieces already on a membrane can still finish assembling.",
+	],
+	"footer":"Your cell and its progress carry on between updates.",
+	"button":"Back to the pond",
+},
 ]
 const CURRENT=RELEASES[-1]
 static func seen_index(account: Dictionary) -> int:

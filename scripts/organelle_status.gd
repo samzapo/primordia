@@ -9,6 +9,11 @@ static func state(sim,cell,organ: Dictionary) -> Dictionary:
   if sim.light_at(cell.organ_position(organ))<=.001:result.label="Waiting for light";return result
   result.label="Collecting light";result.progress=clampf(float(organ.get("photo_elapsed",0))/.25,0,1)
   return result
+ if kind=="toxin_sac":
+  result.progress=preload("res://scripts/toxin_sac.gd").fraction(organ)
+  result.capacity=cell.work_capacity();result.depleted=result.capacity<1
+  result.label="Full · releases toxin on death" if result.progress>=.999999 else "Waiting for surplus biomass" if cell.biomass<=12 else "Low ATP · 25% filling rate" if result.capacity<1 else "Storing toxin"
+  return result
  if kind=="mitochondrion":
   result.label="Waiting for food" if cell.substrate<=.0000001 else "Waiting for oxygen" if cell.oxygen<=.0000001 else "Making ATP from food and oxygen"
   return result

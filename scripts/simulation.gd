@@ -8,6 +8,7 @@ const Genes = preload("res://scripts/mutations.gd")
 var evolution
 var server_mode := false
 var remote_client := false
+var remote_division: Dictionary={} # Authority-derived readiness; never saved.
 var command_sink: Callable
 var camera_views: Array = [] # External particle detail footprints.
 var external_offscreen := false
@@ -513,6 +514,7 @@ func _emit_pheromone(cell, emitted_at: float = -1.0) -> Dictionary:
 	for organ in cell.organs:
 		if organ.kind in ["poreforming","toxin","acidifying"] and organ.hp > 0: hostile = true
 		if organ.kind in ["protection","neutralizing"] and organ.hp > 0: armored = true
+		if organ.kind=="toxin_sac" and organ.hp>0 and float(organ.get("stored_toxin",0))>0:armored=true
 	# Value snapshots, never a Cell reference. Coordinates are deliberately old
 	# once the source moves; size and hostile anatomy can only update via new cues.
 	p.report = {"id":cell.id,"lineage":cell.lineage_id(),"at":cell.position,
@@ -775,8 +777,10 @@ func _biology_after_feed(cell, local_dt: float) -> void:
 		if index < 0: break
 		var organ: Dictionary = cell.organs[index]
 		cell.organs.remove_at(index)
-		cell.lost_organs.append(organ.duplicate(true))
-		spawn_particle(WASTE,cell.organ_position(organ),Vector2.ZERO,organ.material,cell.id)
+		var lost: Dictionary=organ.duplicate(true)
+		if lost.has("stored_toxin"):lost.stored_toxin=0.0
+		cell.lost_organs.append(lost)
+		spawn_particle(WASTE,cell.organ_position(organ),Vector2.ZERO,organ.material+float(organ.get("stored_toxin",0)),cell.id)
 	if profiling: profile_usec["organ_geometry"] = profile_usec.get("organ_geometry",0)+Time.get_ticks_usec()-organ_mark
 	var traction_mark := Time.get_ticks_usec() if profiling else 0
 	var traction := PackedVector2Array()
@@ -1564,6 +1568,7 @@ func _secretion_needed(cell, organ: Dictionary, kind: int) -> bool:
 
 func _emit_and_attack(cell, dt: float) -> void:
 	cell.update_power_state()
+	preload("res://scripts/toxin_sac.gd").fill(cell,dt)
 	# Every living active creature signals, independently of energy or anatomy.
 	cell.emission_clock -= dt
 	while cell.emission_clock <= 0:
@@ -1837,7 +1842,9 @@ func _die(cell, transferred: float = 0.0) -> void:
 	cell.health = 0
 	var total: float = maxf(0,cell.organic_mass()-transferred)
 	var oxygen: float = cell.oxygen
+	preload("res://scripts/toxin_sac.gd").release(self,cell)
 	var structural: float = maxf(0,cell.body+cell.biomass+cell.organ_mass()+cell.brood_mass+cell.chemistry.reactor_mass-transferred)
+	# release removed stored toxin before nutrient conversion; no double release.
 	for vacuole in cell.chemistry.vacuoles: structural += vacuole.material
 	# Surface complexes have already oxidized; lysis does not refuel them.
 	if cell.surface_material() > 0: _emit_material(WASTE,cell.position,cell.surface_material(),Vector2.ZERO,cell.id)
@@ -1998,6 +2005,36 @@ func make_offspring(parent, quote: Dictionary):
 	child.update_geometry()
 	return child
 
+func division_status(subject=null, ledger=null) -> Dictionary:
+	var parent=player if subject==null else subject
+	if remote_client:
+		if remote_division.get("cell",-1)==parent.id:return remote_division.duplicate(true)
+		return {"cell":parent.id,"ready":false,"progress":0.0,"reason":"Checking division with the pond…"}
+	var family=lineage if ledger==null else ledger
+	var result: Dictionary={"cell":parent.id,"ready":false,"reason":"","material":offspring_quote(parent).material,"energy":60.0}
+	result.progress=minf(clampf(parent.brood_mass/maxf(.000001,result.material),0,1),clampf(parent.brood_energy/result.energy,0,1))
+	if parent.dead or parent.health<=0 or parent.lineage_id()!=family.root_id:
+		result.reason="Only a living member of your family can divide."
+	elif cells.filter(func(cell):return not cell.dead).size()>=MAX_LIVE_CELLS:
+		result.reason="The pond is full. Division waits for space in the population."
+	elif parent.brood_mass+.000001<result.material or parent.brood_energy<result.energy:
+		result.reason="Growing: %.2f tissue and %.2f ATP still needed." % [maxf(0,result.material-parent.brood_mass),maxf(0,result.energy-parent.brood_energy)]
+	elif parent.count("feeding")+parent.count("photosynthesis")==0:
+		result.reason="A working feeding or photosynthesis organ is needed."
+	else:
+		var child=make_offspring(parent,offspring_quote(parent))
+		var at=_birth_position(parent,child)
+		if at==null:result.reason="Ready, but nearby cells or plants block division. Waiting for clear water."
+		else:
+			result.ready=true;result.reason="Ready to divide.";result.position=at
+	return result
+
+func _birth_position(parent,child):
+	for i in 32:
+		var at: Vector2=Medium.wrap_position(parent.position+Vector2.from_angle(parent.angle+TAU*i/32)*(parent.extent()+child.extent()+45))
+		if safe_birth_position(at,child.extent()):return at
+	return null
+
 func divide_lineage(dormant: bool = false, follow: bool = true) -> bool:
 	if dormant:return false # Retired command: never fund a stored body.
 	if remote_client: return edit("divide",{})
@@ -2005,21 +2042,12 @@ func divide_lineage(dormant: bool = false, follow: bool = true) -> bool:
 	return _divide_paid(player,lineage,dormant,follow,true)
 
 func _divide_paid(parent,ledger,dormant: bool=false,follow: bool=false,progress: bool=false) -> bool:
-	if dormant or parent.dead or parent.health<=0 or parent.lineage_id()!=ledger.root_id:return false
-	if cells.filter(func(cell):return not cell.dead).size()>=MAX_LIVE_CELLS:return false
-	if ledger.active_family(self).size() >= Lineage.MAX_ACTIVE: return false
+	if dormant:return false
+	var status:=division_status(parent,ledger)
+	if not status.ready:return false
 	var quote := offspring_quote(parent)
-	if parent.brood_mass+0.000001 < quote.material or parent.brood_energy < quote.energy: return false
-	if parent.count("feeding")+parent.count("photosynthesis") == 0: return false
 	var child = make_offspring(parent,quote)
-	child.position = parent.position
-	var found := false
-	for i in 32:
-		child.position = Medium.wrap_position(parent.position+Vector2.from_angle(parent.angle+TAU*i/32)*(parent.extent()+child.extent()+45))
-		if safe_birth_position(child.position,child.extent()):
-			found = true
-			break
-	if not found: return false
+	child.position=status.position
 	Investment.inherit_strategy(self,parent,child)
 	child.chemistry.partition(parent.chemistry,0.25)
 	parent.brood_mass -= quote.material

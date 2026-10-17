@@ -564,6 +564,7 @@ func _apply(id: int,message: Dictionary) -> void:
 	var prior_player=world.player;var prior_lineage=world.lineage;var prior_evolution=world.evolution
 	world.player=cell;world.lineage=account.lineage;world.evolution=account.evolution
 	var before_points: int=account.evolution.points
+	var division_reason: String=world.division_status(cell,account.lineage).reason if message.get("action","")=="divide" else ""
 	var outcome=_start_lineage(account,message.get("args",{})) if message.get("action","")=="start_lineage" else world.edit(str(message.get("action","")),message.get("args",{}))
 	account.selected=world.player.id;account.current=world.player
 	if outcome is bool and outcome and message.get("action","")=="start_lineage" and prior_player==cell:
@@ -571,6 +572,7 @@ func _apply(id: int,message: Dictionary) -> void:
 	world.player=prior_player;world.lineage=prior_lineage;world.evolution=prior_evolution
 	var ok: bool=outcome=="" if outcome is String else outcome>=0 if outcome is int else outcome==true
 	result.ok=ok;result.message="Applied" if ok else str(outcome) if outcome is String else "Cannot apply: check tissue, AP, placement and template"
+	if message.get("action","")=="divide":result.message="Cell divided. +2 AP. Choose your daughter from Family." if ok else division_reason
 	if ok and message.get("action","")=="remove":
 		result.ap_refund=maxi(0,account.evolution.points-before_points)
 		result.message="Organelle recycled · %d AP returned." % result.ap_refund
@@ -729,6 +731,7 @@ func _frame(peer: Dictionary,coverage: Vector4=Vector4.ZERO) -> Dictionary:
 	for cell in world.cells:
 		if peer.get("perception","exteroception")!="interoception" or cell!=focus:internal_overrides[cell.chemistry.get_instance_id()]={"particles":[],"vacuoles":[],"presentation_totals":{"material":cell.chemistry.material(),"storage":cell.chemistry.storage_used(),"potential":cell.chemistry.potential(),"raw_fuel":cell.chemistry.raw_fuel(),"packets":cell.chemistry.particle_count()}}
 	return {"kind":"snapshot","world_id":world_id,"epoch":epoch,"tick":world.revision,"time":world.time,"presentation_usec":Time.get_ticks_usec(),"edit":account.edit,"sequence":account.sequence,
+		"division":world.division_status(_selected(account),account.lineage),
 		"family_portraits":preload("res://scripts/cell_portrait.gd").family(world,account.lineage),
 		"family_recovery":_family_recovery(account),"lineage_names":_lineage_names(),"player_name":str(account.get("display_name","")),"graph":Codec.new().capture({"cells":cells,"player":_selected(account),"focus":_focus(peer),"lineage":account.lineage,"evolution":account.evolution,"investment":world.Investment.owned_settings(world,account.root)},internal_overrides,peer.get("compact_cytoplasm",false),peer.get("cytoplasm_version",1)),
 		"coverage":view,"camera":peer.view,"census":world.habitat_census(),"environment":world.environment.duplicate(true),"particles":PackedByteArray(),"flow":world.fluid.velocity.duplicate(),"acid":world.acidity.values.duplicate(),

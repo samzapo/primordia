@@ -717,3 +717,7 @@ nothing. Do not depend on construction_ap history or migrate saved anatomy.
 Menu actions resolve organ IDs at click time because live snapshots replace
 dictionaries while menus stay open. Only authoritative committed receipts report
 AP returned in multiplayer; preserve exactly-once refunds and checkpointing.
+
+### Growing families and finite toxin sacs (October 17, 2026)
+
+[Revision 63](REVISION_63.md) removes the four-living-cell family cap while retaining paid tissue/ATP, safe placement and whole-pond capacity. The bud explains readiness and opens Invest/Family. A new finite toxin sac fills from surplus biomass and releases its actual stored toxin on death. Free pore-forming packets disperse faster; membrane-bound assembly is unchanged. Stage this owner-approved batch on experimental only.

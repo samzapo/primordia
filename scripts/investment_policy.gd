@@ -53,9 +53,9 @@ static func inherit_strategy(sim,parent,child) -> void:
 # Variants are deterministic preferences, never free organs or hidden ecology knowledge.
 const VARIANTS:={
  "hunter":[["hunting","toxin","propulsion","poreforming","sensing","protection","mitochondrion","regenerative"],
-           ["hunting","poreforming","cilia","counterattack","protection","neutralizing","mitochondrion","regenerative"]],
- "producer":[["photosynthesis","protection","regenerative","mitochondrion","neutralizing","cilia","sensing"],
-             ["photosynthesis","cilia","neutralizing","mitochondrion","counterattack","regenerative","protection","sensing"]],
+           ["hunting","poreforming","cilia","counterattack","protection","neutralizing","mitochondrion","regenerative","toxin_sac"]],
+ "producer":[["photosynthesis","protection","regenerative","mitochondrion","neutralizing","cilia","sensing","toxin_sac"],
+             ["photosynthesis","cilia","neutralizing","mitochondrion","counterattack","regenerative","protection","sensing","toxin_sac"]],
  "grazer":[["cilia","mitochondrion","regenerative","sensing","feeding","protection","neutralizing"],
            ["cilia","neutralizing","regenerative","acidifying","mitochondrion","feeding","sensing","protection"]],
 }

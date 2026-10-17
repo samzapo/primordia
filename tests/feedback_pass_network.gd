@@ -96,6 +96,29 @@ func run() -> void:
  check(account.evolution.points==before_refund+refund,"Retrying a sale cannot duplicate its AP refund")
  saved=Codec.new().restore(host.store.load_latest().graph)
  check(saved.accounts[welcome.token.sha256_text()].evolution.points==account.evolution.points,"Sale AP refund is already in the saved account")
+ # Division readiness is captured by authority even when the camera misses relatives.
+ host.world.habitat_geometry.enabled=false
+ selected.brood_mass=host.world.offspring_quote(selected).material;selected.brood_energy=60;selected.biomass=200;selected.energy=100
+ for i in 3:
+  var extra=Sim.Cell.new(host.world.next_id,Vector2(-1500+i*500,-1000));host.world.next_id+=1
+  extra.lineage=account.root;extra.add_organ("feeding",0,"graze",false);host.world.cells.append(extra)
+  account.lineage.register(extra,selected.id,1,"living",host.world.time)
+ frame=host._frame(peer)
+ check(frame.division.cell==selected.id and frame.division.ready and frame.division.progress==1,"Authoritative snapshot reports funded readiness with four living relatives")
+ var births: int=account.lineage.births;points=account.evolution.points
+ command={"op":"command","epoch":host.epoch,"cell":selected.id,"edit":account.edit,"sequence":5,"action":"divide","args":{}}
+ socket.send_text(JSON.stringify(command))
+ check(await until(func():return not result(5).is_empty()),"Paid division returns an authenticated receipt")
+ check(result(5).ok and result(5).message.contains("Cell divided") and account.lineage.births==births+1 and account.evolution.points==points+2,"A fifth relative is born with a real receipt and exactly two AP")
+ saved=Codec.new().restore(host.store.load_latest().graph)
+ check(saved.accounts[welcome.token.sha256_text()].lineage.births==births+1,"Division and its receipt are durable before success")
+ socket.send_text(JSON.stringify(command))
+ check(await until(func():return messages.filter(func(m):return m.get("kind","")=="result" and m.get("sequence",-1)==5).size()==2),"Retried division returns its original receipt")
+ check(account.lineage.births==births+1 and account.evolution.points==points+2,"Retry cannot duplicate a daughter or AP")
+ command.sequence=6;command.edit=account.edit
+ socket.send_text(JSON.stringify(command))
+ check(await until(func():return not result(6).is_empty()),"An unfunded second division returns a clear rejection")
+ check(not result(6).ok and result(6).message.contains("still needed"),"Rejected division explains actual missing funding")
  socket.close();host.running=false;host.listener.stop();host._finish_snapshots()
  if host.world.resident!=null:
   host.world.resident.gpu.close();await host.world.resident.gpu.closed

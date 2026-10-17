@@ -269,7 +269,7 @@ func run(test_host) -> void:
 	scene.cell_ui.choices[0].pressed.emit()
 	expect(scene.world.evolution.chosen and offered in scene.world.evolution.learned,"Nucleus keeps a blueprint using the existing run rules")
 	scene.cell_ui.open_context({"kind":"bud"})
-	expect(scene.cell_ui.choices.size()==1 and scene.cell_ui.choices[0].caption=="Divide now","The bud offers direct division without banking controls")
+	expect(scene.cell_ui.choices.size()==3 and scene.cell_ui.choices[0].caption=="Divide now","The bud offers direct division without banking controls")
 	cell.brood_mass=0;cell.brood_energy=0
 	var population: int=scene.world.cells.size()
 	scene.cell_ui.choices[0].pressed.emit()
@@ -277,7 +277,7 @@ func run(test_host) -> void:
 	expect(scene.world.cells.size()==population and cell.brood_mass==0 and cell.brood_energy==0,"An unfunded division cannot grant tissue, ATP or a free daughter")
 	scene.world.evolution.offspring_id = cell.id
 	scene.cell_ui.open_context({"kind":"bud"})
-	expect(scene.cell_ui.choices.size()==1 and "tissue" in scene.cell_ui.describe({"kind":"bud"}),"The bud reports automatic division growth after a prior birth")
+	expect(scene.cell_ui.choices.size()==3 and scene.cell_ui.choices[0].radial_progress>=0,"The bud reports automatic division growth after a prior birth")
 	scene.world.evolution.offspring_id = -1
 	scene.cell_ui.close_context()
 	cell.energy = 0
