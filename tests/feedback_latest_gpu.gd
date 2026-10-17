@@ -57,6 +57,7 @@ func run() -> void:
  scene._update_world(1)
  check(scene.views[cell.id].art.colors[1].is_equal_approx(Color("#23dc7e")),"Every viewed member reads its lineage’s chosen body color")
  await investment_input(scene)
+ await family_portraits(scene)
  vp.queue_free();scene.queue_free();await process_frame
  print("FEEDBACK LATEST GPU: %d assertions, %d failures" % [assertions,failures]);quit(0 if failures==0 else 1)
 
@@ -134,3 +135,75 @@ func click(at: Vector2) -> void:
  var press:=InputEventMouseButton.new();press.button_index=MOUSE_BUTTON_LEFT;press.pressed=true;press.position=at;press.global_position=at
  root.push_input(press,true)
  var release: InputEventMouseButton=press.duplicate();release.pressed=false;root.push_input(release,true)
+
+
+func family_portraits(scene) -> void:
+ var Sim=scene.Simulation
+ var cell=Sim.Cell.new(41);cell.body=70;cell.biomass=30;cell.update_geometry()
+ cell.add_organ("feeding",0,"graze",false);cell.add_organ("photosynthesis",1,"graze",false)
+ var child=Sim.Cell.clone_state(cell);child.id=42;child.lineage=41;child.generation=2
+ child.add_organ("toxin",2,"graze",false);child.position+=Vector2(180,0)
+ scene.world.player=cell;scene.world.cells=[cell,child]
+ scene.world.lineage=Sim.Lineage.new();scene.world.lineage.root_id=41
+ scene.world.lineage.register(cell,-1,0,"active",0);scene.world.lineage.register(child,41,2,"living",1)
+ scene.world.evolution.sandbox=true;scene.build_open=true;scene.perception="exteroception"
+ scene.lineage_names=[{"root":41,"color":"#e82b37","name":"Fixture","online":true}]
+ var ui=scene.cell_ui
+ for setting in [{"logical":Vector2i(390,844),"pixels":1.0,"mobile":true},{"logical":Vector2i(1170,2100),"pixels":3.0,"mobile":true},{"logical":Vector2i(760,360),"pixels":1.0,"mobile":true},{"logical":Vector2i(1280,800),"pixels":1.0,"mobile":false},{"logical":Vector2i(390,844),"pixels":1.0,"mobile":true,"scale":1.5}]:
+  root.size=Vector2i(Vector2(setting.logical)/setting.pixels);root.content_scale_size=setting.logical
+  scene.touch_zoom.enabled=setting.mobile;scene.touch_zoom.pixels=setting.pixels;scene.preferences.hud_scale=setting.get("scale",1.0)
+  scene._update_world(1);ui.open_context({"kind":"lineage"})
+  for frame in 5:ui.sync(0);await process_frame
+  var cards: Array=ui.choices.filter(func(choice):return choice.has_meta("family_id"))
+  check(cards.size()==2 and cards.all(func(card):return not card.portrait.is_empty()),"Every current family member has actual anatomy in the shared menu")
+  check(cards.all(func(card):return Rect2(Vector2.ZERO,Vector2(setting.logical)).encloses(card.get_global_rect())),"Family portraits and badges fit portrait, dense touch, landscape and desktop")
+  var card=cards.filter(func(choice):return choice.get_meta("family_id")==42)[0]
+  check(card.symbol=="2" and card.portrait.organs.any(func(organ):return organ.kind=="toxin"),"Generation is a small number while the picture uses that relative's own organs")
+  var image:=root.get_texture().get_image()
+  var conversion:=Vector2(root.size)/Vector2(setting.logical)
+  var rect: Rect2=card.get_global_rect()
+  var center: Vector2=rect.get_center()*conversion
+  var colored:=0;var badge_ink:=0
+  for y in range(-8,9):
+   for x in range(-8,9):
+    var color:=image.get_pixelv(Vector2i(center+Vector2(x,y)))
+    if color.r>color.b*1.4 and color.r>.4:colored+=1
+  var badge: Vector2=(rect.get_center()+Vector2.ONE*minf(rect.size.x,rect.size.y)*.30)*conversion
+  var reach:=maxi(3,roundi(6*card.text_scale*conversion.x))
+  for y in range(-reach,reach+1):
+   for x in range(-reach,reach+1):
+    var color:=image.get_pixelv(Vector2i(badge+Vector2(x,y)))
+    if color.r>.65 and color.g>.75 and color.b>.65:badge_ink+=1
+  check(colored>10,"Actual pixels show the family-colored cell behind the corner badge")
+  check(badge_ink>=2,"Actual pixels show a readable generation number in the bottom corner: %s pixels=%d" % [setting,badge_ink])
+  if capture!="" and setting.logical==Vector2i(390,844):image.save_png(capture+"/family-portrait.png")
+ # Existing controls keep working above the illustration.
+ root.size=Vector2i(390,844);root.content_scale_size=Vector2i.ZERO
+ scene.touch_zoom.enabled=true;scene.touch_zoom.pixels=1;scene.preferences.hud_scale=1
+ ui.open_context({"kind":"lineage"})
+ for frame in 4:ui.sync(0);await process_frame
+ var cards: Array=ui.choices.filter(func(choice):return choice.get_meta("family_id",-1)==42)
+ var card=cards[0]
+ var energy: float=child.energy;var random: int=scene.world.rng.state;var anatomy: Array=child.organs.duplicate(true)
+ child.organs[-1].hp*=.5;child.holes.append({"a":1.2,"size":.5});ui.sync(0)
+ check(card.portrait.organs[-1].hp==.5 and card.portrait.holes.size()==1,"An open family menu refreshes actual damage and wounds")
+ child.organs=anatomy;ui.sync(0)
+ check(child.energy==energy and scene.world.rng.state==random,"Drawing family portraits does not consume resources or ecology RNG")
+ var before: Dictionary=card.portrait
+ scene.lineage_names[0].color="#2735ea";ui.sync(0)
+ for frame in 3:await process_frame
+ check(card.portrait_art.colors[1].is_equal_approx(Color("#2735ea")),"An open portrait follows a newly chosen lineage color")
+ # Off-camera pictures use only the dedicated presentation snapshot.
+ scene.world.remote_client=true
+ scene.family_portraits=preload("res://scripts/cell_portrait.gd").family(scene.world,scene.world.lineage)
+ scene.world.cells=[cell];ui.sync(0)
+ check(not card.portrait.is_empty() and card.portrait.id==42,"A remote relative stays illustrated even outside the camera's simulation models")
+ scene.world.remote_client=false;scene.world.cells=[cell,child]
+ click(card.get_global_rect().get_center())
+ for frame in 3:await process_frame
+ check(scene.world.player.id==42,"Actual pointer selects a relative through its portrait without the art intercepting input")
+ scene.build_open=true;ui.open_context({"kind":"lineage"})
+ child=cell;child.dead=true;child.health=0;scene.world.lineage.died(child,scene.world)
+ ui.sync(0)
+ check(not ui.choices.any(func(choice):return choice.get_meta("family_id",-1)==41),"A dead relative is removed even while the family menu stays open")
+ ui.close_context()

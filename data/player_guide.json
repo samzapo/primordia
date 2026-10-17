@@ -53,7 +53,7 @@
       {
         "id": "history",
         "title": "View your family",
-        "text": "Nucleus → Family lists living relatives and dormant reserves. It shows the highest generation reached and the total number of cells that have existed, including reserves. More relatives shows another page. Deceased relatives leave the list.",
+        "text": "Nucleus → Family shows each living relative and dormant reserve as a picture of its current cell. The tiny number in the bottom corner is its generation. Choose a living relative to manage it; your previous cell stays alive. More relatives shows another page. The summary keeps the highest generation and total cells ever; deceased relatives leave the list.",
         "sources": []
       },
       {

@@ -528,3 +528,12 @@ must agree. Low ATP no longer removes hunting intent when prey is the only cue;
 digestion/rest and emergency priority still apply. Feasible mitochondrial
 investment gains priority during shortage. Update guides/experimental notice
 and functional GPU/persistence tests; preserve the pond, keys and feedback.
+
+October 17 family-menu correction: each current relative/reserve uses a live
+anatomy portrait behind a tiny generation-number badge in the bottom corner,
+matching factory badges. Keep the selected body marked and ordinary follow
+validation/input. Refresh growth, installed/damaged organs and lineage color
+while open; remove deceased entries. Owned off-camera portraits travel as small,
+data-only presentation snapshots, never extra camera interests, chemistry poses
+or simulated client bodies. Capture/drawing must not alter ecology or RNG.
+Validate actual desktop/touch pixels and pointer selection; preserve both ponds.

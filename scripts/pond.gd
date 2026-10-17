@@ -4,6 +4,7 @@ var debug_census_usec:=0
 const Simulation = preload("res://scripts/simulation.gd")
 const FlowView = preload("res://scripts/flow_view.gd")
 const ReactionSparks = preload("res://scripts/reaction_sparks.gd")
+var family_portraits: Dictionary={} # Current owned-family thumbnail data, separate from camera/simulation cells.
 const CellView = preload("res://scripts/cell_view.gd")
 const Preferences = preload("res://scripts/preferences.gd")
 const Visuals = preload("res://scripts/visuals.gd")

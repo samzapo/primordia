@@ -191,6 +191,17 @@ const RELEASES=[
  "footer":"Your cells and their progress carry on between updates.",
  "button":"Back to the pond",
 },
+{
+ "id":"2026-10-17-family-pictures",
+ "audience":"experimental",
+ "title":"What’s new in the pond",
+ "items":[
+  "The family menu now shows each relative’s current cell, including its shape and organelles.",
+  "A tiny corner number shows its generation. Choose a living relative’s picture to manage it.",
+ ],
+ "footer":"Your cells and their progress carry on between updates.",
+ "button":"Back to the pond",
+},
 ]
 const CURRENT=RELEASES[-1]
 static func seen_index(account: Dictionary) -> int:

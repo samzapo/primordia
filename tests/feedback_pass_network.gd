@@ -46,6 +46,27 @@ func run() -> void:
  var frame: Dictionary=host._frame(peer)
  var visible=Codec.new().restore(frame.graph)
  check(visible.investment.lineages.size()==1 and visible.investment.npc.is_empty(),"Policy snapshot does not reveal another family's settings")
+ # Portraits include the owner's off-camera family, without widening live camera models.
+ var relative=Sim.Cell.clone_state(selected);relative.id=host.world.next_id;host.world.next_id+=1
+ relative.lineage=account.root;relative.position=Sim.Medium.wrap_position(selected.position+Vector2(1700,900))
+ relative.previous_position=relative.position;relative.add_organ("photosynthesis",1,"graze",false)
+ host.world.cells.append(relative);account.lineage.register(relative,selected.id,selected.generation+1,"living",host.world.time)
+ var foreign=Sim.Cell.new(host.world.next_id);host.world.next_id+=1;host.world.cells.append(foreign)
+ var random: int=host.world.rng.state;var tissue: float=relative.organic_mass()
+ frame=host._frame(peer);visible=Codec.new().restore(frame.graph)
+ check(frame.family_portraits.has(relative.id) and not visible.cells.any(func(body):return body.id==relative.id),"Owned off-camera anatomy arrives as portrait data without promoting a live world/camera model")
+ check(not frame.family_portraits.has(foreign.id),"Family portraits cannot reveal an unrelated lineage's off-camera anatomy")
+ check(frame.family_portraits[relative.id].organs.any(func(organ):return organ.kind=="photosynthesis"),"A family picture carries its actual installed organs")
+ frame.protocol=Protocol.VERSION
+ var decoded: Dictionary=Protocol.unpack(Protocol.pack(frame))
+ check(decoded.family_portraits[relative.id].outline==relative.membrane.outline(),"Real compressed network framing retains portrait geometry and integer identity")
+ check(host.world.rng.state==random and is_equal_approx(relative.organic_mass(),tissue),"Capturing remote portraits is read-only with respect to biology and ecology RNG")
+ var earlier: Dictionary=frame.family_portraits[relative.id]
+ relative.organs[-1].hp*=.5;relative.render_revision+=1
+ var latest: Dictionary=host._frame(peer).family_portraits[relative.id]
+ check(earlier.organs[-1].hp==1 and latest.organs[-1].hp==.5,"Snapshots refresh damage while earlier queued portrait data stays immutable")
+ relative.dead=true;relative.health=0;account.lineage.died(relative,host.world)
+ check(not host._frame(peer).family_portraits.has(relative.id),"Dead relatives leave the next remote portrait snapshot")
  socket.send_text(JSON.stringify({"op":"lineage_color","color":"#32d4a7"}))
  check(await until(func():return messages.any(func(m):return m.get("kind","")=="lineage_color_result")),"Color save gets a real authenticated receipt")
  var receipt: Dictionary=messages.filter(func(m):return m.get("kind","")=="lineage_color_result")[-1]

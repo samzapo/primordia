@@ -288,13 +288,15 @@ func open_context(target: Dictionary) -> void:
 					_choice("Follow generation %d" % relative.generation,"Continue managing this existing family member; the current body stays alive.",_follow.bind(relative.id),"","G%d" % relative.generation)
 					break
 		"lineage":
+			context["roster"]=hash(sim.lineage.records)
 			var records: Array=sim.lineage.records.filter(func(record):return record.state!="dead")
 			var page: int=clampi(int(target.get("page",0)),0,maxi(0,ceili(records.size()/3.0)-1))
 			var stats: Dictionary=sim.lineage.statistics()
 			_choice("Generation %d" % stats.generation,"%d total cells in this lineage." % stats.total,game._message.bind("Generation %d · %d total cells in this lineage." % [stats.generation,stats.total]),"","G%d" % stats.generation)
 			for record in records.slice(page*3,page*3+3):
 				var can_follow: bool=record.state=="living" and not run.terminal()
-				_choice("Cell %d · %s" % [record.id,record.state],sim.lineage.biography(record),_follow.bind(record.id) if can_follow else game._message.bind(sim.lineage.biography(record)),"","You" if record.state=="active" else "Zz%d" % record.generation if record.state=="dormant" else "G%d" % record.generation)
+				_choice("Cell %d · %s" % [record.id,record.state],sim.lineage.biography(record),_follow.bind(record.id) if can_follow else game._message.bind(sim.lineage.biography(record)),"","%d" % record.generation)
+				choices[-1].selected=record.state=="active"
 				choices[-1].set_meta("family_id",record.id)
 				choices[-1].set_meta("parent_id",record.parent)
 			if records.size()>3:_choice("More relatives","Other living relatives and dormant reserves.",open_context.bind({"kind":"lineage","page":(page+1)%ceili(records.size()/3.0)}),"","More")
@@ -444,6 +446,14 @@ func _events() -> void:
 	if critical and not last_critical: game._message("Critical resources · inspect the ATP sac and damaged membrane.")
 	last_critical = critical
 
+func _sync_family_portraits() -> void:
+	if context.get("kind","")!="lineage":return
+	var models: Dictionary=game.family_portraits if game.world.remote_client else preload("res://scripts/cell_portrait.gd").family(game.world,game.world.lineage)
+	for choice in choices:
+		if not choice.has_meta("family_id"):continue
+		var model: Dictionary=models.get(choice.get_meta("family_id"),{})
+		choice.set_portrait(model,game.world.seed_value,game.lineage_color(int(model.get("lineage",0))))
+
 func sync(_dt: float) -> void:
 	if game == null: return
 	_events()
@@ -451,6 +461,9 @@ func sync(_dt: float) -> void:
 	var active: bool = not game.settings_panel.visible
 	visible = active
 	if not active: return
+	if context.get("kind","")=="lineage" and context.get("roster",0)!=hash(game.world.lineage.records):
+		open_context(context.duplicate());return
+	_sync_family_portraits()
 	var s: float = ui_scale()
 	var size := get_viewport_rect().size
 	var cell_screen: Vector2 = game.world_layer.to_global(interior.position)

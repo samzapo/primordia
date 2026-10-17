@@ -688,3 +688,7 @@ Revision61 AP continuation: each cell's next added/restored organ costs its curr
 
 ### Quarter-capacity low-power organs (October17,2026)
 [Revision62](REVISION_62.md) replaces ATP-based shutdowns with a25% activity floor for functional movement, pumping, secretion, weapon recharge and active gland repair/cleaning. Full operation returns after ATP recovers, with separate entry/recovery thresholds to prevent flicker. Material, target and health prerequisites remain; no ATP is created, and unpaid residual work is an explicit gameplay rule. Passive energy recovery/senses/protection remain unchanged. Shared behavior allows low-power pursuit as a last locally cued option and investment favors feasible mitochondrial recovery.
+
+### Family portraits (October 17, 2026)
+
+The family menu pictures each current relative or dormant reserve with its actual membrane shape, lineage color, nucleus and installed organs. A tiny generation number sits in the bottom corner, like a factory badge, and the selected body stays marked. Pictures update while the menu is open; deceased relatives leave it. Off-camera owned anatomy is a compact presentation snapshot, separate from simulation models and camera interests. Rendering does not advance biology, grant resources or consume ecology RNG. Existing lineage counters, follow validation and ordinary persistent updates remain.

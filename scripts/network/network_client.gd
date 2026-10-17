@@ -455,6 +455,7 @@ func _snapshot(message: Dictionary) -> void:
 		if not retained_ids.has(identity):cells_by_id.erase(identity)
 	world.lineage=data.lineage;world.evolution=data.evolution
 	world.investment=data.get("investment",{"npc":{},"lineages":{},"cells":{}})
+	family_portraits=message.get("family_portraits",{})
 	family_recovery=message.get("family_recovery",{})
 	if not camera_initialized or previous_player!=world.player.id:
 		cell_ui.close_context();build_open=false;moving_id=-1;selected=-1
