@@ -155,12 +155,6 @@ static func icon(c, p: Vector2, kind: String, rotation: float, scale: float, ani
 			c.draw_line(Vector2(1,0),Vector2(15,0),Color("ff80ae"),7,true)
 			c.draw_line(Vector2(-7,0),Vector2(1,0),Color("fff2c3"),3,true)
 			c.draw_line(Vector2(-3,-4),Vector2(-3,4),Color("fff2c3"),3,true)
-		"sanctuary":
-			c.draw_circle(Vector2.ZERO,14,Color("7266c8"))
-			c.draw_circle(Vector2.ZERO,10,Color("d5cbff"))
-			c.draw_arc(Vector2.ZERO,17,0,TAU,32,Color("91f6de"),2,true)
-			c.draw_line(Vector2(-6,1),Vector2(-1,6),Color("6555a7"),3,true)
-			c.draw_line(Vector2(-1,6),Vector2(7,-6),Color("6555a7"),3,true)
 		"mitochondrion":
 			c.draw_set_transform(p,rotation,Vector2(1.25,.75)*scale)
 			c.draw_circle(Vector2.ZERO,13,Color("8a3954"))

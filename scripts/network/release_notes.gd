@@ -125,6 +125,7 @@ const RELEASES=[
 },
 {
  "id":"2026-10-17-cell-investments",
+ "hidden_items":[2], # Historical withdrawn-feature copy is retained, never offered again.
  "audience":"experimental",
  "title":"What’s new in the pond",
  "items":[
@@ -149,6 +150,21 @@ const RELEASES=[
  "footer":"Your cell and its progress carry on between updates.",
  "button":"Back to the pond",
 },
+{
+ "id":"2026-10-17-cell-instincts",
+ "audience":"experimental",
+ "title":"What’s new in the pond",
+ "items":[
+  "Cells now choose when to feed, hunt, rest or explore from their reserves and the signals their organs receive.",
+  "Attacked cells retreat and use nearby family traces to spread out. Flight receptors also seek a way out of harmful acid.",
+  "Shade leaves seek softer light, returning toward light when the water is too dark.",
+  "Hunter, Producer and Grazer investments develop more varied, complementary organs.",
+  "Removed Exploration, Steering and Output percentages. Your cell’s organs now guide these choices automatically.",
+  "The Family menu shows living relatives, highest generation and total cells. Sanctuary is no longer available.",
+ ],
+ "footer":"This update starts a fresh pond. Your existing access key still works.",
+ "button":"Back to the pond",
+},
 ]
 const CURRENT=RELEASES[-1]
 static func seen_index(account: Dictionary) -> int:
@@ -161,7 +177,12 @@ static func applies(update: Dictionary,instance: String) -> bool:
 static func pending_all(account: Dictionary,instance: String="stable") -> Array:
 	var updates: Array=[]
 	for update in RELEASES.slice(seen_index(account)+1):
-		if applies(update,instance):updates.append(update.duplicate(true))
+		if applies(update,instance):
+			var visible: Dictionary=update.duplicate(true)
+			var items: Array=[]
+			for i in update.items.size():
+				if i not in update.get("hidden_items",[]):items.append(update.items[i])
+			visible.items=items;updates.append(visible)
 	return updates
 static func pending(account: Dictionary,instance: String="stable") -> Dictionary:
 	var updates:=pending_all(account,instance)

@@ -201,7 +201,7 @@ func open_context(target: Dictionary) -> void:
 				choices[-1].scar=entry.kind=="scar"
 				if entry.kind=="nucleus" and game.views.has(cell.id):choices[-1].structure_art=game.views[cell.id].art
 		"assembly","chemistry":
-			for index in ([0,1,2,3,5,10,11,13] if target.kind == "assembly" else [12,14,6,7,9,3,8]):
+			for index in ([0,1,2,3,5,10,11,13] if target.kind == "assembly" else [12,6,7,9,3,8]):
 				var kind: String = sim.KINDS[index]
 				var cost := 0.0
 				_choice(game.TITLES[index],"1 AP\n%s" % game.HELP[index],game._select.bind(index),kind,"",run.points >= 1,cost,1,{"kind":kind,"scale":1.0,"mutation":""})
@@ -223,23 +223,6 @@ func open_context(target: Dictionary) -> void:
 					sim.remove(cell.organs.find(organ))
 					close_context()
 					game._message("Organelle recycled · no AP refund."),"","Recycle")
-			if sim.Cell.tunable_steering(organ):
-				var strength: float = sim.Cell.steering_strength(organ)
-				var label: String = "Off" if strength == 0 else "%d%%" % roundi(strength*100)
-				var details := "Click to cycle Off / 25 / 50 / 100 / 200 / 400%. Changes signal priority and response time versus exploration; flight always wins."
-				if organ.kind == "feeding": details += "\nSuction, digestion and absorption still work even with steering Off."
-				elif organ.kind == "photosynthesis": details += "\nLight seeking continues while carbon particles are fixed into food, tissue and oxygen."
-				_choice("Steering "+label,details,func():
-					var steps: Array = sim.Cell.STEERING_STEPS
-					var index: int = steps.find(strength)
-					sim.edit("steering",{"id":organ.id,"value":steps[(index+1)%steps.size()]})
-					open_context(target),"",label)
-			var output: float = sim.Genes.output(organ)
-			_choice("Output %d%%" % roundi(output*100),"Cycle 100 / 150 / 200 / 300 / 400%. More work uses proportionally more ATP, plus 5% extra ATP per additional 100% output. Material inputs are still required. At zero ATP, ordinary photosynthesis and sensing remain available.",func():
-				var steps: Array = sim.Cell.OUTPUT_STEPS
-				var index: int = steps.find(output)
-				sim.edit("output",{"id":organ.id,"value":steps[(index+1)%steps.size()]})
-				open_context(target),"","Out %d%%" % roundi(output*100))
 			if not cell.inherent(organ):
 				for gene in sim.Genes.available(organ,run.learned):
 					var data: Dictionary = sim.Genes.DATA[gene]
@@ -280,31 +263,23 @@ func open_context(target: Dictionary) -> void:
 				_choice("Stability risk","+2 AP next tide: finish with 30 steady seconds at ≥60% health and ≥25 ATP.",_challenge.bind("stability"),"","Steady")
 			if not run.sandbox and run.challenge == "" and run.tide < 6 and run.clock-run.tide*run.TIDE_SECONDS < 90:
 				_choice("Feeding risk","+2 AP next tide: collect 12 external food or fix 12 carbon (or a mixture); finish healthy.",_challenge.bind("metabolism"),"","Feed")
-			_choice("Family & goals",sim.lineage.summary(sim),open_context.bind({"kind":"lineage"}),"","Family")
+			_choice("Family",sim.lineage.summary(sim),open_context.bind({"kind":"lineage"}),"","Family")
+			if not run.sandbox: _choice("Known blueprints","Recall a discovered blueprint.",open_context.bind({"kind":"archive","page":0}),"","Genes")
 			_choice("Investment","Choose automatic AP spending for unattended cells.",open_context.bind({"kind":"investment"}),"","Invest")
-			_choice("Behavior","Tune wandering versus signals and the response cycle.",open_context.bind({"kind":"behavior"}),"","Explore")
+			_choice("Behavior","How this cell chooses what to do.",open_context.bind({"kind":"behavior"}),"","Instinct")
 		"investment":
 			investment_picker.open()
 		"behavior":
-			var label: String = "Off" if cell.exploration == 0 else "%d%%" % roundi(cell.exploration*100)
-			_choice("Exploration "+label,"Relative wandering weight. Signal weight / (signal + exploration) determines following time. Flight bypasses this cycle. No resource cost.",func():
-				var steps: Array = sim.Cell.STEERING_STEPS
-				var index: int = steps.find(cell.exploration)
-				sim.edit("exploration",{"value":steps[(index+1)%steps.size()]})
-				open_context(target),"",label)
-			_choice("Cycle %.0fs" % cell.response_cycle,"Cycle between following a sensed goal and a seeded exploration heading. Click: 2 / 4 / 8 seconds. Memory and senses keep working throughout.",func():
-				var cycles: Array = sim.Cell.RESPONSE_CYCLES
-				sim.edit("cycle",{"value":cycles[(cycles.find(cell.response_cycle)+1)%cycles.size()]})
-				open_context(target),"","%.0fs" % cell.response_cycle)
+			_choice("Cell instincts",sim.Behavior.summary(cell),func():game._message(sim.Behavior.summary(cell)),"","Instinct")
 			_choice("Nucleus","Return to goals and blueprints.",open_context.bind({"kind":"nucleus"}),"","Back")
 		"bud":
-			_choice("Fund growth" if cell.protected_cell() else "Fund offspring","Automatic investment uses surplus tissue and ATP. This adds up to 10 of each now.",func():
+			_choice("Fund offspring","Automatic investment uses surplus tissue and ATP. This adds up to 10 of each now.",func():
 				sim.edit("reserve",{"value":10})
 				game._message(run.objective(sim)),"","+10")
 			_choice("Reclaim reserves","Withdraw up to 10 tissue and 10 ATP.",func():
 				sim.edit("reserve",{"value":-10})
 				game._message(run.objective(sim)),"","−10")
-			var funded: bool = not cell.protected_cell() and cell.brood_mass >= sim.offspring_quote().material and cell.brood_energy >= 60
+			var funded: bool = cell.brood_mass >= sim.offspring_quote().material and cell.brood_energy >= 60
 			_choice("Release successor","A fully funded bud releases automatically when there is room. This releases it now; you keep this body.",_reproduce.bind(false),"","Divide",funded and sim.lineage.active_family(sim).size() < sim.Lineage.MAX_ACTIVE)
 			_choice("Store dormant successor","Same tissue and ATP cost. A prepaid dormant body hatches if the active family is lost.",_reproduce.bind(true),"","Cyst",funded and sim.lineage.dormant.size() < sim.Lineage.MAX_DORMANT)
 			var family: Array = sim.lineage.active_family(sim)
@@ -313,19 +288,16 @@ func open_context(target: Dictionary) -> void:
 					_choice("Follow generation %d" % relative.generation,"Continue managing this existing family member; the current body stays alive.",_follow.bind(relative.id),"","G%d" % relative.generation)
 					break
 		"lineage":
-			var page: int = int(target.get("page",0))
-			var last: int = maxi(0,sim.lineage.records.size()-page*4)
-			for record in sim.lineage.records.slice(maxi(0,last-4),last):
-				var can_follow: bool = record.state == "living" and not run.terminal()
-				_choice("Cell %d · %s" % [record.id,record.state],sim.lineage.biography(record)+("\nClick to follow this living relative." if can_follow else ""),_follow.bind(record.id) if can_follow else game._message.bind(sim.lineage.biography(record)),"","You" if record.state == "active" else "Zz%d" % record.generation if record.state == "dormant" else "†G%d" % record.generation if record.state == "dead" else "G%d" % record.generation)
+			var records: Array=sim.lineage.records.filter(func(record):return record.state!="dead")
+			var page: int=clampi(int(target.get("page",0)),0,maxi(0,ceili(records.size()/3.0)-1))
+			var stats: Dictionary=sim.lineage.statistics()
+			_choice("Generation %d" % stats.generation,"%d total cells in this lineage." % stats.total,game._message.bind("Generation %d · %d total cells in this lineage." % [stats.generation,stats.total]),"","G%d" % stats.generation)
+			for record in records.slice(page*3,page*3+3):
+				var can_follow: bool=record.state=="living" and not run.terminal()
+				_choice("Cell %d · %s" % [record.id,record.state],sim.lineage.biography(record),_follow.bind(record.id) if can_follow else game._message.bind(sim.lineage.biography(record)),"","You" if record.state=="active" else "Zz%d" % record.generation if record.state=="dormant" else "G%d" % record.generation)
 				choices[-1].set_meta("family_id",record.id)
 				choices[-1].set_meta("parent_id",record.parent)
-			if not run.sandbox: _choice("Known blueprints","Recall a discovered blueprint as this tide's one draft choice; installation costs remain.",open_context.bind({"kind":"archive","page":0}),"","Genes")
-			if sim.remote_client:
-				if last>4:_choice("Earlier relatives","Previous page of this family.",open_context.bind({"kind":"lineage","page":page+1}),"","Older")
-				if page>0:_choice("Recent relatives","Return to the newest family records.",open_context.bind({"kind":"lineage","page":0}),"","Recent")
-			else:
-				_choice("Earlier history","Cycle this family tree, then previous expeditions.",open_context.bind({"kind":"lineage","page":page+1} if last > 4 else {"kind":"past","page":0}),"","History")
+			if records.size()>3:_choice("More relatives","Other living relatives and dormant reserves.",open_context.bind({"kind":"lineage","page":(page+1)%ceili(records.size()/3.0)}),"","More")
 		"archive":
 			var known: Array = game.archive.discovered.filter(func(gene): return gene not in run.learned and sim.Genes.DATA[gene].kind != "feeding")
 			var page: int = int(target.get("page",0))
@@ -335,16 +307,7 @@ func open_context(target: Dictionary) -> void:
 					game._message("Blueprint recalled." if game.archive.recall(run,gene) else "Already chose this tide; recall remains available next tide.")
 					open_context({"kind":"archive","page":page}),data.kind,"",not run.chosen and not run.terminal())
 			if known.size() > 3: _choice("More blueprints","Next page.",open_context.bind({"kind":"archive","page":(page+1)%ceili(known.size()/3.0)}),"","More")
-			_choice("Family tree","Return to your current family.",open_context.bind({"kind":"lineage"}),"","Back")
-		"past":
-			var page: int = int(target.get("page",0))
-			var first: int = maxi(0,game.archive.expeditions.size()-(page+1)*3)
-			for entry in game.archive.expeditions.slice(first,first+3):
-				var description := "Expedition %d · %s · %.0fs\n" % [entry.id+1,entry.status,entry.seconds]
-				for record in entry.family.slice(-4): description += "Generation %d · %s%s\n" % [record.generation,record.state," · "+record.cause if record.state == "dead" else ""]
-				_choice("Expedition %d" % [entry.id+1],description,game._message.bind(description),"",str(entry.id+1))
-			if first > 0: _choice("Earlier expeditions","Previous histories.",open_context.bind({"kind":"past","page":page+1}),"","Older")
-			_choice("Current family","Return.",open_context.bind({"kind":"lineage"}),"","Back")
+			_choice("Nucleus","Return to the nucleus.",open_context.bind({"kind":"nucleus"}),"","Back")
 	# At most four actions plus a next-page node around any structure.
 	if choices.size() > 5 and not mobile():
 		var all_choices: Array[Button] = choices.duplicate()
@@ -409,11 +372,7 @@ func describe(target: Dictionary) -> String:
 			var organ: Dictionary = cell.organ_by_id(target.id)
 			if organ.is_empty(): return ""
 			var result: String = game.TITLES[sim.KINDS.find(organ.kind)]+"\nHealth %d%%" % roundi(100*organ.hp/organ.max_hp)
-			result += "\nOutput %d%% · ATP/work +%d%%" % [roundi(sim.Genes.output(organ)*100),roundi((sim.Genes.inefficiency(organ)-1)*100)]
-			if sim.Cell.tunable_steering(organ):
-				var strength: float = sim.Cell.steering_strength(organ)
-				result += "\nSteering "+("Off" if strength == 0 else "%d%%" % roundi(strength*100))
-				result += "\nFollow %.0f%% / explore %.0f%% · %.0fs cycle" % [cell.response_share(organ)*100,(1-cell.response_share(organ))*100,cell.response_cycle]
+
 			var rates: Dictionary = cell.energy_budget.rates(cell.age)
 			var upkeep: float = sim.Cell.organ_upkeep(organ)
 			var whole: float = cell.operating_budget().steady
@@ -510,7 +469,7 @@ func sync(_dt: float) -> void:
 	if not game.build_open and not context.is_empty() and context.kind not in ["lineage","archive","past"]: close_context()
 	if context.get("kind","") == "bud" and choices.size() >= 4:
 		var sim = game.world
-		var funded: bool = not sim.player.protected_cell() and sim.player.brood_mass+0.000001 >= sim.offspring_quote().material and sim.player.brood_energy >= 60
+		var funded: bool = sim.player.brood_mass+0.000001 >= sim.offspring_quote().material and sim.player.brood_energy >= 60
 		choices[2].affordable = funded and sim.lineage.active_family(sim).size() < sim.Lineage.MAX_ACTIVE
 		choices[3].affordable = funded and sim.lineage.dormant.size() < sim.Lineage.MAX_DORMANT
 	_layout_mobile()

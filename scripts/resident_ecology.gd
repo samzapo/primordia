@@ -353,6 +353,12 @@ func step(dt: float) -> void:
 				if queries[i].id!=cell.id or queries[i].mode not in ["graze","hunt","flee"]: continue
 				combined[i]["patch"]=sim._food_patch(combined[i].food,queries[i].reach,cell)
 				received[queries[i].organ_id]=combined[i]
+		if streaming!=null:
+			for i in queries.size():
+				if queries[i].id!=cell.id or queries[i].mode!="family":continue
+				var id: int=queries[i].organ_id
+				if not received.has(id):received[id]={"food":{},"reports":{},"patch":{}}
+				received[id]["families"]=combined[i].reports
 		sim._sense(cell,h,received)
 		sim.profile_usec["sensing"]+=Time.get_ticks_usec()-sense_start
 		if delayed:

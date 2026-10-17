@@ -2,6 +2,8 @@ extends RefCounted
 const Sim=preload("res://scripts/simulation.gd")
 const Codec=preload("res://scripts/network/state_codec.gd")
 static func run(check: Callable) -> void:
+ preload("res://tests/shade_steering.gd").run(check)
+ preload("res://tests/behavior_tree.gd").run(check)
  var sim=Sim.new(591,0,false);sim.server_mode=true;sim.cells=[sim.player]
  sim.player.add_organ("feeding",0,"graze",false)
  var bodies: Array=[]
@@ -64,28 +66,7 @@ static func run(check: Callable) -> void:
  check.call(ordinary.health==hp and not ordinary.accepts_attack(alias),"Counterattack toxin cannot harm an unarmed cell at contact")
  ordinary.add_organ("toxin",0,"graze",false);ordinary.damage(50,PI,alias)
  check.call(ordinary.health<hp,"Counterattack toxin can harm a cell with offensive anatomy")
- photo.add_organ("sanctuary",1,"graze",false);var protected_alias: int=sim._attack_owner(photo)
- sim.managed_lineages=[ordinary.lineage_id()];sim.prepare_combat_rules()
- check.call(not ordinary.accepts_attack(protected_alias) and mitochondrial.accepts_attack(protected_alias),"Protected-cell attacks exclude all player lineages, including offline ones")
- hp=photo.health;var organs: Array=photo.organs.duplicate(true)
- photo.damage(100000,0);sim._metabolize(photo,1000);sim._acid_stress(photo,1000);sim._die(photo)
- check.call(not photo.dead and photo.health==hp and photo.organs.size()==organs.size(),"Protected cell and organs survive combat, severe starvation and death handling")
- var family=sim._family_ledger(photo);family.progression.points=0
- var quote: Dictionary=sim.offspring_quote(photo)
- photo.brood_mass=quote.total_material-.1;photo.brood_energy=quote.energy
- sim._step_reproduction()
- check.call(family.progression.points==0,"An incomplete protected growth investment awards no AP")
- photo.brood_mass=quote.total_material;photo.brood_energy=quote.energy
- var cell_count: int=sim.cells.size()
- var mass_before_cycle: float=photo.organic_mass()
- var exterior_before_cycle: float=sim.particles.reduce(func(total,p):return total+p.amount*sim.Catalog.material(p.kind),0.0)
- var heat_before_cycle: float=photo.chemistry.heat
- sim._step_reproduction()
- var released_mass: float=sim.particles.reduce(func(total,p):return total+p.amount*sim.Catalog.material(p.kind),0.0)-exterior_before_cycle
- check.call(absf(photo.organic_mass()+released_mass-mass_before_cycle)<.000001,"Protected growth transfers every paid material unit into real spent waste")
- check.call(absf(photo.chemistry.heat-heat_before_cycle-quote.total_material*7.5-quote.energy)<.000001,"Protected growth consumes the complete tissue fuel and stored ATP, without a free AP source")
- check.call(family.progression.points==2 and sim.cells.size()==cell_count and photo.brood_mass<.000001 and photo.brood_energy==0,"A fully paid protected cycle awards 2 AP, spends reserves and makes no offspring")
- sim.time+=2;sim._step_reproduction()
- check.call(family.progression.points==2 and not sim._divide_paid(photo,family),"Protected cells cannot reproduce manually or repeat an unpaid reward")
+ check.call("sanctuary" not in sim.Cell.KINDS and not photo.add_organ("sanctuary",1,"graze",false),"Removed Sanctuary cannot be constructed")
  restored=Codec.new().restore(Codec.new().capture(sim));restored.prepare_combat_rules()
- check.call(restored.attack_sources==sim.attack_sources and restored.player.protected_cell(),"Protected anatomy and immutable chemical attack policies survive restart")
+ check.call(restored.attack_sources==sim.attack_sources,"Counterattack's immutable source permissions survive restart without Sanctuary")
+ preload("res://tests/retired_history.gd").run(check)

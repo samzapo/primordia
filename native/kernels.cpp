@@ -521,8 +521,8 @@ protected:
     ClassDB::bind_method(D_METHOD("pool_compact"), &PrimordiaKernels::pool_compact);
     ClassDB::bind_method(D_METHOD("set_activity_views"), &PrimordiaKernels::set_activity_views);
     ClassDB::bind_method(D_METHOD("pool_filter"), &PrimordiaKernels::pool_filter);
-    ClassDB::bind_method(D_METHOD("pool_sense"), &PrimordiaKernels::pool_sense);
-    ClassDB::bind_method(D_METHOD("packet_sense"), &PrimordiaKernels::packet_sense);
+    ClassDB::bind_method(D_METHOD("pool_sense"), &PrimordiaKernels::pool_sense, DEFVAL(false));
+    ClassDB::bind_method(D_METHOD("packet_sense"), &PrimordiaKernels::packet_sense, DEFVAL(false));
     ClassDB::bind_method(D_METHOD("packet_regions"), &PrimordiaKernels::packet_regions);
     ClassDB::bind_method(D_METHOD("pool_needed"), &PrimordiaKernels::pool_needed);
     ClassDB::bind_method(D_METHOD("pool_decoys"), &PrimordiaKernels::pool_decoys);
@@ -757,7 +757,7 @@ public:
     return out;
   }
   Dictionary pool_sense(TypedArray<int64_t> ids,Vector2 receptor,double reach,Vector2 center,
-                        int owner,int lineage,double time,bool graze) {
+                        int owner,int lineage,double time,bool graze,bool family=false) {
     ++pool_batches; Dictionary food,reports;
     for (int k=0;k<ids.size();++k) {
       auto &s=packet_slots[int64_t(ids[k])]; const auto &p=s.value;
@@ -774,7 +774,7 @@ public:
         if (distance<double(bin["distance"])) { bin["nearest"]=d; bin["distance"]=distance; }
       } else if (!graze && p.kind==3 && double(s.d.get("expires_at",0.))>time) {
         Dictionary report=s.d.get("report",Dictionary());
-        if (report.is_empty() || int(report["lineage"])==lineage) continue;
+        if (report.is_empty() || (int(report["lineage"])==lineage)!=family) continue;
         Variant id=report["id"];
         if (reports.has(id)) {
           Dictionary seen=reports[id], old=seen["report"];
@@ -805,7 +805,7 @@ public:
     return chunks.values();
   }
   Dictionary packet_sense(Array particles,TypedArray<int64_t> ids,Vector2 receptor,double reach,Vector2 center,
-                        int owner,int lineage,double time,bool graze) {
+                        int owner,int lineage,double time,bool graze,bool family=false) {
     ++pool_batches; Dictionary food,reports;
     for (int k=0;k<ids.size();++k) {
       auto p=access(particles,int64_t(ids[k]));
@@ -822,7 +822,7 @@ public:
         if (distance<double(bin["distance"])) { bin["nearest"]=d; bin["distance"]=distance; }
       } else if (!graze && p.kind()==3 && double(p.get("expires_at",0.))>time) {
         Dictionary report=p.get("report",Dictionary());
-        if (report.is_empty() || int(report["lineage"])==lineage) continue;
+        if (report.is_empty() || (int(report["lineage"])==lineage)!=family) continue;
         Variant id=report["id"];
         if (reports.has(id)) {
           Dictionary seen=reports[id], old=seen["report"];

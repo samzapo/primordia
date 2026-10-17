@@ -84,11 +84,25 @@ def health(sha,stable_world,previous=None):
         except (OSError,ValueError,KeyError,AssertionError):pass
         time.sleep(2)
     raise RuntimeError("Experimental authority did not pass independent hardware/checkpoint health")
+def requested_reset(environment):
+    value=environment.get("PRIMORDIA_RESET_POND","0")
+    if value not in ("0","1"):raise ValueError("Invalid reset request")
+    if value=="1" and environment.get("GITHUB_EVENT_NAME")!="workflow_dispatch":
+        raise ValueError("Pond resets require an explicit workflow dispatch")
+    return value=="1"
+
+def feedback_identity(state):
+    directory=state/"feedback"
+    if not directory.exists():return {}
+    return {str(path.relative_to(directory)):hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in sorted(directory.rglob("*")) if path.is_file()}
+
 def main():
     if os.environ.get("RUNNER_NAME")!="samzapo-desktop" or os.uname().nodename!="samzapo-desktop":
         raise RuntimeError("Experimental deployment requires samzapo-desktop")
     os.environ.setdefault("XDG_RUNTIME_DIR",f"/run/user/{os.getuid()}")
     os.umask(0o077)
+    reset_pond=requested_reset(os.environ)
     stable=Path.home()/".local/share/primordia-deploy"
     root=Path.home()/".local/share/primordia-experimental"
     isolated_root(root,stable)
@@ -134,7 +148,7 @@ def main():
         raise RuntimeError("Native Dictionary lifetime fixture failed")
 
     call(str(godot),"--headless","--path",str(candidate),"--editor","--import","--quit",env=environment)
-    for script,marker in [("feedback_pass_run","FEEDBACK PASS"),("feedback_latest_run","FEEDBACK LATEST")]:
+    for script,marker in [("feedback_pass_run","FEEDBACK PASS"),("feedback_latest_run","FEEDBACK LATEST"),("normal_output_run","NORMAL OUTPUT")]:
         path=root/(script+"-fixture.log")
         with path.open("w") as output:
             call("timeout","90s",str(godot),"--headless","--path",str(candidate),"--script","tests/"+script+".gd","--","--particle-backend=cpu",env=environment,stdout=output,stderr=subprocess.STDOUT)
@@ -156,6 +170,7 @@ def main():
     for script,flags,marker in [
         ("lineage_start_network",["--gpu"],"LINEAGE START NETWORK"),
         ("feedback_pass_gpu",[],"FEEDBACK PASS GPU"),
+        ("normal_output_run",["--particle-backend=cpu","--gpu"],"NORMAL OUTPUT"),
         ("feedback_pass_network",["--gpu"],"FEEDBACK PASS NETWORK"),
         ("feedback_latest_gpu",["--particle-backend=cpu"],"FEEDBACK LATEST GPU"),
         ("feedback_visual_gpu",["--particle-backend=cpu"],"FEEDBACK VISUAL GPU"),
@@ -196,20 +211,40 @@ def main():
     validation=subprocess.run(["systemd-analyze","--user","verify",str(staged)],capture_output=True,text=True)
     if validation.returncode:raise RuntimeError("Experimental systemd unit is invalid: "+validation.stderr)
     backup=None
+    reset_report=None
     try:
         subprocess.run(["systemctl","--user","stop",UNIT],check=bool(old))
         if old:backup=retain_model_boundary(state,root,"before-experimental-update-")
+        protected_feedback=feedback_identity(state)
+        protected_keys=hashlib.sha256(registry.read_bytes()).hexdigest()
+        if reset_pond:
+            if old is None or backup is None:raise RuntimeError("Reset requires a retained existing experimental pond")
+            path=root/"fresh-pond-reset.log"
+            with path.open("w") as output:
+                call(str(godot),"--headless","--path",str(candidate),"--script","tools/reset_pond.gd","--",
+                     "--state-dir="+str(state),"--confirm-sha="+sha,
+                     env={**environment,"PRIMORDIA_INSTANCE":"experimental","PRIMORDIA_BUILD_SHA":sha},
+                     stdout=output,stderr=subprocess.STDOUT)
+            result=path.read_text();print(result,flush=True)
+            if re.search(r"SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:",result,re.M):raise RuntimeError("Fresh pond preparation failed")
+            reset_report=json.loads(next(line.removeprefix("POND_RESET ") for line in result.splitlines() if line.startswith("POND_RESET ")))
+            if previous:
+                assert reset_report["previous_world_id"]==previous["world_id"] and reset_report["world_id"]!=previous["world_id"]
+                assert reset_report["accounts"]==reset_report["accounts_before"]
+        if feedback_identity(state)!=protected_feedback or hashlib.sha256(registry.read_bytes()).hexdigest()!=protected_keys:
+            raise RuntimeError("Private feedback or access registry changed during pond preparation")
         unit.write_text(text);switch(current,candidate)
         call("systemctl","--user","daemon-reload")
         call("systemctl","--user","enable","--now",UNIT)
-        report=health(sha,baseline["world_id"],previous)
+        report=health(sha,baseline["world_id"],None if reset_pond else previous)
+        if reset_report:assert report["world_id"]==reset_report["world_id"] and report["accounts"]==reset_report["accounts"]
         # Prove this instance persists independently through its own restart.
         call("systemctl","--user","restart",UNIT)
         restarted=health(sha,baseline["world_id"],report)
         route=prepare_and_apply(root)
         after=guard(stable,baseline)
         if after["tick"]<=baseline["tick"]:raise RuntimeError("Stable world did not advance")
-        record={"revision":sha,"experimental":restarted,"initial":report,"routing":route,
+        record={"revision":sha,"experimental":restarted,"initial":report,"routing":route,"pond_reset":reset_report,"predecessor_archive":str(backup) if reset_pond else None,"feedback_retained":all(feedback_identity(state).get(name)==digest for name,digest in protected_feedback.items()),
                 "stable_before":baseline,"stable_after":after,"stable_unit_restarted":False,
                 "separate_state":str(state),"key_registry_sha256":hashlib.sha256(registry.read_bytes()).hexdigest()}
         (root/"last-deploy.json").write_text(json.dumps(record,indent=2))

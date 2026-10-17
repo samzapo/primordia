@@ -3,12 +3,9 @@ const Chemistry = preload("res://scripts/cell_chemistry.gd")
 const Surface = preload("res://scripts/surface_chemistry.gd")
 var chemistry = Chemistry.new()
 var combat_context: Dictionary={} # Shared authority-derived rules, excluded from saves.
-func protected_cell() -> bool:
-	return organs.any(func(organ):return organ.kind=="sanctuary" and organ.hp>0)
 func accepts_attack(source: int) -> bool:
 	var rule: Dictionary=combat_context.get("sources",{}).get(source,{})
 	if rule.get("no_damage",false):return false
-	if rule.get("npc_only",false) and lineage_id() in combat_context.get("player_roots",[]):return false
 	if rule.get("selective",false):
 		return organs.any(func(organ):return organ.kind in ["toxin","poreforming","acidifying"] and organ.hp>0)
 	return true
@@ -18,13 +15,11 @@ var raw_fuel: float:
 var surface_complexes: Array = []
 const Genes = preload("res://scripts/mutations.gd")
 const Membrane = preload("res://scripts/membrane.gd")
-const KINDS := ["propulsion", "protection", "poreforming", "regenerative", "feeding", "sensing", "photosynthesis", "toxin", "neutralizing", "acidifying", "hunting", "cilia", "mitochondrion", "counterattack", "sanctuary"]
-const COST := [8.0, 10.0, 12.0, 10.0, 8.0, 6.0, 12.0, 12.0, 10.0, 12.0, 6.0, 8.0, 10.0, 12.0, 12.0]
-const WIDTH := [19.0, 34.0, 26.0, 27.0, 36.0, 20.0, 30.0, 26.0, 26.0, 26.0, 20.0, 24.0, 0.0, 24.0, 0.0]
+const KINDS := ["propulsion", "protection", "poreforming", "regenerative", "feeding", "sensing", "photosynthesis", "toxin", "neutralizing", "acidifying", "hunting", "cilia", "mitochondrion", "counterattack"]
+const COST := [8.0, 10.0, 12.0, 10.0, 8.0, 6.0, 12.0, 12.0, 10.0, 12.0, 6.0, 8.0, 10.0, 12.0]
+const WIDTH := [19.0, 34.0, 26.0, 27.0, 36.0, 20.0, 30.0, 26.0, 26.0, 26.0, 20.0, 24.0, 0.0, 24.0]
 const SENSE_MODES := ["flee"]
 const MODES := ["graze"]
-const STEERING_STEPS := [0.0,0.25,0.5,1.0,2.0,4.0]
-const RESPONSE_CYCLES := [2.0,4.0,8.0]
 const BASAL_UPKEEP := 0.18
 const MOTION_UPKEEP := 0.20
 const PUMP_UPKEEP := 0.10
@@ -43,7 +38,8 @@ const TISSUE_AREA := Membrane.COUNT*0.5*sin(TAU/Membrane.COUNT)*47.0*47.0/78.0
 const ATP_TURNOVER := 0.002
 const ORAL_FLOW := 64.0
 const ORAL_REACH := 170.0
-var exploration := 0.25
+var behavior: Dictionary={} # Bounded physiology latches and current received escape direction.
+var exploration := 0.25 # Legacy checkpoint fact; inert.
 var response_cycle := 4.0
 var drive_active := false
 var id := 0
@@ -236,7 +232,7 @@ func arc_gap(a: float, b: float) -> float:
 	return wrapf(arc_coordinate(a)-arc_coordinate(b),-length*0.5,length*0.5)
 
 static func internal_organ(kind: String) -> bool:
-	return kind in ["mitochondrion","sanctuary"]
+	return kind=="mitochondrion"
 
 func organ_local_position(organ: Dictionary) -> Vector2:
 	if internal_organ(organ.kind):return local_point(organ.a)*.55
@@ -339,7 +335,6 @@ func occupied() -> float:
 func can_fit(kind: String, a: float, size: float = 1.0, paid: bool = true) -> bool:
 	var k := KINDS.find(kind)
 	if k < 0 or not is_finite(a) or not is_finite(size) or size < 0.5: return false
-	if kind=="sanctuary":return count(kind)==0
 	if internal_organ(kind):return count(kind)<maxi(1,floori(growth_scale()*3))
 	var cost := organ_cost(kind,size) if paid else 0.0
 	var length := perimeter()*pow(maxf(8,body+biomass+brood_mass-cost)/maxf(8,body+biomass+brood_mass),0.5)
@@ -374,39 +369,13 @@ func _make_room(anchor: float, width: float, length: float) -> void:
 		end = item.x-item.half
 	for item in items: item.organ.a = parameter_at_arc(origin+item.x*original_length/length)
 
-static func tunable_steering(organ: Dictionary) -> bool:
-	return organ.get("kind","") in ["feeding","hunting","photosynthesis"]
-
 static func steering_strength(organ: Dictionary) -> float:
-	return clampf(float(organ.get("steering",1.0)),0.0,4.0) if tunable_steering(organ) else 0.0
+	# Legacy percentages remain saved verbatim; all working senses are automatic.
+	return 1.0 if organ.get("kind","") in ["feeding","hunting","photosynthesis","sensing","counterattack"] else 0.0
 
-func set_steering_strength(identity: int, strength: float) -> bool:
-	var organ: Dictionary = organ_by_id(identity)
-	if dead or not tunable_steering(organ) or not is_finite(strength): return false
-	organ.steering = clampf(strength,0.0,4.0)
-	# Disabling a drive invalidates both memory and signals already travelling.
-	if organ.steering == 0:
-		signals = signals.filter(func(packet): return packet.organ_id != identity)
-		if target_organ_id == identity: target_memory = 0
-	sense_clock = 0
-	render_revision += 1
-	return true
-
-func response_share(organ: Dictionary) -> float:
-	var strength := steering_strength(organ)
-	return strength/maxf(0.000001,strength+exploration)
-
-func set_exploration(strength: float) -> bool:
-	if dead or not is_finite(strength): return false
-	exploration = clampf(strength,0,4)
-	render_revision += 1
-	return true
-
-func set_response_cycle(seconds: float) -> bool:
-	if dead or seconds not in RESPONSE_CYCLES: return false
-	response_cycle = seconds
-	render_revision += 1
-	return true
+func set_steering_strength(_identity: int, _strength: float) -> bool:return false
+func set_exploration(_strength: float) -> bool:return false
+func set_response_cycle(_seconds: float) -> bool:return false
 
 func add_organ(kind: String, a: float, mode: String = "graze", paid: bool = true, size: float = 1.0) -> bool:
 	var k := KINDS.find(kind)
@@ -434,23 +403,8 @@ func add_organ(kind: String, a: float, mode: String = "graze", paid: bool = true
 	render_revision += 1
 	return true
 
-const OUTPUT_STEPS := [1.0,1.5,2.0,3.0,4.0]
-
-func set_output_strength(identity: int, value: float) -> bool:
-	var organ := organ_by_id(identity)
-	if organ.is_empty() or not is_finite(value) or value not in OUTPUT_STEPS: return false
-	organ["output"] = value
-	render_revision += 1
-	return true
-
-func sensory_output(organ: Dictionary, paid: bool = false) -> float:
-	# An overdriven receptor pays only when it actually samples; its ordinary
-	# 100% sensing remains available at zero ATP.
-	var requested := Genes.output(organ)-1
-	var unit: float = .1*.15*organ.scale*organ.scale*Genes.inefficiency(organ)
-	var extra := minf(requested,energy/maxf(.0000001,unit))
-	if paid and extra > 0: spend_energy(extra*unit,organ,"sensing")
-	return 1+extra
+func sensory_output(_organ: Dictionary,_paid: bool=false) -> float:
+	return 1.0 # All receptors use their ordinary reach; no output/ATP multiplier.
 
 func pore_radius(organ: Dictionary) -> float:
 	return 18.0*organ.scale*Genes.factor(organ,"intake")
@@ -550,16 +504,18 @@ func recycle(index: int) -> float:
 func drain(amount: float) -> float:
 	var taken = minf(biomass, amount)
 	biomass -= taken
-	var remainder = minf(maxf(0,body-(8 if protected_cell() else 4)), amount-taken)
+	var remainder = minf(maxf(0,body-4), amount-taken)
 	body -= remainder
-	if body <= 4.0001 and not protected_cell(): health = 0
+	if body <= 4.0001: health = 0
 	return taken + remainder
 
 func damage(amount: float, world_angle: float, source: int=-1) -> float:
-	if dead or amount <= 0 or protected_cell() or not accepts_attack(source): return 0.0
+	if dead or amount <= 0 or not accepts_attack(source): return 0.0
 	var released = 0.0
 	var local_angle = surface_parameter(world_angle-angle)
 	last_wound = local_angle
+	behavior["wounded_until"]=age+3.0
+	behavior["wound_direction"]=Vector2.from_angle(world_angle)
 	var hit = -1
 	var distance = INF
 	for i in organs.size():
@@ -707,6 +663,10 @@ func specialize(identity: int, gene: String) -> bool:
 	var health: float = organ.hp/organ.max_hp
 	biomass -= cost
 	organ.mutation = gene
+	if organ.kind=="photosynthesis":
+		signals=signals.filter(func(packet):return packet.organ_id!=identity)
+		if target_organ_id==identity:target_memory=0
+		sense_clock=0 # The next ordinary sensory update reads the new preference.
 	organ.max_material += cost
 	# Added tissue joins a damaged organ at its current health; remaining tissue
 	# waits as cell biomass for repair. No material disappears into a health bar.

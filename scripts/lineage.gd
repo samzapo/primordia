@@ -12,6 +12,8 @@ var founder_material := 0.0
 var progression # Shared with the owning account; checkpoint graph preserves identity.
 var births := 0
 var deaths := 0
+var total_cells:=0
+var highest_generation:=0
 
 func initialize(sim) -> void:
 	register(sim.player,-1,0,"active",sim.time)
@@ -41,9 +43,10 @@ func active_family(sim) -> Array:
 
 func register(cell, parent: int, generation: int, state: String, now: float) -> void:
 	cell.generation = generation
-	records.append({"id":cell.id,"parent":parent,"generation":generation,"state":state,"born":now,"ended":-1.0,"cause":"","food":0.0,"fixed":0.0})
-	# At most seven physical family members; old history is presentation only.
-	if records.size() > 128: records.pop_front()
+	if not record_for(cell.id).is_empty():return
+	total_cells+=1;highest_generation=maxi(highest_generation,generation)
+	records.append({"id":cell.id,"parent":parent,"generation":generation,"state":state,"born":now})
+	# Only current living/reserve records remain; totals outlive individual cells.
 
 func record_for(identity: int) -> Dictionary:
 	for record in records:
@@ -59,13 +62,9 @@ func died(cell, sim) -> void:
 	if cell.lineage_id() != root_id: return
 	var record := record_for(cell.id)
 	if record.is_empty() or record.state == "dead": return
-	record.state = "dead"
-	record.ended = sim.time
-	record.food = cell.processed
-	record.fixed = cell.fixed_carbon
-	record.cause = cell.death_hint
+	records.erase(record)
 	deaths += 1
-	notify("Generation %d lost · %s\nIts family and habitat continue." % [cell.generation,record.cause])
+	notify("Generation %d lost · %s\nIts family and habitat continue." % [cell.generation,cell.death_hint])
 
 func adopted(cell, sim, hatched: bool) -> void:
 	if sim.player.dead: sim.cells.erase(sim.player)
@@ -113,9 +112,12 @@ func recover(sim, dt: float) -> bool:
 	# Remain in the same world until there is room; never discard a funded body.
 	return false
 
+func statistics() -> Dictionary:
+	return {"generation":highest_generation,"total":total_cells}
+
 func summary(sim) -> String:
-	return "%d living family · %d dormant / %d\n%s" % [active_family(sim).size(),dormant.size(),MAX_DORMANT,sim.evolution.objective(sim)]
+	var stats:=statistics()
+	return "Generation %d · %d total cells\n%d living family · %d dormant reserves" % [stats.generation,stats.total,active_family(sim).size(),dormant.size()]
 
 func biography(record: Dictionary) -> String:
-	return "Generation %d · cell %d · %s\nParent %s · born %.0fs%s" % [record.generation,record.id,record.state,"founder" if record.parent < 0 else str(record.parent),record.born,
-		"\nLost at %.0fs: %s\nMetabolized %.1f · fixed %.1f carbon" % [record.ended,record.cause,record.food,record.fixed] if record.state == "dead" else ""]
+	return "Generation %d · cell %d · %s" % [record.generation,record.id,record.state]

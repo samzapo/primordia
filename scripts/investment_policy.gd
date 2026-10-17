@@ -1,5 +1,6 @@
 extends RefCounted
 ## Saved purchase intent; anatomy, AP and feeding still use the ordinary rules.
+const MANUAL_ONLY:=[] # Every currently available organ has an explicit strategy role.
 const STRATEGIES:=["manual","hunter","producer","grazer"]
 const PRIORITIES:={
  "hunter":["hunting","toxin","propulsion","poreforming","cilia","mitochondrion","protection"],
@@ -31,20 +32,51 @@ static func strategy(sim,cell) -> String:
  if root!=sim.lineage.root_id and root not in sim.managed_lineages:return sim.investment.npc.get(cell.id,"manual")
  return sim.investment.cells.get(cell.id,sim.investment.lineages.get(root,"manual"))
 
+# Variants are deterministic preferences, never free organs or hidden ecology knowledge.
+const VARIANTS:={
+ "hunter":[["hunting","toxin","propulsion","poreforming","sensing","protection","mitochondrion","regenerative"],
+           ["hunting","poreforming","cilia","counterattack","protection","neutralizing","mitochondrion","regenerative"]],
+ "producer":[["photosynthesis","protection","regenerative","mitochondrion","neutralizing","cilia","sensing"],
+             ["photosynthesis","cilia","neutralizing","mitochondrion","counterattack","regenerative","protection","sensing"]],
+ "grazer":[["cilia","mitochondrion","regenerative","sensing","feeding","protection","neutralizing"],
+           ["cilia","neutralizing","regenerative","acidifying","mitochondrion","feeding","sensing","protection"]],
+}
 static func candidate(sim,cell) -> Dictionary:
  var policy:=strategy(sim,cell)
- if policy not in PRIORITIES or cell.id in sim.managed_cells:return {}
+ if policy not in VARIANTS or cell.id in sim.managed_cells:return {}
+ var variant: int=posmod(cell.id*19349663 ^ sim.seed_value*83492791,2)
+ var priorities: Array=VARIANTS[policy][variant]
  var best: Dictionary={}
  var score:=-INF
- var priorities: Array=PRIORITIES[policy]
  for index in priorities.size():
   var kind: String=priorities[index]
-  if not cell.can_fit(kind,0,1,false):continue
-  # Acquire the strategy's core first, then diversify by diminishing priority.
-  var value: float=(priorities.size()-index)/float(1+cell.count(kind))
-  if cell.count(priorities[0])==0 and index==0:value+=100
-  if value>score:best={"cell":cell,"kind":kind};score=value
+  var count: int=working(cell,kind)
+  var limit: int=4 if kind=="photosynthesis" else 2 if kind in ["feeding","cilia","protection"] else 1
+  if count>=limit or not cell.can_fit(kind,0,1,false):continue
+  var value: float=(priorities.size()-index)/pow(1+count,1.7)
+  if working(cell,priorities[0])==0 and index==0:value+=100
+  # Establish a complete working role before duplicating its headline organ.
+  if index>0 and count==0:value+=12
+  if policy=="hunter" and working(cell,"hunting")>0:
+   if working(cell,"toxin")+working(cell,"poreforming")+working(cell,"counterattack")==0 and kind in ["toxin","poreforming"]:value+=70
+   if working(cell,"propulsion")+working(cell,"cilia")==0 and kind in ["propulsion","cilia"]:value+=50
+  if cell.health<70 or cell.acid_stress>.25:
+   if kind=="regenerative" and count==0:value+=40
+   if kind=="sensing" and count==0:value+=25
+  if kind=="mitochondrion" and cell.oxygen<.1 and working(cell,"photosynthesis")==0:value*=.25
+  # An acid-assisted recycler acquires its buffer/repair support first.
+  if kind=="acidifying" and working(cell,"regenerative")==0:continue
+  if value>score:
+   best={"cell":cell,"kind":kind};score=value
+   if kind=="photosynthesis":
+    best["mutation"]="shade_leaf" if sim.light_at(cell.position)<.5 else "sun_leaf"
  return best
+
+static func working(cell,kind: String) -> int:
+ var count:=0
+ for organ in cell.organs:
+  if organ.kind==kind and organ.hp>0:count+=1
+ return count
 
 static func set_strategy(sim,scope: String,value: String) -> bool:
  if scope not in ["cell","lineage"] or (value not in STRATEGIES and not (scope=="cell" and value=="inherit")):return false

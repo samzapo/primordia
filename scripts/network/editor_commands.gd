@@ -23,10 +23,8 @@ static func execute(sim, action: String, args: Dictionary):
 		"mutate": return sim.mutate_organ(identity,str(args.get("gene","")))
 		"choose_mutation": return sim.evolution.accept_division_offer(str(args.get("gene","")))
 		"restore": return sim.restore(identity)
-		"steering": return cell.set_steering_strength(identity,value)
-		"output": return cell.set_output_strength(identity,value)
-		"exploration": return cell.set_exploration(value)
-		"cycle": return cell.set_response_cycle(value)
+		"steering","exploration","cycle": return false # Retired tuning; the shared behavior tree decides.
+		"output": return false # Retired command; never alter a saved organ.
 		"reserve":
 			if value not in [-10.0,10.0]: return false
 			cell.reserve(value,sim.offspring_quote().material); return true

@@ -22,7 +22,7 @@ func run() -> void:
   check(Cytoplasm.new().attach(gpu,cell.chemistry,cell),"Mitochondrial fixture uses resident internal particles")
   for i in 60:
    cell.chemistry.advance(cell,1.0/60);cpu.chemistry.advance(cpu,1.0/60)
-  check(absf(cell.energy-cpu.energy)<.000001 and absf(cell.biomass-cpu.biomass)<.000001 and absf(cell.raw_fuel-cpu.raw_fuel)<.000001 and absf(cell.chemistry.heat-cpu.chemistry.heat)<.000001,"Mitochondrial ATP, tissue, fuel, heat and overdrive match CPU reference")
+  check(absf(cell.energy-cpu.energy)<.000001 and absf(cell.biomass-cpu.biomass)<.000001 and absf(cell.raw_fuel-cpu.raw_fuel)<.000001 and absf(cell.chemistry.heat-cpu.chemistry.heat)<.000001,"Mitochondrial ATP, tissue, fuel, heat and inert legacy output match CPU reference")
   check(cell.chemistry.particles.is_empty() and cell.chemistry.accelerator.exports==0,"Mitochondria retain GPU authority without a CPU pose mirror")
   cell.chemistry.ensure_cpu()
  var plant=Sim.Cell.new(32);plant.add_organ("photosynthesis",0,"graze",false)
@@ -48,9 +48,34 @@ func run() -> void:
  sim._sense(defender,.2,perception.for_cell(queries,signals.senses,defender));sim._emit_and_attack(defender,.1)
  check(sim.particles.any(func(p):return p.kind==Sim.TOXIN and sim.attack_sources.get(p.owner,{}).get("selective",false)),"A lone counterattack gland fires from a locally received immutable GPU report")
  check(not sim.cells.any(func(c):return c.id==91),"Counterattack does not need a live source body or remote anatomy lookup")
+
+ # A family trace never becomes a threat, but can guide attack dispersal.
+ defender.add_organ("sensing",PI,"flee",false);defender.add_organ("propulsion",1,"graze",false)
+ defender.sense_clock=0;defender.lineage=90
+ var family_data:=PackedFloat32Array()
+ for index in 2:
+  family_data.append_array(PackedFloat32Array([defender.position.x+index*2,defender.position.y,0,0,0,0,0,3,8,.2,.2,0]))
+ var family_gpu=GPU.new();family_gpu.configure_interactions("chemistry");family_gpu.configure_exchange();family_gpu.configure_perception()
+ family_gpu.initialize(family_data,Fixture.flow(),[
+  {"slot":0,"owner":92,"lineage":90,"expires_at":8.0,"report":{"id":92,"lineage":90,"at":defender.position+Vector2(-30,60),"mass":30.0,"radius":20.0,"hostile":true,"defended":false,"emitted_at":0.0}},
+  {"slot":1,"owner":93,"lineage":93,"expires_at":8.0,"report":{"id":93,"lineage":93,"at":defender.position+Vector2(80,0),"mass":100.0,"radius":40.0,"hostile":true,"defended":true,"emitted_at":0.0}}])
+ var family_ready: Array=await family_gpu.ready;check(family_ready[0],str(family_ready[1]))
+ queries=perception.requests([defender],.2,0)
+ # Both local packet poses reach the real receptors; emission positions differ.
+ var family_query: Dictionary=queries[-1]
+ var family_receipt: Dictionary=family_gpu.exchange_sync([defender],[],[],queries,{"feeding":false,"exposure":false,"projection":false,"summaries":true})
+ var received: Dictionary=perception.for_cell(queries,family_receipt.senses,defender)
+ check(received[family_query.organ_id].families.has(92),"Resident family query receives an actual same-lineage chemical report")
+ check(not received[family_query.organ_id].reports.has(92),"A relative never enters the hostile target channel")
+ sim._sense(defender,.2,received)
+ sim._sense(defender,.2,received)
+ check(defender.target_mode=="flee" and defender.target_id==93 and defender.target.x<0 and defender.target.y<0,"Actual GPU cues escape a foreign threat while spreading away from family")
+ check(defender.facing==-defender.target and defender.threat==Vector2.RIGHT,"Escape steering turns away from family while weapon aim retains the reported threat")
+ check(not sim.cells.any(func(c):return c.id in [92,93]),"GPU behavior uses only immutable emission facts, without live source bodies")
+ family_gpu.close();await family_gpu.closed
  sensed.close();await sensed.closed
  # Actual resident hazard receipt must retain the immutable source permission.
- var attacker=Sim.Cell.new(33,Vector2(500,500));attacker.add_organ("sanctuary",0,"graze",false)
+ var attacker=Sim.Cell.new(33,Vector2(500,500))
  var victim=Sim.Cell.new(34,Vector2(1500,1000))
  sim.cells=[attacker,victim];sim.player=attacker;sim.lineage.root_id=attacker.lineage_id();sim.managed_lineages=[victim.lineage_id()]
  var source: int=sim._attack_owner(attacker,true);sim.prepare_combat_rules()
@@ -63,6 +88,6 @@ func run() -> void:
  var bridge=preload("res://scripts/resident_ecology.gd").new();bridge.world=weakref(sim)
  var hp: float=victim.health
  bridge._apply_exposure([victim],receipt.exposure)
- check(victim.health==hp and absf(victim.waste-.2)<.00001,"Protected/selective toxin becomes spent waste without hurting a player or peaceful body")
+ check(victim.health==hp and absf(victim.waste-.2)<.00001,"Selective toxin becomes spent waste without hurting a peaceful body")
  contact.close();await contact.closed
  print("FEEDBACK PASS GPU: %d assertions, %d failures" % [assertions,failures]);quit(0 if failures==0 else 1)

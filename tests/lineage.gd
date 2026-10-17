@@ -45,7 +45,7 @@ static func run(check: Callable) -> void:
 	check.call(absf(mass(sim)-initial) < 0.01 and sim.external_input == 0,"Death and hatching conserve the initial bank and released tissue")
 	check.call(run.clock == 170 and run.points == 2 and run.learned == [offered[0]] and run.offers == offered and run.chosen and run.crisis_seconds[0] == 21,"Death preserves clock, AP spending, draft and crisis progress")
 	check.call(Score.lineage_motif(sim.seed_value,sim.player.lineage_id()) == motif,"The family theme continues through reserve recovery")
-	check.call(sim.lineage.records[0].cause == "Fixture toxin exposure" and sim.lineage.records[0].state == "dead","Family history records the actual fatal process")
+	check.call(sim.lineage.record_for(founder.id).is_empty() and sim.lineage.total_cells==2,"Deceased records leave the living family ledger while the lifetime total remains")
 	fund(sim)
 	initial = mass(sim)
 	var parent = sim.player

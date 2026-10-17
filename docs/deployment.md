@@ -188,3 +188,7 @@ next visible notice, oldest first, across hidden entries; filtering never rewind
 an account or clears a visible message. The supervisor selects the audience from
 its configured pond before launching the authority, independently of inherited
 build variables or browser input. Review these audiences during every promotion.
+
+### Explicit fresh experimental pond
+
+The experimental.yml manual dispatch has an optional reset_pond boolean, default false. Use it only for an owner-authorized ecology reset, such as Revision60. The job retains the stopped predecessor, prepares a new world with existing account credentials/names and update acknowledgements, preserves the five-key registry and private feedback, and then validates normal hardware/backend delivery and saved-world restart. Pushes cannot activate this reset. Stable is never a target of this tool. A failed install restores the predecessor and previous release.
