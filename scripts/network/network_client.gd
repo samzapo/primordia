@@ -83,6 +83,7 @@ var network_particles
 var network_alpha := 1.0
 var paused_snapshot: Dictionary = {}
 var camera_initialized := false
+var camera_seen_world:=false
 var focus_cell
 var loading_world := false
 var connection_stage := "sign_in"
@@ -95,7 +96,7 @@ func _ready() -> void:
 	world.habitat_geometry=Simulation.Habitat.new(0,[])
 	world.native_render=false;world.native_particle_render_cache=false
 	if OS.has_feature("web"):
-		server_url = str(JavaScriptBridge.eval("(location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws'"))
+		server_url = str(JavaScriptBridge.eval("(location.protocol==='https:'?'wss://':'ws://')+location.host+new URL('./ws',location.href).pathname"))
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--connect="): server_url=arg.trim_prefix("--connect=")
 		elif arg.begins_with("--invite="): invitation=arg.trim_prefix("--invite=")
@@ -141,6 +142,7 @@ func _publish_login_geometry() -> void:
 	JavaScriptBridge.eval("window.primordiaConnectionDiagnostics="+JSON.stringify({"invite_present":invitation!="","status":status.text,"connected":connected,"loading":loading_world,"stage":connection_stage,"key_visible":invite_input.visible,"join_visible":join_button.visible,"retrying":retry_enabled,"transport_failures":transport_failures,"attempts":connection_attempts,"key_characters":invite_input.text.length(),"user_arg_count":OS.get_cmdline_user_args().size(),"invitation_bounds":[input.position.x,input.position.y,input.size.x,input.size.y],"join_bounds":[button.position.x,button.position.y,button.size.x,button.size.y]}))
 
 func _toggle_user_pause() -> void:
+	if user_paused:_ease_camera()
 	if not connected or world.revision==0:return
 	if not user_paused:_freeze_network_pose()
 	user_paused=not user_paused
@@ -194,12 +196,19 @@ func touch_controls_available() -> bool:
 	return connected and not login.visible and world.revision>0
 
 func _input(event: InputEvent) -> void:
-	if login.visible or update_popup.opened: return # Controls receive every key; pond shortcuts cannot consume credentials.
+	if login.visible or update_popup.opened or lineage_confirming: return # Controls receive every key; pond shortcuts cannot consume credentials.
 	super(event)
 func _unhandled_input(event: InputEvent) -> void:
-	if login.visible or update_popup.opened: return
+	if login.visible or update_popup.opened or lineage_confirming: return
 	super(event)
 func _configure_backend() -> void: pass
+func _start_new_lineage() -> void:
+	if not connected:_message("Reconnect before starting a new lineage.");return
+	if not commands.is_empty() or not inflight.is_empty():_message("Wait for the current edit to finish.");return
+	if user_paused:_toggle_user_pause()
+	settings_panel.hide()
+	_queue_command("start_lineage",{"confirmed":true})
+
 func _restart(_profile: int=-1) -> void:
 	_message("The shared world cannot be restarted by a client.")
 func is_paused() -> bool: return user_paused
@@ -425,6 +434,9 @@ func _snapshot(message: Dictionary) -> void:
 		_publish_login_geometry.call_deferred()
 	var data=Codec.new().restore(message.graph)
 	if not data is Dictionary: return
+	if not camera_initialized:
+		if camera_seen_world:_ease_camera()
+		else:camera_has_pose=false;camera_followed_id=-1;camera_motion.cancel()
 	var previous_player: int=world.player.id
 	var previous_focus: int=_follow_cell().id
 	var models: Array=[]
@@ -446,7 +458,7 @@ func _snapshot(message: Dictionary) -> void:
 		cell_ui.close_context();build_open=false;moving_id=-1;selected=-1
 		touch_zoom.cancel()
 		camera_offset=Vector2.ZERO;free_camera=_follow_cell().position;camera_locked=can_follow();camera_rotation=0
-		camera_initialized=true
+		camera_initialized=true;camera_seen_world=true
 	elif camera_locked and not can_follow():
 		camera_locked=false;free_camera=render_camera
 	elif camera_locked and previous_focus!=_follow_cell().id:
@@ -480,7 +492,7 @@ func _snapshot(message: Dictionary) -> void:
 	world.active_particles=packets.size()
 	if network_particles!=null: network_particles.prepare(packets,world.cells)
 	if OS.has_feature("web"):
-		JavaScriptBridge.eval("window.primordiaDiagnostics="+JSON.stringify({"playback":playback.diagnostics(),"connected":connected,"tick":world.revision,"world_id":message.world_id,"packets":packets.size(),"cells":world.cells.size(),"time":world.time,"player_name":player_name,"nameplates":nameplates.items.map(func(item):return {"cell":item.cell,"name":item.name,"online":item.online})}))
+		JavaScriptBridge.eval("window.primordiaDiagnostics="+JSON.stringify({"playback":playback.diagnostics(),"connected":connected,"tick":world.revision,"world_id":message.world_id,"packets":packets.size(),"camera_packets":server_census.get("camera_particles",packets.size()),"buffered_packets":server_census.get("buffered_particles",packets.size()),"coverage":str(message.get("coverage",Vector4.ZERO)),"cells":world.cells.size(),"time":world.time,"player_name":player_name,"nameplates":nameplates.items.map(func(item):return {"cell":item.cell,"name":item.name,"online":item.online})}))
 
 	_show_next_update()
 

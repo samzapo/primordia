@@ -86,8 +86,9 @@ func run() -> void:
 	check(game.cell_ui.message.get_theme_font_size("font_size")>=66 and game.cell_ui.message.get_theme_font("font").get_font_name().contains("Comic"),"Mobile feedback uses readable CSS-sized comic typography")
 	game.cell_ui.sync(0)
 	check(game.cell_ui.tip_box.visible and game.cell_ui.tip_box.position.y>root.size.y*.65 and game.cell_ui.tip.max_lines_visible==3,"Mobile feedback occupies one compact bottom strip")
+	var retained_zoom: float=clampf(game.manual_zoom,game.MIN_ZOOM,game.MAX_ZOOM)
 	game._toggle_perception()
-	check(game.perception=="exteroception" and game.manual_zoom==game.MAX_ZOOM and game.camera_locked,"Leaving interoception restores the normal closest view")
+	check(game.perception=="exteroception" and game.manual_zoom==retained_zoom and game.camera_locked,"Leaving interoception retains zoom within exterior bounds")
 	game.world.evolution.points=10000;game.cell_ui.interior.sync()
 	check(game.cell_ui.interior.ecology.parcels.size()<=16 and game.world.evolution.points==10000,"A long-lived lineage keeps exact AP with bounded decorative tokens")
 	game.queue_free();await process_frame

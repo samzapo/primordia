@@ -9,7 +9,7 @@
   document.head.append(style);document.body.append(overlay);
   const form = overlay.querySelector('form'), send = form.querySelector('[type=submit]');
   const fields = ['category','title','description'];
-  const storageKey = 'primordia.feedback.draft';
+  const storageKey = 'primordia.feedback.draft' + (location.pathname.startsWith('/experimental/') ? '.experimental' : '');
   let action = null, reportId = "", signature = "";
   const draft = () => Object.fromEntries(fields.map(name => [name,form.elements[name].value]));
   const remember = () => { try { localStorage.setItem(storageKey,JSON.stringify({...draft(),id:reportId,signature})); } catch (_) {} };

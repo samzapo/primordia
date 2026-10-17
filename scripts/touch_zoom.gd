@@ -35,8 +35,8 @@ func initialize(owner_game) -> void:
 	pause_button.pressed.connect(game._mobile_pause_menu)
 	minus_button.text="−";bar.add_child(minus_button)
 	plus_button.text="+";bar.add_child(plus_button)
-	minus_button.pressed.connect(func():game._zoom_at(game.camera_screen,1/1.25))
-	plus_button.pressed.connect(func():game._zoom_at(game.camera_screen,1.25))
+	minus_button.pressed.connect(func():game._zoom_button(1/1.25))
+	plus_button.pressed.connect(func():game._zoom_button(1.25))
 	follow_button.z_index=80;follow_button.toggle_mode=true;game.ui.add_child(follow_button)
 	follow_button.pressed.connect(game._toggle_camera)
 	perception_button.z_index=80;game.ui.add_child(perception_button)
@@ -108,7 +108,7 @@ func layout() -> void:
 		for pair in [["pause",pause_button],["feedback",game.feedback_menu_button],["profile",game.profile_menu_button],["gameplay",game.gameplay_menu_button],["mechanics",game.mechanics_menu_button],["zoom_out",minus_button],["zoom_in",plus_button],["follow",follow_button],["perception",perception_button],["music",music_button],["music_volume",music_volume]]:
 			var rect: Rect2=pair[1].get_global_rect()
 			bounds[pair[0]]=[rect.position.x*conversion.x,rect.position.y*conversion.y,rect.size.x*conversion.x,rect.size.y*conversion.y]
-		JavaScriptBridge.eval("window.primordiaTouchControls="+JSON.stringify({"visible":bar.visible,"paused":game.user_paused,"zoom":game.manual_zoom,"editing":game.build_open,"locked":game.camera_locked,"rotation":game.camera_rotation,"camera":[game.render_camera.x,game.render_camera.y],"player_screen":_body_screen(game.world.player,conversion),"focus_screen":_body_screen(game._follow_cell(),conversion),"focus_alive":game.can_follow(),"perception":game.perception,"internal_packets":game._follow_cell().chemistry.particle_count(),"mask_enabled":game.perception_mask.enabled,"bounds":bounds,"cell_ui":game.cell_ui.mobile_diagnostics(conversion),"buffered_tick":game.paused_snapshot.get("tick",0) if game.world.remote_client else 0}))
+		JavaScriptBridge.eval("window.primordiaTouchControls="+JSON.stringify({"visible":bar.visible,"paused":game.user_paused,"zoom":game.manual_zoom,"editing":game.build_open,"locked":game.camera_locked,"rotation":game.render_rotation,"camera":[game.render_camera.x,game.render_camera.y],"player_screen":_body_screen(game.world.player,conversion),"focus_screen":_body_screen(game._follow_cell(),conversion),"focus_alive":game.can_follow(),"perception":game.perception,"internal_packets":game._follow_cell().chemistry.particle_count(),"mask_enabled":game.perception_mask.enabled,"bounds":bounds,"cell_ui":game.cell_ui.mobile_diagnostics(conversion),"buffered_tick":game.paused_snapshot.get("tick",0) if game.world.remote_client else 0}))
 
 func _body_screen(body,conversion: Vector2) -> Array:
 	var view=game.views.get(body.id)
@@ -181,7 +181,7 @@ func _anchor_pair() -> void:
 	var points:=fingers.values()
 	anchor_a=game._screen_world(points[0])
 	# Retain the unwrapped separation: a gesture may straddle a torus seam.
-	anchor_b=anchor_a+(points[1]-points[0]).rotated(-game.camera_rotation)/game.zoom
+	anchor_b=anchor_a+(points[1]-points[0]).rotated(-game.render_rotation)/game.zoom
 	if game.perception=="interoception":
 		anchor_a=game._cell_frame_point(anchor_a)
 		anchor_b=anchor_a+(points[1]-points[0]).rotated(-game.intero_rotation)/game.zoom

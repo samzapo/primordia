@@ -115,7 +115,7 @@ func run() -> void:
 	check(await until(func():return host.world.camera_views.size()==2),"camera union tracks both clients")
 	check(await until(func():return messages[0].any(func(m):return m.get("kind","")=="snapshot" and m.get("particles",PackedByteArray()).size()>0 and not m.get("warming",true))),"bounded particle publication reaches client")
 	var census_frame: Dictionary=messages[0].filter(func(message):return message.get("kind","")=="snapshot" and not message.get("warming",true) and message.get("serial",0)>0)[-1]
-	check(census_frame.has("census") and census_frame.census.has("external") and census_frame.census.has("living_cells") and census_frame.census.camera_particles==census_frame.particles.size()/32,"Snapshots deliver a distinct authoritative global census and camera-record count")
+	check(census_frame.has("census") and census_frame.census.has("external") and census_frame.census.has("living_cells") and census_frame.census.camera_particles<=census_frame.particles.size()/32 and census_frame.census.buffered_particles==census_frame.particles.size()/32,"Snapshots deliver a distinct authoritative global census and camera-record count")
 	withheld_acks[0]=true
 	check(await until(func():return deferred_acks.has(0)),"Slow browser leaves one complete snapshot awaiting acknowledgement")
 	var slow_peer: Dictionary=host.peers.values().filter(func(peer):return peer.account==welcome0.token.sha256_text())[0]

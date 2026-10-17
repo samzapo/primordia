@@ -50,6 +50,18 @@ class WebVersion(unittest.TestCase):
             self.export(root, b"same client")
             self.assertEqual(version(root), first)
 
+    def test_experimental_export_uses_a_separate_database_and_visible_label(self):
+        with tempfile.TemporaryDirectory(prefix="primordia-experimental-web-") as directory:
+            root=Path(directory)
+            self.export(root,b"experimental client")
+            page=root/"index.html";page.write_text(page.read_text()+"</body>")
+            version(root,"experimental")
+            config=json.loads(CONFIG.search(page.read_text()).group(1))
+            self.assertEqual(config["persistentPaths"],["/userfs/primordia-experimental"])
+            self.assertEqual(page.read_text().count('id="primordia-instance"'),1)
+            version(root,"experimental")
+            self.assertEqual(page.read_text().count('id="primordia-instance"'),1)
+
     def test_invalid_manifest_preserves_existing_inputs(self):
         with tempfile.TemporaryDirectory(prefix="primordia-web-version-") as directory:
             root = Path(directory)

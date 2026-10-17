@@ -5,6 +5,8 @@ const Transport=preload("res://scripts/particle_transport.gd")
 const Medium=preload("res://scripts/medium.gd")
 const Perception=preload("res://scripts/resident_perception.gd")
 const HALO:=256.0
+const SERVER_HALO:=512.0 # Fixed overscan beyond widest detail; independent of zoom.
+var priority_views: Array=[]
 const ADMISSIONS:=256
 var cold=Regions.new()
 var center:=Vector2.ZERO
@@ -54,7 +56,7 @@ func update_region(sim) -> void:
 		regions.clear()
 		for view in sim.camera_views:
 			var c:=Medium.wrap_position((Vector2(view.x,view.y)/Regions.SIZE).floor()*Regions.SIZE+Vector2.ONE*Regions.SIZE*.5)
-			var h:=((Vector2(view.z,view.w)+Vector2.ONE*HALO)/Regions.SIZE).ceil()*Regions.SIZE+Vector2.ONE*Regions.SIZE*.5
+			var h:=((Vector2(view.z,view.w)+Vector2.ONE*(SERVER_HALO if sim.server_mode else HALO))/Regions.SIZE).ceil()*Regions.SIZE+Vector2.ONE*Regions.SIZE*.5
 			regions.append(Vector4(c.x,c.y,h.x,h.y))
 		return
 	var at: Vector2=requested_center if request_pending else sim.player.position if sim.camera_follows_player else sim.camera_position
@@ -127,6 +129,34 @@ func _region_keys() -> Array:
 		for key in cold.keys_in(Vector2(region.x,region.y),Vector2(region.z,region.w)): keys[key]=true
 	return keys.keys()
 
+func region_ready(view: Vector4) -> bool:
+	# Chunk-level checks are conservative and bounded; never export cold poses as GPU-ready.
+	var at:=Vector2(view.x,view.y)
+	var half_view:=Vector2(view.z,view.w)+Vector2.ONE*32
+	for key in cold.keys_in(at,half_view):
+		if cold.chunks[key].living>0:return false
+	for packet in owner.pending:
+		if packet.alive:
+			var d:=Medium.offset(at,packet.p).abs()
+			if d.x<=half_view.x and d.y<=half_view.y:return false
+	return true
+
+func _priority(key: Vector2i) -> float:
+	var best:=INF
+	var at: Vector2=(Vector2(key)+Vector2.ONE*.5)*Regions.SIZE
+	for view in priority_views:
+		var beyond: Vector2=(Medium.offset(Vector2(view.x,view.y),at).abs()-Vector2(view.z,view.w)-Vector2.ONE*Regions.SIZE*.5).max(Vector2.ZERO)
+		best=minf(best,beyond.length_squared())
+	return best
+
+func admission_keys() -> Array:
+	var keys:=_region_keys()
+	if multiview and not priority_views.is_empty():
+		keys.sort_custom(func(a,b):
+			var da:=_priority(a);var db:=_priority(b)
+			return da<db if da!=db else a.x<b.x if a.x!=b.x else a.y<b.y)
+	return keys
+
 func service(sim) -> bool:
 	entered=0;transported=0
 	update_region(sim)
@@ -141,7 +171,7 @@ func service(sim) -> bool:
 	advance(sim,moving)
 	cold.put_all(moving,sim.time)
 	var admission: Array=[]
-	for key in _region_keys():
+	for key in admission_keys():
 		if not contains((Vector2(key)+Vector2.ONE*.5)*Regions.SIZE): continue
 		admission.append_array(cold.take(key,ADMISSIONS-admission.size()))
 		if admission.size()>=ADMISSIONS: break

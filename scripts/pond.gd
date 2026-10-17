@@ -73,6 +73,8 @@ var focus_animating := false
 var observation_view: Dictionary = {}
 var scale_bar := preload("res://scripts/scale_bar.gd").new()
 var settings_panel := PanelContainer.new()
+var lineage_confirmation := ConfirmationDialog.new()
+var lineage_confirming:=false
 var feedback:=preload("res://scripts/feedback_form.gd").new()
 var feedback_menu_button: Button
 var profile:=preload("res://scripts/player_profile.gd").new()
@@ -129,6 +131,10 @@ var diagnostic_zoom := false
 var preview_radius := -1.0
 var camera_screen := Vector2.ZERO
 var render_camera := Vector2.ZERO
+var render_rotation:=0.0
+var camera_has_pose:=false
+var camera_followed_id:=-1
+var camera_motion=preload("res://scripts/camera_motion.gd").new()
 var frame_trace
 var native_geometry := true
 var simulation_ms := 0.0
@@ -299,9 +305,15 @@ func _process(dt: float) -> void:
 			perf_wall_seconds = 0;perf_sim_seconds = 0
 	var process_start := Time.get_ticks_usec() if frame_trace != null else 0
 	if not user_paused:ui_time += dt
+	camera_motion.advance(dt,user_paused)
+	if lineage_confirming and OS.has_feature("web"):
+		var action=JSON.parse_string(str(JavaScriptBridge.eval("window.primordiaReaders.take('lineage')")))
+		if action is Dictionary:
+			lineage_confirming=false
+			if action.get("confirmed",false):_start_new_lineage()
 	death_frame_dt = dt if not user_paused and not settings_panel.visible and not build_open else 0.0
 	death_focus_age += death_frame_dt
-	if focus_animating:
+	if focus_animating and not user_paused:
 		camera_zoom = lerpf(camera_zoom,manual_zoom,1-exp(-dt*10))
 		if absf(camera_zoom-manual_zoom) < 0.002: focus_animating = false
 	notice_timer = maxf(0,notice_timer-dt)
@@ -357,17 +369,19 @@ func _process(dt: float) -> void:
 func _track_player_death() -> void:
 	if death_world != world:
 		death_world = world
+		camera_motion.cancel();camera_has_pose=false;camera_followed_id=-1
 		death_seen = 0
 		death_focus_age = 2.0
 	for event in world.death_bursts:
 		if event.serial <= death_seen: continue
 		death_seen = event.serial
 		if not event.player or not death_view.recent(event,world.time): continue
+		_ease_camera()
 		death_focus_age = 0
 		death_focus_at = event.at
 		death_focus_extent=float(event.radius)
 		for point in event.outline:death_focus_extent=maxf(death_focus_extent,point.length())
-		death_focus_rotation=intero_rotation-float(event.angle) if perception=="interoception" else camera_rotation
+		death_focus_rotation=render_rotation
 		cell_ui.close_context()
 		inspector.update_lens(0,get_global_mouse_position(),1,false)
 		camera_locked = true
@@ -383,9 +397,10 @@ func _maximum_zoom() -> float:
 	return MAX_ZOOM*10 if perception=="interoception" else MAX_ZOOM
 
 func _toggle_perception() -> void:
+	_ease_camera()
 	perception="interoception" if perception=="exteroception" else "exteroception"
 	camera_locked=true;camera_offset=Vector2.ZERO;intero_rotation=0;camera_rotation=0
-	if perception=="exteroception":manual_zoom=MAX_ZOOM;camera_zoom=manual_zoom;focus_animating=false
+	manual_zoom=clampf(manual_zoom,MIN_ZOOM,_maximum_zoom());camera_zoom=manual_zoom;focus_animating=false
 	if build_open:observation_view={"zoom":manual_zoom,"locked":true,"free":_follow_cell().position,"offset":Vector2.ZERO}
 	if perception=="interoception" and world.resident!=null and can_follow() and _follow_cell().chemistry.accelerator==null:
 		world.resident.gpu.attach_cytoplasm(_follow_cell().chemistry,_follow_cell())
@@ -393,7 +408,7 @@ func _toggle_perception() -> void:
 	for view in views.values():view.seen_revision=-1;view.queue_redraw()
 	_update_world(1.0 if is_paused() else Engine.get_physics_interpolation_fraction())
 	touch_zoom.layout();_update_perception_menu()
-	_message("Interoception · camera attached to the cell." if perception=="interoception" else "Exteroception · normal maximum magnification.")
+	_message("Interoception · camera attached to the cell." if perception=="interoception" else "Exteroception · zoom retained within pond limits.")
 
 func can_follow() -> bool:
 	return _follow_cell()!=null and not _follow_cell().dead
@@ -415,6 +430,8 @@ func _update_world(alpha: float) -> void:
 	scale_bar.configure(size,zoom,preferences.hud_scale)
 	camera_screen = size*0.5
 	var followed=_follow_cell()
+	if camera_followed_id!=-1 and followed.id!=camera_followed_id:_ease_camera()
+	camera_followed_id=followed.id
 	follow_heading=lerp_angle(followed.previous_angle,followed.angle,_cell_render_alpha(followed,alpha))
 	follow_origin=followed.previous_position+Simulation.Medium.offset(followed.previous_position,followed.position)*_cell_render_alpha(followed,alpha)
 	if perception=="interoception":
@@ -438,7 +455,11 @@ func _update_world(alpha: float) -> void:
 	if death_focus_age < 1.8:
 		var blend: float = smoothstep(1.15,1.8,death_focus_age)
 		render_camera = Simulation.Medium.wrap_position(death_focus_at+Simulation.Medium.offset(death_focus_at,render_camera)*blend)
-	world.camera_follows_player = camera_locked and death_focus_age >= 1.8 and camera_offset.length_squared() < 0.001
+	var pose: Dictionary=camera_motion.sample(render_camera,camera_rotation,zoom)
+	render_camera=pose.at;render_rotation=pose.heading;zoom=pose.zoom;camera_has_pose=true
+	world.view_half=_camera_bounds(size/(2*zoom))
+	scale_bar.configure(size,zoom,preferences.hud_scale)
+	world.camera_follows_player = camera_locked and death_focus_age >= 1.8 and camera_offset.length_squared() < 0.001 and not camera_motion.active
 	if world.resident!=null and world.resident.streaming!=null:
 		var prepared: Vector2=world.resident.streaming.request_view(render_camera)
 		if Simulation.Medium.offset(render_camera,prepared).length_squared()>.01: world.camera_follows_player=false
@@ -446,17 +467,17 @@ func _update_world(alpha: float) -> void:
 	world.camera_position = render_camera
 	light_layer.material.set_shader_parameter("clock",world.time)
 	light_layer.material.set_shader_parameter("camera",render_camera)
-	light_layer.material.set_shader_parameter("camera_rotation",camera_rotation)
+	light_layer.material.set_shader_parameter("camera_rotation",render_rotation)
 	light_layer.material.set_shader_parameter("view_size",size/zoom)
 	light_layer.material.set_shader_parameter("screen_center",camera_screen/size)
 	microscope_layer.material.set_shader_parameter("camera",render_camera)
-	microscope_layer.material.set_shader_parameter("camera_rotation",camera_rotation)
+	microscope_layer.material.set_shader_parameter("camera_rotation",render_rotation)
 	microscope_layer.material.set_shader_parameter("view_size",size/zoom)
 	microscope_layer.material.set_shader_parameter("screen_center",camera_screen/size)
 	preview.position = Simulation.Medium.offset(render_camera,world.player.position)
 	world_layer.position = camera_screen
 	world_layer.scale = Vector2.ONE*zoom
-	world_layer.rotation = camera_rotation
+	world_layer.rotation = render_rotation
 	currents.position = Simulation.Medium.offset(render_camera,currents_origin)
 	habitat_view.sync(render_camera,world.view_half)
 	currents.visible = not flow_streamers
@@ -644,15 +665,32 @@ func _refresh_light_texture() -> void:
 
 func _player_relative(screen: Vector2) -> Vector2:
 	var origin: Vector2=cell_ui.interior.position if views.has(world.player.id) else Simulation.Medium.offset(render_camera,world.player.position)
-	return (screen-camera_screen).rotated(-camera_rotation)/zoom-origin
+	return (screen-camera_screen).rotated(-render_rotation)/zoom-origin
+
+func _ease_camera() -> void:
+	if camera_has_pose:camera_motion.begin(render_camera,render_rotation,zoom)
+
+func _direct_camera() -> void:
+	if not camera_motion.active:return
+	if perception=="interoception":
+		camera_offset=Simulation.Medium.offset(follow_origin,render_camera).rotated(-follow_heading)
+		intero_rotation=render_rotation+follow_heading
+	elif camera_locked:camera_offset=Simulation.Medium.offset(follow_origin,render_camera)
+	else:free_camera=render_camera
+	camera_rotation=render_rotation
+	var size:=get_viewport_rect().size
+	manual_zoom=zoom/maxf(.0001,minf(size.x/Simulation.VIEW.x,size.y/Simulation.VIEW.y));camera_zoom=manual_zoom
+	camera_motion.cancel();focus_animating=false
 
 func _toggle_camera() -> void:
+	_ease_camera()
 	if perception=="interoception":
 		camera_locked=true;camera_offset=Vector2.ZERO;intero_rotation=0
 		_update_world(1);touch_zoom.layout();return
 	if not camera_locked and not can_follow():
 		_message("There is currently no living cell to follow.");touch_zoom.layout();return
-	if camera_locked: free_camera = Simulation.Medium.wrap_position(render_camera)
+	if camera_locked:
+		free_camera=Simulation.Medium.wrap_position(render_camera);camera_rotation=render_rotation;camera_motion.cancel()
 	camera_locked = not camera_locked
 	if camera_locked: camera_offset = Vector2.ZERO;camera_rotation=0
 	camera_dragging = false
@@ -663,13 +701,13 @@ func _toggle_camera() -> void:
 	_update_hud()
 
 func _screen_world(screen: Vector2) -> Vector2:
-	return Simulation.Medium.wrap_position(render_camera+(screen-camera_screen).rotated(-camera_rotation)/zoom)
+	return Simulation.Medium.wrap_position(render_camera+(screen-camera_screen).rotated(-render_rotation)/zoom)
 
 func _world_screen(at: Vector2) -> Vector2:
-	return camera_screen+Simulation.Medium.offset(render_camera,at).rotated(camera_rotation)*zoom
+	return camera_screen+Simulation.Medium.offset(render_camera,at).rotated(render_rotation)*zoom
 
 func _camera_bounds(half: Vector2) -> Vector2:
-	var c:=absf(cos(camera_rotation));var s:=absf(sin(camera_rotation))
+	var c:=absf(cos(render_rotation));var s:=absf(sin(render_rotation))
 	return Vector2(c*half.x+s*half.y,s*half.x+c*half.y).min(Simulation.Medium.WORLD*.5)
 
 func _cell_frame_point(at: Vector2) -> Vector2:
@@ -678,6 +716,7 @@ func _cell_frame_point(at: Vector2) -> Vector2:
 func _camera_gesture(anchor_a: Vector2,anchor_b: Vector2,screen_a: Vector2,screen_b: Vector2) -> void:
 	var source:=anchor_b-anchor_a;var target:=screen_b-screen_a
 	if source.length_squared()<.000001 or target.length_squared()<1:return
+	camera_motion.cancel()
 	focus_animating=false
 	var turn:=wrapf(target.angle()-source.angle(),-PI,PI)
 	var size:=get_viewport_rect().size
@@ -792,11 +831,17 @@ func _build_ui() -> void:
 	perception_menu_button.tooltip_text="Switch between the cell interior and the surrounding water"
 	_button(options,"Sense view [S]",func(): show_senses = not show_senses)
 	_button(options,"Performance overlay [F3]",func(): show_debug = not show_debug)
-	_button(options,"Next habitat [H]",func(): _restart((world.habitat+1)%3))
+	if not world.remote_client:_button(options,"Next habitat [H]",func(): _restart((world.habitat+1)%3))
 	_button(options,"Family history",func():
 		settings_panel.hide()
 		cell_ui.open_context({"kind":"lineage"}))
-	_button(options,"New expedition [R]",func(): _restart())
+	if world.remote_client:_button(options,"Start new lineage",_request_new_lineage)
+	else:_button(options,"New expedition [R]",func(): _restart())
+	ui.add_child(lineage_confirmation)
+	lineage_confirmation.title="Start a new lineage?"
+	lineage_confirmation.dialog_text="Your current family will stay in the pond and live under computer control. You will begin with a new cell. The shared pond will continue."
+	lineage_confirmation.ok_button_text="Start new lineage"
+	lineage_confirmation.confirmed.connect(_start_new_lineage)
 	settings_help=_label(options,"Tab: enter cell / keep edits and resume\nClick factories, nucleus, bud or installed organs\nNew organs have a fixed size · no Undo\nRight-click: cancel a held organ or close choices\nMicrotubules are sampled per cell\nWheel elsewhere: zoom · middle-drag: pan\nSpace: follow/free outside · recenter inside\nM: open / close settings\nI: interoception / exteroception · inside zoom up to 120×\n[ / ]: cycle cell targets · Enter: choose / place\nArrow keys: navigate choices or membrane placement\nHover particles: inspect through a local lens\nNo movement keys: anatomy steers.",MUTED)
 	_button(options,"Resume / Close [M]",func():
 		if touch_zoom.enabled and user_paused:_toggle_user_pause()
@@ -924,6 +969,7 @@ func _toggle_build() -> void:
 		_finish_build()
 		return
 	observation_view = {"zoom":manual_zoom,"locked":camera_locked,"free":free_camera,"offset":camera_offset}
+	_ease_camera()
 	world.begin_build()
 	build_open = true
 	camera_locked = true
@@ -943,6 +989,7 @@ func _toggle_build() -> void:
 	_layout()
 
 func _finish_build() -> void:
+	_ease_camera()
 	world.commit_build()
 	build_open = false
 	selected = -1
@@ -979,6 +1026,10 @@ func _place_at(angle: float) -> bool:
 	_message("Organelle attached." if placed else placement_status())
 	return placed
 
+func _zoom_button(factor: float) -> void:
+	_ease_camera()
+	_zoom_at(camera_screen,factor)
+
 func _zoom_at(screen: Vector2, factor: float) -> void:
 	var before: Vector2=_cell_frame_point(_screen_world(screen)) if perception=="interoception" else _screen_world(screen)
 	manual_zoom=clampf(manual_zoom*factor,MIN_ZOOM,_maximum_zoom());focus_animating=false
@@ -999,6 +1050,17 @@ func _select(index: int) -> void:
 	selected = index
 	placement_keyboard = false
 	tube_start.clear()
+
+func _request_new_lineage() -> void:
+	if not world.remote_client or lineage_confirming:return
+	if OS.has_feature("web"):
+		JavaScriptBridge.eval(FileAccess.get_file_as_string("res://web/player_readers.js"),true)
+		lineage_confirming=true;JavaScriptBridge.eval("window.primordiaReaders.openLineage()")
+	else:
+		lineage_confirmation.popup_centered(Vector2i(mini(520,int(get_viewport_rect().size.x)-32),220))
+
+func _start_new_lineage() -> void:
+	pass # Only the authenticated multiplayer client supplies this action.
 
 func _restart(profile: int = -1) -> void:
 	user_paused=false;touch_zoom.cancel()
@@ -1069,7 +1131,7 @@ func _notification(what: int) -> void:
 	if what==NOTIFICATION_WM_WINDOW_FOCUS_OUT:touch_zoom.cancel()
 
 func _input(event: InputEvent) -> void:
-	if feedback.opened or profile.opened or player_help.opened:return
+	if feedback.opened or profile.opened or player_help.opened or lineage_confirming:return
 	if event is InputEventScreenTouch or event is InputEventScreenDrag:
 		if touch_zoom.handle(event):get_viewport().set_input_as_handled()
 		return
@@ -1117,8 +1179,11 @@ func _input(event: InputEvent) -> void:
 			KEY_C: _select(5)
 			KEY_V: _select(10)
 			KEY_0: _select(9)
-			KEY_H: _restart((world.habitat+1)%3)
-			KEY_R: _restart()
+			KEY_H:
+				if not world.remote_client:_restart((world.habitat+1)%3)
+			KEY_R:
+				if world.remote_client:_request_new_lineage()
+				else:_restart()
 			_:
 				if event.keycode >= KEY_1 and event.keycode <= KEY_9: _select(event.keycode-KEY_1)
 				else: return
@@ -1150,7 +1215,7 @@ func _switch_family(identity: int) -> bool:
 	return true
 
 func _unhandled_input(event: InputEvent) -> void:
-	if feedback.opened or profile.opened or player_help.opened:return
+	if feedback.opened or profile.opened or player_help.opened or lineage_confirming:return
 	if touch_zoom.enabled and (event is InputEventMouseButton or event is InputEventMouseMotion) and event.device==-1:return
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT and not cell_ui.context.is_empty():
 		cell_ui.close_context()
@@ -1177,6 +1242,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			tube_start.clear()
 		return
 	if event.button_index == MOUSE_BUTTON_MIDDLE and (build_open or not camera_locked or perception=="interoception"):
+		_direct_camera()
 		camera_dragging = true
 		camera_button = event.button_index
 		tube_start.clear()
@@ -1195,6 +1261,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if world.player.dead:
 		if event.button_index==MOUSE_BUTTON_LEFT and not camera_locked:
+			_direct_camera()
 			camera_dragging=true;camera_button=event.button_index
 		return
 	if event.button_index == MOUSE_BUTTON_RIGHT:
@@ -1227,6 +1294,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			var anchor := _tubule_anchor(local)
 			if not anchor.is_empty(): tube_start = anchor; return
 		if not build_open and not camera_locked:
+			_direct_camera()
 			camera_dragging = true
 			camera_button = event.button_index
 

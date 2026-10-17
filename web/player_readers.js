@@ -39,7 +39,7 @@
   const back = document.createElement('button'); back.type = 'button'; back.className = 'reader-back';
   footer.append(note, back); card.append(header, body, footer); root.append(card); document.body.append(root);
   let active = '', release = '', previousFocus = null;
-  const queues = {update: [], help: []};
+  const queues = {update: [], help: [], lineage: []};
   function hide() {
     root.hidden = true;
     if (previousFocus?.isConnected) previousFocus.focus({preventScroll:true});
@@ -49,7 +49,10 @@
     queues[active].push({close:true, id:release});
     hide(); // Never wait for the game/server before letting the player leave.
   }
-  close.addEventListener('click', dismiss); back.addEventListener('click', dismiss);
+  close.addEventListener('click', dismiss); back.addEventListener('click', () => {
+    if (active === 'lineage') {queues.lineage.push({confirmed:true});hide();}
+    else dismiss();
+  });
   root.addEventListener('keydown', event => {
     if (event.key !== 'Tab') return;
     const targets = Array.from(card.querySelectorAll('button,select,a[href]')).filter(e => !e.disabled && e.getClientRects().length);
@@ -79,6 +82,11 @@
     }
   }
   window.primordiaReaders = {
+    openLineage() {
+      open('lineage', 'Start a new lineage?', 'The shared pond will continue.', 'Start new lineage');
+      paragraph(body, 'Your current family will stay alive in the pond under computer control. You will begin with a new cell.');
+      paragraph(body, 'Close this message to keep your current lineage.');
+    },
     openUpdate(notes) {
       open('update', notes.title, notes.footer, notes.button); release = notes.id;
       const list = document.createElement('ul'); body.append(list);

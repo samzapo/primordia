@@ -518,8 +518,8 @@
     }
   ],
   "combat": {
-    "toxin_damage_per_unit": 150.0,
-    "pore_damage_per_second": 32.0,
+    "toxin_damage_per_unit": 75.0,
+    "pore_damage_per_second": 16.0,
     "acid_secretion_capacity": 0.5
   }
 }

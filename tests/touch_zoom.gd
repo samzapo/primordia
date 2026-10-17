@@ -12,6 +12,10 @@ func touch(index: int,at: Vector2,pressed: bool,canceled: bool=false) -> void:
 func drag(index: int,at: Vector2) -> void:
 	var event:=InputEventScreenDrag.new();event.index=index;event.position=at
 	game._input(event)
+func settle_camera(target) -> void:
+	for frame in 45:
+		target.camera_motion.advance(1.0/60)
+		target._update_world(1)
 func run(suite) -> void:
 	game=load("res://scenes/pond.tscn").instantiate();game.use_particle_pool=false
 	suite.root.add_child(game);game.set_physics_process(false);game.set_process(false)
@@ -21,16 +25,21 @@ func run(suite) -> void:
 	game.preferences.fullscreen=true
 	var menu_key:=InputEventKey.new();menu_key.keycode=KEY_M;menu_key.pressed=true;game._input(menu_key)
 	suite.expect(game.settings_panel.visible and game.perception_menu_button.is_visible_in_tree() and game.perception_menu_button.text=="Interoception [I]","M menu exposes the perception action and keyboard shortcut")
+	game.manual_zoom=2.75;game.camera_zoom=2.75
 	var desktop_time: float=game.world.time;var desktop_rng: int=game.world.rng.state
 	var shortcut:=InputEventKey.new();shortcut.keycode=KEY_I;shortcut.pressed=true;game._input(shortcut)
 	suite.expect(game.perception=="interoception" and game.perception_menu_button.text=="Exteroception [I]" and game.perception_mask.enabled,"I switches perception from the M menu and updates its return action")
 	game.perception_menu_button.pressed.emit()
 	suite.expect(game.perception=="exteroception" and game.perception_menu_button.text=="Interoception [I]" and not game.perception_mask.enabled and game.world.time==desktop_time and game.world.rng.state==desktop_rng,"The menu action returns outside without changing simulation time or randomness")
+	suite.expect(is_equal_approx(game.manual_zoom,2.75),"Leaving the cell retains an exterior-compatible zoom")
+	game._toggle_perception();game.manual_zoom=game.MAX_ZOOM*8;game._toggle_perception()
+	suite.expect(game.manual_zoom==game.MAX_ZOOM,"Leaving very close interoception clamps only to the exterior maximum")
 	game._input(menu_key)
 	suite.expect(not game.settings_panel.visible and game.preferences.fullscreen,"M closes the menu without toggling fullscreen")
 	var reserved:=InputEventKey.new();reserved.keycode=KEY_ESCAPE;reserved.pressed=true;game._input(reserved)
 	suite.expect(not game.settings_panel.visible,"Escape is reserved for the browser rather than opening the game menu")
 	game.preferences.fullscreen=false
+	settle_camera(game)
 	game.touch_zoom.enabled=true;game.manual_zoom=2;game.touch_zoom.layout();game._update_world(1)
 	var original_time: float=game.world.time
 	var random: int=game.world.rng.state
@@ -75,6 +84,8 @@ func run(suite) -> void:
 	drag(9,final_mid+half+Vector2(40,20));touch(9,final_mid+half+Vector2(40,20),false)
 	suite.expect(game.free_camera==camera,"Lifting one finger ends camera manipulation without a one-finger jump")
 	game._toggle_camera()
+	suite.expect(game.camera_motion.active,"Follow moves through a smooth camera transition")
+	settle_camera(game)
 	suite.expect(game.camera_locked and game.camera_rotation==0 and game.views.has(game.world.player.id) and game.views[game.world.player.id].position.length()<.005,"Follow toggle restores an upright view centered on the rendered cell")
 	camera=game.render_camera;touch(4,middle,true);drag(4,middle+Vector2(80,20));touch(4,middle+Vector2(80,20),false)
 	suite.expect(game.camera_locked and game.render_camera==camera,"One-finger dragging cannot pan the camera")
@@ -131,12 +142,15 @@ func run(suite) -> void:
 	suite.expect(not client.camera_locked and client.free_camera==Vector2(600,600),"Later snapshots preserve the user's unlocked free view")
 	message.tick=22;message.graph=preload("res://scripts/network/state_codec.gd").new().capture({"cells":[],"player":incoming.player,"lineage":incoming.lineage,"evolution":incoming.evolution})
 	client._snapshot(message);client._toggle_camera()
-	suite.expect(client.camera_locked and client.views.has(client.world.player.id) and client.views[client.world.player.id].position.length()<.005,"Refocus immediately draws the owned cell even when the prior camera snapshot omitted it")
+	suite.expect(client.camera_motion.active,"Refocus starts a smooth camera transition")
+	settle_camera(client)
+	suite.expect(client.camera_locked and client.views.has(client.world.player.id) and client.views[client.world.player.id].position.length()<.005,"Refocus smoothly centers the owned cell even when the prior camera snapshot omitted it")
 	var observer=preload("res://scripts/cell.gd").new(71);observer.position=Vector2(800,1400);observer.previous_position=observer.position
 	incoming.player.dead=true;message.tick=23;message.graph=preload("res://scripts/network/state_codec.gd").new().capture({"cells":[observer],"player":incoming.player,"focus":observer,"lineage":incoming.lineage,"evolution":incoming.evolution})
 	client._snapshot(message)
 	if not client.camera_locked:client._toggle_camera()
 	client._update_world(1)
+	settle_camera(client)
 	suite.expect(client.world.player.dead and client._follow_cell().id==71 and client.views[71].position.length()<.005,"A dead owned lineage follows an existing living observer body without changing ownership")
 	client._queue_command("install",{"kind":"propulsion","angle":0})
 	suite.expect(client.commands.is_empty(),"Camera observation grants no authority to edit the observed body")

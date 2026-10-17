@@ -167,7 +167,9 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_error(400)
             return
         origin = self.headers.get("Origin")
-        expected_scheme = "https" if isinstance(self.connection, ssl.SSLSocket) else "http"
+        forwarded_tls = (self.server.trusted_proxy and ipaddress.ip_address(self.client_address[0]).is_loopback
+                         and self.headers.get("X-Forwarded-Proto", "") == "https")
+        expected_scheme = "https" if isinstance(self.connection, ssl.SSLSocket) or forwarded_tls else "http"
         if origin and (urlsplit(origin).netloc != self.headers.get("Host") or urlsplit(origin).scheme != expected_scheme):
             self.send_error(403)
             return
@@ -218,8 +220,11 @@ class Handler(SimpleHTTPRequestHandler):
             except (OSError, ConnectionError):
                 return
 
-def create(web_root, state, port=8766, world_port=8767, bind="0.0.0.0", tls_directory=None):
+def create(web_root, state, port=8766, world_port=8767, bind="0.0.0.0", tls_directory=None, trusted_proxy=False):
+    if trusted_proxy and not ipaddress.ip_address(bind).is_loopback:
+        raise ValueError("Proxy trust requires a loopback-only gateway")
     service = Gateway((bind, port), Handler)
+    service.trusted_proxy = trusted_proxy
     service.web_root = Path(web_root)
     service.state = Path(state)
     service.world_port = world_port

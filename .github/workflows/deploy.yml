@@ -1,7 +1,7 @@
 name: Primordia persistent server CD
 "on":
   push:
-    branches: [samzapo/persistent-multiplayer]
+    branches: [main]
     paths-ignore: [docs/**, README.md, AGENTS.md, .github/workflows/target-probe.yml, .github/workflows/host-telemetry.yml]
   workflow_dispatch:
     inputs:
@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   deploy:
-    if: github.repository == 'samzapo/primordia'
+    if: github.repository == 'samzapo/primordia' && github.ref == 'refs/heads/main'
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 50
     steps:
@@ -24,6 +24,7 @@ jobs:
         shell: bash
         run: |
           test "$RUNNER_NAME" = samzapo-desktop
+          test "$(hostname)" = samzapo-desktop
           hostname
           python3 - <<'PY'
           import json, pathlib, socket, subprocess
@@ -38,21 +39,59 @@ jobs:
                       found=True
               assert found
           PY
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          path: samzapo--persistent-multiplayer--${{ github.run_id }}-${{ github.run_attempt }}
-          persist-credentials: false
-          fetch-depth: 1
-      - name: Build, check GPU networking and deploy the independent service
+      - name: Name task-owned source checkout
+        id: source
         shell: bash
         env:
+          SOURCE_REF: ${{ github.ref_name }}
+        run: |
+          python3 - <<'PYTHON'
+          import os,re
+          branch=re.sub(r'[^A-Za-z0-9._-]','-',os.environ['SOURCE_REF'].replace('/','--'))
+          path=branch+'--'+os.environ['GITHUB_RUN_ID']+'-'+os.environ['GITHUB_RUN_ATTEMPT']
+          with open(os.environ['GITHUB_OUTPUT'],'a') as output:output.write('path='+path+'\n')
+          PYTHON
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: ${{ steps.source.outputs.path }}
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Build, check GPU networking and deploy the stable service
+        shell: bash
+        env:
+          PRIMORDIA_SOURCE_DIRECTORY: ${{ steps.source.outputs.path }}
           PRIMORDIA_ACCESS_KEY_HASHES: ${{ secrets.PRIMORDIA_ACCESS_KEY_HASHES }}
           PRIMORDIA_PERFORMANCE_WARNINGS: ${{ (inputs.allow_performance_warnings == true || (github.event_name == 'push' && contains(github.event.head_commit.message, '[allow-performance-warnings]'))) && '1' || '0' }}
         run: |
-          task_dir="$GITHUB_WORKSPACE/samzapo--persistent-multiplayer--$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          task_dir="$GITHUB_WORKSPACE/$PRIMORDIA_SOURCE_DIRECTORY"
           cd "$task_dir"
           pwd
-          python3 tools/deploy.py
+          python3 - <<'PYTHON'
+          import hashlib,json,os,pathlib,subprocess,sys
+          sys.path.insert(0,str(pathlib.Path.cwd()/"tools"))
+          from deploy import main
+          from experimental_instance import get_json
+          stable=pathlib.Path.home()/".local/share/primordia-deploy"
+          experimental=pathlib.Path.home()/".local/share/primordia-experimental"
+          def retained_files(root):
+              paths=[root/"access-keys.json",*(root/"state/feedback").glob("*.json")]
+              return {str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in paths if p.is_file()}
+          retained={**retained_files(stable),**retained_files(experimental)}
+          def experimental_identity():
+              value=get_json("http://127.0.0.1:8768/health")
+              return {**{k:value[k] for k in ["build","world_id","epoch","tick","accounts"]},
+                  "pid":subprocess.check_output(["systemctl","--user","show","primordia-experimental.service","-p","MainPID","--value"],text=True).strip()}
+          before=experimental_identity() if (experimental/"current").is_dir() else None
+          main()
+          assert all(pathlib.Path(p).is_file() and hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()==digest for p,digest in retained.items()),"A retained key registry or feedback report changed"
+          after=experimental_identity() if before else None
+          if before:
+              assert all(before[k]==after[k] for k in ["build","world_id","epoch","pid"]),"Experimental service identity changed"
+              assert after["tick"]>before["tick"] and after["accounts"]>=before["accounts"],"Experimental world stopped or lost accounts"
+          report={"experimental_before":before,"experimental_after":after,"retained_files_verified":len(retained)}
+          (stable/"last-promotion-preservation.json").write_text(json.dumps(report,indent=2))
+          print("STABLE_DEPLOYMENT_PRESERVATION "+json.dumps(report))
+          PYTHON
   verify:
     needs: deploy
     runs-on: [self-hosted, Linux, X64]
@@ -100,9 +139,22 @@ jobs:
               time.sleep(2)
           assert hashlib.sha256((root/'access-keys.json').read_bytes()).hexdigest()==registry_before, 'Access key registry changed during saved-world restart'
           assert resumed is not None and resumed['backend']=='gpu' and not resumed['backend_error'] and not resumed['checkpoint_error'], 'Saved world did not resume after a service restart'
+          retention=resumed.get("cell_retention",{})
+          assert retention.get("ok") and not retention.get("missing") and not retention.get("changed"),"A saved cell changed or disappeared on restart"
+          assert resumed["accounts"]>=before["accounts"] and resumed["world_id"]==before["world_id"]
+          assert not any(name in resumed.get("gpu","").lower() for name in ["llvmpipe","lavapipe","swiftshader"])
           with opener.open('https://127.0.0.1:8766/api/network',timeout=5) as response: urls=json.load(response)
           assert all(url.startswith('https://') for url in urls['home_urls'])
           report={'performance_warnings':performance_warnings,'performance_warning_rollout':os.environ.get('PRIMORDIA_PERFORMANCE_WARNINGS')=='1','home_urls':urls['home_urls'],'tls_ca_sha256':hashlib.sha256((ca.parent/'ca.crt').read_bytes()).hexdigest(),'samples':samples,'resumed_after_restart':resumed}
           print(json.dumps(report,indent=2))
           with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as output: output.write('Primordia remains on its hardware GPU after the deploy job ends.\n\n```json\n'+json.dumps(report,indent=2)+'\n```\n')
           PY
+          python3 - <<'PYTHON'
+          import json,os,pathlib,sys
+          root=pathlib.Path.home()/".local/share/primordia-experimental"
+          if (root/"current").is_dir():
+              sys.path.insert(0,str(root/"current/tools"))
+              os.environ["GITHUB_SHA"]=json.loads((root/"last-deploy.json").read_text())["revision"]
+              from verify_experimental import main
+              main(restart=False)
+          PYTHON

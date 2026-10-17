@@ -20,7 +20,7 @@ static func run(check: Callable) -> void:
 	Surface.bind(cell,11,0.03,0)
 	for i in 4:Surface.bind(cell,12,.0375,0)
 	Surface.advance(cell,.1)
-	check.call(is_equal_approx(cell.health,96.8),"A complete finite pore applies the increased membrane damage rate")
+	check.call(is_equal_approx(cell.health,98.4),"A complete finite pore applies the restored membrane damage rate")
 	cell=empty()
 	Surface.bind(cell,11,0.03,0)
 	Surface.bind(cell,12,0.0375,0)

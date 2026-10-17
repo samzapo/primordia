@@ -10,6 +10,13 @@ static func run(check: Callable) -> void:
  check.call(medium.current(Vector2.ZERO)==Vector2(11,0),"Ambient current retains its original strength while vegetation supplies local drag")
  medium.set_plants(habitat)
  check.call(Array(medium.plant_drag).max()>0,"Existing plant branches create a nonzero porous water drag")
+ var node:=Medium.index(63,19)
+ var at:=Vector2(63.5,19.5)*Medium.SIZE
+ var a: Vector2=habitat.plants[0].p+habitat.forms[0].branches[0].a
+ var b: Vector2=habitat.plants[0].p+habitat.forms[0].branches[0].b
+ var nearest: Vector2=a+(b-a)*clampf((at-a).dot(b-a)/(b-a).length_squared(),0,1)
+ var legacy_drag: float=.9*(28.0/Medium.SIZE)*clampf((14+Medium.SIZE*.55-at.distance_to(nearest))/(Medium.SIZE*.55),0,1)
+ check.call(absf(medium.plant_drag[node]-legacy_drag*.5)<.000001 and legacy_drag>0,"Measured branch drag is exactly half the previous dissipation coefficient")
  var original: PackedFloat32Array=medium.plant_drag.duplicate()
  habitat.plants[0].p.x+=Medium.WORLD.x;habitat.rebuild();medium.set_plants(habitat)
  check.call(medium.plant_drag==original,"Vegetation damping wraps consistently at pond seams")

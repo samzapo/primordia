@@ -18,7 +18,7 @@ func sync(alpha: float) -> void:
 		if game.perception=="interoception" and cell!=game._follow_cell():continue
 		var owner: Dictionary=owners[cell.lineage_id()]
 		var at: Vector2=cell.previous_position+game.Simulation.Medium.offset(cell.previous_position,cell.position)*game._cell_render_alpha(cell,alpha)
-		var center: Vector2=game.camera_screen+game.Simulation.Medium.offset(game.render_camera,at).rotated(game.camera_rotation)*game.zoom
+		var center: Vector2=game._world_screen(at)
 		var text: String=str(owner.name)
 		var width: float=font.get_string_size(text,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size).x
 		var bounds:=Rect2(Vector2(center.x-width*.5-7*pixels,center.y-cell.extent()*game.zoom-font_size-13*pixels),Vector2(width+14*pixels,font_size+10*pixels))

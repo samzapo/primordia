@@ -55,6 +55,63 @@ const RELEASES=[
 	"footer":"Your cell and its progress carry on between updates.",
 	"button":"Back to the pond",
 },
+{
+	"id":"2026-10-16-experimental-pond",
+	"title":"What’s new in the pond",
+	"items":[
+		"The experimental pond is a separate place to try new features.",
+		"Your cells and progress here stay separate from the main pond.",
+	],
+	"footer":"Your cell and its progress carry on between updates.",
+	"button":"Back to the pond",
+},
+{
+	"id":"2026-10-16-pond-feedback",
+	"title":"What’s new in the pond",
+	"items":[
+		"Start a new lineage from Pause. Your former family stays in the pond under computer control.",
+		"Toxin glands and assembled pores are less deadly.",
+		"Returning from a cell’s interior keeps your zoom within the pond view limits.",
+		"Following, recentering and switching cells now glide smoothly into place.",
+		"Gentle eddies stir the water. Gold marks only the water right around their sources.",
+		"Pore-forming particles now build visibly from a membrane tag into a complete pore.",
+	],
+	"footer":"Your cell and its progress carry on between updates.",
+	"button":"Back to the pond",
+},
+{
+	"id":"2026-10-16-more-pond-currents",
+	"title":"What’s new in the pond",
+	"items":[
+		"Spiral eddies and directional currents now travel through the pond in short bursts, with at least one always active.",
+		"Plants still soften passing currents, with half their previous damping.",
+		"Gold still marks only the water near a current source.",
+	],
+	"footer":"Your cell and its progress carry on between updates.",
+	"button":"Back to the pond",
+},
+{
+	"id":"2026-10-17-camera-particles",
+	"title":"What’s new in the pond",
+	"items":[
+		"Nearby particles arrive ahead of your camera, reducing empty patches while you explore.",
+		"Your view keeps updating while other parts of the pond prepare.",
+	],
+	"footer":"Your cell and its progress carry on between updates.",
+	"button":"Back to the pond",
+},
+{
+	"id":"2026-10-17-pond-exploration",
+	"title":"What’s new in the pond",
+	"items":[
+		"Explore more smoothly: nearby particles arrive ahead of your camera, and Follow glides into place.",
+		"Moving eddies stir the pond, with gold marking their sources and plants softening their flow.",
+		"Pores build visibly in stages, and toxin glands and pores are less deadly.",
+		"Pause lets you start a new lineage while your former family carries on in the pond.",
+	],
+	"footer":"Your cell and its progress carry on between updates.",
+	"button":"Back to the pond",
+},
 ]
 const CURRENT=RELEASES[-1]
 static func seen_index(account: Dictionary) -> int:

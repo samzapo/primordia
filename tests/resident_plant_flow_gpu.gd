@@ -35,6 +35,17 @@ func run() -> void:
    check(sim.fluid.plant_drag.size()==2560,"Resident loop builds its plant drag cache without a CPU gameplay step")
    check(sim.fluid.velocity[strongest].distance_to(expected)<.0001,"Actual "+("native" if native_field else "reference")+" water decays by the same planted-node drag in "+("visible" if visible else "offscreen")+" resident simulation")
  check(habitat.particles_permeable,"Vegetation drag preserves permeable chemical transport")
+ sim.native_fluid=true;sim.fluid.driven=true;sim.time=913.5;sim.background_field_clock=0
+ sim.camera_views=[];sim.fluid.velocity.fill(Vector2.ZERO);sim.fluid.induced_key=""
+ sim.step(.25)
+ var source_index: int=-1;var source_gain:=0.0
+ for i in sim.fluid.tide.size():
+  var at:=Vector2(i%Sim.Medium.COLS+.5,int(i/Sim.Medium.COLS)+.5)*Sim.Medium.SIZE
+  if Sim.Medium.offset(sim.player.position,at).length()<300:continue
+  var gain: float=(sim.fluid.tide[i]-sim.fluid.current(at)).length()
+  if gain>source_gain:source_gain=gain;source_index=i
+ var expected: Vector2=sim.fluid.tide[source_index]*(1-exp(-.25*.12))*exp(-sim.fluid.plant_drag[source_index]*.25)
+ check(source_gain>.1 and sim.fluid.velocity[source_index].distance_to(expected)<.0001,"Actual offscreen resident water receives weak induced forcing through the ordinary damped solver")
  controller.gpu.close();await controller.gpu.closed
  sim.resident=null
  print("RESIDENT PLANT FLOW: %d assertions, %d failures" % [assertions,failures]);quit(0 if failures==0 else 1)

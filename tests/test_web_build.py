@@ -33,6 +33,12 @@ class WebBuildTests(unittest.TestCase):
             self.assertEqual((target / "assets/fonts/OFL.txt").read_text(), "OFL.txt")
             self.assertFalse((target / "assets/fonts/ComicNeue-Regular.ttf.import").exists())
             self.assertIn('"gl_compatibility"', (target / "project.godot").read_text())
+            (source / "project.godot").write_text('[application]'+chr(10)+'config/name="Primordia"'+chr(10))
+            experimental=prepare_web.prepare(source,"experimental")
+            config=(experimental/"project.godot").read_text()
+            self.assertIn('config/custom_user_dir_name="primordia-experimental"',config)
+            self.assertIn('config/use_custom_user_dir=true',config)
+            self.assertNotIn("primordia-experimental",(source/"project.godot").read_text())
 
     def run_build(self, fail_stage=0, message="", engine_status=0):
         with tempfile.TemporaryDirectory(prefix="primordia-web-build-") as directory:

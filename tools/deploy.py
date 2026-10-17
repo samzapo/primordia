@@ -271,16 +271,18 @@ def main():
     validation = subprocess.run(["systemd-analyze", "--user", "verify", str(validation_unit)], capture_output=True, text=True)
     if validation.returncode or str(validation_unit) in validation.stderr:
         raise RuntimeError("Candidate systemd unit did not validate: " + validation.stderr)
+    # Candidate fixtures use isolated storage and finish while the live ponds
+    # keep running. Shared-GPU timing observations may warn only when authorized;
+    # functional, hardware and retention checks always remain hard failures.
+    affinity_options = {"preexec_fn": lambda: os.sched_setaffinity(0, authority_cpus)} if authority_cpus else {}
+    run("bash", str(candidate / "tools/test_network.sh"), "gpu", env=environment, observe=True, **affinity_options)
+    if (state / "health.json").exists():
+        previous = json.loads((state / "health.json").read_text())
     migration_backup = None
     try:
         subprocess.run(["systemctl", "--user", "stop", UNIT], check=bool(old))
         if old and previous:
             migration_backup = retain_model_boundary(state, root, model_boundary_prefix(previous) or "before-update-")
-        # One GPU authority is the deployed workload. Concurrent live/candidate
-        # worlds distort the cadence gate. All builds finish before this short,
-        # checkpointed validation outage; any failure restores the old service.
-        affinity_options = {"preexec_fn": lambda: os.sched_setaffinity(0, authority_cpus)} if authority_cpus else {}
-        run("bash", str(candidate / "tools/test_network.sh"), "gpu", env=environment, observe=True, **affinity_options)
         staged_unit = unit.with_suffix(".service.new")
         staged_unit.write_text(unit_text)
         staged_unit.replace(unit)

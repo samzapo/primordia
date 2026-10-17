@@ -61,6 +61,18 @@
         "title": "Pause and personalize",
         "text": "Pause/settings contains Player name, private bug reports and feature requests, Gameplay, Mechanics, music volume, text size, visual options and fullscreen. Pausing holds exactly what you see while the shared pond continues. Resume returns you to the live pond.",
         "sources": []
+      },
+      {
+        "id": "new_lineage",
+        "title": "Start a new lineage",
+        "text": "In Pause, choose Start new lineage and confirm. Your former family stays alive in the pond under computer control; you begin with a new cell. This does not reset the shared pond. Wait a minute before starting another.",
+        "sources": []
+      },
+      {
+        "id": "camera_transitions",
+        "title": "Smooth camera changes",
+        "text": "Following, recentering, changing views and switching family members glide into place. Pause holds the camera; direct camera gestures stay responsive. Nearby water is prepared ahead of your view to reduce empty patches while exploring.",
+        "sources": []
       }
     ],
     "touch": [
@@ -73,7 +85,7 @@
       {
         "id": "follow",
         "title": "Follow and look inside",
-        "text": "Tap Follow to center on your cell. Tap Interoception to look inside, or Exteroception to return to the pond. Inside, gestures stay relative to your cell and you can zoom much closer.",
+        "text": "Tap Follow to center on your cell. Tap Interoception to look inside, or Exteroception to return to the pond. Inside, gestures stay relative to your cell and you can zoom much closer. Returning outside keeps your zoom within the pond view limits.",
         "sources": []
       },
       {
@@ -141,7 +153,7 @@
       {
         "id": "keyboard",
         "title": "Build with the keyboard",
-        "text": "[ and ] cycle cell targets; Enter opens the selected target or places the held organelle. Arrow keys adjust choices or membrane placement. Number keys and F / C / V select organelle types.",
+        "text": "[ and ] cycle cell targets; Enter opens the selected target or places the held organelle. Arrow keys adjust choices or membrane placement. Number keys and F / C / V select organelle types. R opens the new-lineage confirmation.",
         "sources": []
       },
       {
@@ -356,7 +368,7 @@
         {
           "id": "pore_assembly",
           "title": "Tag + membrane + four pore parts → a damaging pore",
-          "text": "Surface tags attach locally; pore parts build up on the tag. Four make an active pore. Antitoxin can cap an unfinished assembly, while repair helps remove an active pore. The four-part recipe is fictional.",
+          "text": "Surface tags attach locally. Pore parts land at the same small patch and build from a curved piece through a crescent and open ring. Four complete an active pore on the outside of the membrane. Antitoxin can cap an unfinished assembly, while repair helps remove an active pore. The four-part recipe is fictional.",
           "sources": [
             {
               "title": "Structure of a membrane pore",
@@ -633,7 +645,7 @@
         {
           "id": "continuity",
           "title": "The pond continues",
-          "text": "Cells keep living while players are away. Updates preserve saved cells and accounts. If your lineage is lost, a new cell brings you back; the pond keeps a minimum of 15 living cells and restarts if completely empty. These are game rules.",
+          "text": "Cells keep living while players are away. Updates preserve saved cells and accounts. The main and experimental ponds have separate cells and progress. If your lineage is lost, a new cell brings you back; the pond keeps a minimum of 15 living cells and restarts if completely empty. These are game rules.",
           "sources": []
         },
         {
@@ -700,6 +712,17 @@
           "title": "Identity and music",
           "text": "Names appear above player lineages and brighten while their owner is connected. Music responds to the world, but muting it does not change the cell’s biology.",
           "sources": []
+        },
+        {
+          "id": "induced_currents",
+          "title": "Gentle eddies and currents",
+          "text": "Spiral eddies and directional currents move around the pond at 10–50 µm/s. Each lasts 1–20 seconds and spans 30–100 µm. Events overlap so there is always one stirring the water. Plants soften passing currents, with half their previous damping. A short golden stretch marks water immediately around an induced current source; ordinary trails keep their usual color. These are simplified game currents.",
+          "sources": [
+            {
+              "title": "External forces that drive water currents",
+              "url": "https://oceanexplorer.noaa.gov/ocean-fact/currents/"
+            }
+          ]
         }
       ]
     }

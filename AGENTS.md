@@ -429,3 +429,31 @@ and confine animated caustics to lit water. Use actual default-art pixels in
 portrait and dim conditions; a uniform diagnostic/daytime screenshot alone
 does not establish visual acceptance. Preserve pause/toggle, acid readability,
 saved world/cells and the rendering-speed benchmark hold.
+
+
+October16 stable/experimental continuation: main is the default and first stable
+source7df04de. The owner authorizes a second game instance on the same machine
+and HTTPS port under /experimental/. Read docs/deployment.md. Keep its process,
+ports8768/8769 (loopback only), root/state/accounts/feedback/browser IndexedDB
+and CD independent from stable. Reuse existing key hashes without copying live
+cells/checkpoints/accounts/reports. Experimental deploys must never stop stable;
+verify stable PID/build/pond/epoch/registry plus continued time. Never auto-run
+a privileged helper or resume stopped ingress/router helpers. Caddy route
+updates use conditional ETags, preserve existing configuration, and report any
+remaining one-time root-owned boot-file install. No new schedules/FPS campaigns.
+
+October16 approved R1–R5: read docs/REVISION_57.md. Stage on experimental first. Multiplayer new-lineage changes ownership only after explicit confirmation and the ordinary durable sequenced receipt; preserve old family alive/anatomy/history/account/key/pond, saved cooldown and NPC eligibility. Toxin75/pore16 restore pre-buff damage. Perception exits retain zoom with destination clamping. Induced currents are weak seed/time-derived external tide targets shared by all solver/activity paths; preserve plant drag, physical velocities, ecology RNG and full trail history. Gold is restricted to water immediately around source centers, never whole trails or all currents. Draw actual bound pore material outside the real membrane; no invented particles, hit targets or damage. Update guide/release notices, validate actual pixels and keep broad FPS benchmarks held.
+
+October16 camera correction: discrete visible camera relocations ease smoothly, including follow/recenter, family/lineage switch, perception, build framing and live resume. Keep direct gestures exact and Pause frozen. Use one displayed camera pose for world transforms, inverse pointer mapping, inspector headings and network camera interests; do not add lag to ordinary snapshot tracking. Initial unseen sign-in may initialize directly. See Revision57 and camera_motion.gd.
+
+October16 induced-current correction: owner reports sources too rare. Thirty-two staggered spiral/directional event lanes leave an event active at all times. Owner specifies30–100µm diameter,10–50µm/s migration,1–20second lifetime; gold stays source-local. The owner explicitly halves plant dissipation (coefficient and cap), retaining plant geometry and particle permeability. Blend overlapping targets, never reset saved water/cells or gate sources on cameras. See Revision57.
+
+October17 camera particle delivery: owner reports empty water briefly after moving the camera. Read Revision58. Gather a bounded border of real resident packets, retain captured coverage through asynchronous GPU gather/encoding, and keep per-camera visible counts distinct from buffered records. Prioritize actual visible chunks and gate publication by each observer’s prepared coverage, never global unrelated admission/eviction queues. Fixed server overscan stays independent of zoom and never adds local client chemistry, particles or motion prediction. Preserve ACK backpressure, request limits, pause/perception/death and saved cells/keys. Experimental first; no broad FPS campaign.
+
+
+October17 stable promotion: the owner explicitly authorizes squash promotion of
+the tested experimental update into main and stable deployment. Stable CD now
+follows main; feature branches remain experimental until explicitly promoted.
+Preserve each instance's independent saved cells, accounts, five-key registry and
+private feedback. Check the experimental process/pond identity across stable
+updates as well as the stable all-cell retention and saved-world restart.

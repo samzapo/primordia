@@ -4,6 +4,7 @@ project_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$project_dir/tools/godot.sh"
 godot_bin="$(resolve_godot)"
 export PRIMORDIA_INVITE=bounded-infrastructure-fixture
+python3 "$project_dir/tests/test_experimental.py"
 report_file="$(mktemp "${TMPDIR:-/tmp}/primordia-network.XXXXXX")"
 trap 'rm -f -- "$report_file"; if [[ -n ${recovery_state:-} ]]; then rm -rf -- "$recovery_state"; fi' EXIT
 "$godot_bin" --headless --path "$project_dir" --script tests/player_help_run.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"
@@ -42,6 +43,16 @@ for script in anatomy_access_run; do
   ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
   grep -Eq 'ANATOMY ACCESS: [0-9]+ assertions, 0 failures' "$report_file"
 done
+for script in induced_currents_run lineage_start_network camera_motion_run; do
+  "$godot_bin" --headless --path "$project_dir" --script "tests/$script.gd" -- --particle-backend=cpu 2>&1 | tee "$report_file"
+  ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
+  grep -Eq '(INDUCED CURRENTS|LINEAGE START NETWORK|CAMERA MOTION): [0-9]+ assertions, 0 failures' "$report_file"
+done
+for script in camera_delivery_run camera_streaming_network; do
+  "$godot_bin" --headless --path "$project_dir" --script "tests/$script.gd" -- --particle-backend=cpu 2>&1 | tee "$report_file"
+  ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
+  grep -Eq '(CAMERA DELIVERY|CAMERA STREAMING NETWORK): [0-9]+ assertions, 0 failures' "$report_file"
+done
 for script in light_field snapshot_playback network_state network_live; do
   "$godot_bin" --headless --path "$project_dir" --script "tests/$script.gd" 2>&1 | tee "$report_file"
   ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
@@ -67,6 +78,9 @@ PRIMORDIA_RESTART_TEST_STATE="$recovery_state" "$godot_bin" --headless --path "$
 grep -Eq 'POND RESTART NETWORK: [0-9]+ assertions, 0 failures' "$report_file"
 rm -rf -- "$recovery_state"
 if [[ "${1:-}" == gpu ]]; then
+  xvfb-run -a -s '-screen 0 1280x1000x24 -nolisten tcp' "$godot_bin" --path "$project_dir" --rendering-method mobile --rendering-driver vulkan --gpu-index 0 --script tests/feedback_visual_gpu.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"
+  ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
+  grep -Eq 'FEEDBACK VISUAL GPU: [0-9]+ assertions, 0 failures' "$report_file"
   xvfb-run -a -s '-screen 0 1280x720x24 -nolisten tcp' "$godot_bin" --path "$project_dir" --rendering-method mobile --rendering-driver vulkan --gpu-index 0 --script tests/particle_budget_gpu.gd 2>&1 | tee "$report_file"
   ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
   grep -Eq 'PARTICLE BUDGET GPU: [0-9]+ assertions, 0 failures' "$report_file"
