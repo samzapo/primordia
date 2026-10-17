@@ -251,7 +251,7 @@ func update_lens(dt: float, screen: Vector2, alpha: float, allowed: bool) -> voi
 			vacuole_material.set_shader_parameter("opacity",lens_amount)
 		glyph.texture = Art.texture(hovered.kind)
 		glyph.position = lens_center+(hovered.screen-lens_center)*magnification
-		glyph.rotation = hovered.angle+game.camera_rotation
+		glyph.rotation = hovered.angle+game.render_rotation
 		glyph.scale = Vector2.ONE*hovered.radius*2*magnification/96
 		glyph.modulate.a = lens_amount
 		glyph.material.set_shader_parameter("lens_center",lens_center/get_viewport_rect().size)

@@ -137,6 +137,20 @@ def main():
     result=fixture_log.read_text();print(result,flush=True)
     if re.search(r"SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:|returned to CPU|llvmpipe|lavapipe|swiftshader",result,re.M|re.I) or not re.search(r"NETWORK LIVE: \d+ assertions, 0 failures",result) or "backend=gpu" not in result:
         raise RuntimeError("Experimental GPU protocol fixture failed")
+    # Focused feature acceptance on the real target; no FPS campaign or live reports.
+    for script,flags,marker in [
+        ("lineage_start_network",["--gpu"],"LINEAGE START NETWORK"),
+        ("feedback_visual_gpu",["--particle-backend=cpu"],"FEEDBACK VISUAL GPU"),
+    ]:
+        path=root/(script+"-fixture.log")
+        with path.open("w") as output:
+            call("timeout","120s","xvfb-run","-a","-s","-screen 0 1280x1000x24 -nolisten tcp",str(godot),
+                "--path",str(candidate),"--rendering-method","mobile","--rendering-driver","vulkan","--gpu-index","0",
+                "--script","tests/"+script+".gd","--",*flags,
+                env={**environment,"PRIMORDIA_INVITE":"experimental-private-fixture"},stdout=output,stderr=subprocess.STDOUT)
+        report=path.read_text();print(report,flush=True)
+        if re.search(r"SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:|returned to CPU|llvmpipe|lavapipe|swiftshader",report,re.M|re.I) or not re.search(marker+r": [0-9]+ assertions, 0 failures",report):
+            raise RuntimeError("Experimental feature fixture failed: "+script)
     guard(stable,baseline)
     state=root/"state";state.mkdir(mode=0o700,exist_ok=True)
     registry=root/"access-keys.json"

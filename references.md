@@ -502,3 +502,9 @@ probability L/N, each species' expected surviving count is its original count
 times L/N. Primordia applies this artificial computational outflow to all exterior
 owners; it is not a biological decay-rate measurement or a calibrated dilution
 mechanism. Removed material and food potential leave the modeled inventory.
+
+## Gentle induced currents and visible pore assembly (Revision 57)
+
+[NOAA Ocean Exploration: What causes ocean currents?](https://oceanexplorer.noaa.gov/ocean-fact/currents/) describes external wind, density and gravity forcing of real water. This motivates continuing external forcing alongside the existing authored tide, rather than resetting a settled velocity field. The six seeded local eddies, two-minute envelopes, strength/radius ranges and source-local gold are explicit game/presentation choices, not measured microscopic currents, a weather reconstruction or a new turbulence solver. Existing plant drag still dissipates motion; chemical packets and cells respond to the same actual water.
+
+The membrane-pore structure source in Revision 43 above motivates the same existing local assembly. Visible tags and four attached subunit glyphs illustrate retained surface_complexes; they are not extra particles or additional damage. Halving the earlier toxin/pore damage buff and choosing a new lineage are balance/interface choices, not biological claims.

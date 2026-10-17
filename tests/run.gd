@@ -288,9 +288,9 @@ func _test_propulsion_and_toxins() -> void:
 	prey.activity = 1
 	sim.particles[-1].p = prey.position
 	sim._toxin_contacts()
-	expect(is_equal_approx(prey.health,77.5) and not sim.particles[-1].alive,"Toxin contact damages a cell once")
+	expect(is_equal_approx(prey.health,88.75) and not sim.particles[-1].alive,"Toxin contact damages a cell once")
 	sim._toxin_contacts()
-	expect(is_equal_approx(prey.health,77.5),"Consumed toxin cannot apply damage twice")
+	expect(is_equal_approx(prey.health,88.75),"Consumed toxin cannot apply damage twice")
 
 func _test_membrane() -> void:
 	var membrane = Membrane.new(47)

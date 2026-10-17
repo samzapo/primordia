@@ -640,6 +640,7 @@ func _lineage() -> void:
 	var learned: Array = sim.evolution.learned.duplicate()
 	scene.music.frame_cursor = 137123
 	var score_clock: int = scene.music.frame_cursor
+	var camera_before_death: Vector2=scene.render_camera
 	sim.player.health = 0
 	scene._physics_process(DT)
 	scene._process(DT)
@@ -647,13 +648,15 @@ func _lineage() -> void:
 	expect(sim.evolution.points == points+2 and sim.evolution.learned == learned,"Scene handoff keeps the expedition economy")
 	expect(scene.music.frame_cursor >= score_clock,"Succession does not reset the musical transport")
 	var death_at: Vector2 = sim.death_bursts[-1].at
-	expect(scene.death_focus_age < 0.1 and Sim.Medium.offset(scene.render_camera,death_at).length() < 0.001,"The camera holds the original death site after immediate physiological succession")
+	expect(scene.death_focus_age < 0.1 and Sim.Medium.offset(scene.render_camera,camera_before_death).length() < 0.001,"Rupture relocation begins from the current view without a camera jump")
 	expect(not scene.death_view.bursts.is_empty() and not scene.views.has(identity),"The dead membrane becomes visible rupture fragments while real lysis packets remain")
 	var biological_state: Array = [sim.time,sim.rng.state,sim.ecology_rng.state,sim.background_rng.state,hash(sim.particles)]
 	var before_frame: int = scene.music.frame_cursor
 	scene._process(0.5)
-	expect(Sim.Medium.offset(scene.render_camera,death_at).length() < 0.001,"Death-site framing stays fixed during the rupture hold")
-	scene._process(0.85)
+	expect(Sim.Medium.offset(scene.render_camera,death_at).length() <= Sim.Medium.offset(camera_before_death,death_at).length()+.001,"Camera eases toward the original death site while the rupture remains visible")
+	scene._process(.17)
+	expect(Sim.Medium.offset(scene.render_camera,death_at).length()<.001,"Camera arrives at the death site before the successor handoff begins")
+	scene._process(0.68)
 	expect(scene.death_focus_age > 1.15 and scene.death_focus_age < 1.8,"Camera handoff starts only after the visible death burst")
 	scene._process(0.6)
 	expect(Sim.Medium.offset(scene.render_camera,sim.player.position).length() < 0.001 and scene.death_view.bursts.is_empty(),"The camera reaches its successor and expired fragments clear")

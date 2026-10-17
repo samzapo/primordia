@@ -164,10 +164,6 @@ func _draw() -> void:
 				if highlight.size() > 1: draw_polyline(highlight,palette[4],cell.radius*0.068,true)
 				highlight.clear()
 		if highlight.size() > 1: draw_polyline(highlight,palette[4],cell.radius*0.068,true)
-	for complex in cell.surface_complexes:
-		var at: Vector2 = cell.local_point(complex.a)
-		var color := Color("ffdd80") if complex.units>=4 else Color("ff985c")
-		draw_arc(at,4+complex.units,0,TAU*maxf(0.2,complex.units/4.0),16,color,1.8,true)
 	for link in ([] if simple_view else cell.membrane.skeleton.links):
 		var a: Vector2 = cell.membrane.skeleton.point(link.a,cell.membrane)
 		var b: Vector2 = cell.membrane.skeleton.point(link.b,cell.membrane)
@@ -245,6 +241,8 @@ func _draw_organs() -> void:
 		if organ.hp < organ.max_hp:
 			appendages.draw_arc(at,19*organ.scale,-PI/2,-PI/2+TAU*organ.hp/organ.max_hp,24,Color("fc8c90"),2,true)
 
+	for complex in cell.surface_complexes:
+		preload("res://scripts/pore_art.gd").draw(appendages,cell,complex)
 	if game.frame_trace != null: game.frame_trace.work("organ_draw_commands",Time.get_ticks_usec()-mark)
 
 func _draw_sound_waves() -> void:

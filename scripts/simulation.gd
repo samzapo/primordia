@@ -531,6 +531,7 @@ func _emit_material(kind: int, at: Vector2, amount: float, motion: Vector2 = Vec
 
 func step(dt: float) -> void:
 	if remote_client: return
+	preload("res://scripts/induced_currents.gd").update(self)
 	if resident != null:
 		var shown_half:=view_half
 		var shown_camera:=camera_position

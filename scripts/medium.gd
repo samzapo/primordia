@@ -12,6 +12,7 @@ const ACTIVE_FADE := 64.0
 var velocity := PackedVector2Array()
 var activity := PackedFloat32Array()
 var driven := true
+var induced_key := "" # Derived target cache; never a retained physical velocity.
 # Only the serial coarse cell integrator may couple to distant cached nodes.
 var global_coupling := false
 var local_suction := true

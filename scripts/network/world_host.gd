@@ -528,13 +528,15 @@ func _apply(id: int,message: Dictionary) -> void:
 		account.sequence=seq;result.server_sequence=seq;_retain_receipt(account,seq,result)
 		_send(peer,result);return
 	var cell=_selected(account)
-	if cell.dead or cell.lineage_id()!=account.root:
+	if (cell.dead and message.get("action","")!="start_lineage") or cell.lineage_id()!=account.root:
 		account.sequence=seq;result.server_sequence=seq;_retain_receipt(account,seq,result);_send(peer,result);return
 	if not message.get("args",{}) is Dictionary: _send(peer,result);return
 	var prior_player=world.player;var prior_lineage=world.lineage;var prior_evolution=world.evolution
 	world.player=cell;world.lineage=account.lineage;world.evolution=account.evolution
-	var outcome=world.edit(str(message.get("action","")),message.get("args",{}))
+	var outcome=_start_lineage(account,message.get("args",{})) if message.get("action","")=="start_lineage" else world.edit(str(message.get("action","")),message.get("args",{}))
 	account.selected=world.player.id;account.current=world.player
+	if outcome is bool and outcome and message.get("action","")=="start_lineage" and prior_player==cell:
+		prior_player=world.player;prior_lineage=account.lineage;prior_evolution=account.evolution
 	world.player=prior_player;world.lineage=prior_lineage;world.evolution=prior_evolution
 	var ok: bool=outcome=="" if outcome is String else outcome>=0 if outcome is int else outcome==true
 	result.ok=ok;result.message="Applied" if ok else str(outcome) if outcome is String else "Cannot apply: check tissue, AP, placement and template"
@@ -545,6 +547,22 @@ func _apply(id: int,message: Dictionary) -> void:
 	# A successful edit and its deduplication receipt become durable together.
 	if ok and not checkpoint(): _fatal(store.last_error); return
 	_send(peer,result)
+
+func _start_lineage(account: Dictionary,args: Dictionary):
+	if not args.get("confirmed") is bool or not args.confirmed:return "Confirm that your former family will remain under computer control."
+	if world.time<float(account.get("new_lineage_after",0)):return "Please wait a minute before starting another lineage."
+	var founder=Population.introduce(world,true)
+	if founder==null:return "No safe space for a new cell yet. Your current family is unchanged."
+	var previous_root: int=account.root
+	Population.enroll(world,account,founder)
+	# _apply owns the single edit increment and durable deduplication receipt.
+	account.edit-=1
+	for member in world.cells:
+		if member.lineage_id()==previous_root and member.role=="player":member.role="grazer"
+	world.player=founder;world.lineage=account.lineage;world.evolution=account.evolution
+	account.new_lineage_after=world.time+60
+	introduced_cells+=1;lineage_restarts+=1
+	return true
 
 func _retain_receipt(account: Dictionary,seq: int,result: Dictionary) -> void:
 	account.receipts[seq]=result

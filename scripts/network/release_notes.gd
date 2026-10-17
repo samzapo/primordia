@@ -65,6 +65,20 @@ const RELEASES=[
 	"footer":"Your cell and its progress carry on between updates.",
 	"button":"Back to the pond",
 },
+{
+	"id":"2026-10-16-pond-feedback",
+	"title":"What’s new in the pond",
+	"items":[
+		"Start a new lineage from Pause. Your former family stays in the pond under computer control.",
+		"Toxin glands and assembled pores are less deadly.",
+		"Returning from a cell’s interior keeps your zoom within the pond view limits.",
+		"Following, recentering and switching cells now glide smoothly into place.",
+		"Gentle eddies stir the water. Gold marks only the water right around their sources.",
+		"Pore-forming particles now build visibly from a membrane tag into a complete pore.",
+	],
+	"footer":"Your cell and its progress carry on between updates.",
+	"button":"Back to the pond",
+},
 ]
 const CURRENT=RELEASES[-1]
 static func seen_index(account: Dictionary) -> int:

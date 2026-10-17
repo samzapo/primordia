@@ -19,12 +19,19 @@ func run() -> void:
  game.world.cells=[cell,sibling,unowned];game.world.player=cell
  game.lineage_names=[{"root":3,"name":"Sam 🌱","online":true}]
  game.camera_initialized=true;game.camera_locked=true;game.camera_offset=Vector2.ZERO
+ # This fixture replaces the unseen login scene, as the first ready snapshot does.
+ game.camera_has_pose=false;game.camera_followed_id=-1;game.camera_motion.cancel()
  game._update_world(1)
  check(game.nameplates.items.size()==2 and game.nameplates.items.all(func(item):return item.name=="Sam 🌱" and item.online),"Every visible owned sibling carries the owner's highlighted name")
  check(game.nameplates.items.all(func(item):return item.bounds.end.y<game.camera_screen.y),"Nameplates sit above cells at constant readable size")
+ if game.nameplates.items.is_empty():game.queue_free();quit(1);return
  var font_size: int=game.nameplates.items[0].font_size
  game.manual_zoom=2;game._update_world(1)
  check(game.nameplates.items[0].font_size==font_size,"Camera zoom changes cell size without shrinking the nameplate")
+ game.render_rotation=.6;game.camera_rotation=1.2;game.nameplates.sync(1)
+ var sibling_label: Dictionary=game.nameplates.items.filter(func(item):return item.cell==sibling.id)[0]
+ check(absf(sibling_label.bounds.get_center().x-game._world_screen(sibling.position).x)<.01,"Nameplates follow the displayed camera during a rotation transition")
+ game.render_rotation=0;game.camera_rotation=0
  game.lineage_names[0].online=false;game._update_world(1)
  check(game.nameplates.items.all(func(item):return not item.online),"Offline owners retain their name with dim styling")
  game.perception="interoception";game._update_world(1)

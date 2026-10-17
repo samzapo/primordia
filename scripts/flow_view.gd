@@ -149,5 +149,9 @@ func sync(world, camera: Vector2, half_view: Vector2, zoom: float, show_streams:
 		view.material.set_shader_parameter("camera",camera)
 		view.material.set_shader_parameter("clock",world.time)
 		view.material.set_shader_parameter("field_mix",clampf((world.time-last_field_time)*15.0,0,1))
+	var sources:=PackedVector4Array()
+	for source in preload("res://scripts/induced_currents.gd").sources(world.seed_value,world.time):
+		sources.append(Vector4(source.p.x,source.p.y,source.radius*.22,source.envelope))
+	streamers.material.set_shader_parameter("eddy_sources",sources)
 	streamers.material.set_shader_parameter("zoom",zoom)
 	prepare_usec = Time.get_ticks_usec()-started
