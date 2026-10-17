@@ -579,3 +579,8 @@ a one-second delay falsely failed after successful shutdown. Finish interrupted
 standby from the owned stopped release and matching saved health without starting
 it. Standby uses its task-owned source checkout, permitting a scoped repair
 against an explicitly supplied exact deployed stable revision.
+
+Standby user-bus correction: user-service queries must supply XDG_RUNTIME_DIR
+inside the query helper, including imported/read-only verification. An environment
+set in an earlier Python subprocess does not propagate to the next process.
+Test the imported helper with an empty environment as well as an existing path.
