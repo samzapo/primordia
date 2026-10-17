@@ -492,7 +492,7 @@ func _snapshot(message: Dictionary) -> void:
 	world.active_particles=packets.size()
 	if network_particles!=null: network_particles.prepare(packets,world.cells)
 	if OS.has_feature("web"):
-		JavaScriptBridge.eval("window.primordiaDiagnostics="+JSON.stringify({"playback":playback.diagnostics(),"connected":connected,"tick":world.revision,"world_id":message.world_id,"packets":packets.size(),"cells":world.cells.size(),"time":world.time,"player_name":player_name,"nameplates":nameplates.items.map(func(item):return {"cell":item.cell,"name":item.name,"online":item.online})}))
+		JavaScriptBridge.eval("window.primordiaDiagnostics="+JSON.stringify({"playback":playback.diagnostics(),"connected":connected,"tick":world.revision,"world_id":message.world_id,"packets":packets.size(),"camera_packets":server_census.get("camera_particles",packets.size()),"buffered_packets":server_census.get("buffered_particles",packets.size()),"coverage":str(message.get("coverage",Vector4.ZERO)),"cells":world.cells.size(),"time":world.time,"player_name":player_name,"nameplates":nameplates.items.map(func(item):return {"cell":item.cell,"name":item.name,"online":item.online})}))
 
 	_show_next_update()
 

@@ -142,6 +142,7 @@ def main():
         ("lineage_start_network",["--gpu"],"LINEAGE START NETWORK"),
         ("feedback_visual_gpu",["--particle-backend=cpu"],"FEEDBACK VISUAL GPU"),
         ("resident_plant_flow_gpu",[],"RESIDENT PLANT FLOW"),
+        ("camera_streaming_network",["--gpu"],"CAMERA STREAMING NETWORK"),
     ]:
         path=root/(script+"-fixture.log")
         with path.open("w") as output:

@@ -7,6 +7,7 @@ const Protocol = preload("res://scripts/network/protocol.gd")
 const GPU = preload("res://scripts/resident_ecology.gd")
 const Population = preload("res://scripts/network/pond_population.gd")
 const MAX_PLAYERS := 8
+const Delivery=preload("res://scripts/network/camera_delivery.gd")
 var world
 var accounts: Dictionary = {}
 const ReleaseNotes=preload("res://scripts/network/release_notes.gd")
@@ -243,6 +244,7 @@ func _physics_process(dt: float) -> void:
 
 func _set_views() -> void:
 	world.camera_views.clear();world.interoceptive_cells.clear()
+	if world.resident!=null and world.resident.streaming!=null:world.resident.streaming.priority_views.clear()
 	var now := Time.get_ticks_msec()
 	var metered: Dictionary={}
 	for peer in peers.values():
@@ -254,7 +256,9 @@ func _set_views() -> void:
 			var focus=_focus(peer)
 			if focus!=null:metered[focus.id]=true
 			if focus!=null and Sim.Medium.visibility(focus.position,Vector2(v.x,v.y),Vector2(v.z,v.w)+Vector2.ONE*focus.extent())>0:world.interoceptive_cells[focus.id]=true
-		else:world.camera_views.append(Vector4(v.x,v.y,peer.detail.x,peer.detail.y))
+		else:
+			world.camera_views.append(Vector4(v.x,v.y,peer.detail.x,peer.detail.y))
+			if world.resident!=null and world.resident.streaming!=null:world.resident.streaming.priority_views.append(v)
 	for cell in world.cells:
 		if metered.has(cell.id) and not cell.energy_budget.enabled:
 			cell.energy_budget.samples.clear();cell.energy_budget.started_at=cell.age
@@ -643,20 +647,21 @@ func _publish() -> void:
 			_send_snapshot(peer,PackedByteArray())
 	if world.camera_views.is_empty() or not pending_frame.is_empty(): return
 	if world.resident!=null:
-		if world.resident.streaming.queue_depth>0 or world.resident.streaming.eviction_deferred>0: return
 		pending_frame={"frames":{}}
 		var regions: Array=[]
 		for id in peers:
 			var peer: Dictionary=peers[id]
 			if peer.account=="" or peer.view==null or peer.view_tick>=world.revision or peer.get("perception","exteroception")!="exteroception" or peer.get("awaiting_snapshot",0)>0 or peer.get("encoding_snapshot",0)>0: continue
-			pending_frame.frames[id]={"view":peer.view,"frame":_frame(peer)}
-			regions.append(peer.view)
+			var coverage:=_delivery_coverage(peer)
+			if coverage==Vector4.ZERO:continue
+			pending_frame.frames[id]={"view":coverage,"frame":_frame(peer,coverage)}
+			regions.append(coverage)
 		if regions.is_empty() or not world.resident.gpu.publish_views(regions): pending_frame.clear()
 	else:
 		for peer in peers.values():
 			if peer.account=="" or peer.get("perception","exteroception")!="exteroception" or peer.get("awaiting_snapshot",0)>0 or peer.get("encoding_snapshot",0)>0: continue
 			var bytes:=PackedByteArray()
-			var view: Vector4=peer.view
+			var view:=_delivery_coverage(peer)
 			for index in world.grid.query_rect(Vector2(view.x,view.y),Vector2(view.z,view.w)+Vector2.ONE*32):
 				var packet: Dictionary=world.particle_snapshot(index)
 				if not packet.get("alive",false): continue
@@ -664,7 +669,7 @@ func _publish() -> void:
 				for i in 6: record.encode_float(i*4,[packet.p.x,packet.p.y,packet.angle,packet.kind,packet.amount,2*world.particle_radius(packet.kind)*world.particle_scale(packet.amount)][i])
 				record.encode_u32(24,index);record.encode_u32(28,0)
 				bytes.append_array(record)
-			_send_snapshot(peer,bytes)
+			_send_snapshot(peer,bytes,_frame(peer,view))
 
 func _publication_done(data: Dictionary) -> void:
 	if not data.has("error") and not data.get("overflow",false):
@@ -674,10 +679,18 @@ func _publication_done(data: Dictionary) -> void:
 	else: skipped_frames+=1
 	pending_frame.clear()
 
-func _frame(peer: Dictionary) -> Dictionary:
+func _delivery_coverage(peer: Dictionary) -> Vector4:
+	var view: Vector4=peer.view
+	if peer.get("perception","exteroception")=="interoception":return view
+	for margin in [Delivery.PREFETCH,Delivery.PREFETCH*.5,0.0]:
+		var coverage:=Delivery.expanded(view,margin)
+		if world.resident==null or world.resident.streaming==null or world.resident.streaming.region_ready(coverage):return coverage
+	return Vector4.ZERO
+
+func _frame(peer: Dictionary,coverage: Vector4=Vector4.ZERO) -> Dictionary:
 	var account: Dictionary=accounts[peer.account]
 	var cells: Array=[]
-	var view: Vector4=peer.view
+	var view: Vector4=coverage if coverage!=Vector4.ZERO else Delivery.expanded(peer.view) if peer.get("perception","exteroception")=="exteroception" else peer.view
 	for cell in world.cells:
 		if Sim.Medium.visibility(cell.position,Vector2(view.x,view.y),Vector2(view.z,view.w)+Vector2.ONE*cell.extent())>0: cells.append(cell)
 	var internal_overrides: Dictionary={}
@@ -686,7 +699,7 @@ func _frame(peer: Dictionary) -> Dictionary:
 		if peer.get("perception","exteroception")!="interoception" or cell!=focus:internal_overrides[cell.chemistry.get_instance_id()]={"particles":[],"vacuoles":[],"presentation_totals":{"material":cell.chemistry.material(),"storage":cell.chemistry.storage_used(),"potential":cell.chemistry.potential(),"raw_fuel":cell.chemistry.raw_fuel(),"packets":cell.chemistry.particle_count()}}
 	return {"kind":"snapshot","world_id":world_id,"epoch":epoch,"tick":world.revision,"time":world.time,"presentation_usec":Time.get_ticks_usec(),"edit":account.edit,"sequence":account.sequence,
 		"family_recovery":_family_recovery(account),"lineage_names":_lineage_names(),"player_name":str(account.get("display_name","")),"graph":Codec.new().capture({"cells":cells,"player":_selected(account),"focus":_focus(peer),"lineage":account.lineage,"evolution":account.evolution},internal_overrides,peer.get("compact_cytoplasm",false),peer.get("cytoplasm_version",1)),
-		"census":world.habitat_census(),"environment":world.environment.duplicate(true),"particles":PackedByteArray(),"flow":world.fluid.velocity.duplicate(),"acid":world.acidity.values.duplicate(),
+		"coverage":view,"camera":peer.view,"census":world.habitat_census(),"environment":world.environment.duplicate(true),"particles":PackedByteArray(),"flow":world.fluid.velocity.duplicate(),"acid":world.acidity.values.duplicate(),
 		"sounds":world.sound_events.duplicate(true),"sound_sequence":world.sound_sequence,"sparks":world.reaction_sparks.duplicate(true),"perception":peer.get("perception","exteroception"),"warming":false,
 		"death_serial":world.death_serial,"deaths":_death_events(peer),"selected_cell":_selected(account).id,"followed_cell":focus.id if focus!=null else -1}
 
@@ -708,12 +721,17 @@ func _send_snapshot(peer: Dictionary,records: PackedByteArray,frame: Dictionary=
 	if snapshot_queue.size()+(1 if snapshot_thread!=null else 0)>=MAX_PLAYERS:skipped_frames+=1;return
 	if frame.is_empty(): frame=_frame(peer)
 	var bytes:=PackedByteArray()
-	var view: Vector4=peer.view
+	var view: Vector4=frame.get("coverage",peer.view)
+	var camera: Vector4=frame.get("camera",peer.view)
+	var camera_count:=0
 	for offset in range(0,records.size(),32):
 		var d:=Sim.Medium.offset(Vector2(view.x,view.y),Vector2(records.decode_float(offset),records.decode_float(offset+4))).abs()
-		if d.x<=view.z+32 and d.y<=view.w+32: bytes.append_array(records.slice(offset,offset+32))
+		if d.x<=view.z+32 and d.y<=view.w+32:
+			bytes.append_array(records.slice(offset,offset+32))
+			if Delivery.contains(camera,Vector2(records.decode_float(offset),records.decode_float(offset+4))):camera_count+=1
 	frame.particles=bytes
-	frame.census["camera_particles"]=bytes.size()/32
+	frame.census["camera_particles"]=camera_count
+	frame.census["buffered_particles"]=bytes.size()/32
 	var serial: int=peer.get("frame_serial",0)+1
 	frame.serial=serial
 	frame.protocol=Protocol.VERSION
@@ -736,7 +754,8 @@ func _poll_snapshots() -> void:
 		var frame: Dictionary=snapshot_job.frame
 		if not peer.is_empty():
 			peer.encoding_snapshot=0
-			if peer.socket.get_ready_state()==WebSocketPeer.STATE_OPEN and _send_bytes(peer,frame,result.bytes):
+			if frame.get("perception","exteroception")!=peer.get("perception","exteroception") or (frame.get("perception","exteroception")=="exteroception" and not _view_covered(frame.get("coverage",peer.view),peer.view)):skipped_frames+=1
+			elif peer.socket.get_ready_state()==WebSocketPeer.STATE_OPEN and _send_bytes(peer,frame,result.bytes):
 				peer.frame_serial=frame.serial
 				if not peer.get("death_events",false):peer.death_after=maxi(peer.get("death_after",0),frame.death_serial)
 				peer.selected_cell=frame.selected_cell;peer.followed_cell=frame.followed_cell
@@ -875,8 +894,7 @@ func _safe_args(value,depth: int=0) -> bool:
 	return value==null or value is int or value is bool
 
 func _view_covered(old: Vector4,current: Vector4) -> bool:
-	var d:=Sim.Medium.offset(Vector2(old.x,old.y),Vector2(current.x,current.y)).abs()
-	return d.x+current.z<=old.z+32 and d.y+current.w<=old.w+32
+	return Delivery.covers(old,current)
 
 func _family_recovery(account: Dictionary) -> Dictionary:
 	var living: int=account.lineage.active_family(world).size()

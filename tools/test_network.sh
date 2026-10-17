@@ -48,6 +48,11 @@ for script in induced_currents_run lineage_start_network camera_motion_run; do
   ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
   grep -Eq '(INDUCED CURRENTS|LINEAGE START NETWORK|CAMERA MOTION): [0-9]+ assertions, 0 failures' "$report_file"
 done
+for script in camera_delivery_run camera_streaming_network; do
+  "$godot_bin" --headless --path "$project_dir" --script "tests/$script.gd" -- --particle-backend=cpu 2>&1 | tee "$report_file"
+  ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
+  grep -Eq '(CAMERA DELIVERY|CAMERA STREAMING NETWORK): [0-9]+ assertions, 0 failures' "$report_file"
+done
 for script in light_field snapshot_playback network_state network_live; do
   "$godot_bin" --headless --path "$project_dir" --script "tests/$script.gd" 2>&1 | tee "$report_file"
   ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"

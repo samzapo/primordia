@@ -29,17 +29,30 @@ jobs:
                   assert (p/'device').exists() and not (p/'wireless').exists() and not (p/'phy80211').exists()
                   assert (p/'operstate').read_text().strip()=='up'
           PY
+      - name: Name task-owned source checkout
+        id: source
+        shell: bash
+        env:
+          SOURCE_REF: ${{ github.ref_name }}
+        run: |
+          python3 - <<'PYTHON'
+          import os,re
+          branch=re.sub(r'[^A-Za-z0-9._-]','-',os.environ['SOURCE_REF'].replace('/','--'))
+          path=branch+'--'+os.environ['GITHUB_RUN_ID']+'-'+os.environ['GITHUB_RUN_ATTEMPT']
+          with open(os.environ['GITHUB_OUTPUT'],'a') as output:output.write('path='+path+'\n')
+          PYTHON
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          path: samzapo--experimental-server--${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.source.outputs.path }}
           persist-credentials: false
           fetch-depth: 1
       - name: Check instance isolation and deploy experimental only
         shell: bash
         env:
           PRIMORDIA_PERFORMANCE_WARNINGS: "1"
+          PRIMORDIA_SOURCE_DIRECTORY: ${{ steps.source.outputs.path }}
         run: |
-          cd "$GITHUB_WORKSPACE/samzapo--experimental-server--$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          cd "$GITHUB_WORKSPACE/$PRIMORDIA_SOURCE_DIRECTORY"
           python3 tests/test_experimental.py
           python3 tests/test_web_build.py
           python3 tests/test_web_version.py

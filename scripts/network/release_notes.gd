@@ -90,6 +90,16 @@ const RELEASES=[
 	"footer":"Your cell and its progress carry on between updates.",
 	"button":"Back to the pond",
 },
+{
+	"id":"2026-10-17-camera-particles",
+	"title":"What’s new in the pond",
+	"items":[
+		"Nearby particles arrive ahead of your camera, reducing empty patches while you explore.",
+		"Your view keeps updating while other parts of the pond prepare.",
+	],
+	"footer":"Your cell and its progress carry on between updates.",
+	"button":"Back to the pond",
+},
 ]
 const CURRENT=RELEASES[-1]
 static func seen_index(account: Dictionary) -> int:
