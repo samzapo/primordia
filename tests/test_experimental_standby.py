@@ -28,7 +28,7 @@ class StandbyTests(unittest.TestCase):
                      "backend_error":"","checkpoint_error":"","accounts":1,"access_keys":5}
         self.state={"MainPID":"0","ActiveState":"inactive","UnitFileState":"disabled"}
     def enter(self):
-        with patch("pathlib.Path.home",return_value=self.home),patch.object(standby,"stable_identity",return_value=self.baseline),patch.object(standby,"guard",return_value={**self.baseline,"tick":101}),patch.object(standby,"get_json",return_value=self.health),patch.object(standby,"unit_status",return_value=self.state),patch.object(standby.time,"sleep"),patch.object(standby.subprocess,"run") as run:
+        with patch("pathlib.Path.home",return_value=self.home),patch.object(standby,"stable_identity",return_value=self.baseline),patch.object(standby,"guard",return_value={**self.baseline,"tick":101}),patch.object(standby,"get_json",return_value=self.health),patch.object(standby,"unit_status",side_effect=[self.state] if (self.root/"standby.json").exists() else [{"MainPID":"42","ActiveState":"active","UnitFileState":"enabled"},self.state]),patch.object(standby.time,"sleep"),patch.object(standby.subprocess,"run") as run:
             result=standby.enter(self.root,self.stable,self.expected)
         return result,run
     def test_only_experimental_stops_and_state_is_preserved(self):
@@ -62,9 +62,22 @@ class StandbyTests(unittest.TestCase):
             with self.subTest(name=name),patch.object(standby,"unit_status",return_value=self.state):
                 with self.assertRaises(RuntimeError):standby.standby_identity(self.root)
             path.write_bytes(before)
+    def test_cached_stable_health_waits_for_a_fresh_tick(self):
+        states=[{"MainPID":"42","ActiveState":"active","UnitFileState":"enabled"},self.state]
+        with patch("pathlib.Path.home",return_value=self.home),patch.object(standby,"stable_identity",return_value=self.baseline),patch.object(standby,"guard",side_effect=[self.baseline]*3+[{**self.baseline,"tick":101}]),patch.object(standby,"get_json",return_value=self.health),patch.object(standby,"unit_status",side_effect=states),patch.object(standby.time,"sleep") as sleep,patch.object(standby.subprocess,"run"):
+            value=standby.enter(self.root,self.stable,self.expected)
+        self.assertEqual(value["state"],"standby");self.assertEqual(sleep.call_count,3)
+    def test_interrupted_standby_finishes_without_starting_any_service(self):
+        (self.root/"state/health.json").write_text(json.dumps(self.health))
+        before=standby.protected(self.root)
+        with patch("pathlib.Path.home",return_value=self.home),patch.object(standby,"stable_identity",return_value=self.baseline),patch.object(standby,"guard",return_value={**self.baseline,"tick":101}),patch.object(standby,"get_json") as request,patch.object(standby,"unit_status",return_value=self.state),patch.object(standby.subprocess,"check_output",return_value=self.health["build"]),patch.object(standby.subprocess,"run") as run:
+            value=standby.enter(self.root,self.stable,self.expected)
+        run.assert_not_called();request.assert_not_called()
+        self.assertEqual(standby.protected(self.root),before)
+        self.assertEqual(value["state"],"standby")
     def test_bad_backend_refuses_suspension(self):
         self.health["backend_error"]="fixture failure"
-        with patch("pathlib.Path.home",return_value=self.home),patch.object(standby,"stable_identity",return_value=self.baseline),patch.object(standby,"get_json",return_value=self.health),patch.object(standby.subprocess,"run") as run:
+        with patch("pathlib.Path.home",return_value=self.home),patch.object(standby,"stable_identity",return_value=self.baseline),patch.object(standby,"get_json",return_value=self.health),patch.object(standby,"unit_status",return_value={"MainPID":"42","ActiveState":"active","UnitFileState":"enabled"}),patch.object(standby.subprocess,"run") as run:
             with self.assertRaises(RuntimeError):standby.enter(self.root,self.stable,self.expected)
             run.assert_not_called()
 

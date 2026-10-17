@@ -10,6 +10,10 @@ name: Primordia experimental instance
         type: choice
         options: [deploy, standby]
         default: deploy
+      stable_revision:
+        description: Optional exact deployed stable SHA for a standby-only repair
+        type: string
+        default: ""
       reset_pond:
         description: "Start a fresh experimental pond, retaining accounts, keys and private feedback"
         type: boolean
@@ -75,16 +79,34 @@ jobs:
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 3
     steps:
+      - name: Name task-owned standby checkout
+        id: standby_source
+        shell: bash
+        run: |
+          test "$RUNNER_NAME" = samzapo-desktop
+          test "$(hostname)" = samzapo-desktop
+          python3 - <<'PYTHON'
+          import os,re
+          branch=re.sub(r'[^A-Za-z0-9._-]','-',os.environ['GITHUB_REF_NAME'].replace('/','--'))
+          with open(os.environ['GITHUB_OUTPUT'],'a') as output:
+              output.write('path='+branch+'--standby-'+os.environ['GITHUB_RUN_ID']+'-'+os.environ['GITHUB_RUN_ATTEMPT']+'\n')
+          PYTHON
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: ${{ steps.standby_source.outputs.path }}
+          persist-credentials: false
+          fetch-depth: 1
       - name: Preserve and suspend only the experimental pond
         shell: bash
         env:
-          EXPECTED_STABLE_SHA: ${{ github.sha }}
+          EXPECTED_STABLE_SHA: ${{ inputs.stable_revision || github.sha }}
           RESET_REQUESTED: ${{ inputs.reset_pond }}
+          STANDBY_SOURCE: ${{ steps.standby_source.outputs.path }}
         run: |
           test "$RUNNER_NAME" = samzapo-desktop
           test "$(hostname)" = samzapo-desktop
           test "$RESET_REQUESTED" != true
-          python3 "$HOME/.local/share/primordia-deploy/current/tools/experimental_standby.py"
+          python3 "$GITHUB_WORKSPACE/$STANDBY_SOURCE/tools/experimental_standby.py"
   verify:
     needs: deploy
     runs-on: [self-hosted, Linux, X64]
