@@ -62,10 +62,12 @@ func run() -> void:
 
 func investment_input(scene) -> void:
  scene.settings_panel.hide();scene.user_paused=false;scene.world.server_mode=true
+ print("UI_STARTING_SCALE ",scene.preferences.hud_scale)
  scene.build_open=true;scene.perception="exteroception";scene.manual_zoom=5;scene._update_world(1)
- for setting in [{"logical":Vector2i(390,844),"pixels":1.0,"mobile":true},{"logical":Vector2i(1170,2100),"pixels":3.0,"mobile":true},{"logical":Vector2i(760,360),"pixels":1.0,"mobile":true},{"logical":Vector2i(1280,800),"pixels":1.0,"mobile":false}]:
+ for setting in [{"logical":Vector2i(390,844),"pixels":1.0,"mobile":true},{"logical":Vector2i(1170,2100),"pixels":3.0,"mobile":true},{"logical":Vector2i(760,360),"pixels":1.0,"mobile":true},{"logical":Vector2i(1280,800),"pixels":1.0,"mobile":false},{"logical":Vector2i(760,360),"pixels":1.0,"mobile":true,"scale":1.5},{"logical":Vector2i(390,844),"pixels":1.0,"mobile":true,"scale":1.5},{"logical":Vector2i(1280,800),"pixels":1.0,"mobile":false,"scale":2.0}]:
   root.size=Vector2i(Vector2(setting.logical)/setting.pixels);root.content_scale_size=setting.logical
   scene.touch_zoom.enabled=setting.mobile;scene.touch_zoom.pixels=setting.pixels
+  scene.preferences.hud_scale=setting.get("scale",1.0)
   scene._update_world(1);scene.cell_ui.sync(0)
   for frame in 3:await process_frame
   var at: Vector2=scene.cell_ui.screen_at({"kind":"chemistry"})
@@ -96,7 +98,7 @@ func investment_input(scene) -> void:
   scene.cell_ui.open_context({"kind":"investment"})
   var picker=scene.cell_ui.investment_picker
   for frame in 5:scene.cell_ui.sync(0);await process_frame
-  check(Rect2(Vector2.ZERO,Vector2(setting.logical)).encloses(picker.get_global_rect()),"Complete strategy panel fits the viewport on both platforms and touch densities")
+  check(Rect2(Vector2.ZERO,Vector2(setting.logical)).encloses(picker.get_global_rect()),"Complete strategy panel fits viewport: setting=%s actual=%s panel=%s minimum=%s" % [setting,scene.get_viewport_rect(),picker.get_global_rect(),picker.get_combined_minimum_size()])
   check(picker.cards.all(func(card):return picker.get_global_rect().encloses(card.get_global_rect())) and picker.cards[0].get_global_rect().end.x<=picker.cards[1].global_position.x and picker.cards[1].get_global_rect().end.x<=picker.cards[2].global_position.x,"All three cell pictures are visible side by side")
   if capture!="" and setting.logical in [Vector2i(390,844),Vector2i(1280,800)]:
    root.get_texture().get_image().save_png(capture+("/strategy-portrait.png" if setting.mobile else "/strategy-desktop.png"))
@@ -110,7 +112,7 @@ func investment_input(scene) -> void:
   check(pixel.b>.35 or pixel.g>.5,"Strategy card renders an actual colored cell illustration")
   scene.cell_ui.close_context();scene.perception="exteroception"
  # The shared drawings must produce visible icons, not names or blank circles.
- scene.touch_zoom.enabled=false;root.content_scale_size=Vector2i.ZERO;root.size=Vector2i(1280,800)
+ scene.touch_zoom.enabled=false;scene.preferences.hud_scale=1.0;root.content_scale_size=Vector2i.ZERO;root.size=Vector2i(1280,800)
  scene.cell_ui.open_context({"kind":"overlap","targets":["assembly","chemistry","nucleus","atp","bud"].map(func(kind):return {"kind":kind})})
  for frame in 4:scene.cell_ui.sync(0);await process_frame
  var image:=root.get_texture().get_image()

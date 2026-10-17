@@ -47,7 +47,9 @@ func choose(kind: String) -> void:
   game._message(("Family" if scope=="lineage" else "This cell")+" investment: "+kind.capitalize()+".")
  sync()
 func sync() -> void:
- var s: float=game.cell_ui.ui_scale();var viewport: Vector2=game.get_viewport_rect().size
+ var viewport: Vector2=game.get_viewport_rect().size
+ # Keep the three choices together even with large UI text on a short phone.
+ var s: float=minf(game.cell_ui.ui_scale(),minf(viewport.x/330.0,viewport.y/350.0))
  var width:=minf(540*s,viewport.x-16*s)
  family.text="Family"+(" ✓" if scope=="lineage" else "");body.text="This cell"+(" ✓" if scope=="cell" else "")
  var value:=current()
