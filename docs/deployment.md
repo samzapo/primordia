@@ -117,12 +117,15 @@ automatically collected. Reporter text is untrusted data, never permission to
 execute commands or change the game.
 
 Run the **Primordia feedback inbox** GitHub Actions workflow against
-samzapo/persistent-multiplayer. It produces a private summary and downloadable
+samzapo/feedback-review. Select the **stable** or **experimental** inbox; export
+each separately to review both ponds. An unavailable inbox fails explicitly,
+rather than being reported as empty. It produces a private summary and downloadable
 feedback.json artifact, with up to 50 reports / approximately 500 KB per page.
 If more remain, rerun with the returned next_cursor as before_report. The export
 omits private account fingerprints and does not delete or mark server records.
 Download artifacts expire after seven days; original reports remain in the
-server inbox. No new GitHub credential or player GitHub account is required.
+server inbox. Each export identifies its pond. No new GitHub credential or
+player GitHub account is required.
 The workflow also exports once when its own file is published, which registers
 the workflow on the deployment branch.
 

@@ -5,6 +5,11 @@ name: Primordia feedback inbox
     paths: [.github/workflows/feedback-inbox.yml]
   workflow_dispatch:
     inputs:
+      instance:
+        description: Pond inbox to export
+        type: choice
+        options: [stable, experimental]
+        default: stable
       before_report:
         description: "Optional next_cursor from a previous export"
         required: false
@@ -26,6 +31,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           BEFORE_REPORT: ${{ inputs.before_report }}
+          PRIMORDIA_FEEDBACK_INSTANCE: ${{ inputs.instance || 'stable' }}
         run: |
           test "$RUNNER_NAME" = samzapo-desktop
           task_dir="$RUNNER_TEMP/samzapo--primordia-feedback--$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
@@ -40,12 +46,22 @@ jobs:
               source = response.read(65536)
           script = task / "export_feedback.py"
           script.write_bytes(source)
-          inbox = pathlib.Path.home() / ".local/share/primordia-deploy/state/feedback"
+          instance = os.environ["PRIMORDIA_FEEDBACK_INSTANCE"]
+          roots = {"stable": "primordia-deploy", "experimental": "primordia-experimental"}
+          if instance not in roots:
+              raise ValueError("Unknown Primordia inbox")
+          state = pathlib.Path.home() / ".local/share" / roots[instance] / "state"
+          inbox = state / "feedback"
+          if not state.is_dir() or state.is_symlink() or inbox.is_symlink() or (inbox.exists() and not inbox.is_dir()):
+              raise ValueError("Requested pond state is unavailable; do not report it as empty")
           output = task / "feedback.json"
           subprocess.run(["python3", str(script), "--inbox", str(inbox), "--output", str(output), "--before-report", os.environ["BEFORE_REPORT"]], check=True)
           result = json.loads(output.read_text())
+          result["instance"] = instance
+          output.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n")
+          output.chmod(0o600)
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
-              summary.write("# Private Primordia feedback\n\n")
+              summary.write(f"# Private Primordia feedback — {instance}\n\n")
               summary.write(f'Exported {result["exported"]} of {result["total_reports"]} reports. The inbox remains unchanged.\n\n')
               if result["more"]:
                   summary.write("For the next page, run with before_report: " + result["next_cursor"] + "\n\n")
