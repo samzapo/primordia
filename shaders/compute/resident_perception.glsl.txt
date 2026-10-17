@@ -134,7 +134,7 @@ void main(){
  vec4 query=queries[i*4u];uvec4 self=floatBitsToUint(queries[i*4u+1u]);
  bool incumbent=floatBitsToUint(queries[i*4u+2u].x)!=0u;
  if(self.w==2u){food_query(i,query,self);return;}
- if(self.w>=3u){
+ if(self.w>=3u&&self.w!=6u){
   float best=query.z;uint selected=0xffffffffu;
   ivec2 lo=ivec2(floor((query.xy-query.z)/16.)),hi=ivec2(floor((query.xy+query.z)/16.));
   for(int x=lo.x;x<=min(hi.x,lo.x+255);x++)for(int y=lo.y;y<=min(hi.y,lo.y+159);y++){
@@ -175,7 +175,7 @@ void main(){
    uint slot=order[k].y;
    if(imageLoad(state,pixel(slot)+ivec2(1,0)).w!=3.||identity[slot].y==self.x)continue;
    vec4 life=reports[slot*4u+2u];uvec4 who=floatBitsToUint(reports[slot*4u+1u]);
-   if(floatBitsToUint(life.z)==0u||life.y<=pc.now||who.y==self.y)continue;
+   if(floatBitsToUint(life.z)==0u||life.y<=pc.now||(who.y==self.y)!=(self.w==6u))continue;
    float distance=length(offset(query.xy,imageLoad(state,pixel(slot)).xy));
    if(distance>query.z)continue;
    uint source=floatBitsToUint(life.w);
@@ -218,16 +218,18 @@ void main(){
   uvec4 found=latest[scratch+s];if(found.x==0u)continue;
   uint slot=found.x-1u;vec4 report=reports[slot*4u],life=reports[slot*4u+2u];
   uvec4 who=floatBitsToUint(reports[slot*4u+1u]);
-  bool flee=self.w!=0u;
-  if(!flee&&report.z>=query.w&&who.w!=0u)continue;
+  bool family=self.w==6u;
+  bool flee=self.w==1u;
+  if(!family&&!flee&&report.z>=query.w&&who.w!=0u)continue;
   if(flee&&who.z==0u&&report.z<=query.w)continue;
   float distance=uintBitsToFloat(found.z);
-  float score=(flee?100.:2.)+1./(1.+max(0.,pc.now-life.x))+.1/(1.+distance);
+  float score=family?1./(1.+distance):(flee?100.:2.)+1./(1.+max(0.,pc.now-life.x))+.1/(1.+distance);
   if(flee&&who.z!=0u)score+=1.;
   if(who.x==self.z)score+=.05;
   float weighted=score*((incumbent&&who.x==self.z)?1.2:1.);
-  if(weighted<best||(weighted==best&&found.y>=best_order))continue;
-  best=weighted;best_slot=slot;best_distance=distance;best_order=found.y;
+  uint candidate_order=family?who.x:found.y;
+  if(weighted<best||(weighted==best&&candidate_order>=best_order))continue;
+  best=weighted;best_slot=slot;best_distance=distance;best_order=candidate_order;
  }
  if(best>=0.){
   for(uint j=0u;j<4u;j++)receipts[output_at+j]=reports[best_slot*4u+j];
