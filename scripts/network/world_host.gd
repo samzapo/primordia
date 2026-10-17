@@ -221,6 +221,10 @@ func _physics_process(dt: float) -> void:
 	_set_views()
 	preload("res://scripts/environment_cycle.gd").update(world,Time.get_unix_time_from_system())
 	world.managed_lineages = accounts.values().map(func(account):return account.root)
+	world.managed_cells=[]
+	for peer in peers.values():
+		if peer.account!="" and accounts.has(peer.account):
+			world.managed_cells.append(accounts[peer.account].selected)
 	world.step_autonomous_builds()
 	world.step(dt)
 	if world.resident!=null:
@@ -297,6 +301,7 @@ func _poll() -> void:
 			elif peer.account=="" : socket.close(1008,"Authenticate first")
 			elif message.get("op","")=="feedback":_feedback(peer,message)
 			elif message.get("op","")=="profile":_profile(peer,message)
+			elif message.get("op","")=="lineage_color":_lineage_color(peer,message)
 			elif message.get("op","")=="update_seen":_update_seen(peer,message)
 			elif message.get("op","")=="ping": pass
 			elif message.get("op","")=="snapshot_ack":
@@ -323,6 +328,26 @@ func _update_seen(peer: Dictionary,message: Dictionary) -> void:
 		else:account.seen_release=previous
 		ok=false
 	_send(peer,{"kind":"update_seen_result","id":id if id is String else "","ok":ok})
+
+func _lineage_color(peer: Dictionary,message: Dictionary) -> void:
+	var color=message.get("color")
+	var valid:=RegEx.new();valid.compile("^#[0-9a-fA-F]{6}$")
+	if not color is String or valid.search(color)==null:
+		_send(peer,{"kind":"lineage_color_result","ok":false,"message":"Choose a valid color."});return
+	color=color.to_lower()
+	var account: Dictionary=accounts[peer.account]
+	var previous: String=str(account.get("lineage_color",""))
+	if previous!=color:
+		var now:=Time.get_ticks_msec()
+		if now-int(peer.get("color_saved_at",-3000))<3000:
+			_send(peer,{"kind":"lineage_color_result","ok":false,"message":"Please wait a moment before saving another color."});return
+		account.lineage_color=color
+		if not checkpoint():
+			if previous=="":account.erase("lineage_color")
+			else:account.lineage_color=previous
+			_send(peer,{"kind":"lineage_color_result","ok":false,"message":"Could not save your color. Try again."});return
+		peer.color_saved_at=now
+	_send(peer,{"kind":"lineage_color_result","ok":true,"color":color,"message":"Lineage color saved."})
 
 func _profile(peer: Dictionary,message: Dictionary) -> void:
 	var value=message.get("name")
@@ -358,7 +383,9 @@ func _lineage_names() -> Array:
 	for key in accounts:
 		number+=1
 		var account: Dictionary=accounts[key]
-		names.append({"root":account.root,"name":str(account.get("display_name","Player "+str(number))),"online":online.has(key)})
+		var entry: Dictionary={"root":account.root,"name":str(account.get("display_name","Player "+str(number))),"online":online.has(key)}
+		if account.has("lineage_color"):entry.color=account.lineage_color
+		names.append(entry)
 	return names
 
 func _feedback(peer: Dictionary,message: Dictionary) -> void:
@@ -699,7 +726,7 @@ func _frame(peer: Dictionary,coverage: Vector4=Vector4.ZERO) -> Dictionary:
 	for cell in world.cells:
 		if peer.get("perception","exteroception")!="interoception" or cell!=focus:internal_overrides[cell.chemistry.get_instance_id()]={"particles":[],"vacuoles":[],"presentation_totals":{"material":cell.chemistry.material(),"storage":cell.chemistry.storage_used(),"potential":cell.chemistry.potential(),"raw_fuel":cell.chemistry.raw_fuel(),"packets":cell.chemistry.particle_count()}}
 	return {"kind":"snapshot","world_id":world_id,"epoch":epoch,"tick":world.revision,"time":world.time,"presentation_usec":Time.get_ticks_usec(),"edit":account.edit,"sequence":account.sequence,
-		"family_recovery":_family_recovery(account),"lineage_names":_lineage_names(),"player_name":str(account.get("display_name","")),"graph":Codec.new().capture({"cells":cells,"player":_selected(account),"focus":_focus(peer),"lineage":account.lineage,"evolution":account.evolution},internal_overrides,peer.get("compact_cytoplasm",false),peer.get("cytoplasm_version",1)),
+		"family_recovery":_family_recovery(account),"lineage_names":_lineage_names(),"player_name":str(account.get("display_name","")),"graph":Codec.new().capture({"cells":cells,"player":_selected(account),"focus":_focus(peer),"lineage":account.lineage,"evolution":account.evolution,"investment":world.Investment.owned_settings(world,account.root)},internal_overrides,peer.get("compact_cytoplasm",false),peer.get("cytoplasm_version",1)),
 		"coverage":view,"camera":peer.view,"census":world.habitat_census(),"environment":world.environment.duplicate(true),"particles":PackedByteArray(),"flow":world.fluid.velocity.duplicate(),"acid":world.acidity.values.duplicate(),
 		"sounds":world.sound_events.duplicate(true),"sound_sequence":world.sound_sequence,"sparks":world.reaction_sparks.duplicate(true),"perception":peer.get("perception","exteroception"),"warming":false,
 		"death_serial":world.death_serial,"deaths":_death_events(peer),"selected_cell":_selected(account).id,"followed_cell":focus.id if focus!=null else -1}

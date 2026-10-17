@@ -76,10 +76,12 @@ func run() -> void:
 	var site: Vector2=plant.local_point(0)*.72
 	plant.chemistry.emit("carbon",2,site,-1,-1,0)
 	var mass: float=plant.organic_mass();var before: float=plant.energy+plant.biomass*7.5+plant.raw_fuel
+	var exterior_before: float=sim.particle_snapshots().reduce(func(total,p):return total+(p.amount if p.alive and p.kind==Sim.NUTRIENT and p.owner==plant.id else 0.0),0.0)
 	plant.chemistry.photosynthesize(sim,plant,plant.organs[0],1)
 	check(plant.fixed_carbon>0 and plant.oxygen>0 and plant.substrate>0,"Light and local carbon make food and oxygen particles")
-	check(absf(plant.organic_mass()-mass)<.000001,"Photosynthesis conserves carbon material")
-	check(absf(plant.energy+plant.biomass*7.5+plant.raw_fuel-before-plant.chemistry.solar_work)<.000001,"Photosynthesis records the solar energy input explicitly")
+	var shared_food: float=sim.particle_snapshots().reduce(func(total,p):return total+(p.amount if p.alive and p.kind==Sim.NUTRIENT and p.owner==plant.id else 0.0),0.0)-exterior_before
+	check(absf(plant.organic_mass()+shared_food-mass)<.000001,"Internal and shared exterior photosynthate conserve carbon material")
+	check(absf(plant.energy+plant.biomass*7.5+plant.raw_fuel+shared_food*7.5-before-plant.chemistry.solar_work)<.000001,"Photosynthesis records the solar energy input explicitly")
 	check(int(plant.organs[0].get("emission_serial",0))>0,"Photosynthetic production triggers gland bounce")
 	var starving=Cell.new(15);starving.energy=0
 	var stored: float=starving.organic_mass()

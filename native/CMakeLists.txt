@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 3.20)
 project(primordia LANGUAGES CXX)
 find_package(Threads REQUIRED)
 set(CMAKE_CXX_STANDARD 17)
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+execute_process(
+  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../tools/patch_godot_cpp.py" "${CMAKE_CURRENT_SOURCE_DIR}/../build/godot-cpp"
+  COMMAND_ERROR_IS_FATAL ANY)
 set(GODOTCPP_BUILD_PROFILE "${CMAKE_CURRENT_SOURCE_DIR}/profile.json" CACHE PATH "" FORCE)
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../build/godot-cpp" godot-cpp)
 # Compile the original library sources with modern toolchains. No upstream
@@ -61,3 +65,10 @@ else()
 endif()
 
 target_include_directories(primordia PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
+
+# Direct lifetime regression: fixture links the exact same pinned bindings.
+add_library(primordia_dictionary_probe SHARED EXCLUDE_FROM_ALL ../tests/native_dictionary_probe.cpp)
+target_link_libraries(primordia_dictionary_probe PRIVATE godot-cpp::template_release)
+set_target_properties(primordia_dictionary_probe PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/dictionary_probe.gdextension" CONTENT
+"[configuration]\nentry_symbol = \"primordia_dictionary_probe_init\"\ncompatibility_minimum = \"4.4\"\n[libraries]\nlinux.x86_64 = \"res://build/native/$<TARGET_FILE_NAME:primordia_dictionary_probe>\"\nmacos = \"res://build/native/$<TARGET_FILE_NAME:primordia_dictionary_probe>\"\n")

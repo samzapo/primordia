@@ -24,6 +24,13 @@ var build_state: Dictionary = {}
 var build_waste := 0.0
 var build_input := 0.0
 var managed_lineages: Array = []
+var attack_sources: Dictionary={}
+var attack_aliases: Dictionary={}
+var next_attack_owner:=2000000000
+var combat_context: Dictionary={}
+var managed_cells: Array = [] # Connected selected bodies only; derived, never saved.
+const Investment = preload("res://scripts/investment_policy.gd")
+var investment: Dictionary={"npc":{},"lineages":{},"cells":{}}
 var autonomous_build_retry_at := 0.0
 var particle_limit:=0 # Explicit shared-server configuration; CPU comparisons default off.
 var particle_thinning_due:=0.0
@@ -404,25 +411,23 @@ func restore(identity: int) -> bool:
 	return true
 
 func step_autonomous_builds() -> void:
-	# Persistent NPC policy, called by the authority with every account root.
 	if remote_client or time < autonomous_build_retry_at: return
 	autonomous_build_retry_at = time+2.0
+	Investment.npc_assignments(self)
 	var visited: Dictionary = {}
 	for cell in cells:
 		var root: int = cell.lineage_id()
-		if cell.dead or cell.health <= 0 or root == lineage.root_id or root in managed_lineages or visited.has(root): continue
-		visited[root] = true
-		var ledger = _family_ledger(cell)
-		var progression = ledger.progression
-		if progression == null or progression.points < 1: continue
-		var choices: Array = []
+		if cell.dead or cell.health<=0 or visited.has(root):continue
+		visited[root]=true
+		var ledger=_family_ledger(cell)
+		var progression=ledger.progression
+		if progression==null or progression.points<1:continue
 		for relative in ledger.active_family(self):
-			for kind in KINDS:
-				if kind != "feeding" and relative.can_fit(kind,0,1,false):
-					choices.append({"cell":relative,"kind":kind})
-		if choices.is_empty(): continue
-		var choice: Dictionary = choices[progression.random.randi_range(0,choices.size()-1)]
-		_install_for(choice.cell,progression,choice.kind,progression.random.randf()*TAU)
+			var choice: Dictionary=Investment.candidate(self,relative)
+			if choice.is_empty():continue
+			# One ordinary, AP-funded purchase per family per interval.
+			if _install_for(relative,progression,choice.kind,fposmod(relative.id*2.399963+relative.organs.size(),TAU)):break
+
 
 func remove(index: int) -> bool:
 	if remote_client: return edit("remove",{"id":player.organs[index].id}) if index>=0 and index<player.organs.size() else false
@@ -498,7 +503,7 @@ func _emit_pheromone(cell, emitted_at: float = -1.0) -> Dictionary:
 	var hostile := false
 	var armored := false
 	for organ in cell.organs:
-		if organ.kind in ["poreforming","toxin"] and organ.hp > 0: hostile = true
+		if organ.kind in ["poreforming","toxin","acidifying"] and organ.hp > 0: hostile = true
 		if organ.kind in ["protection","neutralizing"] and organ.hp > 0: armored = true
 	# Value snapshots, never a Cell reference. Coordinates are deliberately old
 	# once the source moves; size and hostile anatomy can only update via new cues.
@@ -529,7 +534,56 @@ func _emit_material(kind: int, at: Vector2, amount: float, motion: Vector2 = Vec
 	var count := maxi(1,ceili(amount/float(Catalog.data().ecology.packet_quantum)))
 	for i in count: spawn_particle(kind,at,motion,amount/count,owner)
 
+func prepare_combat_rules() -> void:
+	var roots: Array=managed_lineages.duplicate()
+	if lineage.root_id not in roots:roots.append(lineage.root_id)
+	combat_context={"sources":attack_sources,"player_roots":roots}
+	for cell in cells:cell.combat_context=combat_context
+
+func _attack_owner(cell,selective: bool=false) -> int:
+	var npc_only: bool=cell.protected_cell()
+	if not selective and not npc_only:return cell.id
+	var key: String="%d:%s:%s" % [cell.id,selective,npc_only]
+	if not attack_aliases.has(key):
+		# Positive signed32-bit emission identities are distinct from body IDs.
+		if next_id>=1000000000 or next_attack_owner<=1000000000:
+			push_error("Combat source identity capacity exhausted")
+			attack_sources[2147483647]={"no_damage":true}
+			inherited_lineages[2147483647]=cell.lineage_id()
+			return 2147483647
+		attack_aliases[key]=next_attack_owner
+		attack_sources[next_attack_owner]={"source":cell.id,"root":cell.lineage_id(),"selective":selective,"npc_only":npc_only}
+		inherited_lineages[next_attack_owner]=cell.lineage_id()
+		next_attack_owner-=1
+	return attack_aliases[key]
+
+func _counter_sense(cell,received: Dictionary) -> void:
+	for organ in cell.organs:
+		if organ.kind!="counterattack" or organ.hp<=0:continue
+		var reports: Dictionary={}
+		if received.has(organ.id):reports=received[organ.id].get("reports",{})
+		else:
+			var receptor: Vector2=cell.organ_position(organ)
+			var reach: float=90*sqrt(organ.scale)*cell.sensory_output(organ,true)
+			var ids: Array=grid.query_kind(particles,receptor,reach,PHEROMONE)
+			if particle_pool:reports=kernels.pool_sense(ids,receptor,reach,cell.position,cell.id,cell.lineage_id(),time,false).reports
+			else:
+				for index in ids:
+					var packet: Dictionary=particles[index]
+					if not _pheromone_alive(packet) or Medium.offset(receptor,packet.p).length()>reach:continue
+					var report: Dictionary=packet.get("report",{})
+					if report.is_empty() or report.lineage==cell.lineage_id():continue
+					if not reports.has(report.id) or reports[report.id].report.emitted_at<report.emitted_at:
+						reports[report.id]={"report":report,"distance":Medium.offset(receptor,packet.p).length(),"expires_at":packet.expires_at}
+		var best: Dictionary={}
+		for detected in reports.values():
+			if not detected.report.hostile or detected.expires_at<=time:continue
+			if best.is_empty() or detected.distance<best.distance:best=detected
+		# Copy received facts only, never a source Cell reference or live lookup.
+		organ["counter_report"]=best.duplicate(true)
+
 func step(dt: float) -> void:
+	prepare_combat_rules()
 	if remote_client: return
 	preload("res://scripts/induced_currents.gd").update(self)
 	if resident != null:
@@ -998,7 +1052,7 @@ func _acid_stress(cell, dt: float) -> void:
 	var spent: float = cell.spend_energy(demand,{},"acid stress")
 	var overload := maxf(0,exposure-0.5)*0.8+(demand-spent)*0.15/maxf(dt,0.00001)
 	cell.acid_stress = clampf(cell.acid_stress+(overload-0.12)*dt,0,1)
-	if cell.acid_stress > 0.6:
+	if cell.acid_stress > 0.6 and not cell.protected_cell():
 		cell.health = maxf(0,cell.health-dt*(cell.acid_stress-0.6)*8)
 		cell.death_hint = "Acid stress overwhelmed the membrane"
 
@@ -1162,6 +1216,7 @@ func _food_patch(bins: Dictionary, reach: float, cell) -> Dictionary:
 	return best
 
 func _sense(cell, dt: float, received_by_organ: Dictionary = {}) -> void:
+	if cell.sense_clock<=dt:_counter_sense(cell,received_by_organ)
 	# Explicit diagnostic injection of completed local receptor results. Missing
 	# organs still query the authoritative CPU pool; ordinary calls are unchanged.
 	# A memory or in-flight signal cannot outlive its source organ.
@@ -1384,7 +1439,7 @@ func _metabolize(cell, dt: float) -> void:
 		var before: float=cell.starvation_seconds
 		cell.starvation_seconds+=dt
 		var starving_dt: float=maxf(0,cell.starvation_seconds-Cell.STARVATION_GRACE)-maxf(0,before-Cell.STARVATION_GRACE)
-		cell.health = maxf(0,cell.health-starving_dt*Cell.STARVATION_DAMAGE)
+		if not cell.protected_cell():cell.health = maxf(0,cell.health-starving_dt*Cell.STARVATION_DAMAGE)
 		cell.death_hint = "Prolonged starvation; no usable food or ATP reserves remained"
 	else:
 		cell.starvation_seconds=maxf(0,cell.starvation_seconds-dt*4)
@@ -1414,7 +1469,7 @@ func _emit_and_attack(cell, dt: float) -> void:
 	for organ in cell.organs:
 		var kind: int = {"feeding":ENZYME,"neutralizing":ANTITOXIN,"acidifying":ACID,"regenerative":BUFFER}.get(organ.kind,-1)
 		var energy_cost := Cell.SECRETION_COST*Genes.factor(organ,"secretion_cost")
-		if kind < 0 or cell.biomass < 0.06 or cell.energy < energy_cost: continue
+		if (kind==ACID and cell.protected_cell()) or kind < 0 or cell.biomass < 0.06 or cell.energy < energy_cost: continue
 		if kind != ENZYME and cell.energy < 12: continue
 		var rate := 0.35 if kind == ENZYME else 2.0
 		for event in _event_count(rate*organ.scale*organ.scale*Genes.factor(organ,"secretion"),dt):
@@ -1436,22 +1491,30 @@ func _emit_and_attack(cell, dt: float) -> void:
 			if cell.biomass <= 0.08: break
 			cell.biomass -= 0.08
 			var direction := Vector2.from_angle(rng.randf()*TAU)
-			spawn_particle(TOXIN,cell.position+direction*(cell.radius+12),direction*24,0.08,cell.id)
+			spawn_particle(TOXIN,cell.position+direction*(cell.radius+12),direction*24,0.08,_attack_owner(cell))
 
 	for organ in cell.organs:
-		if organ.kind not in ["toxin","poreforming"]: continue
+		if organ.kind not in ["toxin","poreforming","counterattack"]: continue
 		organ["burst_clock"] = maxf(0,float(organ.get("burst_clock",0))-dt)
 		var aim: Vector2 = cell.threat if cell.target_mode == "flee" else Medium.offset(cell.position,cell.target_position).normalized()
-		if organ.burst_clock > 0 or cell.target_id < 0 or cell.target_memory <= 0 or aim.length_squared() < 0.01: continue
+		if organ.kind=="counterattack":
+			var detected: Dictionary=organ.get("counter_report",{})
+			if detected.is_empty() or detected.expires_at<=time or not detected.report.hostile:continue
+			aim=Medium.offset(cell.organ_position(organ),detected.report.at).normalized()
+		elif cell.target_id<0 or cell.target_memory<=0:continue
+		if organ.burst_clock>0 or aim.length_squared()<.01:continue
 		var burst: float = organ.scale*organ.scale*Genes.factor(organ,"burst")
 		if cell.energy < 12 or cell.available_energy(organ)+0.0000001 < 2*burst*Genes.inefficiency(organ) or cell.biomass < 0.18*burst: continue
 		cell.spend_energy(2*burst*Genes.inefficiency(organ),organ,"combat")
+		var source: int=_attack_owner(cell,organ.kind=="counterattack")
 		if organ.kind == "poreforming":
-			_emit_aimed(TAG,cell.organ_position(organ),aim,155,0.03*burst,cell.id)
-			for unit in 4: _emit_aimed(PORE_SUBUNIT,cell.organ_position(organ),aim,155+unit*4,0.0375*burst,cell.id)
+			_emit_aimed(TAG,cell.organ_position(organ),aim,155,0.03*burst,source)
+			for unit in 4: _emit_aimed(PORE_SUBUNIT,cell.organ_position(organ),aim,155+unit*4,0.0375*burst,source)
+		elif organ.kind=="counterattack" or cell.protected_cell():
+			_emit_aimed(TOXIN,cell.organ_position(organ),aim,170,0.18*burst,source)
 		else:
-			_emit_aimed(DECOY,cell.organ_position(organ),aim,145,0.03*burst,cell.id)
-			_emit_aimed(TOXIN,cell.organ_position(organ),aim,170,0.15*burst,cell.id)
+			_emit_aimed(DECOY,cell.organ_position(organ),aim,145,0.03*burst,source)
+			_emit_aimed(TOXIN,cell.organ_position(organ),aim,170,0.15*burst,source)
 		cell.biomass -= 0.18*burst
 		organ.consume_flash = 1
 		cell.emitted(organ)
@@ -1642,7 +1705,7 @@ func _toxin_contacts() -> void:
 			if cell.dead or cell.activity <= 0 or cell.lineage_id() == inherited_lineages.get(p.owner,p.owner): continue
 			var d = Medium.offset(cell.position,p.p)
 			if d.length() <= cell.support(d.angle())+5:
-				cell.waste += cell.damage(p.amount*Catalog.data().combat.toxin_damage_per_unit,d.angle()) + p.amount
+				cell.waste += cell.damage(p.amount*Catalog.data().combat.toxin_damage_per_unit,d.angle(),p.owner) + p.amount
 				cell.death_hint = "Membrane failed after toxin exposure"
 				if p.owner == player.id: evolution.record("toxin",p.amount*Catalog.data().combat.toxin_damage_per_unit)
 				if kernels != null: kernels.invalidate_particle_render(index)
@@ -1650,7 +1713,8 @@ func _toxin_contacts() -> void:
 				break
 
 func _die(cell, transferred: float = 0.0) -> void:
-	if cell.dead: return
+	if cell.dead:return
+	if cell.protected_cell():cell.health=maxf(1,cell.health);return
 	if server_mode and not remote_client:
 		for ledger in family_ledgers: ledger.died(cell,self)
 	elif evolution.enabled: lineage.died(cell,self)
@@ -1803,7 +1867,7 @@ func offspring_quote(subject = null) -> Dictionary:
 	var radius := maxf(34,parent.occupied()/(TAU*0.8))
 	var body := maxf(30,pow(radius/47.0,2)*78-12)
 	var inherited_body := minf(body,maxf(0,parent.body-30))
-	return {"body":body,"body_transfer":inherited_body,"biomass":12.0,"material":body+12+tissue-inherited_body,"total_material":body+12+tissue,"energy":60.0,"oxygen":0.0}
+	return {"body":body,"body_transfer":inherited_body,"biomass":12.0,"material":body+12+tissue-(0 if parent.protected_cell() else inherited_body),"total_material":body+12+tissue,"energy":60.0,"oxygen":0.0}
 
 func safe_birth_position(at: Vector2, radius: float) -> bool:
 	if not habitat_geometry.clear_at(at,radius): return false
@@ -1855,7 +1919,7 @@ func divide_lineage(dormant: bool = false, follow: bool = true) -> bool:
 	return _divide_paid(player,lineage,dormant,follow,true)
 
 func _divide_paid(parent,ledger,dormant: bool=false,follow: bool=false,progress: bool=false) -> bool:
-	if parent.dead or parent.health<=0 or parent.lineage_id()!=ledger.root_id:return false
+	if parent.protected_cell() or parent.dead or parent.health<=0 or parent.lineage_id()!=ledger.root_id:return false
 	if not dormant and cells.filter(func(cell):return not cell.dead).size()>=MAX_LIVE_CELLS:return false
 	if dormant and ledger.dormant.size() >= Lineage.MAX_DORMANT: return false
 	if not dormant and ledger.active_family(self).size() >= Lineage.MAX_ACTIVE: return false
@@ -1901,7 +1965,7 @@ func _divide_paid(parent,ledger,dormant: bool=false,follow: bool=false,progress:
 			evolution.observe_successor(child)
 	if progress:evolution.offspring_id = child.id if not dormant else evolution.offspring_id
 	_record_sound("division",parent.position,parent.id)
-	ledger.notify(("Dormant successor funded." if dormant else "Successor released.")+(" +1 AP." if ledger.progression!=null else "")+(" Free mutation available in the nucleus." if mutation_offer else ""))
+	ledger.notify(("Dormant successor funded." if dormant else "Successor released.")+(" +2 AP." if ledger.progression!=null else "")+(" Free mutation available in the nucleus." if mutation_offer else ""))
 	events.append({"type":"division","id":child.id,"parent":parent.id,"dormant":dormant,"time":time,"material":quote.total_material,"reserve_used":quote.material,"body_transferred":quote.body_transfer,"oxygen_transferred":child.oxygen,"atp_used":20})
 	return true
 
@@ -1930,7 +1994,8 @@ func _fund_reproduction(cell,dt: float) -> void:
 	var elapsed: float=cell.reproduction_elapsed;cell.reproduction_elapsed=0
 	if cell.count("feeding")+cell.count("photosynthesis")==0:return
 	var quote:=offspring_quote(cell)
-	var tissue: float=minf(REPRODUCTION_RATE*elapsed,minf(maxf(0,cell.biomass-REPRODUCTION_TISSUE_FLOOR),maxf(0,quote.material-cell.brood_mass)))
+	var target_material: float=quote.total_material if cell.protected_cell() else quote.material
+	var tissue: float=minf(REPRODUCTION_RATE*elapsed,minf(maxf(0,cell.biomass-REPRODUCTION_TISSUE_FLOOR),maxf(0,target_material-cell.brood_mass)))
 	var atp: float=minf(REPRODUCTION_RATE*elapsed,minf(maxf(0,cell.energy-REPRODUCTION_ATP_FLOOR),maxf(0,quote.energy-cell.brood_energy)))
 	if tissue<=0 and atp<=0:return
 	cell.biomass-=tissue;cell.brood_mass+=tissue
@@ -1954,6 +2019,16 @@ func _step_reproduction() -> void:
 		if cell.dead or cell.health<=0 or cell.brood_mass<=0 or cell.brood_energy<60 or time<cell.reproduction_retry_at:continue
 		if cell==player and (build_original!=null or (not server_mode and evolution.terminal())):continue
 		var quote:=offspring_quote(cell)
+		if cell.protected_cell():
+			if cell.brood_mass+.000001<quote.total_material or cell.brood_energy<quote.energy:continue
+			cell.brood_mass-=quote.total_material;cell.brood_energy-=quote.energy
+			cell.chemistry.heat+=quote.total_material*7.5+quote.energy
+			_emit_material(WASTE,cell.excretion_position(),quote.total_material,Vector2.ZERO,cell.id)
+			var ledger=_family_ledger(cell)
+			if ledger.progression!=null:ledger.progression.points+=2
+			ledger.notify("Growth investment complete. +2 AP. Protected cells do not divide.")
+			cell.reproduction_retry_at=time+.5;cell.update_geometry();cell.render_revision+=1
+			continue
 		if cell.brood_mass+.000001<quote.material:continue
 		cell.reproduction_retry_at=time+.5
 		_divide_paid(cell,_family_ledger(cell),false,false)

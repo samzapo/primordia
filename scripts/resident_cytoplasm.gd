@@ -210,16 +210,16 @@ func _apply(bytes: PackedByteArray,code: int) -> void:
 	for j in int(bytes.decode_double(7*8)):
 		var base:=128+j*8
 		chem.vacuoles.append({"species":("oxygen" if bytes.decode_double((base+4)*8)==-1 else "carbon") if bytes.decode_double((base+4)*8)<0 else "carrier","id":int(bytes.decode_double(base*8))|(int(bytes.decode_double((base+7)*8))<<32),"p":Vector2(bytes.decode_double((base+1)*8),bytes.decode_double((base+2)*8)),"angle":bytes.decode_double((base+3)*8) if bytes.decode_double((base+4)*8)<0 else 0.0,"radius":1.4 if bytes.decode_double((base+4)*8)<0 else bytes.decode_double((base+3)*8),"acid":bytes.decode_double((base+4)*8),"material":0.0,"contents":bytes.decode_double((base+5)*8),"age":bytes.decode_double((base+6)*8)})
-	cell.biomass+=bytes.decode_double(80*8);cell.health=maxf(0,cell.health+bytes.decode_double(81*8))
+	cell.biomass+=bytes.decode_double(80*8);cell.health=maxf(1 if cell.protected_cell() else 0,cell.health+(0 if cell.protected_cell() else bytes.decode_double(81*8)))
 	var gained:=bytes.decode_double(82*8)
 	if gained>0 and code!=10:cell.gain_energy(gained)
 	cell.processed+=bytes.decode_double(83*8);cell.fermented+=bytes.decode_double(84*8)
 	if bytes.decode_double(84*8)>0:cell.fermentation_activity=2
 	if bytes.decode_double(81*8)<0:cell.death_hint="Osmotic overload; contractile pumping failed"
 
-func advance(dt: float,external: float) -> void:
+func advance(dt: float,external: float,mitochondrial_gain: float=1.0) -> void:
 	var chem=chemistry.get_ref();chem.frame_dt=dt
-	command(0,dt,Vector2.ZERO,0,-1,-1,-1,-1,0,"food",{"external":external})
+	command(0,dt,Vector2.ZERO,0,-1,-1,-1,-1,0,"food",{"external":external,20:mitochondrial_gain})
 
 func value(index: int) -> float:return summary.decode_double(index*8) if not summary.is_empty() else 0.0
 

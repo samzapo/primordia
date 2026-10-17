@@ -263,7 +263,7 @@ func _exposure(sim, cell, dt: float) -> void:
 		p.alive = false
 		cell.waste += p.amount
 		if p.kind == sim.TOXIN:
-			cell.waste += cell.damage(p.amount*sim.Catalog.data().combat.toxin_damage_per_unit,delta.angle())
+			cell.waste += cell.damage(p.amount*sim.Catalog.data().combat.toxin_damage_per_unit,delta.angle(),p.owner)
 			cell.death_hint = "Membrane failed after toxin exposure"
 
 func _hunt(_sim, _attacker, _dt: float) -> void:

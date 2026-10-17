@@ -99,7 +99,7 @@ func run() -> void:
 	var player_ap: int = sim.evolution.points
 	var npc_input: float = sim.external_input; var npc_mass: float = npc.organic_mass()
 	sim.step_autonomous_builds()
-	check(npc.organs.size() == 2 and ledger.progression.points == 1,"An unmanaged lineage buys one random fitting organ with its own AP")
+	check(npc.organs.size() == 2 and ledger.progression.points == 1,"An unmanaged lineage buys one strategy-selected fitting organ with its own AP")
 	check(managed.organs.size() == 1 and sim.evolution.points == player_ap,"Offline player-owned roots and the selected lineage keep their AP")
 	check(npc.biomass == 0 and npc.energy == 0 and is_equal_approx(npc.organic_mass()-npc_mass,sim.external_input-npc_input),"NPC builds use the same AP-only material accounting")
 	sim.step_autonomous_builds()
@@ -114,7 +114,7 @@ func run() -> void:
 	sim.time += 2; recovered.time += 2
 	sim.step_autonomous_builds(); recovered.step_autonomous_builds()
 	var recovered_npc = recovered.cells.filter(func(body):return body.id == npc.id)[0]
-	check(recovered_npc.organs == npc.organs and recovered._family_ledger(recovered_npc).progression.points == ledger.progression.points,"NPC AP and random purchase sequence survive a checkpoint restart")
+	check(recovered_npc.organs == npc.organs and recovered._family_ledger(recovered_npc).progression.points == ledger.progression.points,"NPC AP and strategy purchase sequence survive a checkpoint restart")
 	game.queue_free(); await process_frame
 	print("ANATOMY ACCESS: %d assertions, %d failures" % [assertions,failures])
 	quit(0 if failures == 0 else 1)

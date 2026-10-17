@@ -17,7 +17,7 @@
       {
         "id": "build",
         "title": "Build and restore",
-        "text": "Open the Assembly or Chemistry factory, choose an organelle, then choose a place on the membrane. Each installation or lost-organ restoration costs 1 AP. Organs need room.",
+        "text": "Open the Assembly or Chemistry factory and choose an organelle. Most attach to the membrane; mitochondria and Sanctuary sit inside. Each installation or restoration costs 1 AP. Organs need room. While building, the resource strip shows how much AP you have as well as the cost.",
         "sources": []
       },
       {
@@ -29,7 +29,7 @@
       {
         "id": "organs",
         "title": "Move, recycle and tune",
-        "text": "Open an installed organelle to move it, recycle it, change its Output, or adjust Steering where available. Output increases its work and ATP use; Steering changes its influence on swimming.",
+        "text": "Open an installed organelle to move it, recycle it, change its Output, or adjust Steering where available. Output increases its work and ATP use; Steering changes its influence on swimming. A small ring shows recharge progress. Select an organelle to read its current state at the bottom; energy-starved organs lose their color.",
         "sources": []
       },
       {
@@ -53,7 +53,7 @@
       {
         "id": "history",
         "title": "View your family",
-        "text": "Open Nucleus → Family & goals, or Family history in Pause, to see your relatives and select a living family member.",
+        "text": "Open Nucleus → Family & goals to see your family records. Earlier relatives and Recent relatives move through the current family without leaving the pond.",
         "sources": []
       },
       {
@@ -72,6 +72,18 @@
         "id": "camera_transitions",
         "title": "Smooth camera changes",
         "text": "Following, recentering, changing views and switching family members glide into place. Pause holds the camera; direct camera gestures stay responsive. Nearby water is prepared ahead of your view to reduce empty patches while exploring.",
+        "sources": []
+      },
+      {
+        "id": "investment",
+        "title": "Choose unattended investments",
+        "text": "Open Nucleus → Investment. Choose a family strategy and, if you want, a different one for this cell. Hunter buys offense and mobility, Producer buys photosynthesis and defense, Grazer buys mobility and defense. Manual keeps your AP; Inherit uses the family choice. Automatic buying uses your existing AP only while that cell is not selected by a connected player.",
+        "sources": []
+      },
+      {
+        "id": "lineage_color",
+        "title": "Choose your lineage color",
+        "text": "Pause → Lineage color opens a color disc. Drag around the outer ring to change hue. Drag across the inner disc for saturation and brightness, then Save color. The choice applies to your lineage and stays after reconnecting.",
         "sources": []
       }
     ],
@@ -210,7 +222,7 @@
         {
           "id": "photosynthesis",
           "title": "Carbon + light → food, biomass and oxygen",
-          "text": "Photosynthesis uses carbon particles and light to make food and biomass, releases oxygen, and supplies ATP. Sun and Shade specializations favor different light conditions. In nature, oxygen comes from water; the game leaves water implicit.",
+          "text": "Photosynthesis uses carbon particles and light to make food and biomass, releases oxygen, and supplies ATP. Sun and Shade specializations favor different light conditions. In nature, oxygen comes from water; the game leaves water implicit. Of the food made, 75% stays inside and 25% is released for the pond. This split is a game rule.",
           "sources": [
             {
               "title": "Oxygen production in photosynthesis",
@@ -565,6 +577,34 @@
               "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3678083/"
             }
           ]
+        },
+        {
+          "id": "organ_mitochondrion",
+          "title": "Mitochondrion",
+          "text": "Sits inside the cell and extracts more ATP from food when oxygen is nearby. It can redirect some food from growth into energy; it never adds fuel. Without oxygen, fermentation stays unchanged.",
+          "sources": [
+            {
+              "title": "The mitochondrion",
+              "url": "https://www.ncbi.nlm.nih.gov/books/NBK26894/"
+            }
+          ]
+        },
+        {
+          "id": "organ_counterattack",
+          "title": "Counterattack gland",
+          "text": "Fires at the last position reported by a nearby chemical warning from an armed cell. Its toxin spares cells without offensive organs. Perfect sparing is a game rule inspired by local bacterial counterattack.",
+          "sources": [
+            {
+              "title": "Bacterial tit-for-tat counterattack",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3616380/"
+            }
+          ]
+        },
+        {
+          "id": "organ_sanctuary",
+          "title": "Sanctuary",
+          "text": "A fictional protective organelle: your cell and organs survive, but cannot make offspring. Fully funding a growth cycle spends the food material and ATP, then gives 2 AP. Its attacks harm only computer-controlled lineages; acid secretion and combat decoys are disabled. Removing Sanctuary ends this protection.",
+          "sources": []
         }
       ]
     },
@@ -662,7 +702,7 @@
         {
           "id": "npc_growth",
           "title": "Other cells develop too",
-          "text": "Cells without a player lineage can spend their AP on random organelles that fit. Your lineage keeps its AP for you.",
+          "text": "One in ten computer-controlled cells follows Hunter investment; the rest split evenly between Producer and Grazer, with rounding for small populations. These strategies guide all their AP purchases. Your unattended cells buy only if you opt in through Nucleus → Investment. Existing organs are kept.",
           "sources": []
         }
       ]
@@ -710,7 +750,7 @@
         {
           "id": "names_music",
           "title": "Identity and music",
-          "text": "Names appear above player lineages and brighten while their owner is connected. Music responds to the world, but muting it does not change the cell’s biology.",
+          "text": "Names appear above player lineages and brighten while their owner is connected. Music responds to the world, but muting it does not change the cell’s biology. Pause also lets you choose your lineage’s color. Color and readiness rings are visual aids; they do not change biology.",
           "sources": []
         },
         {

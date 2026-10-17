@@ -17,6 +17,8 @@ func _initialize() -> void:
 	_run.call_deferred()
 
 func _run() -> void:
+	print("CHECKS: feedback_pass_two.gd")
+	preload("res://tests/feedback_pass_two.gd").run(expect)
 	print("CHECKS: acceleration.gd")
 	preload("res://tests/acceleration.gd").run(expect)
 	print("CHECKS: performance.gd")

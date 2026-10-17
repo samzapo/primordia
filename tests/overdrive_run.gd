@@ -96,8 +96,8 @@ func run() -> void:
 		sim.player.chemistry.emit("carbon",20,site)
 		if gpu: check(preload("res://scripts/resident_cytoplasm.gd").new().attach(resident,sim.player.chemistry,sim.player),"Photosynthesis shares the resident intracellular owner")
 		var carbon_before: float = sim.player.carbon; var biomass_before: float = sim.player.biomass
-		var expected: float = 3.5*sim.light_at(sim.player.organ_position(leaf))*.1*output
-		sim._photosynthesize(sim.player,.1)
+		var expected: float = 3.5*sim.light_at(sim.player.organ_position(leaf))*.3*output
+		for pulse in 3:sim._photosynthesize(sim.player,.1)
 		var consumed: float = carbon_before-sim.player.carbon
 		check(absf(consumed-expected)<.00001,"Photosynthesis consumes actual local carbon at selected output")
 		check(absf(sim.player.biomass-biomass_before-consumed*.35)<.00001,"Photosynthetic tissue matches actual consumed carbon")
@@ -105,9 +105,9 @@ func run() -> void:
 		sim.player.chemistry.ensure_cpu()
 	var photo = fixture("photosynthesis",4); photo.player.energy = 0
 	photo.player.chemistry.emit("carbon",20,photo.player.local_point(0)*.72)
-	var baseline: float = 3.5*photo.light_at(photo.player.organ_position(photo.player.organs[0]))*.1
+	var baseline: float = 3.5*photo.light_at(photo.player.organ_position(photo.player.organs[0]))*.3
 	var carbon: float = photo.player.carbon
-	photo._photosynthesize(photo.player,.1)
+	for pulse in 3:photo._photosynthesize(photo.player,.1)
 	check(absf(carbon-photo.player.carbon-baseline)<.00001 and photo.player.energy>0,"An empty ATP reserve permits baseline photosynthesis without free overdrive")
 	print("OVERDRIVE: %d assertions, %d failures" % [assertions,failures])
 	quit(0 if failures == 0 else 1)

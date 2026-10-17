@@ -893,7 +893,7 @@ public:
             int(cell->call("lineage_id"))==int(inherited.get(owner,owner))) continue;
         Vector2 d=perception_delta(cell->get("position"),p.p);
         if (d.length()>double(cell->call("support",d.angle()))+5) continue;
-        double debris=cell->call("damage",p.amount*primordia_chemistry::toxin_damage_per_unit,d.angle());
+        double debris=cell->call("damage",p.amount*primordia_chemistry::toxin_damage_per_unit,d.angle(),owner);
         cell->set("waste",double(cell->get("waste"))+(debris+p.amount));
         cell->set("death_hint","Membrane failed after toxin exposure");
         if (owner==player) director->call("record","toxin",p.amount*primordia_chemistry::toxin_damage_per_unit);
@@ -929,7 +929,7 @@ public:
       }
       p.alive=false; cell->set("waste",double(cell->get("waste"))+p.amount);
       if (p.kind==4) {
-        double debris=cell->call("damage",p.amount*primordia_chemistry::toxin_damage_per_unit,d.angle());
+        double debris=cell->call("damage",p.amount*primordia_chemistry::toxin_damage_per_unit,d.angle(),owner);
         cell->set("waste",double(cell->get("waste"))+debris);
         cell->set("death_hint","Membrane failed after toxin exposure");
       }

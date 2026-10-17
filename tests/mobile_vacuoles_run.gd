@@ -49,7 +49,7 @@ func run() -> void:
 	game._toggle_build();game.cell_ui.open_context({"kind":"assembly"})
 	await process_frame
 	game.cell_ui.sync(0)
-	check(game.cell_ui.choices.size()==7 and game.cell_ui.choices.all(func(choice):return choice.get_parent()==game.cell_ui.mobile_flow),"Mobile assembly exposes every available organ in the top tray")
+	check(game.cell_ui.choices.size()==8 and game.cell_ui.choices.all(func(choice):return choice.get_parent()==game.cell_ui.mobile_flow),"Mobile assembly exposes every available organ in the top tray")
 	check(game.touch_zoom.pause_button.get_global_rect().position.y>=game.cell_ui.mobile_menu_height,"Opening a top tray moves the utility controls below it immediately")
 	check(game.cell_ui.mobile_menu_height>0 and game.cell_ui.mobile_tray.position.y<30,"Mobile action menus are attached to the top of the screen")
 	check(game.cell_ui.mobile_resources.visible and game.cell_ui.mobile_stocks.text.contains("AP") and game.cell_ui.mobile_stocks.text.contains("ATP"),"Mobile stock display is visible without hovering")
@@ -58,7 +58,7 @@ func run() -> void:
 	game.cell_ui.mobile_hide.pressed.emit();game.cell_ui.sync(0)
 	check(game.cell_ui.mobile_stocks.visible,"The same resource button restores current numerical stocks")
 	game.cell_ui.open_context({"kind":"chemistry"});await process_frame;game.cell_ui.sync(0)
-	check(game.cell_ui.choices.size()==6 and game.cell_ui.choices.all(func(choice):return choice.get_parent()==game.cell_ui.mobile_flow),"Mobile chemistry factory exposes all glands and food inspection in the top tray")
+	check(game.cell_ui.choices.size()==8 and game.cell_ui.choices.all(func(choice):return choice.get_parent()==game.cell_ui.mobile_flow),"Mobile chemistry factory exposes all glands and food inspection in the top tray")
 	check(game.cell_ui.describe({"kind":"chemistry"}).contains("buffer/repair") and game.cell_ui.describe({"kind":"chemistry"}).to_lower().contains("photosynthesis"),"Factory description matches the active simplified chemistry")
 	game.world.player.biomass=100;game.world.player.update_geometry();game.world.evolution.points=8
 	for index in [7,9,3,8]:

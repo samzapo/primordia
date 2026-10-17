@@ -8,16 +8,17 @@ func check(ok: bool,message: String) -> void:
 	if not ok:failures+=1;push_error(message)
 func _initialize() -> void:run.call_deferred()
 func run() -> void:
+	var stable_current: Dictionary=Notes.pending_all({},"stable")[-1]
 	var account: Dictionary={}
 	check(not Notes.pending(account).is_empty(),"Unseen update appears for existing and new players")
 	check(not Notes.acknowledge(account,"unknown") and not account.has("seen_release"),"Unknown update cannot suppress the notice")
-	check(not Notes.acknowledge(account,Notes.CURRENT.id),"An update cannot be acknowledged out of order")
+	check(not Notes.acknowledge(account,stable_current.id),"An update cannot be acknowledged out of order")
 	var missed:=Notes.pending_all(account)
-	check(missed.size()>=2 and missed[0].id==Notes.RELEASES[0].id and missed[-1].id==Notes.CURRENT.id,"Missed updates are retained from oldest to newest")
+	check(missed.size()>=2 and missed[0].id==Notes.RELEASES[0].id and missed[-1].id==stable_current.id,"Missed updates are retained from oldest to newest")
 	for update in missed:
 		check(Notes.pending(account).id==update.id and Notes.acknowledge(account,update.id),"Clearing an update exposes the next oldest")
 	check(Notes.pending_all(account).is_empty(),"All cleared updates stay cleared")
-	check(Notes.acknowledge(account,missed[0].id) and account.seen_release==Notes.CURRENT.id,"A duplicate old acknowledgement cannot move progress backwards")
+	check(Notes.acknowledge(account,missed[0].id) and account.seen_release==stable_current.id,"A duplicate old acknowledgement cannot move progress backwards")
 	account.seen_release=Notes.RELEASES[0].id
 	check(Notes.pending_all(account).size()==Notes.pending_all({}).size()-1,"Existing seen-release accounts migrate without replaying cleared updates")
 	for update in Notes.RELEASES:

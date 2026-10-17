@@ -38,7 +38,7 @@ static func advance(cell, dt: float, sim = null) -> void:
 		var cleared: bool = complex.capped or complex.age >= 20
 		if complex.units >= REQUIRED and not complex.capped:
 			var angle: float = cell.angle+complex.a
-			var debris: float = cell.damage(float(preload("res://scripts/chemistry_catalog.gd").data().combat.pore_damage_per_second)*dt,angle)
+			var debris: float = cell.damage(float(preload("res://scripts/chemistry_catalog.gd").data().combat.pore_damage_per_second)*dt,angle,int(complex.get("source",-1)))
 			cell.waste += debris
 			if sim != null and complex.get("source",-1)==sim.player.id: sim.evolution.record("pore",float(preload("res://scripts/chemistry_catalog.gd").data().combat.pore_damage_per_second)*dt)
 			cell.death_hint = "Membrane failed after assembled chemical pores"

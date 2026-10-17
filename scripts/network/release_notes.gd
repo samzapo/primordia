@@ -123,6 +123,20 @@ const RELEASES=[
 	"footer":"Your cell and its progress carry on between updates.",
 	"button":"Back to the pond",
 },
+{
+ "id":"2026-10-17-cell-investments",
+ "audience":"experimental",
+ "title":"What’s new in the pond",
+ "items":[
+  "Photosynthetic cells keep most of their food inside and share a little with the pond. Build mitochondria to get more ATP from food and oxygen.",
+  "Choose Hunter, Producer or Grazer investments in the nucleus for unattended relatives. Other cells now follow these strategies too.",
+  "Try a Counterattack gland that spares unarmed cells, or Sanctuary to keep a cell alive without producing offspring.",
+  "See your AP while building and check organelle recharge and energy needs more easily.",
+  "Choose your lineage’s color in Pause, switch relatives without a camera jump, and browse your current family. Improved long-running pond reliability.",
+ ],
+ "footer":"Your cell and its progress carry on between updates.",
+ "button":"Back to the pond",
+},
 ]
 const CURRENT=RELEASES[-1]
 static func seen_index(account: Dictionary) -> int:

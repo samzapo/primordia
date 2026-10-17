@@ -668,3 +668,8 @@ weather-aware visual exposure so dim conditions retain spatial contrast.
 Irregular animated caustic curves appear only in lit water, follow world time
 and respect the water-ripple setting. They add no energy, chemistry, fluid force
 or camera displacement. See [Revision 56](REVISION_56.md).
+
+### Investment and protected-cell options (October17,2026)
+Revision59 supersedes random NPC buying:10%hunter assignments (rounded down), remaining bodies evenly producer/grazer. Policies override catalog randomness; preserve existing anatomy and all AP prices. Players may opt unattended relatives into saved family/cell strategies from the nucleus. Selected connected bodies remain manual.
+New photosynthate keeps75% of the food inside and releases25% outside; all output debits real local carbon. Internal mitochondria redirect finite food fuel toward ATP when oxygen is present. Counterattack responds to local chemical warnings and spares unarmed bodies at contact.
+The fictional Sanctuary prevents death/organ destruction, blocks offspring and awards2AP only after a full paid growth investment. Its toxin/pore material cannot harm player lineages; area-acid secretion/combat decoys are disabled. These are explicit game rules, not biological claims. See [Revision59](REVISION_59.md).

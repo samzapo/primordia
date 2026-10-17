@@ -102,8 +102,8 @@ static func requests(cells: Array, dt: float=0, now: float=0) -> Array:
 		var local_dt: float=dt*cell.activity
 		if cell.dead or cell.activity<=0 or cell.sense_clock>local_dt: continue
 		for organ in cell.organs:
-			if organ.hp<=0 or organ.kind not in ["hunting","sensing","feeding"]: continue
-			var mode: String="hunt" if organ.kind=="hunting" else organ.mode
+			if organ.hp<=0 or organ.kind not in ["hunting","sensing","feeding","counterattack"]: continue
+			var mode: String="hunt" if organ.kind=="hunting" else "flee" if organ.kind=="counterattack" else organ.mode
 			if mode not in ["hunt","flee","graze","waste","toxin","inspect"]: continue
 			if mode!="flee" and cell.steering_strength(organ)<=0: continue
 			var reach: float=(120 if mode=="hunt" else 90 if mode=="flee" else 310)*sqrt(organ.scale)*(1-organ.blocked*0.65)*Genes.factor(organ,"sense")*cell.sensory_output(organ)

@@ -4,7 +4,7 @@ static func execute(sim, action: String, args: Dictionary):
 	for key in ["id","to","value","angle"]:
 		if args.has(key) and not (args[key] is int or args[key] is float): return false
 		if args.has(key) and not is_finite(float(args[key])): return false
-	for key in ["kind","gene","module","species"]:
+	for key in ["kind","gene","module","species","scope"]:
 		if args.has(key) and not args[key] is String: return false
 	for key in ["dormant","active"]:
 		if args.has(key) and not args[key] is bool: return false
@@ -14,6 +14,7 @@ static func execute(sim, action: String, args: Dictionary):
 	var value: float = float(args.get("value",0))
 	if not is_finite(value): return false
 	match action:
+		"investment": return sim.Investment.set_strategy(sim,str(args.get("scope","")),str(args.get("kind","")))
 		"install": return sim.install(str(args.get("kind","")),float(args.get("angle",0)))
 		"remove":
 			var organ: Dictionary = cell.organ_by_id(identity)

@@ -57,6 +57,7 @@ func run() -> void:
 	var rejected=Cytoplasm.new()
 	check(not rejected.attach(gpu,invalid.chemistry,invalid) and invalid.chemistry.particles.size()==25 and invalid.chemistry.accelerator==null,"Oversized handoff fails without truncating finite CPU inventory")
 	var breathing=Cell.new(73);breathing.chemistry.emit("food",2,Vector2(30,0));breathing.chemistry.emit("oxygen",2,Vector2(30,0),-1,-1,0)
+	breathing.add_organ("mitochondrion",1,"graze",false)
 	var breathing_cpu=Cell.clone_state(breathing)
 	check(Cytoplasm.new().attach(gpu,breathing.chemistry,breathing),"Resident gas intake owns finite oxygen")
 	for i in 60:

@@ -125,7 +125,22 @@ def main():
     environment={**os.environ,"GODOT_BIN":str(godot),"PRIMORDIA_BUILD_JOBS":"2","PRIMORDIA_INSTANCE":"experimental"}
     environment.pop("PRIMORDIA_ACCESS_KEYS_FILE",None)
     call("bash",str(candidate/"tools/build_native.sh"),env=environment)
+    call("cmake","--build",str(candidate/"build/native"),"--target","primordia_dictionary_probe","--parallel","2",env=environment)
+    memory_log=root/"dictionary-lifetime-fixture.log"
+    with memory_log.open("w") as output:
+        call("timeout","60s",str(godot),"--headless","--path",str(candidate),"--script","tests/native_dictionary_lifetime.gd",env=environment,stdout=output,stderr=subprocess.STDOUT)
+    memory_result=memory_log.read_text();print(memory_result,flush=True)
+    if re.search(r"SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:",memory_result,re.M) or "DICTIONARY_RESULT: 8 assertions, 0 failures" not in memory_result:
+        raise RuntimeError("Native Dictionary lifetime fixture failed")
+
     call(str(godot),"--headless","--path",str(candidate),"--editor","--import","--quit",env=environment)
+    for script,marker in [("feedback_pass_run","FEEDBACK PASS"),("feedback_latest_run","FEEDBACK LATEST")]:
+        path=root/(script+"-fixture.log")
+        with path.open("w") as output:
+            call("timeout","90s",str(godot),"--headless","--path",str(candidate),"--script","tests/"+script+".gd","--","--particle-backend=cpu",env=environment,stdout=output,stderr=subprocess.STDOUT)
+        result=path.read_text();print(result,flush=True)
+        if re.search(r"SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:",result,re.M) or not re.search(marker+r": \d+ assertions, 0 failures",result):
+            raise RuntimeError("Experimental feedback correctness fixture failed")
     call("bash",str(candidate/"tools/build_web.sh"),env=environment)
     # Small real-GPU protocol fixture, with no stable outage or frame benchmark.
     fixture_log=root/"gpu-network-fixture.log"
@@ -140,6 +155,9 @@ def main():
     # Focused feature acceptance on the real target; no FPS campaign or live reports.
     for script,flags,marker in [
         ("lineage_start_network",["--gpu"],"LINEAGE START NETWORK"),
+        ("feedback_pass_gpu",[],"FEEDBACK PASS GPU"),
+        ("feedback_pass_network",["--gpu"],"FEEDBACK PASS NETWORK"),
+        ("feedback_latest_gpu",["--particle-backend=cpu"],"FEEDBACK LATEST GPU"),
         ("feedback_visual_gpu",["--particle-backend=cpu"],"FEEDBACK VISUAL GPU"),
         ("resident_plant_flow_gpu",[],"RESIDENT PLANT FLOW"),
         ("camera_streaming_network",["--gpu"],"CAMERA STREAMING NETWORK"),

@@ -424,7 +424,7 @@ func _apply_exposure(cells: Array,exposure: Dictionary) -> void:
 			if event.get("kind",4)!=4:
 				if not cell.accept_surface(event.kind,event.amount,event.angle,event.owner): cell.waste+=event.amount
 				continue
-			cell.waste+=cell.damage(event.amount*sim.Catalog.data().combat.toxin_damage_per_unit,event.angle)+event.amount
+			cell.waste+=cell.damage(event.amount*sim.Catalog.data().combat.toxin_damage_per_unit,event.angle,event.owner)+event.amount
 			cell.death_hint="Membrane failed after toxin exposure"
 			if event.owner==sim.player.id: sim.evolution.record("toxin",event.amount*sim.Catalog.data().combat.toxin_damage_per_unit)
 	for event in exposure.decoys:

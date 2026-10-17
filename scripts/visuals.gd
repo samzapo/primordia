@@ -35,7 +35,21 @@ static func oral_groove(c: Node2D, cell, organ: Dictionary, clock: float, detail
 			c.draw_line(lip[i],lip[i]+normal*reach,Color("caf7be"),width*.24,true)
 	c.draw_circle(lip[12],width*.48*(1+.18*pulse),Color("e1f5ac"))
 
-static func icon(c: Node2D, p: Vector2, kind: String, rotation: float, scale: float, animation_time: float = 0, mode: String = "graze", pulse: float = 0, detail: bool = true, charge: float = 0) -> void:
+class DimmedInk extends RefCounted:
+	var canvas: Node2D
+	func _init(target: Node2D) -> void:canvas=target
+	func tint(color: Color) -> Color:
+		var grey: float=color.get_luminance()
+		return color.lerp(Color(grey,grey,grey,color.a),.85).darkened(.18)
+	func draw_set_transform(at: Vector2,rotation: float=0,scale: Vector2=Vector2.ONE) -> void:canvas.draw_set_transform(at,rotation,scale)
+	func draw_circle(at: Vector2,radius: float,color: Color) -> void:canvas.draw_circle(at,radius,tint(color))
+	func draw_line(a: Vector2,b: Vector2,color: Color,width: float=-1,antialias: bool=false) -> void:canvas.draw_line(a,b,tint(color),width,antialias)
+	func draw_arc(at: Vector2,radius: float,start: float,end: float,points: int,color: Color,width: float=-1,antialias: bool=false) -> void:canvas.draw_arc(at,radius,start,end,points,tint(color),width,antialias)
+	func draw_polyline(points: PackedVector2Array,color: Color,width: float=-1,antialias: bool=false) -> void:canvas.draw_polyline(points,tint(color),width,antialias)
+	func draw_colored_polygon(points: PackedVector2Array,color: Color) -> void:canvas.draw_colored_polygon(points,tint(color))
+
+static func icon(c, p: Vector2, kind: String, rotation: float, scale: float, animation_time: float = 0, mode: String = "graze", pulse: float = 0, detail: bool = true, charge: float = 0, depleted: bool=false) -> void:
+	if depleted:c=DimmedInk.new(c)
 	c.draw_set_transform(p,rotation,Vector2.ONE*scale)
 	var steps := 24 if detail else 10
 	match kind:
@@ -70,6 +84,26 @@ static func icon(c: Node2D, p: Vector2, kind: String, rotation: float, scale: fl
 			c.draw_circle(Vector2(-3,-1),10,Color("ff985c"))
 			c.draw_line(Vector2(2,0),Vector2(16,0),Color("ffdc83"),8,true)
 			c.draw_arc(Vector2(17,0),5,0,TAU,12,Color("fff0ba"),3,true)
+		"counterattack":
+			c.draw_circle(Vector2(-3,0),13,Color("256f88"))
+			c.draw_circle(Vector2(-3,-1),10,Color("7ee5e0"))
+			c.draw_line(Vector2(1,0),Vector2(15,0),Color("ff80ae"),7,true)
+			c.draw_line(Vector2(-7,0),Vector2(1,0),Color("fff2c3"),3,true)
+			c.draw_line(Vector2(-3,-4),Vector2(-3,4),Color("fff2c3"),3,true)
+		"sanctuary":
+			c.draw_circle(Vector2.ZERO,14,Color("7266c8"))
+			c.draw_circle(Vector2.ZERO,10,Color("d5cbff"))
+			c.draw_arc(Vector2.ZERO,17,0,TAU,32,Color("91f6de"),2,true)
+			c.draw_line(Vector2(-6,1),Vector2(-1,6),Color("6555a7"),3,true)
+			c.draw_line(Vector2(-1,6),Vector2(7,-6),Color("6555a7"),3,true)
+		"mitochondrion":
+			c.draw_set_transform(p,rotation,Vector2(1.25,.75)*scale)
+			c.draw_circle(Vector2.ZERO,13,Color("8a3954"))
+			c.draw_circle(Vector2(-1,-1),10.5,Color("ffa15b"))
+			var folds:=PackedVector2Array()
+			for i in 9:folds.append(Vector2(-8+i*2,(-1 if i%2==0 else 1)*5))
+			c.draw_polyline(folds,Color("ffe9a0"),2.3,true)
+			c.draw_set_transform(p,rotation,Vector2.ONE*scale)
 		"photosynthesis":
 			c.draw_colored_polygon(PackedVector2Array([Vector2(-12,-8),Vector2(4,-12),Vector2(17,-5),Vector2(20,2),Vector2(8,12),Vector2(-10,9)]),Color("198b59"))
 			c.draw_circle(Vector2(1,-1),11,Color("79e94d").lerp(Color("fff18a"),pulse))

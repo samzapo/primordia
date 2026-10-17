@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.20)
 project(primordia_resident LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+execute_process(
+  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../../tools/patch_godot_cpp.py" "${CMAKE_CURRENT_SOURCE_DIR}/../../build/godot-cpp"
+  COMMAND_ERROR_IS_FATAL ANY)
 find_package(Threads REQUIRED)
 set(GODOTCPP_BUILD_PROFILE "${CMAKE_CURRENT_SOURCE_DIR}/profile.json" CACHE PATH "" FORCE)
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../../build/godot-cpp" godot-cpp)

@@ -2,15 +2,25 @@ extends RefCounted
 const Chemistry = preload("res://scripts/cell_chemistry.gd")
 const Surface = preload("res://scripts/surface_chemistry.gd")
 var chemistry = Chemistry.new()
+var combat_context: Dictionary={} # Shared authority-derived rules, excluded from saves.
+func protected_cell() -> bool:
+	return organs.any(func(organ):return organ.kind=="sanctuary" and organ.hp>0)
+func accepts_attack(source: int) -> bool:
+	var rule: Dictionary=combat_context.get("sources",{}).get(source,{})
+	if rule.get("no_damage",false):return false
+	if rule.get("npc_only",false) and lineage_id() in combat_context.get("player_roots",[]):return false
+	if rule.get("selective",false):
+		return organs.any(func(organ):return organ.kind in ["toxin","poreforming","acidifying"] and organ.hp>0)
+	return true
 var raw_fuel: float:
 	get: return chemistry.raw_fuel()
 	set(value): chemistry.set_raw_fuel(value)
 var surface_complexes: Array = []
 const Genes = preload("res://scripts/mutations.gd")
 const Membrane = preload("res://scripts/membrane.gd")
-const KINDS := ["propulsion", "protection", "poreforming", "regenerative", "feeding", "sensing", "photosynthesis", "toxin", "neutralizing", "acidifying", "hunting", "cilia"]
-const COST := [8.0, 10.0, 12.0, 10.0, 8.0, 6.0, 12.0, 12.0, 10.0, 12.0, 6.0, 8.0]
-const WIDTH := [19.0, 34.0, 26.0, 27.0, 36.0, 20.0, 30.0, 26.0, 26.0, 26.0, 20.0, 24.0]
+const KINDS := ["propulsion", "protection", "poreforming", "regenerative", "feeding", "sensing", "photosynthesis", "toxin", "neutralizing", "acidifying", "hunting", "cilia", "mitochondrion", "counterattack", "sanctuary"]
+const COST := [8.0, 10.0, 12.0, 10.0, 8.0, 6.0, 12.0, 12.0, 10.0, 12.0, 6.0, 8.0, 10.0, 12.0, 12.0]
+const WIDTH := [19.0, 34.0, 26.0, 27.0, 36.0, 20.0, 30.0, 26.0, 26.0, 26.0, 20.0, 24.0, 0.0, 24.0, 0.0]
 const SENSE_MODES := ["flee"]
 const MODES := ["graze"]
 const STEERING_STEPS := [0.0,0.25,0.5,1.0,2.0,4.0]
@@ -159,6 +169,7 @@ func surface_material() -> float:
 	return amount
 
 func accept_surface(kind: int, amount: float, world_angle: float, source: int = -1) -> bool:
+	if kind in [Surface.TAG,Surface.SUBUNIT] and not accepts_attack(source):return false
 	return Surface.bind(self,kind,amount,world_angle,source)
 
 func update_geometry() -> void:
@@ -224,8 +235,27 @@ func arc_gap(a: float, b: float) -> float:
 	var length := perimeter()
 	return wrapf(arc_coordinate(a)-arc_coordinate(b),-length*0.5,length*0.5)
 
+static func internal_organ(kind: String) -> bool:
+	return kind in ["mitochondrion","sanctuary"]
+
+func organ_local_position(organ: Dictionary) -> Vector2:
+	if internal_organ(organ.kind):return local_point(organ.a)*.55
+	return local_point(organ.a)+organ_normal(organ)*5*organ.scale
+
 func organ_position(organ: Dictionary) -> Vector2:
-	return position + (local_point(organ.a) + organ_normal(organ)*5*organ.scale).rotated(angle)
+	return position+organ_local_position(organ).rotated(angle)
+
+func mitochondrial_gain(dt: float) -> float:
+	if chemistry.amount("food")<=0 or chemistry.amount("oxygen")<=0:return 1.0
+	var strength:=0.0
+	for organ in organs:
+		if organ.kind!="mitochondrion" or organ.hp<=0:continue
+		var extra: float=maxf(0,Genes.output(organ)-1)
+		var price: float=extra*.05*dt*Genes.inefficiency(organ)
+		var paid: float=minf(1,energy/price) if price>0 else 1.0
+		spend_energy(price*paid,organ,"mitochondrion")
+		strength+=(1+extra*paid)*organ.scale*organ.scale*organ.hp/organ.max_hp
+	return 1+minf(4,strength*.5)
 
 func excretion_angle() -> float:
 	return (membrane.oral_angle if is_finite(membrane.oral_angle) else 0.0)+PI*0.85
@@ -294,7 +324,7 @@ static func organ_cost(kind: String, size: float = 1.0) -> float:
 	return COST[k]*size*size if k >= 0 else INF
 
 static func organ_width(organ: Dictionary) -> float:
-	return WIDTH[KINDS.find(organ.kind)]*organ.scale+4
+	return 0.0 if internal_organ(organ.kind) else WIDTH[KINDS.find(organ.kind)]*organ.scale+4
 
 func organ_by_id(identity: int) -> Dictionary:
 	for organ in organs:
@@ -309,6 +339,8 @@ func occupied() -> float:
 func can_fit(kind: String, a: float, size: float = 1.0, paid: bool = true) -> bool:
 	var k := KINDS.find(kind)
 	if k < 0 or not is_finite(a) or not is_finite(size) or size < 0.5: return false
+	if kind=="sanctuary":return count(kind)==0
+	if internal_organ(kind):return count(kind)<maxi(1,floori(growth_scale()*3))
 	var cost := organ_cost(kind,size) if paid else 0.0
 	var length := perimeter()*pow(maxf(8,body+biomass+brood_mass-cost)/maxf(8,body+biomass+brood_mass),0.5)
 	return occupied()+WIDTH[k]*size+4 <= length
@@ -328,6 +360,7 @@ func _make_room(anchor: float, width: float, length: float) -> void:
 	var origin := arc_coordinate(anchor)
 	var items: Array = []
 	for organ in organs:
+		if internal_organ(organ.kind):continue
 		items.append({"organ":organ,"x":fposmod(arc_coordinate(organ.a)-origin,original_length)*length/original_length,"half":organ_width(organ)*0.5})
 	items.sort_custom(func(a,b): return a.x < b.x)
 	var end := width*0.5
@@ -387,7 +420,7 @@ func add_organ(kind: String, a: float, mode: String = "graze", paid: bool = true
 	var cost := 0.0 if kind == "feeding" else organ_cost(kind,size)
 	if paid and biomass < cost: return false
 	var length := perimeter()*pow(maxf(8,body+biomass+brood_mass-(cost if paid else 0.0))/maxf(8,body+biomass+brood_mass),0.5)
-	_make_room(a,WIDTH[k]*size+4,length)
+	if not internal_organ(kind):_make_room(a,WIDTH[k]*size+4,length)
 	if paid: biomass -= cost
 	var max_health := (70.0 if kind == "protection" else 25.0)*size*size
 	organs.append({"id":next_organ_id,"kind":kind,"a":fposmod(a,TAU),"scale":size,"mode":mode,"hp":max_health,"max_hp":max_health,"material":cost,"max_material":cost,"mutation":"","steering":1.0,"growth_spent":size*size,"ap_spent":maxi(1,ceili(size*size-0.000001)),"target_id":-1,"progress":0.0,"coverage":0.0,"feeding":false,"link":Vector2.ZERO,"feedback":"","consume_flash":0.0,"consume_clock":0.0,"charge_flash":0.0,"consumed_total":0.0,"blocked":0.0})
@@ -517,20 +550,20 @@ func recycle(index: int) -> float:
 func drain(amount: float) -> float:
 	var taken = minf(biomass, amount)
 	biomass -= taken
-	var remainder = minf(maxf(0,body-4), amount-taken)
+	var remainder = minf(maxf(0,body-(8 if protected_cell() else 4)), amount-taken)
 	body -= remainder
-	if body <= 4.0001: health = 0
+	if body <= 4.0001 and not protected_cell(): health = 0
 	return taken + remainder
 
-func damage(amount: float, world_angle: float) -> float:
-	if dead or amount <= 0: return 0.0
+func damage(amount: float, world_angle: float, source: int=-1) -> float:
+	if dead or amount <= 0 or protected_cell() or not accepts_attack(source): return 0.0
 	var released = 0.0
 	var local_angle = surface_parameter(world_angle-angle)
 	last_wound = local_angle
 	var hit = -1
 	var distance = INF
 	for i in organs.size():
-		if inherent(organs[i]): continue # A groove is exposed membrane, not armor.
+		if inherent(organs[i]) or internal_organ(organs[i].kind): continue # A groove is exposed membrane, not armor.
 		var arc = absf(arc_gap(organs[i].a,local_angle))
 		if arc < organ_width(organs[i])*0.6 and arc < distance:
 			hit = i
@@ -624,7 +657,7 @@ func move_organ(identity: int, a: float) -> bool:
 	var organ := organ_by_id(identity)
 	if organ.is_empty() or inherent(organ) or not is_finite(a): return false
 	organs.erase(organ)
-	_make_room(a,organ_width(organ),perimeter())
+	if not internal_organ(organ.kind):_make_room(a,organ_width(organ),perimeter())
 	organ.a = fposmod(a,TAU)
 	organs.append(organ)
 	render_revision += 1

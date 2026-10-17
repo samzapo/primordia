@@ -38,15 +38,15 @@ grep -Eq 'OVERDRIVE: [0-9]+ assertions, 0 failures' "$report_file"
 "$godot_bin" --headless --path "$project_dir" --script tests/nutrient_binding_run.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"
 ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
 grep -Eq 'NUTRIENT BINDING: [0-9]+ assertions, 0 failures' "$report_file"
-for script in anatomy_access_run; do
+for script in anatomy_access_run feedback_latest_run; do
   "$godot_bin" --headless --path "$project_dir" --script "tests/$script.gd" -- --particle-backend=cpu 2>&1 | tee "$report_file"
   ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
-  grep -Eq 'ANATOMY ACCESS: [0-9]+ assertions, 0 failures' "$report_file"
+  grep -Eq '(ANATOMY ACCESS|FEEDBACK LATEST): [0-9]+ assertions, 0 failures' "$report_file"
 done
-for script in induced_currents_run lineage_start_network camera_motion_run; do
+for script in induced_currents_run lineage_start_network camera_motion_run feedback_pass_network; do
   "$godot_bin" --headless --path "$project_dir" --script "tests/$script.gd" -- --particle-backend=cpu 2>&1 | tee "$report_file"
   ! grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"
-  grep -Eq '(INDUCED CURRENTS|LINEAGE START NETWORK|CAMERA MOTION): [0-9]+ assertions, 0 failures' "$report_file"
+  grep -Eq '(INDUCED CURRENTS|LINEAGE START NETWORK|CAMERA MOTION|FEEDBACK PASS NETWORK): [0-9]+ assertions, 0 failures' "$report_file"
 done
 for script in camera_delivery_run camera_streaming_network; do
   "$godot_bin" --headless --path "$project_dir" --script "tests/$script.gd" -- --particle-backend=cpu 2>&1 | tee "$report_file"
