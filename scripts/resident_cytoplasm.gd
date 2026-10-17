@@ -217,9 +217,9 @@ func _apply(bytes: PackedByteArray,code: int) -> void:
 	if bytes.decode_double(84*8)>0:cell.fermentation_activity=2
 	if bytes.decode_double(81*8)<0:cell.death_hint="Osmotic overload; contractile pumping failed"
 
-func advance(dt: float,external: float) -> void:
+func advance(dt: float,external: float,mitochondrial_gain: float=1.0) -> void:
 	var chem=chemistry.get_ref();chem.frame_dt=dt
-	command(0,dt,Vector2.ZERO,0,-1,-1,-1,-1,0,"food",{"external":external})
+	command(0,dt,Vector2.ZERO,0,-1,-1,-1,-1,0,"food",{"external":external,20:mitochondrial_gain})
 
 func value(index: int) -> float:return summary.decode_double(index*8) if not summary.is_empty() else 0.0
 

@@ -139,7 +139,8 @@ func _near_consume(species: String, quantity: float, at: Vector2, reach: float) 
 
 func advance(cell, dt: float, _external_osmolarity: float=.15) -> void:
 	if dt<=0 or cell.dead or particle_count()==0:return
-	if accelerator!=null:accelerator.advance(dt,.15);return
+	var mitochondrial_gain: float=cell.mitochondrial_gain(dt)
+	if accelerator!=null:accelerator.advance(dt,.15,mitochondrial_gain);return
 	frame_dt=dt;tick+=1
 	var budget: float=DIGESTION_RATE*cell.growth_scale()*dt
 	var original:=particles.duplicate();batching=true
@@ -155,8 +156,9 @@ func advance(cell, dt: float, _external_osmolarity: float=.15) -> void:
 		var fueled:=minf(used,fuel/7.5)
 		var tissue: float=fueled*(.7*aerobic+.3*anaerobic)/maxf(.00000001,used)
 		var work: float=minf(maxf(0,fuel-tissue*7.5),fueled*(2.25*aerobic+1.0*anaerobic)/maxf(.00000001,used))
-		if bonus>0:
-			var extra := minf(work*bonus,maxf(0,fuel-work))
+		var allocation_gain: float=bonus+maxf(0,mitochondrial_gain-1)*aerobic/maxf(.00000001,used)
+		if allocation_gain>0:
+			var extra := minf(work*allocation_gain,maxf(0,fuel-work))
 			var recovered_heat := maxf(0,fuel-tissue*7.5-work)
 			tissue-=maxf(0,extra-recovered_heat)/7.5
 			work+=extra
@@ -266,6 +268,10 @@ func inherit_configuration(_parent) -> void:pass
 func partition(_parent,_fraction: float) -> float:return 0.0
 func anchor_photosynthesis(_cell,_organ: Dictionary) -> void:pass
 func photosynthesize(sim,cell,organ: Dictionary,dt: float) -> void:
+	# Bound newly released parcels and render-thread work without losing time.
+	organ["photo_elapsed"]=float(organ.get("photo_elapsed",0))+dt
+	if organ.photo_elapsed<.25:return
+	dt=organ.photo_elapsed;organ.photo_elapsed=0.0
 	if dt<=0 or amount("carbon")<=.0000001:return
 	var light: float=sim.light_at(cell.organ_position(organ))
 	var budget: float=3.5*light*organ.scale*organ.scale*organ.hp/organ.max_hp*cell.Genes.factor(organ,"sun" if light>=.5 else "shade")*dt
@@ -281,11 +287,13 @@ func photosynthesize(sim,cell,organ: Dictionary,dt: float) -> void:
 		batching=true
 		used=_near_consume("carbon",budget,site,24)
 		if used>0:
-			emit("food",used*.65,site,organ.id,-1,used*.65*7.5)
+			emit("food",used*.65*.75,site,organ.id,-1,used*.65*.75*7.5)
 			emit("oxygen",used*2.5,site,organ.id,-1,0)
 			cell.biomass+=used*.35;solar_work+=used*11.5
 		batching=false;refresh()
 	if used>0:
+		var normal: Vector2=cell.organ_normal(organ).rotated(cell.angle)
+		sim.spawn_particle(0,cell.organ_position(organ)+normal*12,normal*12,used*.65*.25,cell.id)
 		cell.spend_energy(maxf(0,used-baseline_budget)*extra_cost,organ,"photosynthesis")
 		cell.gain_energy(used*4,organ)
 		cell.fixed_carbon+=used;cell.oxygen_produced+=used*2.5

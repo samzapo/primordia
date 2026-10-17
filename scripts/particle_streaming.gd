@@ -179,7 +179,11 @@ func service(sim) -> bool:
 	settle(sim,admission)
 	for packet in admission:
 		if not packet.alive: continue
-		if contains(packet.p): owner.pending.append(packet);entered+=1
+		if contains(packet.p):
+			# Use the same finite-output escrow as new emissions, including
+			# sub-float remainders and exhausted checkpoint slots.
+			owner.enqueue(packet)
+			if packet.alive:entered+=1
 		else: cold.put(packet,sim.time)
 	queue_depth=0
 	for key in _region_keys():
@@ -239,8 +243,11 @@ func sense(sim,query: Dictionary) -> Dictionary:
 	var result: Dictionary={"food":{},"reports":{},"needed":false}
 	var kind: int=sim.NUTRIENT if query.mode=="graze" else sim.WASTE if query.mode=="waste" else sim.TOXIN if query.mode=="toxin" else sim.PHEROMONE
 	var candidates: Array[int]=sim.grid.query_kind(sim.particles,query.at,query.reach,kind)
-	if query.mode in ["graze","hunt","flee"] and sim.kernels!=null and sim.kernels.has_method("packet_sense"):
-		result=sim.kernels.packet_sense(sim.particles,candidates,query.at,query.reach,query.center,query.id,query.lineage,sim.time,query.mode=="graze")
+	if query.mode in ["graze","hunt","flee","family"] and sim.kernels!=null and sim.kernels.has_method("packet_sense"):
+		result=sim.kernels.packet_sense(sim.particles,candidates,query.at,query.reach,query.center,query.id,query.lineage,sim.time,query.mode=="graze",query.mode=="family")
+		if query.mode=="family":
+			for id in result.reports.keys():
+				if result.reports[id].report.lineage!=query.lineage:result.reports.erase(id)
 		result["needed"]=false
 		return result
 	for index in candidates:
@@ -259,9 +266,9 @@ func sense(sim,query: Dictionary) -> Dictionary:
 			var bin: Dictionary=result.food[key]
 			bin.mass+=packet.amount;bin.moment+=delta*packet.amount
 			if distance<bin.distance: bin.distance=distance;bin.nearest=delta
-		elif query.mode in ["hunt","flee"] and packet.kind==sim.PHEROMONE and packet.expires_at>sim.time:
+		elif query.mode in ["hunt","flee","family"] and packet.kind==sim.PHEROMONE and packet.expires_at>sim.time:
 			var report: Dictionary=packet.report
-			if report.lineage==query.lineage: continue
+			if (report.lineage==query.lineage)!=(query.mode=="family"): continue
 			if not result.reports.has(report.id) or result.reports[report.id].report.emitted_at<report.emitted_at:
 				result.reports[report.id]={"report":report,"distance":distance,"expires_at":packet.expires_at}
 	return result

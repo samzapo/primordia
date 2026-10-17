@@ -4,7 +4,7 @@ static func execute(sim, action: String, args: Dictionary):
 	for key in ["id","to","value","angle"]:
 		if args.has(key) and not (args[key] is int or args[key] is float): return false
 		if args.has(key) and not is_finite(float(args[key])): return false
-	for key in ["kind","gene","module","species"]:
+	for key in ["kind","gene","module","species","scope"]:
 		if args.has(key) and not args[key] is String: return false
 	for key in ["dormant","active"]:
 		if args.has(key) and not args[key] is bool: return false
@@ -14,6 +14,7 @@ static func execute(sim, action: String, args: Dictionary):
 	var value: float = float(args.get("value",0))
 	if not is_finite(value): return false
 	match action:
+		"investment": return sim.Investment.set_strategy(sim,str(args.get("scope","")),str(args.get("kind","")))
 		"install": return sim.install(str(args.get("kind","")),float(args.get("angle",0)))
 		"remove":
 			var organ: Dictionary = cell.organ_by_id(identity)
@@ -22,13 +23,9 @@ static func execute(sim, action: String, args: Dictionary):
 		"mutate": return sim.mutate_organ(identity,str(args.get("gene","")))
 		"choose_mutation": return sim.evolution.accept_division_offer(str(args.get("gene","")))
 		"restore": return sim.restore(identity)
-		"steering": return cell.set_steering_strength(identity,value)
-		"output": return cell.set_output_strength(identity,value)
-		"exploration": return cell.set_exploration(value)
-		"cycle": return cell.set_response_cycle(value)
-		"reserve":
-			if value not in [-10.0,10.0]: return false
-			cell.reserve(value,sim.offspring_quote().material); return true
+		"steering","exploration","cycle": return false # Retired tuning; the shared behavior tree decides.
+		"output": return false # Retired command; never alter a saved organ.
+		"reserve": return false # Growth is automatic; old manual banking controls are retired.
 		"divide": return sim.divide_lineage(bool(args.get("dormant",false)),false)
 		"follow": return sim.follow_family(identity)
 		"module_add","module_remove","module_config","route_add","route_remove","configuration": return false

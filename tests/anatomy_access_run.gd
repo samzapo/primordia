@@ -76,12 +76,13 @@ func run() -> void:
 	sim.player.update_geometry(); sim.evolution.points = 2
 	var original_mass: float = sim.player.organic_mass()
 	var original_input: float = sim.external_input
-	check(sim.install("regenerative",0) and sim.evolution.points == 1,"An organ can be installed with AP and zero biomass/ATP")
+	check(sim.install("regenerative",0) and sim.evolution.points == 2,"The first organ is free and requires no biomass/ATP")
 	check(sim.player.biomass == 0 and sim.player.energy == 0,"Construction never debits cell biomass or ATP")
 	check(is_equal_approx(sim.player.organic_mass()-original_mass,sim.external_input-original_input),"AP construction tissue is an exact explicit material source")
 	var installed: Dictionary = sim.player.organs[-1]
 	sim.player.lost_organs.append(installed.duplicate(true)); sim.player.organs.clear()
-	check(sim.edit("restore",{"id":installed.id}) and sim.evolution.points == 0 and sim.player.biomass == 0,"Lost-organ restoration also costs only one AP")
+	check(sim.edit("restore",{"id":installed.id}) and sim.evolution.points == 2 and sim.player.biomass == 0,"Restoring the only absent organ uses the zero-AP next price")
+	sim.evolution.points = 0
 	var no_ap_state: Array = [sim.player.organic_mass(),sim.external_input,sim.player.organs.size()]
 	check(not sim.install("photosynthesis",1) and no_ap_state == [sim.player.organic_mass(),sim.external_input,sim.player.organs.size()],"A rejected AP purchase introduces no material or organ")
 	sim.evolution.points = 1
@@ -99,22 +100,22 @@ func run() -> void:
 	var player_ap: int = sim.evolution.points
 	var npc_input: float = sim.external_input; var npc_mass: float = npc.organic_mass()
 	sim.step_autonomous_builds()
-	check(npc.organs.size() == 2 and ledger.progression.points == 1,"An unmanaged lineage buys one random fitting organ with its own AP")
+	check(npc.organs.size() == 2 and ledger.progression.points == 2,"An unmanaged lineage buys one strategy-selected fitting organ with its own AP")
 	check(managed.organs.size() == 1 and sim.evolution.points == player_ap,"Offline player-owned roots and the selected lineage keep their AP")
 	check(npc.biomass == 0 and npc.energy == 0 and is_equal_approx(npc.organic_mass()-npc_mass,sim.external_input-npc_input),"NPC builds use the same AP-only material accounting")
 	sim.step_autonomous_builds()
-	check(ledger.progression.points == 1,"NPC purchases are bounded by a simulation-time retry interval")
+	check(ledger.progression.points == 2,"NPC purchases are bounded by a simulation-time retry interval")
 	sim.time += 2; sim.step_autonomous_builds()
-	check(ledger.progression.points == 0 and npc.organs.size() == 3,"NPC purchases spend existing AP once per successful build")
+	check(ledger.progression.points == 1 and npc.organs.size() == 3,"NPC purchases spend existing AP once per successful build")
 	sim.time += 2; sim.step_autonomous_builds()
 	check(npc.organs.size() == 3,"An unmanaged lineage stops buying when its AP is exhausted")
-	ledger.progression.points = 1
+	ledger.progression.points = 2
 	var codec = preload("res://scripts/network/state_codec.gd").new()
 	var recovered = codec.restore(codec.capture(sim))
 	sim.time += 2; recovered.time += 2
 	sim.step_autonomous_builds(); recovered.step_autonomous_builds()
 	var recovered_npc = recovered.cells.filter(func(body):return body.id == npc.id)[0]
-	check(recovered_npc.organs == npc.organs and recovered._family_ledger(recovered_npc).progression.points == ledger.progression.points,"NPC AP and random purchase sequence survive a checkpoint restart")
+	check(recovered_npc.organs == npc.organs and recovered._family_ledger(recovered_npc).progression.points == ledger.progression.points,"NPC AP and strategy purchase sequence survive a checkpoint restart")
 	game.queue_free(); await process_frame
 	print("ANATOMY ACCESS: %d assertions, %d failures" % [assertions,failures])
 	quit(0 if failures == 0 else 1)

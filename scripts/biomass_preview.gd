@@ -36,7 +36,7 @@ func sync() -> void:
 	var price: Dictionary = game.cell_ui.hovered_price
 	var showing_cost: bool = not price.is_empty() or game.selected >= 0
 	var cost: float = float(price.tissue) if not price.is_empty() else 0.0
-	var ap_needed: int = int(price.ap) if not price.is_empty() else 1 if game.selected >= 0 else 0
+	var ap_needed: int = int(price.ap) if not price.is_empty() else game.world.player.construction_price() if game.selected >= 0 else 0
 	var s: float = game.preferences.hud_scale
 	var view := get_viewport_rect().size
 	var maximum := minf(68*s,minf(view.x*0.095,view.y*0.14))

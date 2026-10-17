@@ -50,41 +50,14 @@ static func run(check: Callable) -> void:
 		for i in 8: sim.spawn_particle(Sim.NUTRIENT,cell.position+Vector2(side*(240+i),0),Vector2.ZERO,1,77)
 	aim(sim)
 	check.call(Sim.Medium.offset(cell.position,cell.target_position).length() > 230,"Separated opposing clouds do not produce an empty midpoint goal")
-	var pore: Dictionary = cell.organs[0]
-	cell.set_exploration(1)
-	check.call(is_equal_approx(cell.response_share(pore),0.5),"Equal signal and exploration weights split following time equally")
-	cell.set_steering_strength(pore.id,0.25)
-	check.call(is_equal_approx(cell.response_share(pore),0.2),"A weaker signal grants proportionately more exploration time")
-	cell.set_steering_strength(pore.id,1)
-	cell.sense_clock = 10
-	cell.target_memory = 1
-	cell.age = 3
+	var pore: Dictionary=cell.organs[0]
+	cell.exploration=4;cell.response_cycle=2;pore["steering"]=0
+	cell.sense_clock=10;cell.age=3;cell.target_memory=1
 	sim._sense(cell,DT)
-	check.call(not cell.drive_active and cell.target_memory > 0 and cell.state == "EXPLORING · RESPONSE CYCLE","Exploration happens despite a valid refreshing signal and preserves its bounded memory")
-	var heading: Vector2 = cell.target
-	cell.angle += 2
-	sim._sense(cell,DT)
-	check.call(cell.target == heading,"Exploration heading is independent of cell rotation, avoiding perpetual spirals")
-	cell.age = 0.5
-	sim._sense(cell,DT)
-	check.call(cell.drive_active and cell.target_mode == "graze","The response cycle returns to its remembered signal")
-	cell.set_exploration(0)
-	cell.age = 3.8
-	sim._sense(cell,DT)
-	check.call(cell.drive_active,"Exploration Off follows a valid signal for the entire cycle")
-	cell.add_organ("sensing",1,"flee",false)
-	var flight: Dictionary = cell.organs[-1]
-	cell.target_organ_id = flight.id
-	cell.target_mode = "flee"
-	cell.target_lineage = 77
-	cell.target_memory = 1
-	cell.set_exploration(4)
-	sim._sense(cell,DT)
-	check.call(cell.drive_active and cell.state == "FLEEING","Explicit flight bypasses exploration duty")
-	check.call(not cell.set_response_cycle(3) and not cell.set_exploration(NAN),"Invalid behavior settings are rejected")
-	cell.set_exploration(0.5)
-	cell.set_response_cycle(8)
-	var child = sim.make_offspring(cell,sim.offspring_quote())
-	check.call(child.exploration == 0.5 and child.response_cycle == 8,"Paid successors inherit exploration weight and response cycle")
-	child.set_exploration(2)
-	check.call(cell.exploration == 0.5,"A child's behavior settings are independent of its parent")
+	check.call(cell.drive_active and cell.target_mode=="graze","Legacy exploration/steering settings never interrupt a useful food cue")
+	var heading: Vector2=cell.target
+	cell.angle+=2;sim._sense(cell,DT)
+	check.call(cell.target==heading,"World food intentions stay independent of body rotation")
+	check.call(not cell.set_response_cycle(3) and not cell.set_exploration(1) and not cell.set_steering_strength(pore.id,2),"Retired behavior settings reject all edits")
+	var child=sim.make_offspring(cell,sim.offspring_quote())
+	check.call(cell.exploration==4 and cell.response_cycle==2 and pore.steering==0 and child.exploration==.25 and child.response_cycle==4 and child.organs[0].steering==1,"Parent legacy fields stay intact while a basic daughter starts fresh, with all retired controls inactive")

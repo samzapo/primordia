@@ -28,14 +28,14 @@ static func run(check: Callable) -> void:
 	stress(check)
 	var sim = Sim.new(77)
 	check.call(sim.player.count("propulsion") == 0 and sim.player.count("cilia") == 0 and sim.player.count("feeding") == 1,"Starter has a pore and no free locomotion organ")
-	check.call(sim.lineage.dormant[0].count("propulsion")+sim.lineage.dormant[0].count("cilia") == 0,"Founder reserve preserves the same bare starter anatomy")
+	check.call(sim.lineage.dormant.is_empty(),"Founder has no hidden reserve body")
 	var material: float = sim.player.organic_mass()
 	var tissue: float = sim.player.biomass
 	var ap: int = sim.evolution.points
 	var external: float=sim.external_input
 	var build_energy: float=sim.player.energy
 	check.call(sim.install("cilia",PI/2) and sim.install("propulsion",PI),"Cilia and flagellum are separate buildable purchases")
-	check.call(sim.player.biomass == tissue and sim.player.energy==build_energy and sim.evolution.points == ap-2 and is_equal_approx(material+sim.external_input-external,sim.player.organic_mass()),"Each propulsion purchase costs one AP with tissue accounted as external input")
+	check.call(sim.player.biomass == tissue and sim.player.energy==build_energy and sim.evolution.points == ap-1 and is_equal_approx(material+sim.external_input-external,sim.player.organic_mass()),"The first two propulsion purchases cost zero and one AP with tissue accounted as external input")
 	sim.begin_build()
 	check.call(sim.player.count("cilia") == 1 and sim.player.count("propulsion") == 1,"Both purchases survive entering the cell editor")
 	sim.commit_build()
@@ -89,7 +89,8 @@ static func run(check: Callable) -> void:
 	cell.energy = 0
 	sim._suction_cell(cell,0.5)
 	sim._motion_cell(cell,0.1)
-	check.call(cell.velocity == Vector2.ZERO and sim.fluid.momentum() == Vector2.ZERO,"Empty ATP disables ciliary current and propulsion")
+	check.call(cell.velocity.length()>0 and cell.energy==0,"Empty ATP retains reduced ciliary current and propulsion without negative ATP")
+	cell.velocity=Vector2.ZERO;cell.angular_velocity=0;sim.fluid.velocity.fill(Vector2.ZERO)
 	cell.energy = 72
 	cell.organs[0].hp = 0
 	sim._suction_cell(cell,0.5)

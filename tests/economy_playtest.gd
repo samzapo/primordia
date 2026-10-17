@@ -65,7 +65,6 @@ func run() -> void:
 					if cell.brood_mass+0.000001 >= sim.offspring_quote().material and cell.brood_energy >= 60:
 						# Spend earned reserves: follow the first juvenile; later secure one backup.
 						if cell.generation == 0: sim.divide_lineage(false,true)
-						elif sim.lineage.dormant.size() < 2: sim.divide_lineage(true,false)
 					elif cell.generation == 0:
 						for relative in sim.lineage.active_family(sim):
 							if relative.generation > 0: sim.follow_family(relative.id); break

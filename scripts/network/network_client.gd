@@ -331,6 +331,7 @@ func _poll_network() -> void:
 			match message.get("kind",""):
 				"death_events": _receive_deaths(message)
 				"profile_result": profile.result(message)
+				"lineage_color_result": palette.result(message)
 				"feedback_result": feedback.result(message)
 				"update_seen_result": _release_result(message)
 				"welcome": _welcome(message)
@@ -453,6 +454,8 @@ func _snapshot(message: Dictionary) -> void:
 	for identity in cells_by_id.keys():
 		if not retained_ids.has(identity):cells_by_id.erase(identity)
 	world.lineage=data.lineage;world.evolution=data.evolution
+	world.investment=data.get("investment",{"npc":{},"lineages":{},"cells":{}})
+	family_portraits=message.get("family_portraits",{})
 	family_recovery=message.get("family_recovery",{})
 	if not camera_initialized or previous_player!=world.player.id:
 		cell_ui.close_context();build_open=false;moving_id=-1;selected=-1
@@ -498,7 +501,7 @@ func _snapshot(message: Dictionary) -> void:
 
 func _show_next_update() -> void:
 	if defer_release_updates or not connected or loading_world or login.visible or update_popup.opened or update_popup.pending or pending_release_updates.is_empty():return
-	if player_help.opened or feedback.opened or profile.opened or settings_panel.visible:return
+	if player_help.opened or feedback.opened or profile.opened or palette.opened or settings_panel.visible:return
 	var notes: Dictionary=pending_release_updates[0].duplicate(true)
 	if pending_release_updates.size()>1:notes.button="Next update"
 	touch_zoom.cancel();update_popup.open(notes)
@@ -532,6 +535,10 @@ func _copy_cell(incoming):
 		cell.chemistry.render_origins=origins
 	if death_tombstones.has(cell.id):cell.dead=true
 	return cell
+
+func _submit_lineage_color(value: String) -> String:
+	if not connected:return "Reconnect before saving your color."
+	_send({"op":"lineage_color","color":value});return ""
 
 func _submit_profile(value: String) -> String:
 	if not connected:return "Reconnect before saving your name. Your text is kept."

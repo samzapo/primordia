@@ -5,19 +5,19 @@
       {
         "id": "anatomy",
         "title": "Your cell chooses where to swim",
-        "text": "Build and tune its organs to influence feeding, pursuit, escape and light seeking. You do not steer it directly.",
+        "text": "Build organs to shape what your cell can sense and do. It chooses when to feed, hunt, escape or seek light; you do not steer it directly.",
         "sources": []
       },
       {
         "id": "overlap",
         "title": "Choose overlapping structures",
-        "text": "When several structures share a spot, choose the one you want from the temporary selection menu.",
+        "text": "When several structures share a spot, choose the one you want from the temporary selection menu. Its pictures match the factories, organs and stores on your cell; damaged organs have a pink ring.",
         "sources": []
       },
       {
         "id": "build",
         "title": "Build and restore",
-        "text": "Open the Assembly or Chemistry factory, choose an organelle, then choose a place on the membrane. Each installation or lost-organ restoration costs 1 AP. Organs need room.",
+        "text": "Open the Assembly or Chemistry factory for membrane organs. The three teal chambers with a small + are the Chemistry factory: open it from either view for mitochondria. Choosing an internal organ switches smoothly to Interoception so you can place it inside. The first added organelle is free, the second costs 1 AP, the third 2 AP, and so on. The oral groove does not count. Selling lowers the next price and returns the AP you paid minus 1, with a minimum return of 0; restoration uses that same next price. While building, the resource strip shows your AP and the cost.",
         "sources": []
       },
       {
@@ -28,32 +28,32 @@
       },
       {
         "id": "organs",
-        "title": "Move, recycle and tune",
-        "text": "Open an installed organelle to move it, recycle it, change its Output, or adjust Steering where available. Output increases its work and ATP use; Steering changes its influence on swimming.",
+        "title": "Move, recycle and specialize",
+        "text": "Open an installed organelle to move, recycle or specialize it. Organs work at their normal rate. A small ring shows recharge progress. Select an organelle to read its state at the bottom; energy-starved organs lose their color.",
         "sources": []
       },
       {
         "id": "mutate",
         "title": "Choose adaptations",
-        "text": "Open the nucleus to keep an offered division mutation. Open a matching organelle to apply a learned mutation. Photosynthesis always offers Sun or Shade specialization. These choices are free.",
+        "text": "Open the nucleus to keep an offered division mutation. Open a matching organelle to apply a learned mutation. Photosynthesis always offers Sun or Shade: Sun seeks brighter water; Shade seeks soft light and turns toward light if it is too dark. These choices are free.",
         "sources": []
       },
       {
         "id": "behavior",
-        "title": "Tune exploration",
-        "text": "Open Nucleus → Behavior to change wandering strength and the cycle between exploration and following a signal.",
+        "title": "Understand your cell’s instincts",
+        "text": "Nucleus → Behavior explains its instincts. Low ATP favors food, useful light or resting while food digests. Low biomass favors feeding or hunting. Healthy cells can hunt or explore. Harmful acid and attacks take priority; family traces help attacked cells spread out. The same instincts apply to every cell, using its own organs and local signals.",
         "sources": []
       },
       {
         "id": "offspring",
-        "title": "Manage offspring",
-        "text": "Open the offspring reserve to add or reclaim resources, release a funded successor, or store one dormant. Surplus investment and splitting also happen automatically.",
+        "title": "Cell division",
+        "text": "Surplus tissue and ATP grow a daughter automatically. When ready and there is room, the cell divides and its daughter joins the pond. Open the growing bud to check progress or divide now when ready. Daughters begin with a basic oral groove and inherit the parent’s investment strategy; a Manual parent gives a random Hunter, Producer or Grazer.",
         "sources": []
       },
       {
         "id": "history",
         "title": "View your family",
-        "text": "Open Nucleus → Family & goals, or Family history in Pause, to see your relatives and select a living family member.",
+        "text": "Nucleus → Family shows all living relatives together as pictures of their current cells. The tiny corner number is each cell’s generation. Choose a living relative to manage it; your previous cell stays alive. The menu grows to fit your screen; scroll if your family needs more room. The header keeps the highest generation and lifetime cell count. Deceased relatives leave the list.",
         "sources": []
       },
       {
@@ -73,6 +73,18 @@
         "title": "Smooth camera changes",
         "text": "Following, recentering, changing views and switching family members glide into place. Pause holds the camera; direct camera gestures stay responsive. Nearby water is prepared ahead of your view to reduce empty patches while exploring.",
         "sources": []
+      },
+      {
+        "id": "investment",
+        "title": "Choose unattended investments",
+        "text": "Nucleus → Investment shows Hunter, Producer and Grazer cells together. Choose Family or This cell, then a picture. Hunter builds pursuit, weapons and movement; Producer builds leaves and support; Grazer builds feeding currents and recycling support. Each can develop different supporting organs and respond to damage. Only unattended cells buy; your selected cell stays manual. Manual saves AP; Inherit uses the family choice. Low-power cells favor a mitochondrion when they already have food and oxygen.",
+        "sources": []
+      },
+      {
+        "id": "lineage_color",
+        "title": "Choose your lineage color",
+        "text": "Pause → Lineage color opens a color disc. Drag around the outer ring to change hue. Drag across the inner disc for saturation and brightness, then Save color. The choice applies to your lineage and stays after reconnecting.",
+        "sources": []
       }
     ],
     "touch": [
@@ -91,7 +103,7 @@
       {
         "id": "select",
         "title": "Open cell controls",
-        "text": "Tap a factory, nucleus, offspring reserve, ATP store or installed organelle. Choices appear along the top. Tap × or empty water to close choices.",
+        "text": "Tap a factory, nucleus, growing bud, ATP store or installed organelle. Choices appear along the top. Tap × or empty water to close choices.",
         "sources": []
       },
       {
@@ -141,7 +153,7 @@
       {
         "id": "select",
         "title": "Open cell controls",
-        "text": "Click a factory, nucleus, offspring reserve, ATP store or organelle. Tab enters or leaves cell editing.",
+        "text": "Click a factory, nucleus, growing bud, ATP store or organelle. Tab enters or leaves cell editing.",
         "sources": []
       },
       {
@@ -210,7 +222,7 @@
         {
           "id": "photosynthesis",
           "title": "Carbon + light → food, biomass and oxygen",
-          "text": "Photosynthesis uses carbon particles and light to make food and biomass, releases oxygen, and supplies ATP. Sun and Shade specializations favor different light conditions. In nature, oxygen comes from water; the game leaves water implicit.",
+          "text": "Photosynthesis uses carbon particles and light to make food and biomass, releases oxygen, and supplies ATP. Sun favors and seeks bright water. Shade favors soft light, steers away from bright patches and seeks more light when too dark. In nature, oxygen comes from water; the game leaves water implicit. Of the food made, 75% stays inside and 25% is released for the pond. This split is a game rule.",
           "sources": [
             {
               "title": "Oxygen production in photosynthesis",
@@ -225,7 +237,7 @@
         {
           "id": "emergency",
           "title": "Emergency fuel",
-          "text": "When ATP is low, a cell can reclaim uncommitted offspring reserves and use spare biomass as fuel. It cannot live indefinitely without food or light and carbon.",
+          "text": "When ATP is low, a cell can reclaim uncommitted division investment and use spare biomass as fuel. It cannot live indefinitely without food or light and carbon.",
           "sources": [
             {
               "title": "Microbial energy reserves",
@@ -236,13 +248,19 @@
         {
           "id": "upkeep",
           "title": "ATP pays for work",
-          "text": "Maintenance, swimming, pumping, repair and secretion spend ATP. Higher Output does more work but uses more ATP, with a small extra cost. Ordinary light collection and sensing remain possible at zero ATP.",
+          "text": "Maintenance, swimming, pumping, repair and secretion spend ATP. Ordinary light collection and sensing remain possible at zero ATP.",
           "sources": [
             {
               "title": "Catalysis and cellular energy",
               "url": "https://www.ncbi.nlm.nih.gov/books/NBK26838/"
             }
           ]
+        },
+        {
+          "id": "low_power",
+          "title": "Low ATP: quarter capacity",
+          "text": "Low ATP slows movement, feeding currents, glands and active repair to 25% capacity instead of switching them off. Weapons recharge four times more slowly. Normal activity returns automatically when ATP recovers. Organs still need their usual materials and signals. Digestion, photosynthesis, sensing and passive protection keep their existing operation. This residual capacity is a game rule.",
+          "sources": []
         }
       ]
     },
@@ -454,7 +472,7 @@
         {
           "id": "organ_feeding",
           "title": "Oral groove",
-          "text": "Senses and takes in food, pumps nearby water, and releases digestive enzymes. Turning its Steering off does not turn feeding off.",
+          "text": "Senses and takes in food, pumps nearby water, and releases digestive enzymes.",
           "sources": [
             {
               "title": "Food-vacuole formation",
@@ -487,7 +505,7 @@
         {
           "id": "organ_photosynthesis",
           "title": "Photosynthesis",
-          "text": "Uses light and carbon; also steers toward light. Choose Sun or Shade from its menu.",
+          "text": "Uses light and carbon. Sun leaves seek brighter water; Shade leaves seek soft light, returning toward light when it is too dark. Choose Sun or Shade from its menu.",
           "sources": [
             {
               "title": "Oxygen production in photosynthesis",
@@ -565,6 +583,28 @@
               "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3678083/"
             }
           ]
+        },
+        {
+          "id": "organ_mitochondrion",
+          "title": "Mitochondrion",
+          "text": "Sits inside the cell and extracts more ATP from food when oxygen is nearby. It can redirect some food from growth into energy; it never adds fuel. Without oxygen, fermentation stays unchanged.",
+          "sources": [
+            {
+              "title": "The mitochondrion",
+              "url": "https://www.ncbi.nlm.nih.gov/books/NBK26894/"
+            }
+          ]
+        },
+        {
+          "id": "organ_counterattack",
+          "title": "Counterattack gland",
+          "text": "Fires at the last position reported by a nearby chemical warning from an armed cell. Its toxin spares cells without offensive organs. Perfect sparing is a game rule inspired by local bacterial counterattack.",
+          "sources": [
+            {
+              "title": "Bacterial tit-for-tat counterattack",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3616380/"
+            }
+          ]
         }
       ]
     },
@@ -586,7 +626,7 @@
         {
           "id": "division",
           "title": "Reproduction and AP",
-          "text": "Surplus biomass and ATP go into offspring reserves automatically. A funded cell divides when there is room. Each committed division awards 2 AP; building or restoring an organelle costs 1 AP. AP is a game resource.",
+          "text": "Surplus biomass and ATP automatically grow a daughter inside the cell. A funded cell divides when there is room. Each committed division awards 2 AP; each cell’s first added organelle costs 0 AP, its second 1 AP, its third 2 AP, and so on. The oral groove does not count. Selling lowers the next price and returns the AP you paid minus 1, with a minimum return of 0; restoring an absent organ uses the next price. AP is a game resource. Daughters start with a basic oral groove and rebuild their own organs. They inherit the parent’s investment choice; Manual gives a random Hunter, Producer or Grazer.",
           "sources": [
             {
               "title": "Cell division",
@@ -597,22 +637,11 @@
         {
           "id": "mutations",
           "title": "Mutations and inheritance",
-          "text": "Division has a 10% chance to offer a free mutation. Keep it through the nucleus, then apply it to a matching organelle. Descendants inherit their lineage’s anatomy. The chance and choices are game rules.",
+          "text": "Division has a 10% chance to offer a free mutation. Keep it through the nucleus, then apply it to a matching organelle. Daughters start with a basic oral groove and inherit the investment strategy, rather than the parent’s organs or mutations. The chance and choices are game rules.",
           "sources": [
             {
               "title": "Cell division",
               "url": "https://www.ncbi.nlm.nih.gov/books/NBK26831/"
-            }
-          ]
-        },
-        {
-          "id": "dormant",
-          "title": "Stored successors",
-          "text": "A fully paid dormant successor can preserve the lineage if its active cells die. Storing one still needs real offspring reserves.",
-          "sources": [
-            {
-              "title": "Microbial dormancy",
-              "url": "https://pubmed.ncbi.nlm.nih.gov/20231463/"
             }
           ]
         },
@@ -662,7 +691,7 @@
         {
           "id": "npc_growth",
           "title": "Other cells develop too",
-          "text": "Cells without a player lineage can spend their AP on random organelles that fit. Your lineage keeps its AP for you.",
+          "text": "Unassigned computer-controlled cells are balanced toward one in ten Hunters, with the rest split between Producers and Grazers. Daughters keep their parent’s investment strategy; a Manual parent gives a random Hunter, Producer or Grazer. Inherited choices stay with each daughter, so reproduction can change the mix. Strategies build a core and complementary support; injury favors repair and escape senses. Your selected cell stays manual to build, while unattended cells follow their saved strategy. These are game rules.",
           "sources": []
         }
       ]
@@ -710,7 +739,7 @@
         {
           "id": "names_music",
           "title": "Identity and music",
-          "text": "Names appear above player lineages and brighten while their owner is connected. Music responds to the world, but muting it does not change the cell’s biology.",
+          "text": "Names appear above player lineages and brighten while their owner is connected. Music responds to the world, but muting it does not change the cell’s biology. Pause also lets you choose your lineage’s color. Color and readiness rings are visual aids; they do not change biology.",
           "sources": []
         },
         {
@@ -721,6 +750,25 @@
             {
               "title": "External forces that drive water currents",
               "url": "https://oceanexplorer.noaa.gov/ocean-fact/currents/"
+            }
+          ]
+        },
+        {
+          "id": "cell_instincts",
+          "title": "Shared instincts, different bodies",
+          "text": "Every cell uses the same priorities: escape harm, recover ATP, rebuild biomass, then hunt or explore. Food and prey must be sensed locally. Leaves seek useful light; a flight receptor can sense harmful acidity. A hit can trigger a short retreat. Received family traces help attacked cells spread out. Low reserves recover through a quiet range before the goal changes. Resting stops active swimming while real digestion continues. These priorities and thresholds are game choices, not a literal biological brain.",
+          "sources": [
+            {
+              "title": "Chemical sensing under flow",
+              "url": "https://www.nature.com/articles/s41467-023-44267-y"
+            },
+            {
+              "title": "Light-guided swimming",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC4868408/"
+            },
+            {
+              "title": "Responses to acidity",
+              "url": "https://www.nature.com/articles/s42003-024-06698-1"
             }
           ]
         }

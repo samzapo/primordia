@@ -668,3 +668,43 @@ weather-aware visual exposure so dim conditions retain spatial contrast.
 Irregular animated caustic curves appear only in lit water, follow world time
 and respect the water-ripple setting. They add no energy, chemistry, fluid force
 or camera displacement. See [Revision 56](REVISION_56.md).
+
+### Investment and protected-cell options (October17,2026)
+Revision59 supersedes random NPC buying:10%hunter assignments (rounded down), remaining bodies evenly producer/grazer. Policies override catalog randomness; preserve existing anatomy and all AP prices. Players may opt unattended relatives into saved family/cell strategies from the nucleus. Selected connected bodies remain manual.
+New photosynthate keeps75% of the food inside and releases25% outside; all output debits real local carbon. Internal mitochondria redirect finite food fuel toward ATP when oxygen is present. Counterattack responds to local chemical warnings and spares unarmed bodies at contact.
+The fictional Sanctuary prevents death/organ destruction, blocks offspring and awards2AP only after a full paid growth investment. Its toxin/pore material cannot harm player lineages; area-acid secretion/combat decoys are disabled. These are explicit game rules, not biological claims. See [Revision59](REVISION_59.md).
+
+### Shade preference and normal organ activity (October17,2026)
+Revision60 makes Shade leaves seek the darker local direction above0.45 light and brighter water below0.35; the middle band has no light drive. Sun/ordinary leaves retain light seeking. In-flight and held light intentions cannot override a changed preference. Steering and flight rules remain. Per-organelle Output/overdrive is retired: normal work/ATP rates apply, and saved percentages are retained but ignored. No saved cell is rewritten. See [Revision60](REVISION_60.md).
+
+October17 continuation: [Revision60](REVISION_60.md) replaces manual Exploration/duty cycles and organ Steering percentages with one local-signal behavior tree for all cells. Survive harm, recover ATP, rebuild biomass, then hunt/explore; anatomy supplies abilities. Investment roles develop diverse complementary builds using actual anatomy and own condition, with the same AP/physiology rules. Future organs must review both systems, their tests and simple player guide. This supersedes earlier manual-gain instructions; retain legacy saved fields inert, all cells and both independent ponds.
+
+Final Revision60 correction: Sanctuary is withdrawn entirely. Family retains current relatives/reserves plus lifetime total and highest generation, without deceased cards. The owner explicitly authorizes a fresh experimental pond for this large revision, with accounts/keys/private feedback retained and stable untouched; future ordinary updates remain persistent.
+
+### Division inherits investment rather than anatomy (October17,2026)
+[Revision61](REVISION_61.md) replaces cloned daughter builds with a new basic oral-groove body. Only the effective investment strategy is inherited; Manual selects Hunter, Producer or Grazer uniformly at successful birth. New anatomy and its lower reproduction quote use the ordinary finite material/ATP transfer. Daughter body overrides survive checkpointing and NPC assignment; reproductive success may change the population strategy mix. Parent organs and existing saved/dormant cells remain unchanged.
+
+Revision61 AP continuation: each cell's next added/restored organ costs its current installed non-inherent organ count:0,1,2,...AP. Selling lowers the next price and refunds the actual AP paid minus1, floored at0. Oral anatomy is excluded. Shared price calculation covers manual, unattended, desktop and mobile building; existing anatomy determines cost without migration.
+
+### Quarter-capacity low-power organs (October17,2026)
+[Revision62](REVISION_62.md) replaces ATP-based shutdowns with a25% activity floor for functional movement, pumping, secretion, weapon recharge and active gland repair/cleaning. Full operation returns after ATP recovers, with separate entry/recovery thresholds to prevent flicker. Material, target and health prerequisites remain; no ATP is created, and unpaid residual work is an explicit gameplay rule. Passive energy recovery/senses/protection remain unchanged. Shared behavior allows low-power pursuit as a last locally cued option and investment favors feasible mitochondrial recovery.
+
+### Family portraits (October 17, 2026)
+
+The family menu pictures each current relative or dormant reserve with its actual membrane shape, lineage color, nucleus and installed organs. A tiny generation number sits in the bottom corner, like a factory badge, and the selected body stays marked. Pictures update while the menu is open; deceased relatives leave it. Off-camera owned anatomy is a compact presentation snapshot, separate from simulation models and camera interests. Rendering does not advance biology, grant resources or consume ecology RNG. Existing lineage counters, follow validation and ordinary persistent updates remain.
+
+October 17 family-menu continuation: all current relatives and reserves appear in one responsive portrait grid on desktop and touch. The standalone G-generation tile and More pages are removed. Small header text keeps highest generation and lifetime total; each portrait keeps its tiny corner generation badge. The panel grows up to the screen bounds and scrolls only when needed, with Close fixed above the scrolling portraits. This changes presentation only.
+
+### Direct living division (October 17, 2026)
+
+Banked offspring are removed. A founder has no free hidden backup. Surplus
+tissue and ATP still fund growth; a ready cell divides directly into a living
+daughter when space and population limits allow. The growing bud has only
+Divide now, with no fund/reclaim/store menu. A failed birth retains its numeric
+growth investment and does not create a separate body. Basic daughter anatomy,
+investment inheritance, 2AP per birth and living-family succession remain.
+The owner waives old reserve/history retention for this revision: previously
+stored bodies are discarded during ordinary authority ticking, with tissue
+recorded in build_waste, rather than hatched or migrated. Save/reload boundaries
+still preserve all actual living cells and both pond identities. The retired
+checkpoint array is readable only to discard it; it has no gameplay use.
