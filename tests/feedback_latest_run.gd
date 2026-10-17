@@ -30,7 +30,7 @@ func run() -> void:
  check(absf(status.progress-.5)<.000001 and status.label.begins_with("Recharging"),"Readiness ring follows the actual organ cooldown")
  cell.energy=0
  status=preload("res://scripts/organelle_status.gd").state(sim,cell,organ)
- check(status.depleted and status.label.contains("ATP"),"Energy-starved glands have an explicit state and dimmed presentation")
+ check(status.depleted and status.capacity==.25 and status.label.contains("25%") and not status.label.contains("paused"),"Energy-starved glands show active quarter capacity and their actual slow recharge")
  for point in [Vector2.ZERO,Vector2(1,1),Vector2(-1,1),Vector2(.5,-.2)]:
   var wheel=preload("res://scripts/lineage_color_wheel.gd")
   check(wheel.disc_to_square(wheel.square_to_disc(point)).distance_to(point)<.00001,"HSV disc reaches the complete saturation/value range")

@@ -89,7 +89,8 @@ static func run(check: Callable) -> void:
 	cell.energy = 0
 	sim._suction_cell(cell,0.5)
 	sim._motion_cell(cell,0.1)
-	check.call(cell.velocity == Vector2.ZERO and sim.fluid.momentum() == Vector2.ZERO,"Empty ATP disables ciliary current and propulsion")
+	check.call(cell.velocity.length()>0 and cell.energy==0,"Empty ATP retains reduced ciliary current and propulsion without negative ATP")
+	cell.velocity=Vector2.ZERO;cell.angular_velocity=0;sim.fluid.velocity.fill(Vector2.ZERO)
 	cell.energy = 72
 	cell.organs[0].hp = 0
 	sim._suction_cell(cell,0.5)

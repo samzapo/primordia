@@ -28,6 +28,9 @@ const CILIA_PUMP := 0.08
 const CILIA_THRUST := 1800.0
 const CILIA_REACH := 170.0
 const CILIA_FLOW := 52.0
+const LOW_POWER_ATP := 12.0
+const POWER_RECOVERY_ATP := 18.0
+const LOW_POWER_CAPACITY := 0.25
 const SECRETION_COST := 0.10
 const AEROBIC_ATP := 2.25
 const FERMENT_ATP := 1.0
@@ -248,6 +251,15 @@ func organ_local_position(organ: Dictionary) -> Vector2:
 
 func organ_position(organ: Dictionary) -> Vector2:
 	return position+organ_local_position(organ).rotated(angle)
+
+func update_power_state() -> void:
+	if energy<LOW_POWER_ATP:behavior["low_power"]=true
+	elif energy>=POWER_RECOVERY_ATP:behavior.erase("low_power")
+
+func work_capacity(required: float=0.0) -> float:
+	# Read-only, including when used by presentation or coarse intake requests.
+	var threshold: float=POWER_RECOVERY_ATP if behavior.get("low_power",false) else LOW_POWER_ATP
+	return LOW_POWER_CAPACITY if energy+0.0000001<maxf(threshold,required) else 1.0
 
 func mitochondrial_gain(dt: float) -> float:
 	if chemistry.amount("food")<=0 or chemistry.amount("oxygen")<=0:return 1.0
@@ -564,21 +576,23 @@ func damage(amount: float, world_angle: float, source: int=-1) -> float:
 func heal(dt: float) -> float:
 	leaks.clear()
 	if health <= 0 or dead: return 0.0
+	update_power_state()
+	var capacity: float=work_capacity()
 	var leaked = 0.0
 	var repair := 1.0
 	var repair_cost := 1.0
 	for organ in organs:
-		if organ.kind == "regenerative":
+		if organ.kind == "regenerative" and organ.hp>0:
 			repair += 2.0*organ.scale*organ.scale*Genes.factor(organ,"repair")
 			repair_cost = maxf(repair_cost,Genes.factor(organ,"repair_cost"))
 	for hole in holes:
 		var loss: float = drain(hole.size * 7.0 * dt)
 		leaked += loss
 		if loss > 0: leaks.append({"a":hole.a,"amount":loss})
-		hole.size = maxf(0,hole.size-dt*1.1*repair)
+		hole.size = maxf(0,hole.size-dt*1.1*(1+(repair-1)*capacity))
 	holes = holes.filter(func(h): return h.size > 0)
-	if energy > 0:
-		var healed = minf(100-health, minf(8.0*repair*dt, minf(biomass/0.05,available_energy()/(0.2*repair_cost))))
+	if energy > 0 or repair>1:
+		var healed = minf(100-health,minf(8.0*repair*dt*capacity,biomass/0.05))
 		health += healed
 		# Repaired membrane incorporates mass into structure rather than deleting it.
 		biomass -= healed*0.05
@@ -588,7 +602,7 @@ func heal(dt: float) -> float:
 		for organ in organs:
 			if inherent(organ): continue
 			var unit: float = organ.get("max_material",organ_cost(organ.kind,organ.scale)) / organ.max_hp
-			var restore = minf(organ.max_hp-organ.hp,minf(dt*1.3*repair,minf(biomass/unit,available_energy(organ)/(0.15*repair_cost))))
+			var restore = minf(organ.max_hp-organ.hp,minf(dt*1.3*repair*capacity,biomass/unit))
 			organ.hp += restore
 			organ.material += restore*unit
 			biomass -= restore*unit

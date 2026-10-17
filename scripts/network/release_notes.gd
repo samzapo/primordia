@@ -179,6 +179,18 @@ const RELEASES=[
  "footer":"Your existing cells and their organs carry on between updates.",
  "button":"Back to the pond",
 },
+{
+ "id":"2026-10-17-quarter-power",
+ "audience":"experimental",
+ "title":"What’s new in the pond",
+ "items":[
+  "Low ATP now slows movement, feeding currents, glands and active repair to a quarter of normal activity instead of stopping them.",
+  "Weapons recharge more slowly while underpowered. Normal activity returns automatically as ATP recovers.",
+  "Organs still need their usual materials and signals. Photosynthesis and digestion keep working to help the cell recover.",
+ ],
+ "footer":"Your cells and their progress carry on between updates.",
+ "button":"Back to the pond",
+},
 ]
 const CURRENT=RELEASES[-1]
 static func seen_index(account: Dictionary) -> int:

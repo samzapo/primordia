@@ -512,3 +512,19 @@ Do not use a lifetime construction counter. Automatic
 investment and both desktop/mobile factory, placement, resource and restoration
 previews use this same Cell.construction_price. Zero AP must allow a first free
 build. Existing cells derive price from actual anatomy without a save migration.
+
+October 17 low-power correction: read Revision 62. Replace ATP shutdowns with a
+shared 25% operating floor for functional motors/pumping, secretion, weapon
+recharge, active gland repair and receptor cleaning. Enter below 12 ATP, recover
+at 18 to avoid flicker; preserve the bounded low_power latch in behavior.
+Status/presentation reads must not change it. Passive photosynthesis/digestion,
+sensing and protection keep their existing ATP-independent rules. Keep finite
+material, valid targets/needed secretion and broken-organ gates; charge only
+actual available ATP, never invent ATP or negative stocks. Quarter baseline
+work without sufficient ATP is an explicit game allowance, not a biochemical
+conservation claim. Weapon parcels remain unchanged and recharge advances at
+quarter rate. Shared fine/resident/coarse helpers and offscreen intake estimates
+must agree. Low ATP no longer removes hunting intent when prey is the only cue;
+digestion/rest and emergency priority still apply. Feasible mitochondrial
+investment gains priority during shortage. Update guides/experimental notice
+and functional GPU/persistence tests; preserve the pond, keys and feedback.

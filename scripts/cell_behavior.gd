@@ -25,7 +25,7 @@ static func priority(cell, mode: String) -> int:
 		"light":return 700 if cell.behavior.get("low_energy",false) else 400 if cell.behavior.get("low_mass",false) else 250
 		"hunt":
 			if cell.behavior.get("low_energy",false):
-				return 0 if cell.energy<12 or digesting(cell) else 350
+				return 0 if digesting(cell) else 350
 			return 550 if cell.behavior.get("low_mass",false) else 500
 	return 0
 

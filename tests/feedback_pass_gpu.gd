@@ -105,4 +105,33 @@ func run() -> void:
  bridge._apply_exposure([victim],receipt.exposure)
  check(victim.health==hp and absf(victim.waste-.2)<.00001,"Selective toxin becomes spent waste without hurting a peaceful body")
  contact.close();await contact.closed
+ # ATP-starved weapons still emit actual material into the resident owner.
+ var low=Sim.new(731,0,false);low.cells=[low.player]
+ low.player.organs.clear();low.player.add_organ("poreforming",0,"graze",false)
+ low.player.energy=0;low.player.biomass=10;low.player.target_id=999
+ low.player.target_memory=1;low.player.target_mode="hunt"
+ low.player.target_position=low.player.position+Vector2(100,0)
+ var owner=preload("res://scripts/resident_ecology.gd").new();owner.streaming_enabled=false
+ owner.start(low,512)
+ var owner_ready: Array=await owner.initialized;check(owner_ready[0],str(owner_ready[1]))
+ low._emit_and_attack(low.player,.01)
+ var admitted: Dictionary=owner._receipt([],[],{"feeding":false,"projection":false,"chemistry":false})
+ check(not admitted.has("error") and owner.pending.is_empty(),"Zero-ATP pore burst is accepted by the actual hardware resident owner")
+ var low_packets: Array=owner.snapshots()
+ var emitted:=0.0;var pieces:=0
+ for packet in low_packets:
+  if packet.kind in [Sim.TAG,Sim.PORE_SUBUNIT]:
+   emitted+=packet.amount
+   if packet.kind==Sim.PORE_SUBUNIT:pieces+=1
+ check(absf(emitted-.18)<.000001 and pieces==4 and absf(low.player.biomass-9.82)<.000001,"Low-power resident burst retains its finite tag, four pore pieces and actual tissue debit")
+ low._emit_and_attack(low.player,1)
+ check(is_equal_approx(low.player.organs[0].burst_clock,.5) and low.player.energy==0,"Resident weapon advances its shared quarter-speed recharge without negative ATP")
+ owner.gpu.advance(.01,1)
+ owner._receipt([],[],{"feeding":false,"projection":false,"chemistry":false})
+ check(owner.ready and owner.fallback_reason=="" and low.particles.is_empty(),"Low-power secretion keeps GPU authority without a CPU pose mirror or fallback")
+ low_packets=owner.snapshots()
+ check(low_packets.all(func(packet):return packet.p.is_finite() and is_finite(packet.amount)),"Residual low_packets remain finite under actual resident transport")
+ low.player.energy=18;low._emit_and_attack(low.player,.25)
+ check(is_equal_approx(low.player.organs[0].burst_clock,.25) and not low.player.behavior.has("low_power"),"The resident path resumes normal recharge after real ATP replenishment")
+ owner.close();await owner.gpu.closed
  print("FEEDBACK PASS GPU: %d assertions, %d failures" % [assertions,failures]);quit(0 if failures==0 else 1)

@@ -77,7 +77,7 @@
       {
         "id": "investment",
         "title": "Choose unattended investments",
-        "text": "Nucleus → Investment shows Hunter, Producer and Grazer cells together. Choose Family or This cell, then a picture. Hunter builds pursuit, weapons and movement; Producer builds leaves and support; Grazer builds feeding currents and recycling support. Each can develop different supporting organs and respond to damage. Only unattended cells buy; your selected cell stays manual. Manual saves AP; Inherit uses the family choice.",
+        "text": "Nucleus → Investment shows Hunter, Producer and Grazer cells together. Choose Family or This cell, then a picture. Hunter builds pursuit, weapons and movement; Producer builds leaves and support; Grazer builds feeding currents and recycling support. Each can develop different supporting organs and respond to damage. Only unattended cells buy; your selected cell stays manual. Manual saves AP; Inherit uses the family choice. Low-power cells favor a mitochondrion when they already have food and oxygen.",
         "sources": []
       },
       {
@@ -255,6 +255,12 @@
               "url": "https://www.ncbi.nlm.nih.gov/books/NBK26838/"
             }
           ]
+        },
+        {
+          "id": "low_power",
+          "title": "Low ATP: quarter capacity",
+          "text": "Low ATP slows movement, feeding currents, glands and active repair to 25% capacity instead of switching them off. Weapons recharge four times more slowly. Normal activity returns automatically when ATP recovers. Organs still need their usual materials and signals. Digestion, photosynthesis, sensing and passive protection keep their existing operation. This residual capacity is a game rule.",
+          "sources": []
         }
       ]
     },

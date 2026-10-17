@@ -82,6 +82,7 @@ static func candidate(sim,cell) -> Dictionary:
    if kind=="regenerative" and count==0:value+=40
    if kind=="sensing" and count==0:value+=25
   if kind=="mitochondrion" and cell.oxygen<.1 and working(cell,"photosynthesis")==0:value*=.25
+  if kind=="mitochondrion" and count==0 and cell.work_capacity()<1 and cell.substrate>0 and cell.oxygen>.1:value+=18
   # An acid-assisted recycler acquires its buffer/repair support first.
   if kind=="acidifying" and working(cell,"regenerative")==0:continue
   if value>score:

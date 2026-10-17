@@ -1157,14 +1157,16 @@ func _suction(dt: float) -> void:
 		_suction_cell(cell,dt*cell.activity)
 
 func _suction_cell(cell, dt: float) -> void:
+	cell.update_power_state()
 	for organ in cell.organs:
-		if organ.kind not in ["feeding","cilia"] or organ.hp <= 0 or cell.energy <= 0: continue
+		if organ.kind not in ["feeding","cilia"] or organ.hp <= 0: continue
 		var ciliary: bool = organ.kind == "cilia"
 		var cost: float = dt*(Cell.CILIA_PUMP if ciliary else Cell.PUMP_UPKEEP)*organ.scale*organ.scale*Genes.output_cost(organ)
 		var health: float = organ.hp/organ.max_hp
 		var power: float = (Cell.CILIA_FLOW if ciliary else Cell.ORAL_FLOW)*organ.scale*health*Genes.factor(organ,"suction")
-		var paid: float = cell.spend_energy(cost,organ,"pumping")
-		power *= minf(1,paid/maxf(0.000001,cost))
+		var capacity: float=cell.work_capacity(cost)
+		cell.spend_energy(cost*capacity,organ,"pumping")
+		power *= capacity
 		var at: Vector2 = cell.organ_position(organ)+cell.organ_normal(organ).rotated(cell.angle)*8 if ciliary else cell.pore_center(organ)
 		fluid.suction(cell,at,(Cell.CILIA_REACH if ciliary else Cell.ORAL_REACH)*sqrt(organ.scale),power,dt,cell.target if ciliary else Vector2.ZERO)
 
@@ -1561,6 +1563,7 @@ func _secretion_needed(cell, organ: Dictionary, kind: int) -> bool:
 	return false
 
 func _emit_and_attack(cell, dt: float) -> void:
+	cell.update_power_state()
 	# Every living active creature signals, independently of energy or anatomy.
 	cell.emission_clock -= dt
 	while cell.emission_clock <= 0:
@@ -1569,11 +1572,10 @@ func _emit_and_attack(cell, dt: float) -> void:
 	for organ in cell.organs:
 		var kind: int = {"feeding":ENZYME,"neutralizing":ANTITOXIN,"acidifying":ACID,"regenerative":BUFFER}.get(organ.kind,-1)
 		var energy_cost := Cell.SECRETION_COST*Genes.factor(organ,"secretion_cost")
-		if kind < 0 or cell.biomass < 0.06 or cell.energy < energy_cost: continue
-		if kind != ENZYME and cell.energy < 12: continue
+		if kind < 0 or organ.hp<=0 or cell.biomass < 0.06: continue
 		var rate := 0.35 if kind == ENZYME else 2.0
-		for event in _event_count(rate*organ.scale*organ.scale*Genes.factor(organ,"secretion"),dt):
-			if cell.biomass < 0.06 or cell.available_energy(organ)+0.0000001 < energy_cost: break
+		for event in _event_count(rate*organ.scale*organ.scale*Genes.factor(organ,"secretion")*cell.work_capacity(energy_cost),dt):
+			if cell.biomass < 0.06: break
 			# Query only on a scheduled secretion attempt, rather than every tick.
 			if not _secretion_needed(cell,organ,kind): continue
 			cell.biomass -= 0.06
@@ -1594,8 +1596,10 @@ func _emit_and_attack(cell, dt: float) -> void:
 			spawn_particle(TOXIN,cell.position+direction*(cell.radius+12),direction*24,0.08,_attack_owner(cell))
 
 	for organ in cell.organs:
-		if organ.kind not in ["toxin","poreforming","counterattack"]: continue
-		organ["burst_clock"] = maxf(0,float(organ.get("burst_clock",0))-dt)
+		if organ.kind not in ["toxin","poreforming","counterattack"] or organ.hp<=0: continue
+		var burst: float = organ.scale*organ.scale*Genes.factor(organ,"burst")
+		var capacity: float=cell.work_capacity(2*burst*Genes.inefficiency(organ))
+		organ["burst_clock"] = maxf(0,float(organ.get("burst_clock",0))-dt*capacity)
 		var aim: Vector2 = cell.threat if cell.target_mode == "flee" else Medium.offset(cell.position,cell.target_position).normalized()
 		if organ.kind=="counterattack":
 			var detected: Dictionary=organ.get("counter_report",{})
@@ -1603,8 +1607,7 @@ func _emit_and_attack(cell, dt: float) -> void:
 			aim=Medium.offset(cell.organ_position(organ),detected.report.at).normalized()
 		elif cell.target_id<0 or cell.target_memory<=0:continue
 		if organ.burst_clock>0 or aim.length_squared()<.01:continue
-		var burst: float = organ.scale*organ.scale*Genes.factor(organ,"burst")
-		if cell.energy < 12 or cell.available_energy(organ)+0.0000001 < 2*burst*Genes.inefficiency(organ) or cell.biomass < 0.18*burst: continue
+		if cell.biomass < 0.18*burst: continue
 		cell.spend_energy(2*burst*Genes.inefficiency(organ),organ,"combat")
 		var source: int=_attack_owner(cell,organ.kind=="counterattack")
 		if organ.kind == "poreforming":
@@ -1625,16 +1628,18 @@ func _motion(dt: float) -> void:
 		if not cell.dead and cell.activity > 0: _motion_cell(cell,dt*cell.activity)
 
 func _motion_cell(cell, local_dt: float) -> void:
+	cell.update_power_state()
 	var previous: Vector2 = cell.position
 	var steering_power := 0.0
 	for organ in cell.organs:
-		if cell.energy <= 0 or cell.target.length_squared()<.0001: continue
+		if organ.hp<=0 or cell.target.length_squared()<.0001: continue
 		var pursuing: bool = organ.kind in ["hunting","photosynthesis"] and organ.id == cell.target_organ_id and cell.drive_active and cell.target_memory > 0 and cell.target_mode in ["hunt","light"]
 		if organ.kind not in ["propulsion","cilia"] and not pursuing: continue
 		var arm: Vector2 = cell.organ_position(organ)-cell.position
 		var power: float = (2600.0 if organ.kind == "propulsion" else Cell.CILIA_THRUST if organ.kind == "cilia" else 1100.0)*organ.scale*organ.scale*(organ.hp/organ.max_hp)*Genes.factor(organ,"thrust")
 		var energy_cost: float = local_dt*(Cell.CILIA_MOTION if organ.kind == "cilia" else Cell.MOTION_UPKEEP)*organ.scale*organ.scale*Genes.factor(organ,"motion_cost")
-		power *= minf(1,cell.available_energy(organ)/maxf(0.000001,energy_cost))
+		var capacity: float=cell.work_capacity(energy_cost)
+		power *= capacity
 		var thrust: Vector2 = cell.organ_normal(organ).rotated(cell.angle)
 		# Flagella can reverse their stroke, but force follows their mounted axis.
 		if organ.kind in ["propulsion","cilia"] and thrust.dot(cell.target) < 0: thrust = -thrust
@@ -1643,7 +1648,7 @@ func _motion_cell(cell, local_dt: float) -> void:
 			cell.velocity += impulse/cell.mass
 			cell.angular_velocity += arm.cross(impulse)/cell.inertia
 			steering_power += power
-			cell.spend_energy(energy_cost,organ,"movement")
+			cell.spend_energy(energy_cost*capacity,organ,"movement")
 	# Flagella can reverse their stroke to retreat while the receptor remains
 	# facing the threat. A paired steering impulse also acts on the medium.
 	if steering_power > 0:
@@ -1740,14 +1745,18 @@ func _exclude_particles() -> void:
 			if not moved: break
 
 func _clear_receptors(cell, dt: float) -> void:
+	cell.update_power_state()
 	for organ in cell.organs:
 		if organ.blocked <= 0: continue
 		# Basal unbinding never needs energy. ATP-funded cleaning and repair
 		# bodies speed recovery; occupation cannot become a permanent disable.
 		organ.blocked = maxf(0,organ.blocked-dt*0.045)
-		var cleared: float = minf(organ.blocked,dt*0.18*(1+cell.count("regenerative")*1.5))
-		var energy: float = cell.spend_energy(cleared*1.2,organ,"receptor cleaning")
-		organ.blocked = maxf(0,organ.blocked-energy/1.2)
+		var repair:=0
+		for gland in cell.organs:
+			if gland.kind=="regenerative" and gland.hp>0:repair+=1
+		var cleared: float = minf(organ.blocked,dt*0.18*(1+repair*1.5)*cell.work_capacity())
+		cell.spend_energy(cleared*1.2,organ,"receptor cleaning")
+		organ.blocked = maxf(0,organ.blocked-cleared)
 
 func _receptor_contacts() -> void:
 	for cell in cells:
