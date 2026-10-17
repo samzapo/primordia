@@ -5,6 +5,11 @@ name: Primordia host telemetry
     branches: [samzapo/persistent-multiplayer]
     paths: [.github/workflows/host-telemetry.yml]
   workflow_dispatch:
+    inputs:
+      experimental_only:
+        description: "Read-only experimental restart diagnostics instead of stable performance telemetry"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -15,7 +20,7 @@ concurrency:
 
 jobs:
   capabilities:
-    if: github.repository == 'samzapo/primordia'
+    if: github.repository == 'samzapo/primordia' && !inputs.experimental_only
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 5
     steps:
@@ -377,3 +382,42 @@ jobs:
           PY
           cd "$RUNNER_TEMP"
           rmdir "$task_dir"
+
+
+  experimental-diagnostics:
+    if: github.repository == 'samzapo/primordia' && inputs.experimental_only
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 3
+    steps:
+      - name: Read bounded experimental health and restart errors
+        shell: bash
+        run: |
+          test "$RUNNER_NAME" = samzapo-desktop
+          test "$(hostname)" = samzapo-desktop
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib,subprocess
+          from urllib.request import build_opener,ProxyHandler
+          os.environ.setdefault("XDG_RUNTIME_DIR",f"/run/user/{os.getuid()}")
+          opener=build_opener(ProxyHandler({}))
+          fields=["build","world_id","epoch","tick","backend","gpu","backend_error","checkpoint_error","cell_retention","accounts","access_keys","uptime_seconds"]
+          report={}
+          for instance,port,unit in [("stable",8766,"primordia.service"),("experimental",8768,"primordia-experimental.service")]:
+              try:
+                  with opener.open(f"http://127.0.0.1:{port}/health",timeout=5) as response:
+                      health=json.load(response)
+                  report[instance]={k:health.get(k) for k in fields}
+              except Exception as error:report[instance]={"error":type(error).__name__}
+              state=subprocess.run(["systemctl","--user","show",unit,"-p","MainPID","-p","ActiveState","-p","SubState","-p","NRestarts"],capture_output=True,text=True,timeout=10)
+              report[instance]["service"]=state.stdout.strip()
+          root=pathlib.Path.home()/".local/share/primordia-experimental"
+          report["experimental_current"]=str((root/"current").resolve())
+          report["registry_sha256"]=hashlib.sha256((root/"access-keys.json").read_bytes()).hexdigest()
+          journal=subprocess.run(["journalctl","--user","-u","primordia-experimental.service","--since","-15 minutes","--no-pager","-n","350","-o","cat"],capture_output=True,text=True,timeout=10)
+          lines=journal.stdout.splitlines()
+          indices=set()
+          for i,line in enumerate(lines):
+              if any(mark in line for mark in ["CELL_RETENTION","WORLD_READY","ERROR:","SCRIPT ERROR:","failed","Failed","Traceback"]):
+                  indices.update(range(max(0,i-1),min(len(lines),i+6)))
+          report["restart_journal"]=[lines[i][:2000] for i in sorted(indices)][-160:]
+          print("EXPERIMENTAL_DIAGNOSTICS "+json.dumps(report))
+          PY
