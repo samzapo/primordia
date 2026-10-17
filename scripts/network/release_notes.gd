@@ -229,6 +229,17 @@ const RELEASES=[
  "footer":"Your living cells and their progress carry on between updates.",
  "button":"Back to the pond",
 },
+{
+ "id":"2026-10-17-recycling",
+ "audience":"stable",
+ "title":"What’s new in the pond",
+ "items":[
+  "Recycling any added organelle returns the current build tier: four added organelles return 3 AP, three return 2, and one returns 0. The oral groove does not count.",
+  "Recycling works while your cell is moving and updating. Its confirmation tells you how much AP came back.",
+ ],
+ "footer":"Your living cells and their progress carry on between updates.",
+ "button":"Back to the pond",
+},
 ]
 const CURRENT=RELEASES[-1]
 static func seen_index(account: Dictionary) -> int:

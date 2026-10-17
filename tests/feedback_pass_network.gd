@@ -78,18 +78,19 @@ func run() -> void:
  socket.send_text(JSON.stringify({"op":"lineage_color","color":"javascript:bad"}))
  check(await until(func():return messages.any(func(m):return m.get("kind","")=="lineage_color_result")),"Invalid color has an explicit rejection")
  check(not messages.filter(func(m):return m.get("kind","")=="lineage_color_result")[-1].ok and account.lineage_color=="#32d4a7","Untrusted strings cannot replace a validated color")
- # The authenticated sale returns only the recorded paid cost minus one.
+ # The authenticated sale reverses the current build tier exactly once.
  account.evolution.points=20
  for kind in ["cilia","photosynthesis","mitochondrion"]:
   check(host.world._install_for(selected,account.evolution,kind,1),"Refund fixture builds through the actual AP-funded installation path")
  var sold: Dictionary=selected.organs[-1]
  var refund: int=selected.construction_refund(sold)
- check(sold.construction_ap>=2 and refund==sold.construction_ap-1,"The organ records its actual progressive purchase price")
+ check(sold.construction_ap>=2 and refund==selected.construction_price()-1,"Recycling uses the current tier, not the individual organ price")
  var before_refund: int=account.evolution.points
  command={"op":"command","epoch":host.epoch,"cell":selected.id,"edit":account.edit,"sequence":4,"action":"remove","args":{"id":sold.id}}
  socket.send_text(JSON.stringify(command))
  check(await until(func():return not result(4).is_empty()),"Sale receives an authenticated durable receipt")
- check(result(4).ok and selected.organ_by_id(sold.id).is_empty() and account.evolution.points==before_refund+refund,"Sale returns paid AP minus one exactly once")
+ check(result(4).get("ap_refund",-1)==refund and result(4).message.contains("%d AP returned" % refund),"The durable receipt reports the actual AP returned")
+ check(result(4).ok and selected.organ_by_id(sold.id).is_empty() and account.evolution.points==before_refund+refund,"Sale returns the current build tier exactly once")
  socket.send_text(JSON.stringify(command))
  check(await until(func():return messages.filter(func(m):return m.get("kind","")=="result" and m.get("sequence",-1)==4).size()==2),"A repeated sale returns its original receipt")
  check(account.evolution.points==before_refund+refund,"Retrying a sale cannot duplicate its AP refund")

@@ -584,3 +584,12 @@ Standby user-bus correction: user-service queries must supply XDG_RUNTIME_DIR
 inside the query helper, including imported/read-only verification. An environment
 set in an earlier Python subprocess does not propagate to the next process.
 Test the imported helper with an empty environment as well as an existing path.
+
+October 17 recycling correction supersedes per-organ paid-price refunds: return
+max(0,current installed non-inherent organ count minus1), before removal.
+With four added organs, recycling any one returns3AP; three return2AP.
+The inherent oral groove is excluded; missing/rejected/duplicate removals return
+nothing. Do not depend on construction_ap history or migrate saved anatomy.
+Menu actions resolve organ IDs at click time because live snapshots replace
+dictionaries while menus stay open. Only authoritative committed receipts report
+AP returned in multiplayer; preserve exactly-once refunds and checkpointing.

@@ -153,9 +153,11 @@ func construction_price() -> int:
 	# The inherent oral groove belongs to the body, not the purchased build.
 	return organs.filter(func(organ):return not inherent(organ)).size()
 
-static func construction_refund(organ: Dictionary) -> int:
-	# Pre-progressive saves paid at most one AP per normal installation.
-	return maxi(0,int(organ.get("construction_ap",1))-1)
+func construction_refund(organ: Dictionary) -> int:
+	var current: Dictionary=organ_by_id(int(organ.get("id",-1)))
+	if current.is_empty() or inherent(current):return 0
+	# Reverse the current build tier, independent of this organ's purchase history.
+	return maxi(0,construction_price()-1)
 
 func has_mode(mode: String) -> bool:
 	for organ in organs:

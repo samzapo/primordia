@@ -223,10 +223,16 @@ func open_context(target: Dictionary) -> void:
 					game.placement_angle = organ.a
 					close_context()
 					game._message(("Tap inside the cell to move it. Tap its icon to cancel." if mobile() else "Choose a location inside the cell · right-click cancels the move.") if cell.internal_organ(organ.kind) else ("Tap the membrane to move it. Tap its icon to cancel." if mobile() else "Choose a membrane location · right-click cancels the move.")),"","Move")
-				_choice("Recycle","Returns half the tissue and %d AP (the AP paid minus one). Lowers the next build price." % cell.construction_refund(organ),func():
-					sim.remove(cell.organs.find(organ))
+				_choice("Recycle","Returns half the tissue and %d AP. Four added organelles return 3 AP; three return 2. Lowers the next build price." % cell.construction_refund(organ),func():
+					# Snapshots replace organ dictionaries while this menu stays open.
+					# Resolve the stable ID at click time; never compare an old snapshot.
+					var current=sim.player
+					var live: Dictionary=current.organ_by_id(target.id) if current.id==cell.id else {}
+					var refund: int=current.construction_refund(live)
+					var ok: bool=not live.is_empty() and sim.edit("remove",{"id":target.id})
 					close_context()
-					game._message("Organelle recycled · %d AP returned." % cell.construction_refund(organ)),"","Recycle")
+					if not ok:game._message("This organelle is no longer available.")
+					elif not sim.remote_client:game._message("Organelle recycled · %d AP returned." % refund),"","Recycle")
 			if not cell.inherent(organ):
 				for gene in sim.Genes.available(organ,run.learned):
 					var data: Dictionary = sim.Genes.DATA[gene]
