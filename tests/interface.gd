@@ -268,7 +268,7 @@ func run(test_host) -> void:
 	settle()
 	cell = scene.world.player
 	scene.cell_ui.open_context({"kind":"chemistry"})
-	expect(scene.cell_ui.choices.size() == 5 and scene.cell_ui.choices.any(func(choice):return choice.kind=="regenerative") and scene.cell_ui.choices.any(func(choice):return choice.kind=="photosynthesis"),"Chemistry factory exposes photosynthesis and glands with compact desktop paging")
+	expect(scene.cell_ui.choices.size() == 5 and scene.cell_ui.choices.any(func(choice):return choice.kind=="mitochondrion") and scene.cell_ui.choices.any(func(choice):return choice.kind=="sanctuary") and scene.cell_ui.choices.any(func(choice):return choice.kind=="photosynthesis"),"Chemistry factory puts internal choices beside photosynthesis with compact desktop paging")
 	scene.cell_ui.choices[-1].pressed.emit()
 	expect(scene.cell_ui.choices.any(func(choice):return choice.caption=="Food vacuoles") and scene.cell_ui.choices.any(func(choice):return choice.kind=="neutralizing"),"The next chemistry page retains neutralization and food/gas inspection")
 	scene.cell_ui.close_context()

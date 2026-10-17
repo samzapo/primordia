@@ -1062,13 +1062,21 @@ func _zoom_at(screen: Vector2, factor: float) -> void:
 
 func _select(index: int) -> void:
 	if settings_panel.visible or world.player.dead or world.evolution.terminal(): return
+	if index<0 or index>=Simulation.KINDS.size():return
 	if not build_open: _toggle_build()
+	if not build_open:return
 	cell_ui.close_context()
 	cell_ui.keyboard_target.clear()
 	moving_id = -1
 	selected = index
+	_prepare_placement(Simulation.KINDS[index])
 	placement_keyboard = false
 	tube_start.clear()
+
+func _prepare_placement(kind: String) -> void:
+	# Internal placement enters the existing attached/eased camera frame.
+	if world.player.internal_organ(kind) and perception!="interoception":
+		_toggle_perception()
 
 func _request_new_lineage() -> void:
 	if not world.remote_client or lineage_confirming:return

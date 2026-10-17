@@ -1,5 +1,6 @@
 extends Node2D
 ## Intracellular resource parcels and anatomy; the outside can pause independently.
+const Visuals=preload("res://scripts/visuals.gd")
 const Ecology = preload("res://scripts/interior_ecology.gd")
 var ecology := Ecology.new()
 var game
@@ -56,11 +57,7 @@ func _draw() -> void:
 	var cell = game.world.player
 	var at: Vector2 = anchors.atp
 	if atp_size > 0.05:
-		var sac := Vector2(0.86,1.16)*atp_size
-		_ellipse(at+Vector2(0,1),sac*1.10,Color("745344"))
-		_ellipse(at,sac,Color("efbb4c"))
-		_ellipse(at-Vector2.ONE*atp_size*0.12,sac*0.76,Color("ffe58e"))
-		draw_arc(at,atp_size*0.72,PI,PI*1.47,12,Color("fff5c7"),maxf(0.8,atp_size*0.13),true)
+		Visuals.atp_store(self,at,atp_size)
 	else:
 		draw_arc(at,1.5,0,TAU,12,Color("bc9459"),0.6,true)
 	for parcel in (ecology.parcels if game.internal_visible(cell) else []):
@@ -81,29 +78,15 @@ func _draw() -> void:
 	draw_circle(anchors.nucleus+Vector2(-0.25,0.04)*r,r*0.035,Color("edb3ef"))
 	# Folded assembly ribbons, not an extra equipped organ.
 	at = anchors.assembly
-	for i in 3:
-		var points := PackedVector2Array()
-		for j in 9:
-			var t := j/8.0
-			points.append(at+Vector2((t-0.5)*0.30,(i-1)*0.075+sin(t*PI)*0.065)*r)
-		draw_polyline(points,Color("bc557d"),r*0.068,true)
-		draw_polyline(points,Color("ffa96a"),r*0.040,true)
-	draw_circle(at+Vector2(0.18,0.06)*r,r*0.047,Color("ffd267"))
+	Visuals.assembly_factory(self,at,r)
 
-
-	# Cell-local chemistry factory: a visible entry point, independent of metabolism.
+	# A raised chamber plate and a build badge identify the click point without labels.
 	at = anchors.chemistry
-	for i in 3:
-		var chamber := at+Vector2((i-1)*0.10,abs(i-1)*0.07)*r
-		_ellipse(chamber,Vector2(0.063,0.13)*r,Color("235981"))
-		_ellipse(chamber-Vector2(0,r*0.02),Vector2(0.047,0.10)*r,Color("46dfcb"))
-		draw_circle(chamber-Vector2(0,r*0.055),r*0.025,Color("c8ffe1"))
+	var active: bool=game.cell_ui.hovered.get("kind","")=="chemistry" or game.cell_ui.context.get("kind","")=="chemistry"
+	preload("res://scripts/visuals.gd").internal_factory(self,at,r*.21,active)
 
 	at = anchors.bud
-	_ellipse(at,Vector2(0.17,0.145)*r,Color("9363ac"))
-	_ellipse(at,Vector2(0.15,0.125)*r,Color("4b3979"))
-	_ellipse(at,Vector2(0.13,0.105)*r,Color("ed69bc"),bud_material)
-	draw_arc(at,0.16*r,-PI/2,-PI/2+TAU*bud_energy,24,Color("ffd65a"),r*0.032,true)
+	Visuals.offspring_store(self,at,r,bud_material,bud_energy)
 	if game.world.evolution.offspring_id >= 0:
 		draw_arc(at,0.16*r,-PI/2,-PI/2+TAU*clampf(game.world.evolution.viable_seconds/60,0,1),24,Color("9cf4b4"),r*0.045,true)
 	# Three crisis arcs and tiny dormant bodies show the goal and insurance.

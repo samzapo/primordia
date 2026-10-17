@@ -35,6 +35,63 @@ static func oral_groove(c: Node2D, cell, organ: Dictionary, clock: float, detail
 			c.draw_line(lip[i],lip[i]+normal*reach,Color("caf7be"),width*.24,true)
 	c.draw_circle(lip[12],width*.48*(1+.18*pulse),Color("e1f5ac"))
 
+static func structure_ellipse(c,at: Vector2,extent: Vector2,color: Color,fill: float=1.0) -> void:
+	if fill<=0:return
+	var points:=PackedVector2Array()
+	var cut:=acos(clampf(1-fill*2,-1,1))
+	for i in (24 if fill>=1 else 25):
+		var angle:=PI/2-cut+2*cut*i/24
+		points.append(at+Vector2(cos(angle),sin(angle))*extent)
+	if points.size()>=3:c.draw_colored_polygon(points,color)
+
+static func assembly_factory(c,at: Vector2,r: float) -> void:
+	for i in 3:
+		var points:=PackedVector2Array()
+		for j in 9:
+			var t:=j/8.0
+			points.append(at+Vector2((t-.5)*.30,(i-1)*.075+sin(t*PI)*.065)*r)
+		c.draw_polyline(points,Color("bc557d"),r*.068,true)
+		c.draw_polyline(points,Color("ffa96a"),r*.040,true)
+	c.draw_circle(at+Vector2(.18,.06)*r,r*.047,Color("ffd267"))
+
+static func atp_store(c,at: Vector2,extent: float) -> void:
+	var sac:=Vector2(.86,1.16)*extent
+	structure_ellipse(c,at+Vector2(0,1),sac*1.10,Color("745344"))
+	structure_ellipse(c,at,sac,Color("efbb4c"))
+	structure_ellipse(c,at-Vector2.ONE*extent*.12,sac*.76,Color("ffe58e"))
+	c.draw_arc(at,extent*.72,PI,PI*1.47,12,Color("fff5c7"),maxf(.8,extent*.13),true)
+
+static func offspring_store(c,at: Vector2,r: float,material: float=1,energy: float=1) -> void:
+	structure_ellipse(c,at,Vector2(.17,.145)*r,Color("9363ac"))
+	structure_ellipse(c,at,Vector2(.15,.125)*r,Color("4b3979"))
+	structure_ellipse(c,at,Vector2(.13,.105)*r,Color("ed69bc"),material)
+	c.draw_arc(at,.16*r,-PI/2,-PI/2+TAU*energy,24,Color("ffd65a"),r*.032,true)
+
+static func nucleus_art(c,at: Vector2,extent: float,core: PackedVector2Array,palette: Array,detail: bool=true) -> void:
+	c.draw_colored_polygon(Transform2D(0,Vector2.ONE*extent*1.18,0,at+Vector2(0,extent*.1))*core,palette[0])
+	c.draw_colored_polygon(Transform2D(0,Vector2.ONE*extent,0,at)*core,palette[5].darkened(.2))
+	c.draw_colored_polygon(Transform2D(0,Vector2.ONE*extent*.74,0,at-Vector2.ONE*extent*.08)*core,palette[5])
+	if detail:c.draw_colored_polygon(Transform2D(-.3,Vector2(.30,.38)*extent,0,at-Vector2.ONE*extent*.22)*core,palette[6])
+
+static func internal_factory(c,at: Vector2,radius: float,active: bool=false) -> void:
+	# Shared factory/overlap-menu artwork. This is a build affordance, not an organ.
+	c.draw_circle(at+Vector2(0,radius*.12),radius,Color("122d51"))
+	c.draw_circle(at,radius,Color("276c83"))
+	c.draw_circle(at-Vector2(0,radius*.06),radius*.83,Color("193e65"))
+	c.draw_arc(at,radius*.94,0,TAU,36,Color("caffdf") if active else Color("72d9d3"),radius*.085,true)
+	c.draw_arc(at,radius*.80,PI,TAU,20,Color("3aa0ad"),radius*.055,true)
+	for i in 3:
+		var center: Vector2=at+Vector2((i-1)*.47,abs(i-1)*.14-.12)*radius
+		var outline:=PackedVector2Array()
+		for step in 24:outline.append(center+Vector2(cos(step*TAU/24)*.20,sin(step*TAU/24)*.46)*radius)
+		c.draw_colored_polygon(outline,Color("42dfc6"))
+		c.draw_circle(center-Vector2(0,radius*.20),radius*.11,Color("d3ffe9"))
+	var badge: Vector2=at+Vector2(.69,.63)*radius
+	c.draw_circle(badge,radius*.34,Color("174a66"))
+	c.draw_circle(badge,radius*.27,Color("b8f2bd"))
+	for direction in [Vector2.RIGHT,Vector2.DOWN]:
+		c.draw_line(badge-direction*radius*.16,badge+direction*radius*.16,Color("20576b"),radius*.10,true)
+
 class DimmedInk extends RefCounted:
 	var canvas: Node2D
 	func _init(target: Node2D) -> void:canvas=target
@@ -53,6 +110,14 @@ static func icon(c, p: Vector2, kind: String, rotation: float, scale: float, ani
 	c.draw_set_transform(p,rotation,Vector2.ONE*scale)
 	var steps := 24 if detail else 10
 	match kind:
+		"assembly_factory":
+			assembly_factory(c,Vector2.ZERO,110)
+		"offspring_store":
+			offspring_store(c,Vector2.ZERO,115)
+		"atp_store":
+			atp_store(c,Vector2.ZERO,19)
+		"internal_factory":
+			internal_factory(c,Vector2.ZERO,23)
 		"propulsion":
 			var path := PackedVector2Array()
 			for i in (18 if detail else 9):

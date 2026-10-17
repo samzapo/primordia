@@ -1,6 +1,8 @@
 extends Button
 ## Compact cell-local choices use the same organ artwork as the world.
 const Visuals = preload("res://scripts/visuals.gd")
+var structure_art: Dictionary={}
+var scar:=false
 var picture := Node2D.new()
 var kind := ""
 var caption := ""
@@ -43,7 +45,12 @@ func _draw() -> void:
 			pixels = maxi(10,roundi(pixels*r*1.7/extent.x))
 			extent = font.get_string_size(symbol,HORIZONTAL_ALIGNMENT_LEFT,-1,pixels)
 		draw_string(font,center+Vector2(-extent.x*0.5,pixels*0.34),symbol,HORIZONTAL_ALIGNMENT_LEFT,-1,pixels,tint)
+	if scar:draw_arc(center,r*.75,0,TAU,24,Color("ffb6ca"),2*text_scale,true)
 	if not affordable: draw_circle(center+Vector2(r*0.65,-r*0.65),4*text_scale,Color("f68899"))
 
 func _draw_picture() -> void:
-	if kind != "": Visuals.icon(picture,Vector2.ZERO,kind,-0.4,0.73*text_scale,0,"graze")
+	if kind=="cell_nucleus" and not structure_art.is_empty():
+		picture.draw_set_transform(Vector2.ZERO,-.4,Vector2.ONE*.73*text_scale)
+		Visuals.nucleus_art(picture,Vector2.ZERO,19,structure_art.core,structure_art.colors)
+		picture.draw_set_transform(Vector2.ZERO)
+	elif kind!="":Visuals.icon(picture,Vector2.ZERO,kind,-.4,.73*text_scale,0,"graze")

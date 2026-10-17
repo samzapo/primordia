@@ -185,11 +185,7 @@ func _draw() -> void:
 	var size := safe_radius*0.28
 	nucleus_center = nucleus
 	nucleus_size = size
-	draw_colored_polygon(Transform2D(0,Vector2.ONE*size*1.18,0,nucleus+Vector2(0,size*0.1))*core,palette[0])
-	draw_colored_polygon(Transform2D(0,Vector2.ONE*size,0,nucleus)*core,palette[5].darkened(0.2))
-	draw_colored_polygon(Transform2D(0,Vector2.ONE*size*0.74,0,nucleus-Vector2.ONE*size*0.08)*core,palette[5])
-	if not simple_view:
-		draw_colored_polygon(Transform2D(-0.3,Vector2(0.30,0.38)*size,0,nucleus-Vector2.ONE*size*0.22)*core,palette[6])
+	Visuals.nucleus_art(self,nucleus,size,core,palette,not simple_view)
 	for packet in (cell.signals if game.internal_visible(cell) else []): draw_circle(packet.p,3*Visuals.INTERNAL_PARTICLE_SCALE,Color("fc8c90") if packet.fear else Color("b5a3f4"))
 	for hole in cell.holes:
 		var at: Vector2 = cell.local_point(hole.a)

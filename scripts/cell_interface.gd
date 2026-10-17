@@ -5,6 +5,7 @@ const Interior = preload("res://scripts/cell_interior.gd")
 const Action = preload("res://scripts/cell_action.gd")
 const Biomass = preload("res://scripts/biomass_preview.gd")
 var game
+var investment_picker:=preload("res://scripts/investment_picker.gd").new()
 var mobile_menu_height:=0.0
 var mobile_tray:=PanelContainer.new()
 var mobile_scroll:=ScrollContainer.new()
@@ -41,6 +42,7 @@ var last_goal := ""
 
 func initialize(owner_game) -> void:
 	game = owner_game
+	add_child(investment_picker);investment_picker.initialize(game)
 	mobile_tray.z_index=90;add_child(mobile_tray)
 	var tray_row:=HBoxContainer.new();mobile_tray.add_child(tray_row)
 	tray_row.add_child(mobile_scroll);mobile_scroll.size_flags_horizontal=Control.SIZE_EXPAND_FILL
@@ -94,6 +96,7 @@ func reset() -> void:
 
 func close_context() -> void:
 	pathways.hide()
+	investment_picker.hide()
 	context.clear()
 	mobile_tray.hide();mobile_menu_height=0.0
 	if mobile():game.touch_zoom.layout()
@@ -119,7 +122,7 @@ func screen_at(target: Dictionary) -> Vector2:
 				p = preload("res://scripts/visuals.gd").oral_path(cell,record.a)[12]
 			else:
 				p = cell.organ_local_position(record)
-	else: p = interior.anchors.get("nucleus" if target.kind in ["lineage","archive","past"] else target.kind,Vector2.ZERO)
+	else: p = interior.anchors.get("nucleus" if target.kind in ["lineage","archive","past","investment"] else target.kind,Vector2.ZERO)
 	return game.world_layer.to_global(interior.position+p.rotated(interior.rotation))
 
 func targets() -> Array:
@@ -134,6 +137,7 @@ func _hit_candidates(screen: Vector2) -> Array:
 	var found: Array = []
 	for target in targets():
 		var radius := maxf(18*game.preferences.hud_scale,interior.anchors.radius*game.zoom*(0.28 if target.kind == "nucleus" else 0.16))
+		if target.kind=="chemistry":radius=maxf(20*ui_scale(),interior.anchors.radius*game.zoom*.24)
 		if target.kind in ["organ","scar"]: radius = maxf(17*game.preferences.hud_scale,14*game.zoom)
 		var distance := screen.distance_to(screen_at(target))
 		if distance < radius: found.append({"target":target,"score":distance/radius})
@@ -184,15 +188,20 @@ func open_context(target: Dictionary) -> void:
 	match target.kind:
 		"overlap":
 			for entry in target.targets:
-				var kind := ""
+				var kind: String={"assembly":"assembly_factory","chemistry":"internal_factory","nucleus":"cell_nucleus","atp":"atp_store","bud":"offspring_store"}.get(entry.kind,"")
 				if entry.kind == "organ":
 					var organ: Dictionary = cell.organ_by_id(entry.id)
 					if organ.is_empty(): continue
 					kind = organ.kind
+				if entry.kind=="scar":
+					for scar in cell.lost_organs:
+						if scar.id==entry.id:kind=scar.kind;break
 				var symbol: String = {"assembly":"Build","chemistry":"Chem","nucleus":"Genes","bud":"Bud","atp":"ATP","scar":"Restore"}.get(entry.kind,"")
 				_choice(target_title(entry),describe(entry),open_context.bind(entry),kind,symbol)
+				choices[-1].scar=entry.kind=="scar"
+				if entry.kind=="nucleus" and game.views.has(cell.id):choices[-1].structure_art=game.views[cell.id].art
 		"assembly","chemistry":
-			for index in ([0,1,2,3,5,10,11,13] if target.kind == "assembly" else [6,7,9,3,8,12,14]):
+			for index in ([0,1,2,3,5,10,11,13] if target.kind == "assembly" else [12,14,6,7,9,3,8]):
 				var kind: String = sim.KINDS[index]
 				var cost := 0.0
 				_choice(game.TITLES[index],"1 AP\n%s" % game.HELP[index],game._select.bind(index),kind,"",run.points >= 1,cost,1,{"kind":kind,"scale":1.0,"mutation":""})
@@ -204,11 +213,12 @@ func open_context(target: Dictionary) -> void:
 			var organ: Dictionary = cell.organ_by_id(target.id)
 			if organ.is_empty(): close_context(); return
 			if not cell.inherent(organ):
-				_choice("Move","Choose a new membrane location. No resource cost.",func():
+				_choice("Move",("Choose a new location inside the cell." if cell.internal_organ(organ.kind) else "Choose a new membrane location.")+" No resource cost.",func():
 					game.moving_id = target.id
+					game._prepare_placement(organ.kind)
 					game.placement_angle = organ.a
 					close_context()
-					game._message("Tap the membrane to move it. Tap its icon to cancel." if mobile() else "Choose a membrane location · right-click cancels the move."),"","Move")
+					game._message(("Tap inside the cell to move it. Tap its icon to cancel." if mobile() else "Choose a location inside the cell · right-click cancels the move.") if cell.internal_organ(organ.kind) else ("Tap the membrane to move it. Tap its icon to cancel." if mobile() else "Choose a membrane location · right-click cancels the move.")),"","Move")
 				_choice("Recycle","Returns half the tissue as usable biomass; half becomes waste. AP is not refunded.",func():
 					sim.remove(cell.organs.find(organ))
 					close_context()
@@ -274,14 +284,7 @@ func open_context(target: Dictionary) -> void:
 			_choice("Investment","Choose automatic AP spending for unattended cells.",open_context.bind({"kind":"investment"}),"","Invest")
 			_choice("Behavior","Tune wandering versus signals and the response cycle.",open_context.bind({"kind":"behavior"}),"","Explore")
 		"investment":
-			for scope in ["lineage","cell"]:
-				var current: String=sim.investment.lineages.get(cell.lineage_id(),"manual") if scope=="lineage" else sim.investment.cells.get(cell.id,"inherit")
-				var modes: Array=["manual","hunter","producer","grazer"] if scope=="lineage" else ["inherit","manual","hunter","producer","grazer"]
-				var next: String=modes[(modes.find(current)+1)%modes.size()]
-				_choice(("Family: " if scope=="lineage" else "This cell: ")+current.capitalize(),"Switch to "+next.capitalize()+". Hunter buys offense and mobility; Producer buys photosynthesis and defense; Grazer buys mobility and defense. Uses your existing AP only while the cell is not selected by a connected player.",func():
-					sim.edit("investment",{"scope":scope,"kind":next})
-					open_context(target),"",next.capitalize())
-			_choice("Nucleus","Return to your cell.",open_context.bind({"kind":"nucleus"}),"","Back")
+			investment_picker.open()
 		"behavior":
 			var label: String = "Off" if cell.exploration == 0 else "%d%%" % roundi(cell.exploration*100)
 			_choice("Exploration "+label,"Relative wandering weight. Signal weight / (signal + exploration) determines following time. Flight bypasses this cycle. No resource cost.",func():
@@ -499,7 +502,8 @@ func sync(_dt: float) -> void:
 	message.add_theme_font_size_override("font_size",roundi((22 if mobile() else 20)*s))
 	message.position = (cell_screen+Vector2(-message.size.x*0.5,game.world.player.radius*game.zoom+35)).clamp(Vector2(16,16),size-message.size-Vector2(16,16))
 	edit_hint.visible = game.build_open and not mobile() and (game.selected>=0 or game.moving_id>=0 or not context.is_empty())
-	edit_hint.text = "Tab · return to habitat" if game.selected < 0 and game.moving_id < 0 else "Place on membrane · right-click cancels"
+	var placing_kind: String=game.Simulation.KINDS[game.selected] if game.selected>=0 else game.world.player.organ_by_id(game.moving_id).get("kind","")
+	edit_hint.text = "Tab · return to habitat" if placing_kind=="" else ("Place inside the cell · right-click cancels" if game.world.player.internal_organ(placing_kind) else "Place on membrane · right-click cancels")
 	edit_hint.add_theme_font_size_override("font_size",roundi(14*s))
 	edit_hint.size = Vector2(minf(540*s,size.x-32),0)
 	edit_hint.position = Vector2((size.x-edit_hint.size.x)*0.5,14)
@@ -510,6 +514,7 @@ func sync(_dt: float) -> void:
 		choices[2].affordable = funded and sim.lineage.active_family(sim).size() < sim.Lineage.MAX_ACTIVE
 		choices[3].affordable = funded and sim.lineage.dormant.size() < sim.Lineage.MAX_DORMANT
 	_layout_mobile()
+	if investment_picker.visible:investment_picker.sync()
 	if not context.is_empty():
 		if mobile():
 			for choice in choices:
@@ -557,7 +562,7 @@ func sync(_dt: float) -> void:
 		if inspected_choice.tissue_cost >= 0:
 			hovered_price = {"tissue":inspected_choice.tissue_cost,"ap":inspected_choice.ap_cost,"rate_model":inspected_choice.rate_model}
 	else:
-		if not context.is_empty() and choices.is_empty(): _tooltip(describe(context),screen_at(context))
+		if not context.is_empty() and choices.is_empty() and context.kind!="investment": _tooltip(describe(context),screen_at(context))
 		elif not hovered.is_empty() and (game.build_open or Input.is_key_pressed(KEY_ALT)) and (hovered.kind != "body" or Input.is_key_pressed(KEY_ALT)) and game.selected < 0 and game.moving_id < 0: _tooltip(describe(hovered),screen_at(hovered))
 		elif not keyboard_target.is_empty() and game.selected < 0: _tooltip(describe(keyboard_target),screen_at(keyboard_target))
 		elif game.selected >= 0:
@@ -576,7 +581,7 @@ func _layout_mobile() -> void:
 	var s:=ui_scale();var size:=get_viewport_rect().size
 	mobile_tray.visible=mobile() and not context.is_empty() and not choices.is_empty()
 	mobile_resources.visible=not game.world.player.dead and ((mobile() and game.touch_controls_available()) or (not mobile() and game.build_open))
-	mobile_menu_height=0
+	mobile_menu_height=investment_picker.size.y+16*s if mobile() and investment_picker.visible else 0.0
 	cancel_icon.visible=mobile() and (game.selected>=0 or game.moving_id>=0) and not game.settings_panel.visible
 	if cancel_icon.visible:
 		var organ: Dictionary=game.world.player.organ_by_id(game.moving_id)
@@ -611,10 +616,12 @@ func mobile_diagnostics(conversion: Vector2) -> Dictionary:
 		return [rect.position.x*conversion.x,rect.position.y*conversion.y,rect.size.x*conversion.x,rect.size.y*conversion.y]
 	var factory:=screen_at({"kind":"assembly"})*conversion
 	var chemistry_factory:=screen_at({"kind":"chemistry"})*conversion
+	var nucleus:=screen_at({"kind":"nucleus"})*conversion
 	return {"resources_visible":mobile_resources.is_visible_in_tree(),"stocks_visible":mobile_stocks.is_visible_in_tree(),
 		"stocks":mobile_stocks.text,"resources_bounds":bounds.call(mobile_resources),"hide_bounds":bounds.call(mobile_hide),
 		"factory_visible":interior.is_visible_in_tree(),"factory":[factory.x,factory.y],
-		"chemistry_factory":[chemistry_factory.x,chemistry_factory.y],
+		"chemistry_factory":[chemistry_factory.x,chemistry_factory.y],"nucleus":[nucleus.x,nucleus.y],
+		"investment":investment_picker.diagnostics(conversion),
 		"tray_visible":mobile_tray.is_visible_in_tree(),"tray_bounds":bounds.call(mobile_tray),
 		"settings_visible":game.settings_panel.visible,
 		"placement_cancel":{"visible":cancel_icon.is_visible_in_tree(),"kind":cancel_icon.kind,"bounds":bounds.call(cancel_icon)},
@@ -640,7 +647,7 @@ func activate_keyboard() -> bool:
 
 func _draw() -> void:
 	if game == null or game.settings_panel.visible: return
-	if not context.is_empty() and not mobile():
+	if not context.is_empty() and context.kind!="investment" and not mobile():
 		draw_line(screen_at(context),menu_center,Color(0.5,0.91,0.85,0.35),1.5,true)
 		for choice in choices:
 			var origin := menu_center

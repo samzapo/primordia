@@ -137,6 +137,18 @@ const RELEASES=[
  "footer":"Your cell and its progress carry on between updates.",
  "button":"Back to the pond",
 },
+{
+ "id":"2026-10-17-clear-building",
+ "audience":"experimental",
+ "title":"What’s new in the pond",
+ "items":[
+  "Look for the teal chamber factory with its new rim and build symbol. Choose an internal organ from either view to go inside and place it.",
+  "Pick Hunter, Producer or Grazer directly from three pictured cells in the Investment menu.",
+  "Choose overlapping structures by their matching pictures, including both factories, the nucleus and resource stores.",
+ ],
+ "footer":"Your cell and its progress carry on between updates.",
+ "button":"Back to the pond",
+},
 ]
 const CURRENT=RELEASES[-1]
 static func seen_index(account: Dictionary) -> int:

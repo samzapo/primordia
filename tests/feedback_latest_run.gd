@@ -10,6 +10,7 @@ func run() -> void:
  await process_frame;await process_frame
  scene.set_process(false);scene.set_physics_process(false);scene.preferences.music_volume=0
  var sim=scene.world;sim.server_mode=true;sim.automatic_reproduction=false
+ await internal_and_investment(scene)
  var cell=sim.player
  scene.build_open=true;scene.cell_ui.context={};scene.cell_ui.sync(0)
  check(not scene.cell_ui.edit_hint.visible,"No irrelevant Tab hint remains after the interaction closes")
@@ -37,3 +38,47 @@ func run() -> void:
  check(scene.palette.opened and scene.palette.wheel.size.x==scene.palette.wheel.size.y,"Pause opens a circular color picker")
  scene.palette.close();scene.queue_free();await process_frame
  print("FEEDBACK LATEST: %d assertions, %d failures" % [assertions,failures]);quit(0 if failures==0 else 1)
+
+func internal_and_investment(scene) -> void:
+ var sim=scene.world
+ for mobile in [false,true]:
+  scene.touch_zoom.enabled=mobile
+  scene.perception="exteroception";scene.build_open=false;scene.user_paused=false
+  scene.manual_zoom=5;scene._update_world(1);scene.cell_ui.sync(0)
+  check(scene.cell_ui.interior.visible and scene.cell_ui._hit_candidates(scene.cell_ui.screen_at({"kind":"chemistry"})).any(func(item):return item.target.kind=="chemistry"),"The factory remains clickable from outside on both platforms")
+  scene.cell_ui.open_context({"kind":"chemistry"})
+  scene._toggle_build();scene.cell_ui.open_context({"kind":"chemistry"})
+  check(scene.build_open and scene.cell_ui.choices[0].kind=="mitochondrion" and scene.cell_ui.choices[1].kind=="sanctuary","Internal organ choices remain available without a permanent screen label")
+  scene._select(12)
+  check(scene.perception=="interoception" and scene.selected==12 and scene.camera_locked,"Selecting mitochondria attaches the interior camera on either platform")
+  check(scene.camera_motion.active,"Automatic interior entry uses the existing smooth camera transition")
+  scene.cell_ui.sync(0)
+  check(scene.placement_status().contains("inside") and (scene.cell_ui.cancel_icon.visible if mobile else scene.cell_ui.edit_hint.text.contains("inside")),"Placement guidance and cancellation match internal placement")
+  scene._cancel_placement();scene.cell_ui.sync(0)
+  check(scene.cell_ui.interior.visible,"The same factory remains visible from inside")
+  scene.cell_ui.open_context({"kind":"chemistry"});scene._select(14)
+  check(scene.perception=="interoception" and scene.selected==14,"Choosing an internal organ inside does not toggle back outside")
+  scene._cancel_placement();scene.perception="exteroception";scene._select(6)
+  check(scene.perception=="exteroception","Membrane organ choice does not force an interior view")
+  scene._cancel_placement()
+  scene.cell_ui.open_context({"kind":"investment"})
+  var picker=scene.cell_ui.investment_picker
+  check(picker.visible and picker.cards.size()==3 and picker.cards.all(func(card):return card.visible),"All three illustrated strategies appear together")
+  for kind in ["grazer","producer","hunter"]:
+   picker.choose(kind)
+   check(sim.investment.lineages[sim.player.lineage_id()]==kind,"Family strategy is selected directly, never cycled")
+  picker._scope("cell");picker.choose("producer")
+  check(sim.investment.cells[sim.player.id]=="producer" and picker.inherit.visible,"Body strategy has its own direct choice")
+  picker.choose("inherit")
+  check(not sim.investment.cells.has(sim.player.id) and picker.current()=="inherit","Inherit explicitly removes a body override")
+  picker._scope("lineage");picker.choose("manual")
+  check(sim.investment.lineages[sim.player.lineage_id()]=="manual" and not picker.inherit.visible,"Manual is explicit and family scope cannot inherit")
+  scene.cell_ui.close_context()
+  check(not picker.visible,"Closing an interaction dismisses the strategy panel")
+  var targets: Array=["assembly","chemistry","nucleus","atp","bud"].map(func(kind):return {"kind":kind})
+  scene.cell_ui.open_context({"kind":"overlap","targets":targets})
+  check(scene.cell_ui.choices.map(func(choice):return choice.kind)==["assembly_factory","internal_factory","cell_nucleus","atp_store","offspring_store"],"Overlap choices use matching pictures for every cell-local structure")
+  check(scene.cell_ui.choices[2].structure_art.get("core")==scene.views[sim.player.id].art.core,"Nucleus picture uses this actual lineage's art")
+  scene.cell_ui.close_context()
+  scene._finish_build()
+ scene.touch_zoom.enabled=false;scene.build_open=false

@@ -11,13 +11,13 @@
       {
         "id": "overlap",
         "title": "Choose overlapping structures",
-        "text": "When several structures share a spot, choose the one you want from the temporary selection menu.",
+        "text": "When several structures share a spot, choose the one you want from the temporary selection menu. Its pictures match the factories, organs and stores on your cell; damaged organs have a pink ring.",
         "sources": []
       },
       {
         "id": "build",
         "title": "Build and restore",
-        "text": "Open the Assembly or Chemistry factory and choose an organelle. Most attach to the membrane; mitochondria and Sanctuary sit inside. Each installation or restoration costs 1 AP. Organs need room. While building, the resource strip shows how much AP you have as well as the cost.",
+        "text": "Open the Assembly or Chemistry factory for membrane organs. The three teal chambers with a small + are the Chemistry factory: open it from either view for mitochondria or Sanctuary. Choosing an internal organ switches smoothly to Interoception so you can place it inside. Each installation or restoration costs 1 AP. While building, the resource strip shows your AP and the cost.",
         "sources": []
       },
       {
@@ -77,7 +77,7 @@
       {
         "id": "investment",
         "title": "Choose unattended investments",
-        "text": "Open Nucleus → Investment. Choose a family strategy and, if you want, a different one for this cell. Hunter buys offense and mobility, Producer buys photosynthesis and defense, Grazer buys mobility and defense. Manual keeps your AP; Inherit uses the family choice. Automatic buying uses your existing AP only while that cell is not selected by a connected player.",
+        "text": "Open Nucleus → Investment. Choose Family or This cell, then select one of the three pictured cells: Hunter buys offense and mobility, Producer buys photosynthesis and defense, Grazer buys mobility and defense. Manual keeps your AP; Inherit uses the family choice. Automatic buying spends existing AP only while that cell is not selected by a connected player.",
         "sources": []
       },
       {
