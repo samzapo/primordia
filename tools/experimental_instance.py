@@ -168,6 +168,7 @@ def main():
         raise RuntimeError("Experimental GPU protocol fixture failed")
     # Focused feature acceptance on the real target; no FPS campaign or live reports.
     for script,flags,marker in [
+        ("resident_admission_gpu",[],"RESIDENT ADMISSION"),
         ("lineage_start_network",["--gpu"],"LINEAGE START NETWORK"),
         ("feedback_pass_gpu",[],"FEEDBACK PASS GPU"),
         ("normal_output_run",["--particle-backend=cpu","--gpu"],"NORMAL OUTPUT"),

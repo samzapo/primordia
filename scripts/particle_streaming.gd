@@ -179,7 +179,11 @@ func service(sim) -> bool:
 	settle(sim,admission)
 	for packet in admission:
 		if not packet.alive: continue
-		if contains(packet.p): owner.pending.append(packet);entered+=1
+		if contains(packet.p):
+			# Use the same finite-output escrow as new emissions, including
+			# sub-float remainders and exhausted checkpoint slots.
+			owner.enqueue(packet)
+			if packet.alive:entered+=1
 		else: cold.put(packet,sim.time)
 	queue_depth=0
 	for key in _region_keys():

@@ -555,3 +555,10 @@ accounts, five keys and feedback. Keep paid automatic growth and actual safe
 live division, basic daughter/strategy inheritance, 2AP awards and normal
 living-family succession. The bud offers only Divide now. Show only living
 relatives in portraits/help; there is no storage bank or dormant recovery.
+
+October 17 restart acceptance found an exhausted/sub-float cold nutrient reaching
+resident GPU admission as a zero float32 dose. Keep strict exchange validation
+and hardware GPU gates. Cold promotion must pass through the same enqueue
+escrow as paid emissions, retaining positive sub-float material and food capacity.
+Retire only exactly empty material/capacity slots; never round up a dose or cull
+positive matter to make a deployment pass. Validate the real handoff and restart.

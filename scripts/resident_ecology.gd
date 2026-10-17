@@ -80,6 +80,11 @@ static func encode(p: Dictionary,sim) -> Dictionary:
 	return data
 
 func enqueue(packet: Dictionary) -> void:
+	if not packet.alive:return
+	# Cold/checkpoint packets can retain an exhausted slot. No material or fuel
+	# remains to transfer; do not submit an invalid zero-dose GPU emission.
+	if packet.amount==0 and packet.get("capacity",0)==0:
+		packet.alive=false;return
 	# Photosynthesis can release a double-precision remainder smaller than one
 	# float32 packet. Retain that paid material until another release makes a
 	# representable packet; never create a minimum dose or silently discard it.
