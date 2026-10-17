@@ -100,6 +100,18 @@ const RELEASES=[
 	"footer":"Your cell and its progress carry on between updates.",
 	"button":"Back to the pond",
 },
+{
+	"id":"2026-10-17-pond-exploration",
+	"title":"What’s new in the pond",
+	"items":[
+		"Explore more smoothly: nearby particles arrive ahead of your camera, and Follow glides into place.",
+		"Moving eddies stir the pond, with gold marking their sources and plants softening their flow.",
+		"Pores build visibly in stages, and toxin glands and pores are less deadly.",
+		"Pause lets you start a new lineage while your former family carries on in the pond.",
+	],
+	"footer":"Your cell and its progress carry on between updates.",
+	"button":"Back to the pond",
+},
 ]
 const CURRENT=RELEASES[-1]
 static func seen_index(account: Dictionary) -> int:

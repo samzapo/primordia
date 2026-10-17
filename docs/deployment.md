@@ -16,7 +16,7 @@ Phone key entry uses Godot's browser keyboard bridge, enabled by `html/experimen
 
 ## Continuous deployment
 
-Pushes to `samzapo/persistent-multiplayer` run `.github/workflows/deploy.yml`. The guarded runner is `samzapo-desktop`. The source has its own revision branch and Git worktree in `~/.local/share/primordia-deploy/releases/samzapo--persistent-multiplayer--<commit>` before changing `current`. The Actions process installs/restarts the service and exits; systemd keeps the world running. A second job proves the service survives Actions cleanup.
+Pushes to `main` run `.github/workflows/deploy.yml`. The guarded runner is `samzapo-desktop`. The source has its own revision branch and Git worktree in `~/.local/share/primordia-deploy/releases/samzapo--persistent-multiplayer--<commit>` before changing `current`. The Actions process installs/restarts the service and exits; systemd keeps the world running. Builds and isolated candidate checks finish before the short checkpointed service switch. A second job proves the service survives Actions cleanup and an independent saved-world restart. Stable deployment also checks that the experimental process, pond and keys remain intact, retains private feedback in both instances, and verifies public HTTPS/WSS assets for both paths.
 
 Godot and templates are checksum-pinned in `tools/toolchain.json`. Large dependencies download only over verified wired routes. The target needs Python 3.10+, curl, Git, CMake, a C++ compiler, Xvfb/xauth, a user systemd manager and Vulkan hardware. The deployer enables lingering for its own user and verifies it. It does not change GSOC configuration or use sudo.
 
@@ -135,9 +135,10 @@ pond to submit it.
 
 ## Independent experimental instance
 
-The first stable game is main at7df04de and main is the default branch. Stable CD
-still explicitly deploys samzapo/persistent-multiplayer. Experimental source/CD
-uses samzapo/experimental-server and .github/workflows/experimental.yml.
+The default branch main is the stable game source and stable CD follows main.
+Approved experimental features are squash-merged into main after validation.
+Experimental source/CD uses samzapo/experimental-server or an explicitly selected
+feature branch through .github/workflows/experimental.yml.
 
 The same samzapo-desktop machine and public HTTPS8766 serve /experimental/.
 Caddy strips that prefix and proxies to loopback HTTP8768; its independent Godot

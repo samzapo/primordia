@@ -449,3 +449,11 @@ October16 camera correction: discrete visible camera relocations ease smoothly, 
 October16 induced-current correction: owner reports sources too rare. Thirty-two staggered spiral/directional event lanes leave an event active at all times. Owner specifies30–100µm diameter,10–50µm/s migration,1–20second lifetime; gold stays source-local. The owner explicitly halves plant dissipation (coefficient and cap), retaining plant geometry and particle permeability. Blend overlapping targets, never reset saved water/cells or gate sources on cameras. See Revision57.
 
 October17 camera particle delivery: owner reports empty water briefly after moving the camera. Read Revision58. Gather a bounded border of real resident packets, retain captured coverage through asynchronous GPU gather/encoding, and keep per-camera visible counts distinct from buffered records. Prioritize actual visible chunks and gate publication by each observer’s prepared coverage, never global unrelated admission/eviction queues. Fixed server overscan stays independent of zoom and never adds local client chemistry, particles or motion prediction. Preserve ACK backpressure, request limits, pause/perception/death and saved cells/keys. Experimental first; no broad FPS campaign.
+
+
+October17 stable promotion: the owner explicitly authorizes squash promotion of
+the tested experimental update into main and stable deployment. Stable CD now
+follows main; feature branches remain experimental until explicitly promoted.
+Preserve each instance's independent saved cells, accounts, five-key registry and
+private feedback. Check the experimental process/pond identity across stable
+updates as well as the stable all-cell retention and saved-world restart.
