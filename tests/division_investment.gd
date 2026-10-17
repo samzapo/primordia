@@ -88,15 +88,15 @@ static func pricing(check: Callable) -> void:
  check.call(sim.install("photosynthesis",2) and sim.evolution.points==19,"The second added organ costs one AP")
  check.call(sim.install("mitochondrion",0) and sim.evolution.points==17 and cell.construction_price()==3,"The third internal organ costs two AP and counts toward the next price")
  var organ: Dictionary=cell.organs[-1]
- check.call(organ.construction_ap==2 and sim.remove(cell.organs.find(organ)) and sim.evolution.points==18 and cell.construction_price()==2,"Selling a two-AP organ returns one AP and lowers the next price")
+ check.call(organ.construction_ap==2 and sim.remove(cell.organs.find(organ)) and sim.evolution.points==19 and cell.construction_price()==2,"Selling from three added organs returns two AP and lowers the next price")
  var leaf: Dictionary=cell.organs.filter(func(o):return o.kind=="photosynthesis")[0]
  cell.organs.erase(leaf);cell.lost_organs.append(leaf);cell.update_geometry()
- check.call(sim.restore(leaf.id) and sim.evolution.points==17 and cell.construction_price()==2 and cell.organs[-1].construction_ap==1,"Restoration pays and records the same current-count price as new construction")
- check.call(sim.remove(cell.organs.find(cell.organs.filter(func(o):return o.kind=="photosynthesis")[0])) and sim.evolution.points==17 and cell.construction_price()==1,"Selling a one-AP organ returns zero rather than charging a penalty")
- check.call(sim.remove(cell.organs.find(cell.organs.filter(func(o):return o.kind=="cilia")[0])) and sim.evolution.points==17 and cell.construction_price()==0,"Selling a free first organ returns zero and restores the free next price")
- check.call(not sim.remove(0) and sim.evolution.points==17,"The inherent oral groove cannot be sold for AP")
+ check.call(sim.restore(leaf.id) and sim.evolution.points==18 and cell.construction_price()==2 and cell.organs[-1].construction_ap==1,"Restoration pays and records the same current-count price as new construction")
+ check.call(sim.remove(cell.organs.find(cell.organs.filter(func(o):return o.kind=="photosynthesis")[0])) and sim.evolution.points==19 and cell.construction_price()==1,"Selling from two added organs returns one AP")
+ check.call(sim.remove(cell.organs.find(cell.organs.filter(func(o):return o.kind=="cilia")[0])) and sim.evolution.points==19 and cell.construction_price()==0,"Selling a free first organ returns zero and restores the free next price")
+ check.call(not sim.remove(0) and sim.evolution.points==19,"The inherent oral groove cannot be sold for AP")
  var saved=Codec.new().restore(Codec.new().capture(sim))
- check.call(saved.player.construction_price()==0 and saved.evolution.points==17,"Current-count pricing and AP refunds survive checkpoint recovery")
+ check.call(saved.player.construction_price()==0 and saved.evolution.points==19,"Current-count pricing and AP refunds survive checkpoint recovery")
  var npc=Sim.Cell.new(77,Vector2(1100,1200));npc.add_organ("feeding",0,"graze",false)
  sim.cells.append(npc);sim.managed_cells=[cell.id]
  var ledger=sim._family_ledger(npc);ledger.progression.points=0

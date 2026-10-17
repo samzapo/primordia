@@ -708,3 +708,12 @@ stored bodies are discarded during ordinary authority ticking, with tissue
 recorded in build_waste, rather than hatched or migrated. Save/reload boundaries
 still preserve all actual living cells and both pond identities. The retired
 checkpoint array is readable only to discard it; it has no gameplay use.
+
+October 17 recycling correction supersedes per-organ paid-price refunds: return
+max(0,current installed non-inherent organ count minus1), before removal.
+With four added organs, recycling any one returns3AP; three return2AP.
+The inherent oral groove is excluded; missing/rejected/duplicate removals return
+nothing. Do not depend on construction_ap history or migrate saved anatomy.
+Menu actions resolve organ IDs at click time because live snapshots replace
+dictionaries while menus stay open. Only authoritative committed receipts report
+AP returned in multiplayer; preserve exactly-once refunds and checkpointing.

@@ -17,3 +17,12 @@ The owner's mobile screenshot also shows missing-glyph boxes beside investment s
 The owner further requests0AP for a cell's first added organ,1AP for its second,2AP for its third, and so on. Their correction explicitly bases price on current anatomy: selling an organ lowers the next price. Cell.construction_price counts currently installed non-inherent organs, including internal organs. Its inherent oral groove is excluded. Restoration also installs a currently absent organ at the next price. Moving, repair and free mutations do not count as new installations. No lifetime counter or migration is needed. Autonomous investment may make its first purchase with zero AP, then waits for sufficient AP like player construction. Both factories and all placement/resource previews must show the same live price.
 
 The owner's final refund correction supersedes the temporary no-refund choice: selling returns max(0,actual installation price paid minus1). Store construction_ap on each successful new installation/restoration, without altering existing saved organs. Legacy normal installs cost at most1AP and therefore refund0. Restoration records its newly paid price; loss/repair does not issue refunds. Rejected/inherent removals grant nothing, and sequenced network receipts must prevent repeated refunds. A cancelled local construction plan restores the AP journal as well as anatomy/material.
+
+October 17 recycling correction supersedes per-organ paid-price refunds: return
+max(0,current installed non-inherent organ count minus1), before removal.
+With four added organs, recycling any one returns3AP; three return2AP.
+The inherent oral groove is excluded; missing/rejected/duplicate removals return
+nothing. Do not depend on construction_ap history or migrate saved anatomy.
+Menu actions resolve organ IDs at click time because live snapshots replace
+dictionaries while menus stay open. Only authoritative committed receipts report
+AP returned in multiplayer; preserve exactly-once refunds and checkpointing.

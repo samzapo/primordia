@@ -437,7 +437,7 @@ func step_autonomous_builds() -> void:
 func remove(index: int) -> bool:
 	if remote_client: return edit("remove",{"id":player.organs[index].id}) if index>=0 and index<player.organs.size() else false
 	if index<0 or index>=player.organs.size():return false
-	var refund: int=Cell.construction_refund(player.organs[index])
+	var refund: int=player.construction_refund(player.organs[index])
 	var debris: float = player.recycle(index)
 	if debris < 0: return false
 	evolution.refund(refund,"Recycle organ")
