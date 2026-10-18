@@ -745,3 +745,5 @@ both ponds/accounts/keys/feedback and return experimental to standby afterward.
 ### Instinct and queued division controls (October18,2026)
 
 [Revision67](REVISION_67.md) makes Instinct a saved presentation toggle and nests continuous or one-shot paid division under Divide. A pending one-shot waits for resources and safe space, clears on one committed birth and is never inherited. Wave crests become the initial view once for this update; later choices remain saved. Preserve both ponds and stage on experimental.
+
+[Revision68](REVISION_68.md) makes mitochondria recover additional finite food energy without reducing biomass. Healthy organs add50% of baseline aerobic ATP each, capped5x; no oxygen or fuel means no extra work. Keep fresh food/solar/tissue-debris energy explicit and all saved parcels unchanged.

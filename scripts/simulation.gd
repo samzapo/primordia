@@ -556,7 +556,11 @@ func _expire_pheromones() -> void:
 func _emit_material(kind: int, at: Vector2, amount: float, motion: Vector2 = Vector2.ZERO, owner: int = 0) -> void:
 	# Packet merging requires oriented contact, never an emission shortcut.
 	var count := maxi(1,ceili(amount/float(Catalog.data().ecology.packet_quantum)))
-	for i in count: spawn_particle(kind,at,motion,amount/count,owner)
+	for i in count:
+		spawn_particle(kind,at,motion,amount/count,owner)
+		if kind==NUTRIENT:
+			last_spawn.capacity=last_spawn.amount*Cell.Chemistry.TISSUE_FUEL/Cell.Chemistry.FOOD_FUEL
+			_commit_spawn_metadata()
 
 func prepare_combat_rules() -> void:
 	combat_context={"sources":attack_sources}
@@ -1891,6 +1895,8 @@ func _die(cell, transferred: float = 0.0) -> void:
 	for i in count:
 		var direction := Vector2.from_angle(TAU*i/count)
 		spawn_particle(NUTRIENT,cell.position+direction*cell.radius*0.9,direction*24,structural/count,cell.id)
+		last_spawn.capacity=last_spawn.amount*Cell.Chemistry.TISSUE_FUEL/Cell.Chemistry.FOOD_FUEL
+		_commit_spawn_metadata()
 	for packet in cell.chemistry.particles:
 		if not packet.alive: continue
 		var key: String = "nutrient" if packet.species == "food" else "atp" if packet.species == "reserved_atp" else packet.species
@@ -1902,7 +1908,7 @@ func _die(cell, transferred: float = 0.0) -> void:
 		var at: Vector2 = Medium.wrap_position(cell.position+packet.p.rotated(cell.angle))
 		spawn_particle(kind,at,normal*24,packet.amount,cell.id)
 		if kind == NUTRIENT:
-			last_spawn.capacity = clampf(packet.fuel/7.5,0,packet.amount)
+			last_spawn.capacity = clampf(packet.fuel/Cell.Chemistry.FOOD_FUEL,0,packet.amount)
 			if last_spawn.capacity>=packet.amount:
 				last_spawn.capacity+=clampf(float(packet.get("nutrition",0)),0,packet.amount*float(Catalog.data().ecology.nutrient_bonus_limit))
 			_commit_spawn_metadata()

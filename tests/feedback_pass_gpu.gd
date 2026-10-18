@@ -25,6 +25,23 @@ func run() -> void:
   check(absf(cell.energy-cpu.energy)<.000001 and absf(cell.biomass-cpu.biomass)<.000001 and absf(cell.raw_fuel-cpu.raw_fuel)<.000001 and absf(cell.chemistry.heat-cpu.chemistry.heat)<.000001,"Mitochondrial ATP, tissue, fuel, heat and inert legacy output match CPU reference")
   check(cell.chemistry.particles.is_empty() and cell.chemistry.accelerator.exports==0,"Mitochondria retain GPU authority without a CPU pose mirror")
   cell.chemistry.ensure_cpu()
+ # Real resident digestion must retain growth and finite energy at every efficiency.
+ for count in [0,1,2,8]:
+  for fuel in [0.0,7.5,18.0]:
+   for near_oxygen in [true,false]:
+    var cell=Sim.Cell.new(680+count);cell.body=10000;cell.biomass=10;cell.energy=0;cell.update_geometry()
+    for i in count:cell.add_organ("mitochondrion",i*.5,"graze",false)
+    cell.chemistry.emit("food",1,Vector2.ZERO,-1,-1,fuel)
+    cell.chemistry.emit("oxygen",1,Vector2.ZERO if near_oxygen else Vector2(1000,0),-1,-1,0)
+    var cpu=Sim.Cell.clone_state(cell)
+    check(Cytoplasm.new().attach(gpu,cell.chemistry,cell),"Efficiency fixture owns actual resident food and oxygen")
+    cell.chemistry.advance(cell,10);cpu.chemistry.advance(cpu,10)
+    check(absf(cell.energy-cpu.energy)<.000001 and absf(cell.biomass-cpu.biomass)<.000001 and absf(cell.oxygen-cpu.oxygen)<.000001 and absf(cell.chemistry.heat-cpu.chemistry.heat)<.000001,"Resident ATP/growth/oxygen/heat match CPU for counts, spent fuel and local oxygen")
+    check(absf(cell.energy+(cell.biomass-10)*7.5+cell.raw_fuel+cell.chemistry.heat-fuel)<.000001,"Resident efficiency conserves actual finite meal energy")
+    if fuel>=7.5:check(absf(cell.biomass-10-(.7 if near_oxygen else .3))<.000001,"Resident mitochondrial recovery never reduces biomass yield")
+    if fuel==18 and near_oxygen:check(absf(cell.energy-2.25*(1+minf(4,count*.5)))<.000001,"Resident ordinary-food ATP follows the authored mitochondrial multiplier")
+    check(cell.chemistry.particles.is_empty() and cell.chemistry.accelerator.exports==0,"Efficiency creates no CPU particle mirror or full export")
+    cell.chemistry.ensure_cpu()
  var plant=Sim.Cell.new(32);plant.add_organ("photosynthesis",0,"graze",false)
  plant.chemistry.emit("carbon",3,plant.local_point(0)*.72,-1,-1,0)
  var sim=Sim.new(59,0,false);sim.cells=[plant];sim.player=plant;sim.particles=[];sim.grid.rebuild([])

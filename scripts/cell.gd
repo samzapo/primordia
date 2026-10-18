@@ -283,17 +283,17 @@ func work_capacity(required: float=0.0) -> float:
 	var threshold: float=POWER_RECOVERY_ATP if behavior.get("low_power",false) else LOW_POWER_ATP
 	return LOW_POWER_CAPACITY if energy+0.0000001<maxf(threshold,required) else 1.0
 
-func mitochondrial_gain(dt: float) -> float:
-	if chemistry.amount("food")<=0 or chemistry.amount("oxygen")<=0:return 1.0
+func mitochondrial_efficiency() -> float:
+	# Read-only capacity: each healthy normal-sized organ adds50%, capped5x.
 	var strength:=0.0
 	for organ in organs:
-		if organ.kind!="mitochondrion" or organ.hp<=0:continue
-		var extra: float=maxf(0,Genes.output(organ)-1)
-		var price: float=extra*.05*dt*Genes.inefficiency(organ)
-		var paid: float=minf(1,energy/price) if price>0 else 1.0
-		spend_energy(price*paid,organ,"mitochondrion")
-		strength+=(1+extra*paid)*organ.scale*organ.scale*organ.hp/organ.max_hp
+		if organ.kind=="mitochondrion" and organ.hp>0:
+			strength+=organ.scale*organ.scale*organ.hp/organ.max_hp
 	return 1+minf(4,strength*.5)
+
+func mitochondrial_gain(_dt: float) -> float:
+	if chemistry.amount("food")<=0 or chemistry.amount("oxygen")<=0:return 1.0
+	return mitochondrial_efficiency()
 
 func excretion_angle() -> float:
 	return (membrane.oral_angle if is_finite(membrane.oral_angle) else 0.0)+PI*0.85

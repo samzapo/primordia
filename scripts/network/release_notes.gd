@@ -355,6 +355,17 @@ const RELEASES=[
   ],
   "footer":"Your cells and their progress carry on between updates.",
   "button":"Back to the pond"
+ },
+ {
+  "id":"2026-10-18-mitochondrial-efficiency",
+  "audience":"experimental",
+  "title":"What’s new in the pond",
+  "items":[
+   "Mitochondria now recover more ATP from food and oxygen without taking away biomass growth.",
+   "Each healthy mitochondrion adds 50% to ordinary oxygen-supported digestion. Two give double the ATP; damaged mitochondria help less."
+  ],
+  "footer":"Your cells and their progress carry on between updates.",
+  "button":"Back to the pond"
  }
 ]
 const CURRENT=RELEASES[-1]

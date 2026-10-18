@@ -17,7 +17,7 @@ static func state(sim,cell,organ: Dictionary) -> Dictionary:
   result.label="Full · releases toxin on death" if result.progress>=.999999 else "Waiting for surplus biomass" if cell.biomass<=12 else "Low ATP · 25% filling rate" if result.capacity<1 else "Storing toxin"
   return result
  if kind=="mitochondrion":
-  result.label="Waiting for food" if cell.substrate<=.0000001 else "Waiting for oxygen" if cell.oxygen<=.0000001 else "Making ATP from food and oxygen"
+  result.label=("%.2fx ATP yield · " % cell.mitochondrial_efficiency())+("Waiting for food" if cell.substrate<=.0000001 else "Waiting for oxygen" if cell.oxygen<=.0000001 else "Recovering energy from food and oxygen")
   return result
  if kind in ["toxin","poreforming","counterattack"]:
   var burst: float=organ.scale*organ.scale*cell.Genes.factor(organ,"burst")

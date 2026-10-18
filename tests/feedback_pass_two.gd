@@ -2,6 +2,7 @@ extends RefCounted
 const Sim=preload("res://scripts/simulation.gd")
 const Codec=preload("res://scripts/network/state_codec.gd")
 static func run(check: Callable) -> void:
+ mitochondrial_upgrade(check)
  preload("res://tests/shade_steering.gd").run(check)
  preload("res://tests/behavior_tree.gd").run(check)
  preload("res://tests/division_investment.gd").run(check)
@@ -69,3 +70,46 @@ static func run(check: Callable) -> void:
  restored=Codec.new().restore(Codec.new().capture(sim));restored.prepare_combat_rules()
  check.call(restored.attack_sources==sim.attack_sources,"Counterattack's immutable source permissions survive restart without Sanctuary")
  preload("res://tests/retired_history.gd").run(check)
+
+static func mitochondrial_upgrade(check: Callable) -> void:
+ var initial_biomass:=10.0
+ for count in [0,1,2,8,12]:
+  var cell=Sim.Cell.new(680+count);cell.body=10000;cell.biomass=initial_biomass;cell.energy=0;cell.update_geometry()
+  for i in count:check.call(cell.add_organ("mitochondrion",i*.5,"graze",false),"Large-cell fixture installs a real mitochondrion")
+  var factor: float=1+minf(4,count*.5)
+  check.call(is_equal_approx(cell.mitochondrial_efficiency(),factor),"Healthy mitochondrial capacity stacks additively with its finite ceiling")
+  cell.chemistry.emit("food",1,Vector2.ZERO);cell.chemistry.emit("oxygen",1,Vector2.ZERO,-1,-1,0)
+  var fuel: float=cell.raw_fuel
+  cell.chemistry.advance(cell,10)
+  check.call(absf(cell.energy-2.25*factor)<.000001,"Mitochondria multiply ordinary aerobic ATP without throughput changes")
+  check.call(absf(cell.biomass-initial_biomass-.7)<.000001 and cell.substrate==0 and cell.oxygen==0,"Every mitochondrial count keeps the same biomass, food and oxygen use")
+  check.call(absf(cell.energy+(cell.biomass-initial_biomass)*7.5+cell.raw_fuel+cell.chemistry.heat-fuel)<.000001,"Mitochondrial bonus comes only from finite otherwise dissipated fuel")
+ var damaged=Sim.Cell.new(700);damaged.energy=0;damaged.add_organ("mitochondrion",0,"graze",false)
+ damaged.organs[0].hp=damaged.organs[0].max_hp*.5
+ check.call(is_equal_approx(damaged.mitochondrial_efficiency(),1.25) and damaged.energy==0,"Damage halves the bonus; reading capacity spends no ATP")
+ damaged.organs[0].hp=0
+ check.call(damaged.mitochondrial_efficiency()==1,"A destroyed mitochondrion adds no efficiency")
+ for fuel in [0.0,7.5,18.0]:
+  for oxygen_at in [Vector2.ZERO,Vector2(1000,0)]:
+   var plain=Sim.Cell.new(710);plain.energy=0;plain.biomass=0;plain.body=10000;plain.update_geometry()
+   plain.chemistry.emit("food",1,Vector2.ZERO,-1,-1,fuel);plain.chemistry.emit("oxygen",1,oxygen_at,-1,-1,0)
+   var mito=Sim.Cell.clone_state(plain);mito.add_organ("mitochondrion",1,"graze",false)
+   plain.chemistry.advance(plain,10);mito.chemistry.advance(mito,10)
+   check.call(absf(mito.biomass-plain.biomass)<.000001 and mito.oxygen==plain.oxygen and mito.substrate==plain.substrate,"Efficiency never diverts growth or consumes more food/oxygen")
+   check.call(absf(mito.energy+mito.biomass*7.5+mito.raw_fuel+mito.chemistry.heat-fuel)<.000001,"Exhausted, legacy and fresh meals all retain exact energy accounting")
+   if fuel<=7.5 or oxygen_at!=Vector2.ZERO:check.call(absf(mito.energy-plain.energy)<.000001,"No spare fuel or no local oxygen gives no unfunded mitochondrial ATP")
+ var sim=Sim.new(688,0,false);sim.cells=[sim.player];sim.particles=[];sim.grid.clear();sim.evolution.enabled=false
+ var cell=sim.player;cell.chemistry.particles.clear();cell.chemistry.refresh()
+ cell.chemistry.emit("food",2,Vector2.ZERO,-1,-1,9)
+ var before: float=(cell.organic_mass()-cell.substrate)*7.5+cell.raw_fuel
+ var encoded=Codec.new().capture(sim);var restored=Codec.new().restore(encoded)
+ check.call(restored.player.chemistry.particles==cell.chemistry.particles,"Checkpoint upgrade does not refill or alter saved food")
+ sim._die(cell)
+ var released:=0.0
+ for packet in sim.particles:
+  if packet.alive and packet.kind==Sim.NUTRIENT:released+=minf(packet.amount,packet.capacity)*Sim.Cell.Chemistry.FOOD_FUEL
+ check.call(absf(released-before)<.000001,"Lysis preserves legacy food and tissue fuel without gaining the fresh-food reserve")
+ sim.particles=[];sim.grid.clear();sim._emit_material(Sim.NUTRIENT,Vector2.ZERO,3)
+ released=0
+ for packet in sim.particles:released+=minf(packet.amount,packet.capacity)*Sim.Cell.Chemistry.FOOD_FUEL
+ check.call(absf(released-3*7.5)<.000001,"Tissue leaks retain their own energy rather than gaining fresh-food energy")

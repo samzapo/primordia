@@ -601,7 +601,7 @@
         {
           "id": "organ_mitochondrion",
           "title": "Mitochondrion",
-          "text": "Sits inside the cell and extracts more ATP from food when oxygen is nearby. It can redirect some food from growth into energy; it never adds fuel. Without oxygen, fermentation stays unchanged.",
+          "text": "Sits inside the cell and helps recover more ATP from food and nearby oxygen without reducing biomass growth. Each healthy mitochondrion adds 50% to ordinary oxygen-supported digestion: one gives 1.5x ATP, two give 2x, up to 5x. Damage reduces its benefit. It has a small upkeep cost. Direct leaf ATP and fermentation are unchanged; exhausted food cannot make extra energy.",
           "sources": [
             {
               "title": "The mitochondrion",
