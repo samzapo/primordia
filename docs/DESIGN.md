@@ -758,3 +758,5 @@ October18 Revision69 receptor steering: free Flight/Hunting/Toward family/Away f
 [Revision70](REVISION_70.md) replaces the critical-resource banner with a slow amber blink on the selected cell’s ATP sac below10ATP and a coral blink on its actual membrane below30%health. Conditions are independent and presentation-only; the pause-aware UI clock freezes the cues with the view.
 
 [Revision71](REVISION_71.md) keeps detected relatives selectable for five seconds after a real family signal, adds clear Cancel merge and a brief donor pull-in, and makes surface gas exchange depend on fluid speed. These are bounded local memories/presentation effects; resource transfer stays authoritative and once only.
+
+[Revision72](REVISION_72.md) makes player-selected family merge commit immediately from recent pheromone eligibility, without seeking or waiting for contact. Preserve uncapped biomass/AP, finite transfer and pull-in art; autonomous fusion still requires contact.

@@ -405,6 +405,18 @@ const RELEASES=[
   ],
   "footer":"Experimental updates start with a fresh copy of the main pond.",
   "button":"Back to the pond"
+ },
+ {
+  "id":"2026-10-18-immediate-family-merge",
+  "audience":"experimental",
+  "title":"What’s new in the pond",
+  "items":[
+   "Choose a bright relative to merge it straight into your cell, without waiting for an approach.",
+   "The relative slides into your cell as its resources are absorbed.",
+   "Crowded water never blocks a merge. Your biomass and AP have no storage limit."
+  ],
+  "footer":"Experimental updates start with a fresh copy of the main pond.",
+  "button":"Back to the pond"
  }
 ]
 const CURRENT=RELEASES[-1]

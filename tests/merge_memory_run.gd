@@ -27,9 +27,12 @@ func run() -> void:
 	var remembered: Vector2=cell.behavior.merge_cues[donor.id].report.at
 	sim.particles=[];sim.grid.rebuild(sim.particles);sim.time=1;cell.sense_clock=0;sim._sense(cell,.2)
 	check(cell.behavior.family_cues.is_empty() and sim.FamilyMerging.detected(sim,cell,donor.id),"A missed reception no longer makes a recent relative flicker out")
-	check(sim.FamilyMerging.request(sim,donor.id),"Recently detected family remains clickable after its physical tracer is gone")
+	check(sim.FamilyMerging.candidates(sim,cell).has(donor.id),"Recently detected family remains clickable after its physical tracer is gone")
 	donor.position+=Vector2(0,200)
-	check(sim.FamilyMerging.direction(sim,cell).is_equal_approx(Sim.Medium.offset(cell.position,remembered).normalized()),"Approach uses the immutable received position, never live donor movement")
+	cell.behavior["merge_order"]={"id":donor.id,"expires_at":60.0,"automatic":false}
+	check(cell.behavior.merge_cues[donor.id].report.at==remembered and sim.FamilyMerging.direction(sim,cell)==Vector2.ZERO,"Old player approach orders never steer toward the remembered or live donor")
+	sim.FamilyMerging.step(sim)
+	check(not cell.behavior.has("merge_order") and sim.cells.has(donor),"Saved player approach orders are discarded without seeking or merging")
 	for i in 20:sim.FamilyMerging.candidates(sim,cell)
 	check(sim.FamilyMerging.candidates(sim,cell)[donor.id]==expires,"Drawing, target export and repeated inspection do not refresh memory")
 	sim.time=4.99
@@ -38,20 +41,31 @@ func run() -> void:
 	check(sim.FamilyMerging.candidates(sim,cell).is_empty() and not sim.FamilyMerging.request(sim,donor.id),"A newly controlled donor becomes unavailable immediately despite memory")
 	sim.managed_cells=[]
 	sim.time=5.01;cell.sense_clock=0;sim._sense(cell,.2)
-	check(sim.FamilyMerging.candidates(sim,cell).is_empty() and sim.FamilyMerging.direction(sim,cell)==Vector2.ZERO,"No signal for five seconds expires selection and approach")
+	check(sim.FamilyMerging.candidates(sim,cell).is_empty() and sim.FamilyMerging.direction(sim,cell)==Vector2.ZERO,"No signal for five seconds expires merge selection")
 	sim.FamilyMerging.remember(sim,cell,{donor.id:{"expires_at":5.0,"report":trace.report}})
 	check(not sim.FamilyMerging.detected(sim,cell,donor.id),"An already expired packet cannot renew permission")
 	# A second true reception renews the finite window.
 	trace=sim._emit_pheromone(donor);trace.p=cell.organ_position(cell.organs[0]);trace.expires_at=5.2
 	sim.grid.rebuild(sim.particles);cell.sense_clock=0;sim._sense(cell,.2)
 	check(sim.FamilyMerging.candidates(sim,cell)[donor.id]==10.01,"A fresh actual reception renews the window")
-	donor.position=cell.position+Vector2(cell.extent()+donor.extent()-2,0)
+	check(not sim.FamilyMerging.touching(sim,cell,donor),"The selected donor is still separated from the receiver")
+	var blocker=Sim.Cell.new(502,cell.position);sim.cells.append(blocker)
+	cell.biomass=25000;cell.ap=10000;donor.biomass=50000;donor.ap=20000
+	var total_ap: int=cell.ap+donor.ap
+	var expected_mass: float=cell.biomass+(donor.body+donor.biomass+donor.brood_mass+donor.surface_material()+donor.organ_mass()*.5)*.9
 	var organs: int=donor.organs.size()
-	check(sim.FamilyMerging.request(sim,donor.id) and not sim.cells.has(donor),"Contact commits one transfer and removes the donor from simulation")
+	check(sim.FamilyMerging.request(sim,donor.id) and not sim.cells.has(donor) and not cell.behavior.has("merge_order"),"Selection immediately commits one transfer without waiting for contact or navigation")
+	check(cell.biomass>74999*.9 and is_equal_approx(cell.biomass,expected_mass) and cell.ap==total_ap,"Crowding and large biomass/AP balances never cap or truncate the transfer")
+	var retained_radius: float=cell.radius
+	cell.biomass*=4;cell.update_geometry()
+	check(cell.radius>retained_radius*1.9,"Cell geometry keeps growing above large balances without a size ceiling")
+	var checkpoint=Codec.new().restore(Codec.new().capture(sim))
+	check(checkpoint.player.biomass==cell.biomass and checkpoint.player.ap==total_ap,"Checkpoint round-trip retains uncapped biomass and AP")
 	check(sim.merge_bursts.size()==1 and sim.merge_bursts[0].portrait.organs.size()==organs,"The committed fact retains the donor artwork before organs are reabsorbed")
 	check(not sim.FamilyMerging.request(sim,donor.id) and sim.merge_bursts.size()==1,"Retried selection cannot transfer again or replay the animation")
 	var stored: Dictionary=Codec.new().capture(sim)
 	check(not stored.objects[0].fields.has("merge_bursts"),"Animation artwork is transient and never retained in pond checkpoints")
+	cell.biomass=20;cell.update_geometry()
 	var view=View.new();view.game=Game.new();root.add_child(view)
 	var amount: float=cell.biomass;var rng: int=sim.rng.state;var bodies: int=sim.cells.size()
 	view.sync(sim,Vector2.ZERO,0)

@@ -139,7 +139,7 @@
       {
         "id": "family_tools",
         "title": "Family and growth",
-        "text": "Tap Family to switch relatives. Merge zooms to nearby water: tap a bright relative to merge it into your current cell. Only unattended relatives whose pheromones your cell received within the past five seconds are selectable; other cells are dim. Tap Cancel merge to leave. Swipe through long families, or use the up/down arrows. Open the division bud, then Divide for continuous Auto divide or a single queued birth. Investment shows all three strategies and whether this cell uses Family or an individual setting."
+        "text": "Tap Family to switch relatives. Merge zooms to nearby water: tap a bright relative to merge it into your current cell immediately. You do not need to travel to it. Only unattended relatives whose pheromones your cell received within the past five seconds are selectable; other cells are dim. Tap Cancel merge to leave. Swipe through long families, or use the up/down arrows. Open the division bud, then Divide for continuous Auto divide or a single queued birth. Investment shows all three strategies and whether this cell uses Family or an individual setting."
       }
     ],
     "desktop": [
@@ -194,7 +194,7 @@
       {
         "id": "family_tools",
         "title": "Family and growth",
-        "text": "Click Family to switch relatives. Merge zooms to nearby water: click a bright relative to merge it into your current cell. Only unattended relatives whose pheromones your cell received within the past five seconds are selectable; other cells are dim. Right-click or use Cancel merge to leave. Use the up/down arrows to scroll long families. Open the division bud, then Divide for continuous Auto divide or a single queued birth. Investment shows all three strategies and whether this cell uses Family or an individual setting."
+        "text": "Click Family to switch relatives. Merge zooms to nearby water: click a bright relative to merge it into your current cell immediately. You do not need to travel to it. Only unattended relatives whose pheromones your cell received within the past five seconds are selectable; other cells are dim. Right-click or use Cancel merge to leave. Use the up/down arrows to scroll long families. Open the division bud, then Divide for continuous Auto divide or a single queued birth. Investment shows all three strategies and whether this cell uses Family or an individual setting."
       }
     ]
   },
@@ -833,7 +833,7 @@
         {
           "id": "family_fusion",
           "title": "Merging relatives",
-          "text": "Merge a relative into this cell through Family. Only members of the same lineage can merge, and they must meet physically. The donor's organs are reabsorbed first using normal AP refunds. All remaining AP and internal food/gases transfer; 90% of the remaining body material and ATP are retained. Some material becomes waste and some ATP becomes heat. The receiving cell keeps its organs. Unattended family cells can merge on their own, more often in a crowd. A player's selected cell cannot be an automatic donor. Fusion earns no division AP. These yields and restrictions are game rules inspired by cell fusion.",
+          "text": "Merge a relative into this cell through Family. Only members of the same lineage can merge. Selecting an unattended relative whose pheromones were received in the past five seconds merges it immediately, even in crowded water. Biomass and AP have no storage limit. Its image slides into your cell. Autonomous relatives still need physical contact to merge. The donor's organs are reabsorbed first using normal AP refunds. All remaining AP and internal food/gases transfer; 90% of the remaining body material and ATP are retained. Some material becomes waste and some ATP becomes heat. The receiving cell keeps its organs. Unattended family cells can merge on their own, more often in a crowd. A player's selected cell cannot be an automatic donor. Fusion earns no division AP. These yields and restrictions are game rules inspired by cell fusion.",
           "sources": [
             {
               "title": "Cell fusion and membrane merger",

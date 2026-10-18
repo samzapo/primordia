@@ -572,7 +572,7 @@ func _apply(id: int,message: Dictionary) -> void:
 	world.player=prior_player;world.lineage=prior_lineage;world.evolution=prior_evolution
 	var ok: bool=outcome=="" if outcome is String else outcome>=0 if outcome is int else outcome==true
 	result.ok=ok;result.message="Applied" if ok else str(outcome) if outcome is String else "Cannot apply: check tissue, AP, placement and template"
-	if message.get("action","")=="merge":result.message="Merge requested. Following the detected family trail." if ok else "Choose a nearby, unattended relative whose pheromones this cell can detect."
+	if message.get("action","")=="merge":result.message="Family cells merged." if ok else "Choose an unattended relative whose pheromones this cell received recently."
 	if message.get("action","")=="divide":result.message="Cell divided. Parent +1 AP, daughter +1 AP. Choose her from Family." if ok else division_reason
 	if ok and message.get("action","")=="division_request":
 		result.queued=cell.division_requested;result.automatic=cell.automatic_division

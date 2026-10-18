@@ -1,5 +1,5 @@
 extends RefCounted
-## Fusion is a local physical transaction, never a population cull or remote kill.
+## Explicit selection commits immediately; autonomous fusion still needs contact.
 const MIN_AGE:=60.0
 const COOLDOWN:=120.0
 const RECENT_SECONDS:=5.0
@@ -55,11 +55,12 @@ static func neighborhood(receiver) -> float:
 
 static func request(sim,donor_id: int) -> bool:
  var receiver=sim.player
+ if not receiver.behavior.get("merge_order",{}).get("automatic",false):receiver.behavior.erase("merge_order")
  for donor in sim.cells:
   if donor.id==donor_id and eligible(sim,receiver,donor) and detected(sim,receiver,donor_id):
-   receiver.behavior["merge_order"]={"id":donor.id,"expires_at":sim.time+60,"automatic":false}
-   if touching(sim,receiver,donor):return commit(sim,receiver,donor)
-   return true
+   # Selection is the transaction, not an instruction to navigate.
+   # Eligibility and finite transfer remain; crowding never limits growth.
+   return commit(sim,receiver,donor,true)
  return false
 
 static func touching(sim,a,b) -> bool:
@@ -68,7 +69,7 @@ static func touching(sim,a,b) -> bool:
 
 static func direction(sim,cell) -> Vector2:
  var order: Dictionary=cell.behavior.get("merge_order",{})
- if order.is_empty() or float(order.expires_at)<=sim.time:return Vector2.ZERO
+ if order.is_empty() or not order.get("automatic",false) or float(order.expires_at)<=sim.time:return Vector2.ZERO
  var received: Dictionary=cue(sim,cell,int(order.id))
  if received.is_empty():return Vector2.ZERO
  return sim.Medium.offset(cell.position,received.report.at).normalized()
@@ -83,7 +84,8 @@ static func step(sim) -> void:
   for id in cues.keys():
    if float(cues[id].expires_at)<=sim.time:cues.erase(id)
   var order: Dictionary=cell.behavior.get("merge_order",{})
-  if not order.is_empty() and (float(order.expires_at)<=sim.time or (order.get("automatic",false) and managed(sim,cell))):
+  # Discard saved player approach orders from earlier builds. They never resume.
+  if not order.is_empty() and (not order.get("automatic",false) or float(order.expires_at)<=sim.time or managed(sim,cell)):
    cell.behavior.erase("merge_order");order={}
   if order.is_empty() and not managed(sim,cell) and cell.age>=MIN_AGE and sim.time>=cell.merge_after:
    var chance: float=1-exp(-(.2 if cues.size()>=4 else .02)*elapsed)
@@ -102,17 +104,11 @@ static func step(sim) -> void:
    if touching(sim,cell,donor):commit(sim,cell,donor)
    break
 
-static func commit(sim,receiver,donor) -> bool:
- if not eligible(sim,receiver,donor) or not detected(sim,receiver,donor.id) or not touching(sim,receiver,donor):return false
- var organ_material: float=donor.organ_mass()
- var solids: float=donor.body+donor.biomass+donor.brood_mass+donor.surface_material()+organ_material*.5
- var radius: float=receiver.tissue_radius(receiver.body+receiver.biomass+receiver.brood_mass+solids*.9)
- var extent: float=radius*maxf(1.05,receiver.extent()/maxf(1,receiver.radius))
- if not sim.habitat_geometry.clear_at(receiver.position,extent):return false
- for other in sim.cells:
-  if other==receiver or other==donor or other.dead:continue
-  if sim.Medium.offset(receiver.position,other.position).length()<extent+other.extent()+4:return false
- # Complete all preflight checks before any irreversible work. GPU ownership is
+static func commit(sim,receiver,donor,from_selection: bool=false) -> bool:
+ if not eligible(sim,receiver,donor) or not detected(sim,receiver,donor.id):return false
+ if not from_selection and not touching(sim,receiver,donor):return false
+ # Eligibility is checked before any transfer. Growth has no space/balance cap.
+ # GPU ownership is
  # released once for this rare explicit transaction; normal simulation stays resident.
  var picture: Dictionary=preload("res://scripts/cell_portrait.gd").capture(donor)
  receiver.chemistry.ensure_cpu();donor.chemistry.ensure_cpu()
@@ -121,7 +117,7 @@ static func commit(sim,receiver,donor) -> bool:
   if donor.inherent(donor.organs[index]):continue
   if not sim._recycle_for(donor,ledger.progression,index):return false
  # Inherent groove material is zero. Any bound membrane material joins the body.
- solids=donor.body+donor.biomass+donor.brood_mass+donor.surface_material()
+ var solids: float=donor.body+donor.biomass+donor.brood_mass+donor.surface_material()
  receiver.biomass+=solids*.9
  if solids>0:sim.spawn_particle(sim.WASTE,receiver.excretion_position(),Vector2.ZERO,solids*.1,receiver.id)
  var available: float=donor.energy+donor.brood_energy

@@ -180,11 +180,9 @@ func merge_gates() -> void:
  check(not sim.FamilyMerging.request(sim,donor.id) and sim.FamilyMerging.candidates(sim,receiver).is_empty(),"A family roster or nearby body alone does not grant merge selection")
  detect(sim,receiver,donor)
  check(sim.FamilyMerging.candidates(sim,receiver).keys()==[donor.id],"Only a real received family trace enables the same-lineage donor")
- check(sim.FamilyMerging.request(sim,donor.id) and receiver.behavior.has("merge_order"),"A detected relative can be chosen for physical approach")
- var report: Dictionary=receiver.behavior.family_cues[donor.id].report
- var expected: Vector2=sim.Medium.offset(receiver.position,report.at).normalized()
+ receiver.behavior["merge_order"]={"id":donor.id,"expires_at":sim.time+60,"automatic":false}
  donor.position+=Vector2(0,300)
- check(sim.FamilyMerging.direction(sim,receiver).is_equal_approx(expected),"Moving the donor cannot reveal its live position through merge navigation")
+ check(sim.FamilyMerging.direction(sim,receiver)==Vector2.ZERO,"Legacy player merge orders cannot steer toward the donor")
  sim.managed_cells=[donor.id]
  check(sim.FamilyMerging.candidates(sim,receiver).is_empty() and not sim.FamilyMerging.request(sim,donor.id),"A controlled donor remains ineligible even when detected")
  sim.managed_cells=[]
@@ -196,12 +194,20 @@ func merge_gates() -> void:
  var bodies: int=sim.cells.size();sim.FamilyMerging.step(sim)
  check(sim.cells.size()==bodies,"An old merge order cannot consume an undetected touching relative")
  cue.expires_at=expiry
+ receiver.behavior.family_cues[donor.id]=cue
  for organ in receiver.organs:
   if organ.kind in ["feeding","hunting","sensing","counterattack"]:organ.hp=0
  check(sim.FamilyMerging.candidates(sim,receiver).is_empty(),"Losing the sensing organ removes selection despite a retained cue")
  for organ in receiver.organs:organ.hp=organ.max_hp
  cue.report.lineage=9999
  check(not sim.FamilyMerging.detected(sim,receiver,donor.id),"A foreign lineage report cannot authorize family fusion")
+ cue.report.lineage=receiver.lineage_id()
+ # A nearby overlapping third body must not impose an implicit biomass cap.
+ stranger.position=receiver.position
+ sim.habitat_geometry.enabled=true
+ donor.position=receiver.position+Vector2(500,300)
+ check(not sim.FamilyMerging.commit(sim,receiver,donor),"Autonomous fusion still cannot consume a separated body")
+ check(sim.FamilyMerging.request(sim,donor.id) and not sim.cells.has(donor) and not receiver.behavior.has("merge_order"),"A valid separated donor merges immediately despite an overlapping third cell")
 
 func receive_trace(sim,cell,source,organ) -> void:
  sim.particles.clear();sim.grid.clear()

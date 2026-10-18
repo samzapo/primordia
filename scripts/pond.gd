@@ -1314,7 +1314,7 @@ func _choose_merge_at(screen: Vector2) -> void:
 		_message("Choose a bright relative whose pheromones this cell can detect.");return
 	if world.edit("merge",{"id":identity}):
 		_end_merge_selection()
-		_message("Merge requested. Following the detected family trail." if world.remote_client else "Following the detected family trail to merge.")
+		_message("Merging selected relative..." if world.remote_client else "Family cells merged.")
 	else:_message("That relative is no longer available. Choose another bright cell.")
 
 func _family_at(screen: Vector2) -> int:

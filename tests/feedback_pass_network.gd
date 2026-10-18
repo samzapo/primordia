@@ -151,16 +151,18 @@ func run() -> void:
  if host.cpu:
   host.world.grid.rebuild(host.world.particles);selected.behavior["family_cues"]=host.world._family_reports(selected)
  check(await until(func():return Sim.FamilyMerging.detected(host.world,selected,donor.id)),"The receiver detects a real emitted family tracer through its active chemistry backend")
- # Actual contact is a separate physical precondition, never a navigation input.
- donor.position=selected.position+Vector2(selected.support(0)+donor.support(PI)-5,0);donor.previous_position=donor.position
+ # Selection must commit while the sensed donor is still physically separated.
+ donor.position=selected.position+Vector2(450,200);donor.previous_position=donor.position
+ check(not Sim.FamilyMerging.touching(host.world,selected,donor),"The network merge starts without physical contact")
  var eligibility: Dictionary=host._frame(peer).merge_available
  check(eligibility.cell==selected.id and eligibility.targets.has(donor.id),"The real socket snapshot exposes only current detected merge target identities")
  var donor_id: int=donor.id;var combined_ap: int=selected.ap+donor.ap
  command={"op":"command","epoch":host.epoch,"cell":selected.id,"edit":account.edit,"sequence":9,"action":"merge","args":{"id":donor.id}}
  socket.send_text(JSON.stringify(command))
- check(await until(func():return not result(9).is_empty()),"Same-family physical fusion receives an authenticated receipt")
+ check(await until(func():return not result(9).is_empty()),"Immediate selected fusion receives an authenticated receipt")
  if not result(9).ok:print("FUSION_REJECT ",result(9)," distance=",Sim.Medium.offset(selected.position,donor.position).length()," supports=",selected.support(0)+donor.support(PI))
- check(result(9).ok and not host.world.cells.any(func(body):return body.id==donor_id) and selected.ap==combined_ap,"Fusion combines existing cell AP exactly once without a division award")
+ check(result(9).ok and not host.world.cells.any(func(body):return body.id==donor_id) and selected.ap==combined_ap and not selected.behavior.has("merge_order"),"Fusion is complete at the receipt with no approach order or extra AP")
+ check(result(9).message=="Family cells merged.","The authoritative receipt confirms completion rather than promising navigation")
  saved=Codec.new().restore(host.store.load_latest().graph)
  check(not saved.world.cells.any(func(body):return body.id==donor_id) and saved.accounts[welcome.token.sha256_text()].current.id==selected.id,"Fusion is durable before success and retains the receiver identity")
  socket.send_text(JSON.stringify(command))
