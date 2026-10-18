@@ -155,6 +155,31 @@ func run() -> void:
  socket.send_text(JSON.stringify(command))
  check(await until(func():return messages.filter(func(m):return m.get("kind","")=="result" and m.get("sequence",-1)==9).size()==2),"Retried fusion receives its original receipt")
  check(selected.ap==combined_ap and account.lineage.births==births+1,"Retried fusion cannot duplicate AP or births")
+ # Single-division requests use the same authenticated, durable receipt path.
+ selected.brood_mass=0;selected.brood_energy=0
+ command={"op":"command","epoch":host.epoch,"cell":selected.id,"edit":account.edit,"sequence":10,"action":"division_request","args":{"active":true}}
+ births=account.lineage.births;points=selected.ap
+ socket.send_text(JSON.stringify(command))
+ check(await until(func():return not result(10).is_empty()),"Queued division has a real authenticated receipt")
+ check(result(10).ok and result(10).queued and selected.division_requested and not selected.automatic_division and account.lineage.births==births,"Unfunded manual division queues instead of being rejected or enabling continuous auto")
+ saved=Codec.new().restore(host.store.load_latest().graph)
+ check(saved.accounts[welcome.token.sha256_text()].current.division_requested,"The one-shot request is durable before the success receipt")
+ frame=host._frame(peer)
+ check(frame.division.queued and not frame.division.automatic,"Browser readiness includes the authoritative queued/automatic state")
+ for body in host.world.cells:
+  if body!=selected:body.automatic_division=false;body.position=Vector2(2600+body.id*10,2200)
+ host.world.automatic_reproduction=true
+ selected.brood_mass=host.world.offspring_quote(selected).material;selected.brood_energy=60;selected.reproduction_retry_at=0
+ host.world._step_reproduction();host.world.automatic_reproduction=false
+ check(account.lineage.births==births+1 and not selected.division_requested and selected.ap==points+1,"Authority consumes the queued birth once, preserving per-cell AP")
+ check(not host.world.cells[-1].division_requested and not host.world.cells[-1].automatic_division,"The queued birth does not arm its daughter")
+ socket.send_text(JSON.stringify(command))
+ check(await until(func():return messages.filter(func(m):return m.get("kind","")=="result" and m.get("sequence",-1)==10).size()==2),"A replay receives its retained queue receipt")
+ check(not selected.division_requested and account.lineage.births==births+1,"Replaying the completed request cannot re-arm or duplicate its birth")
+ command.sequence=11;command.edit=account.edit;command.cell=selected.id+10000
+ socket.send_text(JSON.stringify(command))
+ check(await until(func():return not result(11).is_empty()),"Forged division target receives a rejection")
+ check(not result(11).ok and not selected.division_requested,"A queued division cannot target another body")
  socket.close();host.running=false;host.listener.stop();host._finish_snapshots()
  if host.world.resident!=null:
   host.world.resident.gpu.close();await host.world.resident.gpu.closed

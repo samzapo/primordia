@@ -573,6 +573,9 @@ func _apply(id: int,message: Dictionary) -> void:
 	var ok: bool=outcome=="" if outcome is String else outcome>=0 if outcome is int else outcome==true
 	result.ok=ok;result.message="Applied" if ok else str(outcome) if outcome is String else "Cannot apply: check tissue, AP, placement and template"
 	if message.get("action","")=="divide":result.message="Cell divided. Parent +1 AP, daughter +1 AP. Choose her from Family." if ok else division_reason
+	if ok and message.get("action","")=="division_request":
+		result.queued=cell.division_requested;result.automatic=cell.automatic_division
+		result.message="Queued division cancelled." if not message.args.active else "One division queued. It will happen when resources and clear water are ready." if cell.division_requested else "Cell divided. Parent +1 AP, daughter +1 AP. Choose her from Family."
 	if ok and message.get("action","")=="remove":
 		result.ap_refund=maxi(0,cell.ap-before_points)
 		result.message="Organelle reabsorbed · %d AP returned to this cell." % result.ap_refund

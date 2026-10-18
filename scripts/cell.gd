@@ -45,6 +45,7 @@ const ATP_TURNOVER := 0.002
 const ORAL_FLOW := 64.0
 const ORAL_REACH := 170.0
 var automatic_division:=false
+var division_requested:=false # One paid birth at the next safe opportunity; never inherited.
 var merge_after:=0.0
 var behavior: Dictionary={} # Bounded physiology latches and current received escape direction.
 var exploration := 0.25 # Legacy checkpoint fact; inert.

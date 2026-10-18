@@ -168,9 +168,18 @@ func run(test_host) -> void:
 	expect(cell.count("protection") == 0 and scene.views[cell.id].seen_revision > seen,"Recycling refreshes the paused drawing before resuming")
 	expect(scene.world.player.ap == points+refund,"Reabsorption returns the current construction tier to this cell")
 	points=scene.world.player.ap
-	scene.cell_ui.open_context({"kind":"behavior"})
-	expect(scene.cell_ui.choices.size()==2 and scene.cell_ui.choices[0].caption==cell.state.capitalize(),"The nucleus describes shared instincts without manual exploration controls")
-	expect(scene.cell_ui.choices[0].description==cell.state.capitalize(),"The temporary menu shows only the live current intention")
+	scene.preferences.show_instinct=false
+	var instinct: Array=[]
+	for page in 4:
+		scene.cell_ui.open_context({"kind":"nucleus","menu_page":page})
+		instinct=scene.cell_ui.choices.filter(func(choice):return choice.symbol=="Instinct")
+		if not instinct.is_empty():break
+	expect(instinct.size()==1,"The nucleus exposes Instinct as a direct toggle")
+	if not instinct.is_empty():
+		instinct[0].pressed.emit()
+		expect(scene.preferences.show_instinct and instinct[0].selected,"Instinct toggles on without opening a submenu")
+		instinct[0].pressed.emit()
+		expect(not scene.preferences.show_instinct and not instinct[0].selected,"Instinct toggles off without changing cell behavior")
 	var pore: Dictionary=cell.organs.filter(func(item):return item.kind=="feeding")[0]
 	scene.cell_ui.open_context({"kind":"organ","id":pore.id})
 	expect(scene.cell_ui.choices.all(func(choice):return not choice.caption.begins_with("Steering") and not choice.caption.begins_with("Output")),"Organs expose no retired percentage controls")
@@ -272,16 +281,20 @@ func run(test_host) -> void:
 	scene.cell_ui.choices[0].pressed.emit()
 	expect(scene.world.evolution.chosen and offered in scene.world.evolution.learned,"Nucleus keeps a blueprint using the existing run rules")
 	scene.cell_ui.open_context({"kind":"bud"})
-	expect(scene.cell_ui.choices.size()==5 and scene.cell_ui.choices[0].caption=="Divide now","The bud offers direct division without banking controls")
+	expect(scene.cell_ui.choices.size()==3 and scene.cell_ui.choices[0].caption=="Divide","The bud offers direct division without banking controls")
 	cell.brood_mass=0;cell.brood_energy=0
 	var population: int=scene.world.cells.size()
 	scene.cell_ui.choices[0].pressed.emit()
-	cell=scene.world.player # Division commits/re-enters the editor; use its current body.
-	expect(scene.world.cells.size()==population and cell.brood_mass==0 and cell.brood_energy==0,"An unfunded division cannot grant tissue, ATP or a free daughter")
+	expect(scene.cell_ui.context.kind=="division" and scene.cell_ui.choices[1].caption=="Start division now","Divide opens explicit automatic and one-shot choices")
+	scene.cell_ui.choices[1].pressed.emit()
+	cell=scene.world.player # The request commits/re-enters local editing.
+	expect(scene.world.cells.size()==population and cell.brood_mass==0 and cell.brood_energy==0 and cell.division_requested,"An unfunded request queues one birth without granting tissue, ATP or a free daughter")
 	scene.world.evolution.offspring_id = cell.id
 	scene.cell_ui.open_context({"kind":"bud"})
-	expect(scene.cell_ui.choices.size()==5 and scene.cell_ui.choices[0].radial_progress>=0,"The bud reports automatic division growth after a prior birth")
+	expect(scene.cell_ui.choices.size()==3 and scene.cell_ui.choices[0].radial_progress>=0 and scene.cell_ui.choices[0].selected,"The bud reports automatic division growth after a prior birth")
 	scene.world.evolution.offspring_id = -1
+	scene.cell_ui.open_context({"kind":"division"});scene.cell_ui.choices[1].pressed.emit()
+	expect(not scene.world.player.division_requested,"The queued birth can be cancelled through the same division menu")
 	scene.cell_ui.close_context()
 	cell.energy = 0
 	scene.cell_ui.interior.sync()
@@ -602,11 +615,12 @@ func _lineage() -> void:
 	scene.cell_ui.open_context({"kind":"bud"})
 	parent.brood_energy = 50
 	scene.cell_ui.sync(0)
-	expect(not scene.cell_ui.choices[0].affordable,"The bud marks an unfunded successor")
+	expect(scene.cell_ui.choices[0].affordable and not scene.cell_ui.choices[0].progress_ready and scene.cell_ui.choices[0].radial_progress<1,"An unfunded Divide remains accessible while the ring shows incomplete preparation")
 	parent.brood_energy = 60
 	scene.cell_ui.sync(0)
-	expect(scene.cell_ui.choices[0].affordable,"Funding refreshes readiness while the bud choices remain open")
+	expect(scene.cell_ui.choices[0].progress_ready,"Funding refreshes readiness while the bud choices remain open")
 	scene.cell_ui.choices[0].pressed.emit()
+	scene.cell_ui.choices[1].pressed.emit()
 	scene._update_world(1)
 	expect(sim.lineage.births == 1 and sim.cells.size() == 2 and sim.player.id == parent.id,"Release from the bud creates a real autonomous family member")
 	expect(scene.build_open and sim.build_original != null and sim.player.organic_mass() < mass and sim.player.ap == points+1,"Birth awards one AP to each body, commits paid anatomy and resumes editing the depleted parent")

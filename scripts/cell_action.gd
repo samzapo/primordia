@@ -43,7 +43,7 @@ func _ready() -> void:
 func _draw() -> void:
 	var center := size*0.5
 	var r := minf(size.x,size.y)*0.47
-	var active := is_hovered() or has_focus()
+	var active := is_hovered() or has_focus() or selected
 	draw_circle(center,r,Color("172448"))
 	draw_circle(center,r*0.9,Color("305066") if active else Color("223954"))
 	draw_arc(center,r*0.93,0,TAU,32,tint if active else tint.darkened(0.3),2*text_scale,true)

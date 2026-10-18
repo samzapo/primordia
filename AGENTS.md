@@ -626,3 +626,5 @@ forcing parameters stay unchanged. Persistent masks/curves fade in/out, and
 conflicting retired curves retain safe geometry through their fade instead of
 vanishing. Preserve complete paths, shared noncrossing admission, remembered
 Pause choice, functional hardware checks and experimental-only notices.
+
+October18 division-control correction: read Revision67. Instinct toggles a saved local intent readout/arrow, on by default; never switch off AI. Start division now queues one paid birth when blocked/unfunded, highlights Divide and clears only on successful commit or cancellation. It switches that parent out of continuous auto and never arms the daughter. Preserve authenticated exactly-once receipts, saved request state, ordinary1+1AP, material/safe-position/population gates and all cells. Auto divide stays separate in the Divide submenu. Default older display preferences to crests once, then remember deliberate choices. Experimental first; no rendering-speed campaign.

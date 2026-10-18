@@ -667,12 +667,18 @@ func _test_preferences() -> void:
 	preferences.bloom = false
 	preferences.water_ripples = false
 	preferences.current_style = "streamlines"
+	preferences.show_instinct = true
 	preferences.hud_scale = 1.5
 	preferences.save_settings()
 	var restored = preload("res://scripts/preferences.gd").new()
 	restored.path = preferences.path
 	restored.load_settings()
-	expect(restored.fullscreen and restored.hud_scale == 1.5 and not restored.bloom and not restored.water_ripples and restored.current_style=="streamlines","Current style, water shimmer, fullscreen, bloom and HUD scale survive settings reload")
+	expect(restored.fullscreen and restored.hud_scale == 1.5 and not restored.bloom and not restored.water_ripples and restored.current_style=="streamlines" and restored.show_instinct,"Current style, instinct, water shimmer, fullscreen, bloom and HUD scale survive settings reload")
+	var legacy:=ConfigFile.new();legacy.set_value("display","current_style","streamlines");legacy.set_value("display","hud_scale",1.5);legacy.save(preferences.path)
+	restored.load_settings()
+	expect(restored.current_style=="crests" and restored.show_instinct and restored.hud_scale==1.5,"This update defaults older settings to crests without changing other choices")
+	restored.current_style="streamlines";restored.save_settings();preferences.load_settings()
+	expect(preferences.current_style=="streamlines","A deliberate subsequent style choice survives the one-time default update")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(preferences.path))
 
 func _test_packing_and_size() -> void:

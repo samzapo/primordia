@@ -193,7 +193,7 @@ func _draw() -> void:
 		draw_arc(at,4+hole.size*6,0,TAU,16,Color("fc8c90"),1.5,true)
 	if game.show_senses:
 		draw_line(Vector2.ZERO,cell.target.rotated(-cell.angle)*(cell.radius+80),Color("b5a3f4"),2,true)
-	if cell==game.world.player and game.cell_ui.context.get("kind","")=="behavior" and cell.target.length_squared()>.001 and not cell.state.contains("RESTING"):
+	if cell==game.world.player and game.preferences.show_instinct and cell.target.length_squared()>.001 and not cell.state.contains("RESTING"):
 		var direction: Vector2=cell.target.rotated(-cell.angle).normalized()
 		var end: Vector2=direction*(cell.extent()+28)
 		draw_line(direction*cell.extent(),end,Color("fff0ac"),2,true)

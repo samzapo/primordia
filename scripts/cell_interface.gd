@@ -126,7 +126,7 @@ func screen_at(target: Dictionary) -> Vector2:
 				p = preload("res://scripts/visuals.gd").oral_path(cell,record.a)[12]
 			else:
 				p = cell.organ_local_position(record)
-	else: p = interior.anchors.get("nucleus" if target.kind in ["lineage","archive","past","investment"] else target.kind,Vector2.ZERO)
+	else: p = interior.anchors.get("nucleus" if target.kind in ["lineage","archive","past","investment"] else "bud" if target.kind=="division" else target.kind,Vector2.ZERO)
 	return game.world_layer.to_global(interior.position+p.rotated(interior.rotation))
 
 func targets() -> Array:
@@ -274,20 +274,22 @@ func open_context(target: Dictionary) -> void:
 			_choice("Family",sim.lineage.summary(sim),open_context.bind({"kind":"lineage"}),"","Family")
 			if not run.sandbox: _choice("Known blueprints","Recall a discovered blueprint.",open_context.bind({"kind":"archive","page":0}),"","Genes")
 			_choice("Investment","Choose automatic AP spending for unattended cells.",open_context.bind({"kind":"investment"}),"","Invest")
-			_choice("Behavior","How this cell chooses what to do.",open_context.bind({"kind":"behavior"}),"","Instinct")
+			_choice("Instinct","Show or hide this cell’s current intention and direction.",_toggle_instinct,"","Instinct")
+			choices[-1].set_meta("instinct_toggle",true);choices[-1].selected=game.preferences.show_instinct
 		"investment":
 			investment_picker.open()
-		"behavior":
-			_choice("Cell instincts",sim.Behavior.summary(cell),func():game._message(sim.Behavior.summary(cell)),"","Instinct")
-			_choice("Nucleus","Return to goals and blueprints.",open_context.bind({"kind":"nucleus"}),"","Back")
 		"bud":
 			var readiness: Dictionary=sim.division_status()
-			_choice("Divide now",readiness.reason,_reproduce,"","Divide",readiness.ready)
-			choices[-1].radial_progress=readiness.get("progress",0.0);choices[-1].progress_ready=readiness.ready
+			_choice("Divide",readiness.reason,open_context.bind({"kind":"division"}),"","Divide")
+			choices[-1].set_meta("division_entry",true)
 			_choice("Investment","Choose Hunter, Producer or Grazer for unattended cells.",open_context.bind({"kind":"investment"}),"","Invest")
 			_choice("Family",sim.lineage.summary(sim),open_context.bind({"kind":"lineage"}),"","Family")
-			_choice("Automatic division","Switch automatic division for this cell.",_division_policy.bind("cell",not cell.automatic_division),"","Auto: on" if cell.automatic_division else "Auto: off")
-			_choice("Family division","Set automatic division for the whole family.",_division_policy.bind("lineage",not cell.automatic_division),"","Family auto")
+		"division":
+			_choice("Auto divide","Keep dividing this cell when resources and clear water are ready.",_toggle_auto_division,"","Auto divide")
+			choices[-1].set_meta("division_auto",true)
+			_choice("Start division now","Divide once now, or queue one division until ready.",_reproduce,"","Start now")
+			choices[-1].set_meta("division_once",true)
+			_choice("Back","Return to this cell.",open_context.bind({"kind":"bud"}),"","Back")
 		"lineage","merge_family":
 			context["roster"]=hash(sim.lineage.records)
 			var records: Array=sim.lineage.records.filter(func(record):return record.state in ["living","active"])
@@ -329,9 +331,16 @@ func open_context(target: Dictionary) -> void:
 			choices[i].focus_neighbor_bottom = choices[i].focus_neighbor_right
 	sync(0)
 
-func _division_policy(scope: String,automatic: bool) -> void:
-	game.world.edit("division_policy",{"scope":scope,"automatic":automatic})
-	close_context()
+func _toggle_instinct() -> void:
+	game.preferences.show_instinct=not game.preferences.show_instinct
+	game.preferences.save_settings()
+	if game.views.has(game.world.player.id):game.views[game.world.player.id].queue_redraw()
+	sync(0)
+
+func _toggle_auto_division() -> void:
+	var status: Dictionary=game.world.division_status()
+	game.world.edit("division_policy",{"scope":"cell","automatic":not status.get("automatic",game.world.player.automatic_division)})
+	sync(0)
 
 func _merge(identity: int) -> void:
 	if identity==game.world.player.id:return
@@ -357,14 +366,18 @@ func command_result(command: Dictionary,result: Dictionary) -> void:
 		if context.get("kind","")=="organ":open_context(context.duplicate())
 
 func _reproduce() -> void:
-	# Commit the parent's edits before transferring tissue into a separate body.
-	game.world.commit_build()
-	var readiness: Dictionary=game.world.division_status()
-	var success: bool = game.world.divide_lineage(false,false)
-	game.world.begin_build()
-	close_context()
-	if game.world.remote_client:game._message("Division requested…" if success else readiness.reason)
-	else:game._message("Cell divided. Choose your daughter from Family." if success else readiness.reason)
+	# Commit local editing first. Authority owns the durable one-shot request.
+	var status: Dictionary=game.world.division_status()
+	var active: bool=not status.get("queued",game.world.player.division_requested)
+	if active:game.world.commit_build()
+	var success: bool=game.world.request_division(active)
+	if active:game.world.begin_build()
+	open_context({"kind":"bud"})
+	if game.world.remote_client:game._message("Division request sent…" if success else "Could not request division.")
+	elif not success:game._message(game.world.division_status().reason)
+	elif not active:game._message("Queued division cancelled.")
+	elif game.world.player.division_requested:game._message("One division queued. Waiting for resources and clear water.")
+	else:game._message("Cell divided. Choose your daughter from Family.")
 
 func _follow(identity: int) -> void:
 	var keep_editing: bool=game.build_open and not game.world.remote_client
@@ -396,7 +409,7 @@ func describe(target: Dictionary) -> String:
 		"lineage": return "FAMILY TREE\n"+sim.lineage.summary(sim)+"\n"+run.forecast()
 		"archive": return "Known blueprints · %d\nOne draft choice per tide; recalling grants no free anatomy." % game.archive.discovered.size()
 		"past": return "Expedition history · %d recorded\nYour next expedition retains these discoveries, not extra stats." % game.archive.expeditions.size()
-		"bud": return sim.division_status().reason
+		"bud","division": return sim.division_status().reason
 		"organ":
 			var organ: Dictionary = cell.organ_by_id(target.id)
 			if organ.is_empty(): return ""
@@ -437,7 +450,7 @@ func _tooltip(value: String, at: Vector2) -> void:
 	var extent := tip_box.get_combined_minimum_size()
 	tip_box.size = extent # Shrink after text reflow; stale tall panels otherwise clip at large UI scales.
 	tip_box.position = (at+Vector2(18,18)).clamp(Vector2(12,12),get_viewport_rect().size-extent-Vector2(12,12))
-	if mobile() or context.get("kind","")=="organ":
+	if mobile() or context.get("kind","")=="organ" or value.begins_with("Instinct ·"):
 		tip.custom_minimum_size.x=maxf(50,get_viewport_rect().size.x-32*s)
 		tip.max_lines_visible=3
 		tip.add_theme_font_size_override("font_size",roundi((22 if game.notice_timer>3 else 18)*s))
@@ -517,20 +530,30 @@ func sync(_dt: float) -> void:
 	edit_hint.size = Vector2(minf(540*s,size.x-32),0)
 	edit_hint.position = Vector2((size.x-edit_hint.size.x)*0.5,14)
 	if not game.build_open and not context.is_empty() and context.kind not in ["lineage","merge_family","archive","past"]: close_context()
-	if context.get("kind","") == "bud" and not choices.is_empty():
+	if context.get("kind","") in ["bud","division"] and not choices.is_empty():
 		var sim = game.world
 		var readiness: Dictionary=sim.division_status()
-		choices[0].affordable=readiness.ready
-		choices[0].description=readiness.reason
-		choices[0].radial_progress=readiness.get("progress",0.0);choices[0].progress_ready=readiness.ready
-		choices[0].queue_redraw()
+		var queued: bool=readiness.get("queued",sim.player.division_requested)
+		var automatic: bool=readiness.get("automatic",sim.player.automatic_division)
+		for choice in choices:
+			if choice.has_meta("division_entry") or choice.has_meta("division_once"):
+				choice.affordable=true;choice.selected=queued or (automatic and choice.has_meta("division_entry"))
+				choice.description=("One division queued. " if queued else "")+readiness.reason
+				choice.radial_progress=readiness.get("progress",0.0);choice.progress_ready=readiness.ready
+				if choice.has_meta("division_once"):
+					choice.caption="Cancel queued division" if queued else "Start division now"
+					choice.symbol="Queued" if queued else "Start now"
+				choice.queue_redraw()
+			elif choice.has_meta("division_auto"):
+				choice.selected=automatic;choice.queue_redraw()
 	if context.get("kind","") in ["lineage","merge_family"]:family_picker.sync()
 	_layout_mobile()
 	if investment_picker.visible:investment_picker.sync()
-	if context.get("kind","")=="behavior" and not choices.is_empty():
-		choices[0].caption=game.world.Behavior.summary(game.world.player)
-		choices[0].description=choices[0].caption
-		choices[0].queue_redraw()
+	for choice in choices:
+		if choice.has_meta("instinct_toggle"):
+			choice.selected=game.preferences.show_instinct
+			choice.description=game.world.Behavior.summary(game.world.player)+(" · Tap again to hide." if mobile() else " · Click again to hide.") if game.preferences.show_instinct else "Show this cell’s current intention and direction."
+			choice.queue_redraw()
 	if not context.is_empty() and context.kind not in ["lineage","merge_family"]:
 		if mobile():
 			for choice in choices:
@@ -583,6 +606,8 @@ func sync(_dt: float) -> void:
 		elif not keyboard_target.is_empty() and game.selected < 0: _tooltip(describe(keyboard_target),screen_at(keyboard_target))
 		elif game.selected >= 0:
 			_tooltip("%s\nCost %d AP · You have %d AP\n%s" % [game.TITLES[game.selected],game.world.player.construction_price(),game.world.player.ap,game.placement_status()],cursor)
+		elif game.preferences.show_instinct and not game.world.player.dead:
+			_tooltip("Instinct · "+game.world.Behavior.summary(game.world.player),Vector2.ZERO)
 		else:
 			tip_box.hide()
 	if context.get("kind","")=="organ" and not tip_box.visible:_tooltip(describe(context),Vector2.ZERO)

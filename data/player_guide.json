@@ -41,13 +41,13 @@
       {
         "id": "behavior",
         "title": "Understand your cell’s instincts",
-        "text": "Nucleus → Behavior explains its instincts. Low ATP favors food, useful light or resting while food digests. Low biomass favors feeding or hunting. Healthy cells can hunt or explore. Harmful acid and attacks take priority; family traces help attacked cells spread out. The same instincts apply to every cell, using its own organs and local signals.",
+        "text": "Intent view starts on. Nucleus → Instinct toggles the live intention readout and direction arrow. Low ATP favors food, useful light or resting while food digests. Low biomass favors feeding or hunting. Healthy cells can hunt or explore. Harmful acid and attacks take priority; family traces help attacked cells spread out. The same instincts apply to every cell, using its own organs and local signals.",
         "sources": []
       },
       {
         "id": "offspring",
         "title": "Cell division",
-        "text": "Surplus tissue and ATP prepare division automatically. Open the small bud: the ring around Divide fills as tissue and ATP accumulate. Green means ready; amber means fully funded but waiting for clear water or room in the pond. Divide makes a living daughter; Investment and Family are available here too. There is no four-cell family limit, but division still needs clear water and room in the pond. Daughters start with a basic oral groove and inherit the parent’s investment strategy; Manual stays Manual. A starving cell pauses reproductive investment while it recovers.",
+        "text": "Surplus tissue and ATP prepare division automatically. Open the small bud, then Divide. Choose Auto divide to keep dividing, or Start division now for just one daughter. If resources or clear space are missing, Divide stays highlighted until that one birth succeeds. Open it again to cancel. The ring fills with preparation; green means ready and amber means waiting for space. Daughters start with a basic oral groove and one leaf. Each parent and daughter gains 1 AP. A starving cell pauses preparation while it recovers.",
         "sources": []
       },
       {
@@ -139,7 +139,7 @@
       {
         "id": "family_tools",
         "title": "Family and growth",
-        "text": "Tap Family to switch relatives or choose a relative to merge into this cell. Use the up/down arrows to scroll long families. Open the division bud for Divide and automatic-division controls. Investment shows all three strategies and whether this cell uses Family or an individual setting."
+        "text": "Tap Family to switch relatives or choose a relative to merge into this cell. Use the up/down arrows to scroll long families. Open the division bud, then Divide for continuous Auto divide or a single queued birth. Investment shows all three strategies and whether this cell uses Family or an individual setting."
       }
     ],
     "desktop": [
@@ -194,7 +194,7 @@
       {
         "id": "family_tools",
         "title": "Family and growth",
-        "text": "Click Family to switch relatives or choose a relative to merge into this cell. Use the up/down arrows to scroll long families. Open the division bud for Divide and automatic-division controls. Investment shows all three strategies and whether this cell uses Family or an individual setting."
+        "text": "Click Family to switch relatives or choose a relative to merge into this cell. Use the up/down arrows to scroll long families. Open the division bud, then Divide for continuous Auto divide or a single queued birth. Investment shows all three strategies and whether this cell uses Family or an individual setting."
       }
     ]
   },
@@ -651,7 +651,7 @@
         {
           "id": "division",
           "title": "Reproduction and AP",
-          "text": "Cells prepare division using surplus biomass and ATP. New cells have an oral groove and one ordinary leaf, paid for by the division's material budget. Divide when the ring is full, or enable automatic division for a cell or the family. Automatic division starts off. A committed division gives 1 AP to the parent and 1 AP to the daughter. A full pond waits for room; merging can free space. These costs and AP awards are game rules.",
+          "text": "Cells prepare division using surplus biomass and ATP. Bud → Divide offers continuous Auto divide or one Start division now request. A one-shot waits for resources and safe space, clears after one birth and never arms the daughter. New daughters have an oral groove and one ordinary leaf, paid from the material budget. Continuous auto starts off. A committed division gives 1 AP to each parent and daughter. These costs and AP awards are game rules.",
           "sources": [
             {
               "title": "Cell division",
@@ -781,7 +781,7 @@
         {
           "id": "cell_instincts",
           "title": "Shared instincts, different bodies",
-          "text": "Instinct shows what your cell is trying to do now, with an arrow for its intended direction. All cells escape harm, recover ATP, rebuild biomass, then hunt or explore using their actual organs and locally received chemical, light and acidity signals. Unattended relatives can follow family traces to merge; crowding makes this more likely.",
+          "text": "Intent view starts on. Nucleus → Instinct toggles the current intention and direction arrow on or off. This only changes what you see. All cells escape harm, recover ATP, rebuild biomass, then hunt or explore using their actual organs and locally received chemical, light and acidity signals. Unattended relatives can follow family traces to merge; crowding makes this more likely.",
           "sources": [
             {
               "title": "Chemical sensing under flow",

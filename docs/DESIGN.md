@@ -741,3 +741,7 @@ both ponds/accounts/keys/feedback and return experimental to standby afterward.
 
 ### Family fusion and surface exchange (October18,2026)
 [Revision66](REVISION_66.md) introduces optional division, physically local same-family merging, clearer investment inheritance, independent weapon cues, small curl-enhanced atmospheric oxygen alongside CO2, gradual gas arrival and readable controls. Stage on experimental while preserving both ponds.
+
+### Instinct and queued division controls (October18,2026)
+
+[Revision67](REVISION_67.md) makes Instinct a saved presentation toggle and nests continuous or one-shot paid division under Divide. A pending one-shot waits for resources and safe space, clears on one committed birth and is never inherited. Wave crests become the initial view once for this update; later choices remain saved. Preserve both ponds and stage on experimental.

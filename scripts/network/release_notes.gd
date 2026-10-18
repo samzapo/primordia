@@ -343,6 +343,18 @@ const RELEASES=[
   ],
   "footer":"Your cells and their progress carry on between updates.",
   "button":"Back to the pond"
+ },
+ {
+  "id":"2026-10-18-division-and-instinct-controls",
+  "audience":"experimental",
+  "title":"What’s new in the pond",
+  "items":[
+   "Intent view starts on. Use Instinct to show or hide your cell’s intention and direction arrow.",
+   "Divide opens a choice: keep Auto divide on, or request just one division. If resources are short, your request stays lit until the cell can divide.",
+   "Wave crests are the starting view for this update. You can still choose Streamlines in Pause."
+  ],
+  "footer":"Your cells and their progress carry on between updates.",
+  "button":"Back to the pond"
  }
 ]
 const CURRENT=RELEASES[-1]

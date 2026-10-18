@@ -1,10 +1,12 @@
 extends RefCounted
+const CURRENT_STYLE_DEFAULT_VERSION := 1
 const SCALES := [0.85, 1.0, 1.25, 1.5, 1.75]
 var hud_scale := 1.0
 var fullscreen := false
 var bloom := true
 var water_ripples := true
 var current_style := "crests"
+var show_instinct := true
 var music_volume := 0.65
 var persist := true
 var path := "user://preferences.cfg"
@@ -17,9 +19,12 @@ func load_settings() -> void:
 	fullscreen = bool(config.get_value("display","fullscreen",false))
 	bloom = bool(config.get_value("display","bloom",true))
 	water_ripples = bool(config.get_value("display","water_ripples",true))
-	current_style = str(config.get_value("display","current_style","crests"))
+	var prior_default:=int(config.get_value("display","current_style_default_version",0))
+	current_style = "crests" if prior_default<CURRENT_STYLE_DEFAULT_VERSION else str(config.get_value("display","current_style","crests"))
+	show_instinct=bool(config.get_value("display","show_instinct",true))
 	if current_style not in ["crests","streamlines"]:current_style="crests"
 	music_volume = clampf(float(config.get_value("audio","music_volume",0.65)),0,1)
+	if prior_default<CURRENT_STYLE_DEFAULT_VERSION:save_settings()
 
 func save_settings() -> void:
 	if not persist: return
@@ -29,5 +34,7 @@ func save_settings() -> void:
 	config.set_value("display","bloom",bloom)
 	config.set_value("display","water_ripples",water_ripples)
 	config.set_value("display","current_style",current_style)
+	config.set_value("display","current_style_default_version",CURRENT_STYLE_DEFAULT_VERSION)
+	config.set_value("display","show_instinct",show_instinct)
 	config.set_value("audio","music_volume",music_volume)
 	config.save(path)

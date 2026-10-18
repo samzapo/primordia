@@ -2051,9 +2051,9 @@ func division_status(subject=null, ledger=null) -> Dictionary:
 	var parent=player if subject==null else subject
 	if remote_client:
 		if remote_division.get("cell",-1)==parent.id:return remote_division.duplicate(true)
-		return {"cell":parent.id,"ready":false,"progress":0.0,"reason":"Checking division with the pond…"}
+		return {"cell":parent.id,"ready":false,"progress":0.0,"queued":parent.division_requested,"automatic":parent.automatic_division,"reason":"Checking division with the pond…"}
 	var family=lineage if ledger==null else ledger
-	var result: Dictionary={"cell":parent.id,"ready":false,"reason":"","material":offspring_quote(parent).material,"energy":60.0}
+	var result: Dictionary={"cell":parent.id,"ready":false,"queued":parent.division_requested,"automatic":parent.automatic_division,"reason":"","material":offspring_quote(parent).material,"energy":60.0}
 	result.progress=minf(clampf(parent.brood_mass/maxf(.000001,result.material),0,1),clampf(parent.brood_energy/result.energy,0,1))
 	if parent.dead or parent.health<=0 or parent.lineage_id()!=family.root_id:
 		result.reason="Only a living member of your family can divide."
@@ -2083,6 +2083,18 @@ func divide_lineage(dormant: bool = false, follow: bool = true) -> bool:
 	if player.dead or evolution.terminal() or build_original != null: return false
 	return _divide_paid(player,lineage,dormant,follow,true)
 
+func request_division(active: bool=true) -> bool:
+	if remote_client:return edit("division_request",{"active":active})
+	if player.dead or player.health<=0 or evolution.terminal():return false
+	if not active:
+		player.division_requested=false;return true
+	if build_original!=null:return false
+	player.division_requested=true
+	# Manual intent supersedes continuous division for this body.
+	player.automatic_division=false;player.reproduction_retry_at=time
+	_divide_paid(player,lineage,false,false,true)
+	return true # A valid unpaid/blocked request is retained, not rejected.
+
 func _divide_paid(parent,ledger,dormant: bool=false,follow: bool=false,progress: bool=false) -> bool:
 	if dormant:return false
 	var status:=division_status(parent,ledger)
@@ -2092,6 +2104,7 @@ func _divide_paid(parent,ledger,dormant: bool=false,follow: bool=false,progress:
 	child.position=status.position
 	Investment.inherit_strategy(self,parent,child)
 	child.chemistry.partition(parent.chemistry,0.25)
+	parent.division_requested=false
 	parent.brood_mass -= quote.material
 	parent.body -= quote.body_transfer
 	parent.brood_energy -= quote.energy
@@ -2174,9 +2187,9 @@ func _step_reproduction() -> void:
 	for ledger in family_ledgers:ledger.discard_stored(self)
 	if not automatic_reproduction:return
 	for cell in cells.duplicate():
-		if cell.dead or cell.health<=0 or not cell.automatic_division or cell.brood_mass<=0 or cell.brood_energy<60 or time<cell.reproduction_retry_at:continue
+		if cell.dead or cell.health<=0 or not (cell.automatic_division or cell.division_requested) or cell.brood_mass<=0 or cell.brood_energy<60 or time<cell.reproduction_retry_at:continue
 		if cell==player and (build_original!=null or (not server_mode and evolution.terminal())):continue
 		var quote:=offspring_quote(cell)
 		if cell.brood_mass+.000001<quote.material:continue
 		cell.reproduction_retry_at=time+.5
-		_divide_paid(cell,_family_ledger(cell),false,false)
+		_divide_paid(cell,_family_ledger(cell),false,false,cell==player and cell.division_requested)

@@ -51,7 +51,7 @@ func run() -> void:
 	game.queue_free();await process_frame
 	var background:=ColorRect.new();background.color=Color(.025,.04,.10);background.size=Vector2(1200,900);root.add_child(background)
 	var flow=preload("res://scripts/flow_view.gd").new();root.add_child(flow);flow.position=Vector2(140,200);flow.scale=Vector2.ONE*3
-	flow.wakes.hide()
+	flow.wakes.hide();flow.use_crests=false
 	var image:=Image.create(64,40,false,Image.FORMAT_RGF)
 	for y in 40:
 		for x in 64:image.set_pixel(x,y,Color(20,0,0))

@@ -33,7 +33,7 @@ var input_samples: Array[Dictionary]=[]
 var input_baselines: Array[Vector2]=[]
 var input_image: Image
 var input_texture: ImageTexture
-var use_crests := false
+var use_crests := true
 var crest_tracks: Dictionary={}
 var crest_world
 var crest_clock := -INF

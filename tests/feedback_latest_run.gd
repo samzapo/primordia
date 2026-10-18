@@ -92,7 +92,7 @@ func internal_and_investment(scene) -> void:
   check(scene.cell_ui.family_picker.summary.text.contains("generation 4") and scene.cell_ui.family_picker.summary.text.contains("%d cells ever" % lifetime),"Both platforms show generation and lifetime count after a death")
   scene.cell_ui.close_context()
   scene.cell_ui.open_context({"kind":"bud"})
-  check(scene.cell_ui.choices.size()==5 and scene.cell_ui.choices[0].caption=="Divide now" and scene.cell_ui.choices[1].caption=="Investment","Both platforms offer direct division without storing, funding or reclaiming buttons")
+  check(scene.cell_ui.choices.size()==3 and scene.cell_ui.choices[0].caption=="Divide" and scene.cell_ui.choices[1].caption=="Investment","Both platforms offer direct division without storing, funding or reclaiming buttons")
   scene.cell_ui.close_context()
   scene._finish_build()
  scene.touch_zoom.enabled=false;scene.build_open=false
