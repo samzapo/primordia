@@ -16,6 +16,12 @@ func run() -> void:
 	game.world.cells=[game.world.player];game.habitat_view.hide();game.manual_zoom=6
 	var cell=game.world.player;cell.angle=0;cell.previous_angle=0
 	game._update_world(1);await settle()
+	if "--resource-warnings-only" in OS.get_cmdline_user_args():
+		await resource_warning_pixels(game)
+		print("RESOURCE WARNING GPU: %d assertions, %d failures; GPU=%s" % [assertions,failures,RenderingServer.get_video_adapter_name()])
+		game.queue_free();await process_frame
+		if FileAccess.file_exists(preferences_path):DirAccess.remove_absolute(ProjectSettings.globalize_path(preferences_path))
+		quit(0 if failures==0 else 1);return
 	var before:=root.get_texture().get_image()
 	var surface=preload("res://scripts/surface_chemistry.gd")
 	surface.bind(cell,11,.03,0)
@@ -48,6 +54,7 @@ func run() -> void:
 		sheet.blit_rect(tile,area,Vector2i(i*area.size.x,0))
 	if OS.has_environment("PRIMORDIA_FEEDBACK_PORE_PHASES"):sheet.save_png(OS.get_environment("PRIMORDIA_FEEDBACK_PORE_PHASES"))
 	if OS.has_environment("PRIMORDIA_FEEDBACK_PORE_CAPTURE"):after.save_png(OS.get_environment("PRIMORDIA_FEEDBACK_PORE_CAPTURE"))
+	await resource_warning_pixels(game)
 	game.queue_free();await process_frame
 	var background:=ColorRect.new();background.color=Color(.025,.04,.10);background.size=Vector2(1200,900);root.add_child(background)
 	var flow=preload("res://scripts/flow_view.gd").new();root.add_child(flow);flow.position=Vector2(140,200);flow.scale=Vector2.ONE*3
@@ -299,3 +306,56 @@ func induced_fades(game) -> void:
 	for sample in flow.crest_tracks.values():
 		if prior.has(sample.id):jump=maxf(jump,absf(sample.opacity-float(prior[sample.id])))
 	check(jump<=.101,"Four-hundredths of a second cannot cause a visible opacity step larger than the fade rate")
+
+
+func changed_pixels(before: Image,after: Image,area: Rect2i) -> int:
+	var count:=0
+	var clipped:=area.intersection(Rect2i(Vector2i.ZERO,after.get_size()))
+	for y in range(clipped.position.y,clipped.end.y):
+		for x in range(clipped.position.x,clipped.end.x):
+			var a:=before.get_pixel(x,y);var b:=after.get_pixel(x,y)
+			if Vector3(a.r-b.r,a.g-b.g,a.b-b.b).length()>.04:count+=1
+	return count
+
+func resource_warning_pixels(game) -> void:
+	var cell=game.world.player
+	game.world.evolution.sandbox=true;game.preferences.show_instinct=false;game.show_senses=false
+	game.cell_ui.reset();game.notice="Existing notice";game.notice_timer=0
+	var original_time: float=game.world.time
+	var original_rng: int=game.world.rng.state
+	for mobile in [false,true]:
+		root.size=Vector2i(412,915) if mobile else Vector2i(1200,900)
+		game.touch_zoom.enabled=mobile;game.touch_zoom.pixels=1
+		game.camera_has_pose=false;game.camera_followed_id=-1;game.camera_motion.cancel()
+		for depth in [true,false]:
+			game.membrane_depth=depth
+			for state in [{"energy":2.0,"health":100.0},{"energy":50.0,"health":15.0},{"energy":0.0,"health":15.0},{"energy":50.0,"health":100.0}]:
+				cell.energy=state.energy;cell.health=state.health
+				game.ui_time=0;game._update_world(1);game.cell_ui.sync(0);await settle()
+				var quiet:=root.get_texture().get_image()
+				game.ui_time=.8;game._update_world(1);game.cell_ui.sync(0);await settle()
+				var bright:=root.get_texture().get_image()
+				if state.energy==0 and depth and OS.has_environment("PRIMORDIA_RESOURCE_WARNING_CAPTURE"):
+					var path: String=OS.get_environment("PRIMORDIA_RESOURCE_WARNING_CAPTURE")+("-mobile" if mobile else "-desktop")
+					bright.save_jpg(path+"-bright.jpg",.9);quiet.save_jpg(path+"-quiet.jpg",.9)
+				var interior=game.cell_ui.interior
+				var transform: Transform2D=root.get_final_transform()*interior.get_global_transform_with_canvas()
+				var center: Vector2=transform*interior.anchors.atp
+				var extent: int=ceili(maxf(interior.atp_size*absf(transform.get_scale().x)*1.6+3,14*game.cell_ui.ui_scale()))
+				var atp_pixels:=changed_pixels(quiet,bright,Rect2i(Vector2i(center)-Vector2i.ONE*extent,Vector2i.ONE*extent*2))
+				check((atp_pixels>3 if state.energy<10 else atp_pixels==0),"ATP warning is independently visible, including empty ATP, on mobile=%s shaded=%s ATP=%s pixels=%s" % [mobile,depth,state.energy,atp_pixels])
+				var view=game.views[cell.id]
+				var body_transform: Transform2D=root.get_final_transform()*view.get_global_transform_with_canvas()
+				var rim_pixels:=0
+				for point in cell.membrane.outline():
+					var edge: Vector2=body_transform*(point*.955)
+					rim_pixels+=changed_pixels(quiet,bright,Rect2i(Vector2i(edge)-Vector2i(3,3),Vector2i(6,6)))
+				check((rim_pixels>10 if state.health<30 else rim_pixels==0),"Only critically damaged membranes blink along the actual outline on mobile=%s shaded=%s health=%s pixels=%s" % [mobile,depth,state.health,rim_pixels])
+				check(game.notice=="Existing notice","Resource warnings do not replace the current notice with a critical-resource message")
+				check(cell.energy==state.energy and cell.health==state.health and game.world.time==original_time and game.world.rng.state==original_rng,"Blinking is presentation-only with unchanged ATP, health, world time and RNG")
+				if state.energy==0:check(interior.atp_size==0,"Warning around an empty ATP sac never invents resource fill")
+			cell.dead=true;cell.health=0;cell.energy=0
+			game._update_world(1);await settle()
+			check(not game.views.has(cell.id) and not game.cell_ui.interior.visible,"A dead cell does not continue resource warning cues")
+			cell.dead=false;cell.health=100;cell.energy=50
+	game.membrane_depth=true;game.touch_zoom.enabled=false

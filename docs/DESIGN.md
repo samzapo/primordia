@@ -753,3 +753,6 @@ both ponds/accounts/keys/feedback and return experimental to standby afterward.
 October18 Revision69 follow-up: bound the Family panel to the visible viewport with measured header rows and actual touch dragging; retain arrow/wheel/focus controls. Disable kinship immunity for offensive particle contacts across CPU/coarse/resident GPU, including self exposure; keep hunter receptors targeting non-family cells. Preserve both ponds; experimental first.
 
 October18 Revision69 receptor steering: free Flight/Hunting/Toward family/Away from family at a dedicated receptor factory; exclude these from AP build tiers/refunds. Hunter selects any detected non-family cell without size/defense filters. Flight avoids real nearby toxins and armed non-family signals. Family receptors use actual local chemical snapshots and survival-first shared behavior; no live-ID navigation. Counterattack remains a productive gland. Experimental first, preserve ponds.
+
+
+[Revision70](REVISION_70.md) replaces the critical-resource banner with a slow amber blink on the selected cell’s ATP sac below10ATP and a coral blink on its actual membrane below30%health. Conditions are independent and presentation-only; the pause-aware UI clock freezes the cues with the view.

@@ -29,6 +29,7 @@ var depth_style := false
 var sound_waves := Node2D.new()
 var nucleus_center := Vector2.ZERO
 var nucleus_size := 0.0
+var membrane_warning:=false
 
 func _ready() -> void:
 	# Keep each shaded body immediately behind its own contents, so another
@@ -77,6 +78,9 @@ func sync(render_position: Vector2, render_angle: float, zoom: float, alpha: flo
 		seen_revision = -1
 		surface_revision = -1
 		surface.visible = depth_style
+	var critical_membrane: bool=cell==game.world.player and not cell.dead and cell.health<Visuals.CRITICAL_HEALTH
+	if critical_membrane or membrane_warning!=critical_membrane:
+		membrane_warning=critical_membrane;queue_redraw()
 	var internal: bool=game.internal_visible(cell)
 	interior_backing.visible=internal
 	interior_backing.mesh=surface.mesh if surface.mesh!=null else Surface.mesh(cell.membrane.outline(),game.native_geometry)
@@ -166,6 +170,11 @@ func _draw() -> void:
 				if highlight.size() > 1: draw_polyline(highlight,palette[4],cell.radius*0.068,true)
 				highlight.clear()
 		if highlight.size() > 1: draw_polyline(highlight,palette[4],cell.radius*0.068,true)
+	if membrane_warning:
+		var warning_rim:=PackedVector2Array()
+		for point in outline:warning_rim.append(point*.955)
+		warning_rim.append(warning_rim[0])
+		draw_polyline(warning_rim,Color(1,.40,.24,Visuals.warning_pulse(game.ui_time)*.85),maxf(cell.radius*.06,1.5/maxf(.001,game.zoom)),true)
 	for link in ([] if simple_view else cell.membrane.skeleton.links):
 		var a: Vector2 = cell.membrane.skeleton.point(link.a,cell.membrane)
 		var b: Vector2 = cell.membrane.skeleton.point(link.b,cell.membrane)

@@ -382,6 +382,16 @@ const RELEASES=[
   ],
   "footer":"Your cells and their progress carry on between updates.",
   "button":"Back to the pond"
+ },
+ {
+  "id":"2026-10-18-critical-resource-signals",
+  "audience":"experimental",
+  "title":"What’s new in the pond",
+  "items":[
+   "Low ATP now makes the ATP sac blink amber. Critical membrane damage makes the membrane blink coral, replacing the warning message."
+  ],
+  "footer":"Your cells and their progress carry on between updates.",
+  "button":"Back to the pond"
  }
 ]
 const CURRENT=RELEASES[-1]

@@ -54,6 +54,19 @@ static func assembly_factory(c,at: Vector2,r: float) -> void:
 		c.draw_polyline(points,Color("ffa96a"),r*.040,true)
 	c.draw_circle(at+Vector2(.18,.06)*r,r*.047,Color("ffd267"))
 
+const CRITICAL_ATP:=10.0
+const CRITICAL_HEALTH:=30.0
+static func warning_pulse(clock: float) -> float:
+	# Slow, smooth emphasis on the structure; never hide anatomy or change stocks.
+	return pow(.5-.5*cos(TAU*clock/1.6),2)
+
+static func atp_warning(c,at: Vector2,extent: float,zoom: float,clock: float) -> void:
+	var strength:=warning_pulse(clock)
+	var ring:=PackedVector2Array()
+	for i in 33:ring.append(at+Vector2(cos(TAU*i/32),sin(TAU*i/32))*Vector2(.86,1.16)*maxf(extent,5/maxf(.001,zoom))*1.2)
+	c.draw_polyline(ring,Color(1,.64,.16,strength*.25),maxf(extent*.16,3/maxf(.001,zoom)),true)
+	c.draw_polyline(ring,Color(1,.91,.53,strength*.90),maxf(extent*.07,1.2/maxf(.001,zoom)),true)
+
 static func atp_store(c,at: Vector2,extent: float) -> void:
 	var sac:=Vector2(.86,1.16)*extent
 	structure_ellipse(c,at+Vector2(0,1),sac*1.10,Color("745344"))

@@ -60,6 +60,9 @@ func _draw() -> void:
 		Visuals.atp_store(self,at,atp_size)
 	else:
 		draw_arc(at,1.5,0,TAU,12,Color("bc9459"),0.6,true)
+	if not cell.dead and cell.energy<Visuals.CRITICAL_ATP:
+		var pixels_per_world: float=absf((get_viewport().get_final_transform()*get_global_transform_with_canvas()).get_scale().x)/maxf(.001,game.cell_ui.ui_scale())
+		Visuals.atp_warning(self,at,maxf(1.5,atp_size),pixels_per_world,game.ui_time)
 	for parcel in (ecology.parcels if game.internal_visible(cell) else []):
 		if parcel.kind != "ap": continue
 		draw_circle(parcel.p,parcel.radius*preload("res://scripts/visuals.gd").INTERNAL_PARTICLE_SCALE,Color("f8c650"))

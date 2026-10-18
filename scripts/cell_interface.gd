@@ -37,7 +37,6 @@ var keyboard_target: Dictionary = {}
 var last_tide := 0
 var last_resistance := ""
 var last_ending := ""
-var last_critical := false
 var last_lineage := 0
 var last_goal := ""
 var pending_mutation: Dictionary={}
@@ -95,7 +94,6 @@ func reset() -> void:
 	last_tide = game.world.evolution.tide
 	last_resistance = ""
 	last_ending = ""
-	last_critical = false
 	last_lineage = game.world.lineage.serial
 	last_goal = game.world.evolution.goal_key(game.world)
 
@@ -491,10 +489,6 @@ func _events() -> void:
 	if run.terminal() and run.ending != last_ending:
 		last_ending = run.ending
 		game._message(run.ending+"\nEsc → Family history · R starts the next expedition.")
-	if run.terminal(): return
-	var critical: bool = game.world.player.health < 30 or game.world.player.energy < 10
-	if critical and not last_critical: game._message("Critical resources · inspect the ATP sac and damaged membrane.")
-	last_critical = critical
 
 func _sync_family_portraits() -> void:
 	if context.get("kind","") not in ["lineage","merge_family"]:return
