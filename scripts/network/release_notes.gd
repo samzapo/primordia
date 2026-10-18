@@ -392,6 +392,19 @@ const RELEASES=[
   ],
   "footer":"Your cells and their progress carry on between updates.",
   "button":"Back to the pond"
+ },
+ {
+  "id":"2026-10-18-steady-family-merge",
+  "audience":"experimental",
+  "title":"What’s new in the pond",
+  "items":[
+   "Nearby relatives stay available to merge for five seconds after you receive their family signal.",
+   "Cancel merge takes you back, and overlapping relatives are easier to choose.",
+   "A merging relative now slides into your cell and fades away.",
+   "Air now enters faster-moving water more quickly."
+  ],
+  "footer":"Experimental updates start with a fresh copy of the main pond.",
+  "button":"Back to the pond"
  }
 ]
 const CURRENT=RELEASES[-1]

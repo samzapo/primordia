@@ -54,15 +54,13 @@ func run() -> void:
  check(absf(carbon-sim.ambient_carbon_added)<.00001 and absf(oxygen-sim.ambient_oxygen_added)<.00001,"Gas additions are explicitly accounted by species")
  check(absf(sim.external_input-carbon)<.00001,"Oxygen does not masquerade as organic carbon input")
  # A vortical field exchanges more gas than a stationary field at equal clocks.
- var calm=fixture();var swirl=fixture()
- for i in swirl.fluid.velocity.size():
-  var x: float=i%swirl.fluid.COLS
-  var y: float=int(i/swirl.fluid.COLS)
-  swirl.fluid.velocity[i]=Vector2(-y,x)*10
+ var calm=fixture();var flowing=fixture();var faster=fixture()
  calm.fluid.velocity.fill(Vector2.ZERO)
- for sample in [calm,swirl]:
+ flowing.fluid.velocity.fill(Vector2(20,0));faster.fluid.velocity.fill(Vector2(40,0))
+ for sample in [calm,flowing,faster]:
   sample.ambient_carbon_enabled=true;sample.time=5;Supply.step(sample)
- check(swirl.ambient_carbon_added>calm.ambient_carbon_added and swirl.ambient_oxygen_added>calm.ambient_oxygen_added,"Higher absolute curl enhances both gas exchange rates")
+ check(flowing.ambient_carbon_added>calm.ambient_carbon_added and flowing.ambient_oxygen_added>calm.ambient_oxygen_added,"Uniform zero-curl flow increases both gas exchange rates from its actual speed")
+ check(faster.ambient_carbon_added>flowing.ambient_carbon_added and faster.ambient_oxygen_added>flowing.ambient_oxygen_added,"Faster flow adds more air while the calm-water baseline remains")
  # A donor first pays the ordinary 3+2+1+0 Reabsorb refunds.
  sim=fixture();cell=sim.player;cell.ap=2
  var donor=Sim.Cell.new(1,cell.position+Vector2(100,0))

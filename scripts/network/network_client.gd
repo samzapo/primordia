@@ -4,6 +4,8 @@ var server_census: Dictionary={}
 var update_popup=preload("res://scripts/update_popup.gd").new()
 var pending_release_updates: Array=[]
 var defer_release_updates:=false
+var merge_tombstones: Dictionary={}
+var received_merge_serial:=0
 var received_death_serial:=0
 var death_tombstones: Dictionary={}
 const Codec = preload("res://scripts/network/state_codec.gd")
@@ -362,6 +364,7 @@ func _welcome(message: Dictionary) -> void:
 	death_world=world;death_seen=world.death_serial;death_focus_age=2.0
 	received_death_serial=world.death_serial;death_tombstones.clear()
 	death_view.reset(world,world.death_serial)
+	received_merge_serial=int(message.get("merge_serial",0));world.merge_serial=received_merge_serial;world.merge_bursts.clear();merge_tombstones.clear();merge_view.reset(world,received_merge_serial)
 	player_name=str(message.get("player_name",""))
 	token=message.token;epoch=message.epoch;command_sequence=message.sequence;edit_revision=message.edit
 	world.seed_value=message.seed;world.habitat_geometry=Codec.new().restore(message.habitat)
@@ -378,6 +381,19 @@ func _ack_snapshot(message: Dictionary) -> void:
 
 func _receive_deaths(message: Dictionary) -> void:
 	if int(message.get("epoch",-1))!=epoch:return
+	for event in message.get("merges",[]):
+		if int(event.serial)<=received_merge_serial:continue
+		received_merge_serial=int(event.serial);world.merge_serial=received_merge_serial
+		merge_tombstones[int(event.donor)]=true
+		if merge_tombstones.size()>64:merge_tombstones.erase(merge_tombstones.keys()[0])
+		if not user_paused:
+			if cells_by_id.has(int(event.donor)):cells_by_id[int(event.donor)].dead=true
+			world.lineage.records=world.lineage.records.filter(func(record):return record.id!=int(event.donor))
+			family_portraits.erase(int(event.donor))
+		if user_paused or float(message.get("time",world.time))-float(event.time)>merge_view.LIFETIME:continue
+		world.merge_bursts.append(event.duplicate(true))
+		if world.merge_bursts.size()>32:world.merge_bursts.pop_front()
+
 	world.death_serial=maxi(world.death_serial,int(message.get("death_serial",world.death_serial)))
 	if user_paused:
 		received_death_serial=maxi(received_death_serial,world.death_serial);return
@@ -458,7 +474,9 @@ func _snapshot(message: Dictionary) -> void:
 	world.remote_division=message.get("division",{}).duplicate(true)
 	merge_available=message.get("merge_available",{}).duplicate(true)
 	world.investment=data.get("investment",{"npc":{},"lineages":{},"cells":{}})
-	family_portraits=message.get("family_portraits",{})
+	family_portraits=message.get("family_portraits",{}).duplicate()
+	world.lineage.records=world.lineage.records.filter(func(record):return not merge_tombstones.has(int(record.id)))
+	for retired in merge_tombstones:family_portraits.erase(retired)
 	family_recovery=message.get("family_recovery",{})
 	if not camera_initialized or previous_player!=world.player.id:
 		merge_selection.clear();merge_candidates.clear()
@@ -537,7 +555,7 @@ func _copy_cell(incoming):
 		cell.previous_position=previous;cell.previous_angle=heading
 		cell.chemistry.owner=weakref(cell)
 		cell.chemistry.render_origins=origins
-	if death_tombstones.has(cell.id):cell.dead=true
+	if death_tombstones.has(cell.id) or merge_tombstones.has(cell.id):cell.dead=true
 	return cell
 
 func _submit_lineage_color(value: String) -> String:

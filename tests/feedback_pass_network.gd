@@ -14,7 +14,7 @@ func run() -> void:
  socket.inbound_buffer_size=Protocol.MAX_FRAME;socket.outbound_buffer_size=65536
  socket.connect_to_url("ws://127.0.0.1:"+str(host.port))
  check(await until(func():return socket.get_ready_state()==WebSocketPeer.STATE_OPEN),"Real investment socket connects")
- socket.send_text(JSON.stringify({"op":"hello","invite":OS.get_environment("PRIMORDIA_INVITE"),"snapshot_ack":true}))
+ socket.send_text(JSON.stringify({"op":"hello","invite":OS.get_environment("PRIMORDIA_INVITE"),"snapshot_ack":true,"death_events":true}))
  check(await until(func():return messages.any(func(m):return m.get("kind","")=="welcome")),"Fixture account signs in")
  var welcome: Dictionary=messages.filter(func(m):return m.get("kind","")=="welcome")[0]
  var account: Dictionary=host.accounts[welcome.token.sha256_text()]
@@ -166,6 +166,8 @@ func run() -> void:
  socket.send_text(JSON.stringify(command))
  check(await until(func():return messages.filter(func(m):return m.get("kind","")=="result" and m.get("sequence",-1)==9).size()==2),"Retried fusion receives its original receipt")
  check(selected.ap==combined_ap and account.lineage.births==births+1,"Retried fusion cannot duplicate AP or births")
+ check(await until(func():return messages.any(func(frame):return frame.get("merges",[]).any(func(event):return event.donor==donor_id and event.receiver==selected.id))),"The real socket delivers the consumed donor's pull-in artwork")
+ check(host.world.merge_bursts.size()==1 and host.world.merge_bursts[0].donor==donor_id,"Retried authenticated merge produces one presentation fact and no revived donor")
  # Single-division requests use the same authenticated, durable receipt path.
  selected.brood_mass=0;selected.brood_energy=0
  command={"op":"command","epoch":host.epoch,"cell":selected.id,"edit":account.edit,"sequence":10,"action":"division_request","args":{"active":true}}

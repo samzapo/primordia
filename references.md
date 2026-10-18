@@ -547,7 +547,7 @@ Atmospheric exchange also proportionally degasses carbon in oversaturated water 
 
 ## Surface gas exchange and cell fusion — October18,2026
 
-[USGS, Dissolved oxygen: Chapter6](https://www.usgs.gov/publications/dissolved-oxygen-chapter-6) describes air–water exchange responding to undersaturation/supersaturation and the contribution of mixing, respiration and primary production. Primordia models bounded exterior CO2 plus a smaller O2 source; the local curl multiplier is an authored2D proxy for surface mixing, not a calibrated transfer law.
+[USGS, Dissolved oxygen: Chapter6](https://www.usgs.gov/publications/dissolved-oxygen-chapter-6) describes air–water exchange responding to undersaturation/supersaturation and the contribution of mixing, respiration and primary production. Primordia models bounded exterior CO2 plus a smaller O2 source; the local speed-dependent multiplier, with a small background diffusion rate, is an authored2D proxy for surface mixing, not a calibrated transfer law.
 
 [Millay et al., Myomaker is a membrane activator of myoblast fusion and muscle formation (2013)](https://pmc.ncbi.nlm.nih.gov/articles/PMC3739301/) experimentally demonstrates regulated membrane fusion. Same-lineage game fusion, organ reabsorption, resource/AP transfers,90% yields, cooldowns and crowd-sensitive willingness are fictional mechanics; they do not model chromosomes, ploidy or real microbial kin fusion.
 

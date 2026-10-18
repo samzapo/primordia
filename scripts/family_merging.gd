@@ -2,24 +2,47 @@ extends RefCounted
 ## Fusion is a local physical transaction, never a population cull or remote kill.
 const MIN_AGE:=60.0
 const COOLDOWN:=120.0
+const RECENT_SECONDS:=5.0
+const MAX_RECENT:=64
 static func managed(sim,cell) -> bool:
  return cell.id in sim.managed_cells or (not sim.server_mode and cell==sim.player)
 
 static func eligible(sim,receiver,donor) -> bool:
  return receiver!=donor and not receiver.dead and receiver.health>0 and not donor.dead and donor.health>0 and receiver.lineage_id()==donor.lineage_id() and not managed(sim,donor)
 
+static func remember(sim,receiver,received: Dictionary) -> void:
+ var memory: Dictionary=receiver.behavior.get("merge_cues",{})
+ for id in memory.keys():
+  if float(memory[id].get("expires_at",0))<=sim.time:memory.erase(id)
+ for id in received:
+  var cue: Dictionary=received[id]
+  var report: Dictionary=cue.get("report",{})
+  if float(cue.get("expires_at",0))<=sim.time or report.is_empty():continue
+  if int(report.get("id",-1))!=int(id) or int(id)==receiver.id or int(report.get("lineage",-1))!=receiver.lineage_id():continue
+  memory[id]={"report":report.duplicate(true),"received_at":sim.time,"expires_at":sim.time+RECENT_SECONDS}
+ while memory.size()>MAX_RECENT:
+  var oldest=memory.keys()[0]
+  for id in memory:
+   if float(memory[id].received_at)<float(memory[oldest].received_at):oldest=id
+  memory.erase(oldest)
+ receiver.behavior["merge_cues"]=memory
+
+static func cue(sim,receiver,donor_id: int) -> Dictionary:
+ for signals in [receiver.behavior.get("merge_cues",{}),receiver.behavior.get("family_cues",{})]:
+  var item: Dictionary=signals.get(donor_id,{})
+  var report: Dictionary=item.get("report",{})
+  if float(item.get("expires_at",0))>sim.time and int(report.get("id",-1))==donor_id and int(report.get("lineage",-1))==receiver.lineage_id():
+   return item
+ return {}
+
 static func detected(sim,receiver,donor_id: int) -> bool:
- var cue: Dictionary=receiver.behavior.get("family_cues",{}).get(donor_id,{})
- var report: Dictionary=cue.get("report",{})
- if cue.is_empty() or float(cue.get("expires_at",0))<=sim.time:return false
- if int(report.get("id",-1))!=donor_id or int(report.get("lineage",-1))!=receiver.lineage_id():return false
- return receiver.organs.any(func(organ):return organ.hp>0 and organ.kind in ["feeding","hunting","sensing","counterattack","family_toward","family_away"])
+ return not cue(sim,receiver,donor_id).is_empty() and receiver.organs.any(func(organ):return organ.hp>0 and organ.kind in ["feeding","hunting","sensing","counterattack","family_toward","family_away"])
 
 static func candidates(sim,receiver) -> Dictionary:
  var result: Dictionary={}
  for donor in sim.cells:
   if eligible(sim,receiver,donor) and detected(sim,receiver,donor.id):
-   result[donor.id]=float(receiver.behavior.family_cues[donor.id].expires_at)
+   result[donor.id]=float(cue(sim,receiver,donor.id).expires_at)
  return result
 
 static func neighborhood(receiver) -> float:
@@ -46,9 +69,9 @@ static func touching(sim,a,b) -> bool:
 static func direction(sim,cell) -> Vector2:
  var order: Dictionary=cell.behavior.get("merge_order",{})
  if order.is_empty() or float(order.expires_at)<=sim.time:return Vector2.ZERO
- var cue: Dictionary=cell.behavior.get("family_cues",{}).get(int(order.id),{})
- if cue.is_empty() or float(cue.expires_at)<=sim.time:return Vector2.ZERO
- return sim.Medium.offset(cell.position,cue.report.at).normalized()
+ var received: Dictionary=cue(sim,cell,int(order.id))
+ if received.is_empty():return Vector2.ZERO
+ return sim.Medium.offset(cell.position,received.report.at).normalized()
 
 static func step(sim) -> void:
  if sim.remote_client or sim.time<sim.merge_step_at:return
@@ -91,6 +114,7 @@ static func commit(sim,receiver,donor) -> bool:
   if sim.Medium.offset(receiver.position,other.position).length()<extent+other.extent()+4:return false
  # Complete all preflight checks before any irreversible work. GPU ownership is
  # released once for this rare explicit transaction; normal simulation stays resident.
+ var picture: Dictionary=preload("res://scripts/cell_portrait.gd").capture(donor)
  receiver.chemistry.ensure_cpu();donor.chemistry.ensure_cpu()
  var ledger=sim._family_ledger(donor)
  for index in range(donor.organs.size()-1,-1,-1):
@@ -124,6 +148,10 @@ static func commit(sim,receiver,donor) -> bool:
  receiver.merge_after=sim.time+COOLDOWN
  receiver.behavior.erase("merge_order")
  receiver.update_geometry();receiver.render_revision+=1
+ sim.merge_serial+=1
+ sim.merge_bursts.append({"serial":sim.merge_serial,"time":sim.time,"donor":donor.id,"receiver":receiver.id,
+  "at":donor.position,"to":receiver.position,"portrait":picture})
+ if sim.merge_bursts.size()>32:sim.merge_bursts.pop_front()
  donor.dead=true;donor.ap=0;donor.energy=0;donor.brood_energy=0
  donor.chemistry.particles.clear();donor.chemistry.refresh()
  sim.cells.erase(donor)

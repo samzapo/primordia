@@ -139,7 +139,7 @@
       {
         "id": "family_tools",
         "title": "Family and growth",
-        "text": "Tap Family to switch relatives. Merge zooms to nearby water: tap a bright relative to merge it into your current cell. Only unattended relatives whose pheromones your cell detects are selectable; other cells are dim. Tap Cancel to leave. Swipe through long families, or use the up/down arrows. Open the division bud, then Divide for continuous Auto divide or a single queued birth. Investment shows all three strategies and whether this cell uses Family or an individual setting."
+        "text": "Tap Family to switch relatives. Merge zooms to nearby water: tap a bright relative to merge it into your current cell. Only unattended relatives whose pheromones your cell received within the past five seconds are selectable; other cells are dim. Tap Cancel merge to leave. Swipe through long families, or use the up/down arrows. Open the division bud, then Divide for continuous Auto divide or a single queued birth. Investment shows all three strategies and whether this cell uses Family or an individual setting."
       }
     ],
     "desktop": [
@@ -194,7 +194,7 @@
       {
         "id": "family_tools",
         "title": "Family and growth",
-        "text": "Click Family to switch relatives. Merge zooms to nearby water: click a bright relative to merge it into your current cell. Only unattended relatives whose pheromones your cell detects are selectable; other cells are dim. Right-click or use Cancel to leave. Use the up/down arrows to scroll long families. Open the division bud, then Divide for continuous Auto divide or a single queued birth. Investment shows all three strategies and whether this cell uses Family or an individual setting."
+        "text": "Click Family to switch relatives. Merge zooms to nearby water: click a bright relative to merge it into your current cell. Only unattended relatives whose pheromones your cell received within the past five seconds are selectable; other cells are dim. Right-click or use Cancel merge to leave. Use the up/down arrows to scroll long families. Open the division bud, then Divide for continuous Auto divide or a single queued birth. Investment shows all three strategies and whether this cell uses Family or an individual setting."
       }
     ]
   },
@@ -822,7 +822,7 @@
         {
           "id": "surface_gases",
           "title": "Air, CO2 and oxygen",
-          "text": "CO2 enters the water gradually from the air. A much smaller amount of oxygen also dissolves from air; leaves produce oxygen through photosynthesis. Swirling water exchanges gases faster. The gases remain real moving parcels that must reach the cell. Saturation levels, parcel sizes and the use of curl as a surface-mixing cue are game choices.",
+          "text": "CO2 enters the water gradually from the air. A much smaller amount of oxygen also dissolves from air; leaves produce oxygen through photosynthesis. Faster-moving water exchanges gases faster, with a small background exchange in still water. The gases remain real moving parcels that must reach the cell. Saturation levels, parcel sizes and the use of fluid speed as a surface-mixing cue are game choices.",
           "sources": [
             {
               "title": "Air–water oxygen exchange",

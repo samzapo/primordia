@@ -16,6 +16,7 @@ var mobile_resources:=PanelContainer.new()
 var mobile_stocks:=Label.new()
 var mobile_hide:=Button.new()
 var resources_hidden:=false
+var merge_cancel_button:=Button.new()
 var cancel_icon=Action.new()
 const COMIC=preload("res://assets/fonts/ComicNeue-Regular.ttf")
 func mobile() -> bool:return game!=null and game.touch_zoom.enabled
@@ -55,6 +56,8 @@ func initialize(owner_game) -> void:
 	var stock_row:=HBoxContainer.new();mobile_resources.add_child(stock_row)
 	stock_row.add_child(mobile_stocks);mobile_stocks.add_theme_font_override("font",COMIC);mobile_stocks.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	stock_row.add_child(mobile_hide);mobile_hide.pressed.connect(func():resources_hidden=not resources_hidden)
+	merge_cancel_button.z_index=90;merge_cancel_button.text="Cancel merge";add_child(merge_cancel_button);merge_cancel_button.hide()
+	merge_cancel_button.pressed.connect(func():game._end_merge_selection())
 	cancel_icon.z_index=90;cancel_icon.caption="Cancel placement";cancel_icon.description="Tap to cancel";add_child(cancel_icon)
 	cancel_icon.pressed.connect(func():
 		if game.merge_selecting():game._end_merge_selection()
@@ -603,7 +606,7 @@ func sync(_dt: float) -> void:
 		if inspected_choice.tissue_cost >= 0:
 			hovered_price = {"tissue":inspected_choice.tissue_cost,"ap":inspected_choice.ap_cost,"rate_model":inspected_choice.rate_model}
 	else:
-		if game.merge_selecting():_tooltip("No available relatives detected yet. Wait for a family trail, or Cancel." if game.merge_candidates.is_empty() else "Tap a bright relative to merge. Tap Cancel to go back." if mobile() else "Click a bright relative to merge. Right-click or Cancel to go back.",Vector2.ZERO)
+		if game.merge_selecting():_tooltip("No available relatives detected yet. Wait for a family signal, or Cancel merge." if game.merge_candidates.is_empty() else "Tap a bright relative to merge. Signals keep it available for five seconds. Cancel merge goes back." if mobile() else "Click a bright relative to merge. Signals keep it available for five seconds. Right-click or Cancel merge goes back.",Vector2.ZERO)
 		elif not context.is_empty() and choices.is_empty() and context.kind!="investment": _tooltip(describe(context),screen_at(context))
 		elif not hovered.is_empty() and (game.build_open or Input.is_key_pressed(KEY_ALT)) and (hovered.kind != "body" or Input.is_key_pressed(KEY_ALT)) and game.selected < 0 and game.moving_id < 0: _tooltip(describe(hovered),screen_at(hovered))
 		elif not keyboard_target.is_empty() and game.selected < 0: _tooltip(describe(keyboard_target),screen_at(keyboard_target))
@@ -627,13 +630,18 @@ func _layout_mobile() -> void:
 	mobile_resources.visible=not game.world.player.dead and ((mobile() and game.touch_controls_available()) or (not mobile() and game.build_open))
 	mobile_menu_height=investment_picker.size.y+16*s if mobile() and investment_picker.visible else 0.0
 	if mobile() and family_picker.visible:mobile_menu_height=family_picker.position.y+family_picker.size.y+8*s
-	cancel_icon.visible=(game.merge_selecting() or (mobile() and (game.selected>=0 or game.moving_id>=0))) and not game.settings_panel.visible
+	merge_cancel_button.visible=game.merge_selecting() and not game.settings_panel.visible
+	if merge_cancel_button.visible:
+		var scale: float=minf(s,size.x/340.0)
+		merge_cancel_button.position=Vector2(8,38)*scale;merge_cancel_button.size=Vector2(132,42)*scale
+		merge_cancel_button.add_theme_font_size_override("font_size",roundi(18*scale))
+	cancel_icon.visible=mobile() and (game.selected>=0 or game.moving_id>=0) and not game.settings_panel.visible and not game.merge_selecting()
 	if cancel_icon.visible:
 		var organ: Dictionary=game.world.player.organ_by_id(game.moving_id)
-		cancel_icon.kind="" if game.merge_selecting() else game.Simulation.KINDS[game.selected] if game.selected>=0 else organ.get("kind","")
-		cancel_icon.symbol="Cancel" if game.merge_selecting() else ""
-		cancel_icon.caption="Cancel merge" if game.merge_selecting() else "Cancel placement"
-		cancel_icon.position=Vector2(8,38 if game.merge_selecting() else 8)*s;cancel_icon.size=Vector2.ONE*54*s;cancel_icon.text_scale=s*.75;cancel_icon.queue_redraw()
+		cancel_icon.kind=game.Simulation.KINDS[game.selected] if game.selected>=0 else organ.get("kind","")
+		cancel_icon.symbol=""
+		cancel_icon.caption="Cancel placement"
+		cancel_icon.position=Vector2(8,8)*s;cancel_icon.size=Vector2.ONE*54*s;cancel_icon.text_scale=s*.75;cancel_icon.queue_redraw()
 	if mobile_tray.visible:
 		var columns:=maxi(1,int((size.x-64*s)/(65*s)))
 		var height:=minf(size.y*.32,ceilf(float(choices.size())/columns)*65*s+12*s)
@@ -671,6 +679,7 @@ func mobile_diagnostics(conversion: Vector2) -> Dictionary:
 		"investment":investment_picker.diagnostics(conversion),
 		"tray_visible":mobile_tray.is_visible_in_tree(),"tray_bounds":bounds.call(mobile_tray),
 		"settings_visible":game.settings_panel.visible,
+		"merge_cancel":{"visible":merge_cancel_button.is_visible_in_tree(),"bounds":bounds.call(merge_cancel_button)},
 		"placement_cancel":{"visible":cancel_icon.is_visible_in_tree(),"kind":cancel_icon.kind,"bounds":bounds.call(cancel_icon)},
 		"description":{"visible":tip_box.is_visible_in_tree(),"text":tip.text,"bounds":bounds.call(tip_box)},
 		"choices":choices.map(func(choice):return {"caption":choice.caption,"bounds":bounds.call(choice)})}

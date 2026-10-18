@@ -88,6 +88,21 @@ func run() -> void:
 	client._toggle_user_pause()
 	check(not client.user_paused and client.playback.frames.is_empty() and client.playback_after_tick==-1,"Resume starts a fresh live buffer instead of replaying paused history")
 	check(sim.rng.state==seed and sim.time==0,"Presentation and camera pause never advance authority state or random streams")
+	var donor=Sim.Cell.new(501,Vector2(100,500));donor.lineage=sim.player.lineage_id()
+	sim.cells.append(donor);sim.lineage.register(donor,sim.player.id,1,"living",0)
+	var stale: Dictionary=wire.duplicate()
+	stale.graph=Codec.new().capture({"cells":sim.cells,"player":sim.player,"lineage":sim.lineage,"evolution":sim.evolution})
+	client._snapshot(stale)
+	var merge={"serial":1,"time":client.world.time,"donor":501,"receiver":client.world.player.id,"at":Vector2(100,500),"to":client.world.player.position,"portrait":preload("res://scripts/cell_portrait.gd").capture(client.world.player)}
+	var delivery={"epoch":4,"time":client.world.time,"merges":[merge]}
+	client._receive_deaths(delivery);client._receive_deaths(delivery)
+	check(client.world.merge_bursts.size()==1 and client.received_merge_serial==1,"Side-channel and buffered snapshot duplicates cannot replay a pull-in")
+	check(client.cells_by_id[501].dead and client.world.lineage.record_for(501).is_empty(),"The committed fact immediately retires the old donor drawing and family portrait")
+	client._snapshot(stale)
+	check(client.cells_by_id[501].dead and client.world.lineage.record_for(501).is_empty(),"An older buffered graph cannot resurrect an already consumed donor")
+	client.user_paused=true;merge.serial=2;client._receive_deaths(delivery)
+	client.user_paused=false;client._receive_deaths(delivery)
+	check(client.world.merge_bursts.size()==1 and client.received_merge_serial==2,"A paused merge is consumed without replaying old absorption on resume")
 	client.queue_free();await process_frame
 	print("SNAPSHOT PLAYBACK: %d assertions, %d failures; old holds=%d new holds=%d" % [assertions,failures,old_stalls,stalls])
 	quit(0 if failures==0 else 1)

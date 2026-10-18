@@ -140,6 +140,8 @@ var reaction_sparks: Array[Dictionary] = []
 var reaction_serial := 0
 # Immutable, bounded presentation snapshots; no extra mass or random draws.
 var death_bursts: Array[Dictionary] = []
+var merge_bursts: Array[Dictionary] = []
+var merge_serial:=0
 var death_serial := 0
 var sound_sequence := 0
 var sound_recent: Dictionary = {}
@@ -1407,6 +1409,7 @@ func _sense(cell, dt: float, received_by_organ: Dictionary = {}) -> void:
 				best_score = food_score
 				best = {"score":1.0,"mode":"graze","id":-1,"at":patch.at,"a":organ.a,"organ_id":organ.id}
 		cell.behavior["family_cues"]=families.duplicate(true)
+		FamilyMerging.remember(self,cell,families)
 		for sensor in cell.organs:
 			if sensor.kind!="sensing" or sensor.hp<=0:continue
 			var danger: Dictionary=received_by_organ.get(sensor.id,{}).get("danger",{}) if received_by_organ.has(sensor.id) else _toxin_report(cell,sensor)

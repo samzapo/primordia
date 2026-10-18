@@ -1,5 +1,7 @@
 extends RefCounted
 ## Raw multi-touch is used on the web; GUI controls retain native mouse emulation.
+var cancel_touch:=-1
+var cancel_start:=Vector2.ZERO
 var game
 var last_tap_family := -1
 var last_tap_time := -10000
@@ -125,6 +127,7 @@ func _over_gui(node: Node,at: Vector2) -> bool:
 	return false
 
 func cancel() -> void:
+	cancel_touch=-1
 	fingers.clear();moved=false;last_tap_family=-1
 	if game!=null:game.tube_start.clear();game.camera_dragging=false
 
@@ -152,6 +155,20 @@ func _tap(at: Vector2) -> void:
 func handle(event: InputEvent) -> bool:
 	if not event is InputEventScreenTouch and not event is InputEventScreenDrag:return false
 	if not enabled:enabled=true;layout()
+	if game.merge_selecting():
+		var cancel_button=game.cell_ui.merge_cancel_button
+		if event is InputEventScreenTouch and event.pressed and cancel_button.is_visible_in_tree() and cancel_button.get_global_rect().has_point(event.position):
+			cancel_touch=event.index;cancel_start=event.position
+			return true
+		if cancel_touch>=0 and event.index!=cancel_touch:return true
+		if cancel_touch>=0 and event.index==cancel_touch:
+			if event is InputEventScreenDrag:
+				if event.position.distance_to(cancel_start)>8*pixels:cancel_touch=-1
+				return true
+			if event is InputEventScreenTouch and not event.pressed:
+				cancel_touch=-1
+				if not event.canceled and cancel_button.get_global_rect().has_point(event.position):game._end_merge_selection()
+				return true
 	if event is InputEventScreenTouch:
 		if event.canceled:cancel();return true
 		if event.pressed:

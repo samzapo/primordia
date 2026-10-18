@@ -193,8 +193,13 @@ func merge_controls() -> void:
 		await merge_settle_camera(game)
 		print("MERGE_STAGE neighborhood ",mobile)
 		check(not game.camera_motion.active and game.zoom<before_zoom and game.camera_locked,"Merge smoothly zooms out to the recipient neighborhood")
-		check(game.merge_candidates.keys()==[900] and game.cell_ui.cancel_icon.visible,"Only detected relatives are selectable and Cancel is reachable")
-		check(not game.cell_ui.cancel_icon.get_global_rect().intersects(game.cell_ui.tip_box.get_global_rect()),"Cancel and merge instructions never overlap on either platform")
+		check(game.merge_candidates.keys()==[900] and game.cell_ui.merge_cancel_button.visible,"Only detected relatives are selectable and Cancel is reachable")
+		check(not game.cell_ui.merge_cancel_button.get_global_rect().intersects(game.cell_ui.tip_box.get_global_rect()),"Cancel and merge instructions never overlap on either platform")
+		var original_position: Vector2=bodies[0].position
+		bodies[0].position=cell.position+Vector2(20,0);bodies[0].previous_position=bodies[0].position
+		game._update_world(1)
+		check(game._merge_at(game.views[900].get_global_transform_with_canvas().origin)==900,"An eligible relative remains clickable where its body overlaps the receiving cell")
+		bodies[0].position=original_position;bodies[0].previous_position=original_position;game._update_world(1)
 		check(game.touch_zoom.perception_button.text=="Internal" and game.perception_menu_button.text=="Internal [I]","Both platform controls use the new plain view names")
 		var image:=root.get_texture().get_image()
 		var values: Array=[]
@@ -207,7 +212,7 @@ func merge_controls() -> void:
 		for body in [bodies[1],bodies[2]]:
 			await merge_world_click(game,game.views[body.id].get_global_transform_with_canvas().origin,mobile)
 			check(game.merge_selecting() and commands.is_empty() and sim.player==cell,"Click/tap on a dim cell neither merges nor switches control")
-		await press_ui(game.cell_ui.cancel_icon)
+		await merge_world_click(game,game.cell_ui.merge_cancel_button.get_global_rect().get_center(),mobile)
 		check(not game.merge_selecting() and game.perception==before_perception and game.manual_zoom==8 and commands.is_empty(),"Cancel restores the previous view without a command or resource mutation")
 		await merge_settle_camera(game)
 		game.cell_ui.open_context({"kind":"lineage"});await settle_ui();await press_ui(game.cell_ui.family_picker.merge_button);await merge_settle_camera(game)

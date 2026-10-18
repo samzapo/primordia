@@ -10,6 +10,7 @@ const GROUPS:=20
 const INTERVAL:=PERIOD/GROUPS
 const SATURATION:=8.0 # Carbon units per 64x64 water area, not a cell allowance.
 const RELAXATION:=10.0
+const SPEED_SCALE:=20.0 # World units/s; speed-dependent exchange above background diffusion.
 
 static func group(k: int,seed_value: int) -> int:return posmod(k*17+posmod(seed_value,GROUPS),GROUPS)
 
@@ -69,17 +70,18 @@ static func step(sim) -> void:
  sim.ambient_carbon_phase=(phase+1)%GROUPS
  sim.ambient_carbon_at=sim.time;sim.ambient_carbon_due=sim.time+INTERVAL
  if elapsed<=0:return
- # Curl increases surface exchange without adding momentum or sampling cameras.
- var factors:=PackedFloat32Array();factors.resize(COUNT)
+ # Sample velocity once, only for the current staggered group. Background
+ # diffusion remains; the extra exchange coefficient is linear in local speed.
+ var speeds:=PackedFloat32Array();speeds.resize(COUNT)
+ for k in COUNT:
+  if group(k,sim.seed_value)!=phase:continue
+  speeds[k]=1+sim.fluid.velocity[sim.fluid.index(k%COLS,int(k/COLS))].length()/SPEED_SCALE
  for kind in [sim.CARBON,sim.OXYGEN]:
+  var factors:=PackedFloat32Array();factors.resize(COUNT)
   var relaxation: float=RELAXATION if kind==sim.CARBON else 60.0
   var target: float=SATURATION if kind==sim.CARBON else .5
   for k in COUNT:
-   var x: int=k%COLS;var y: int=k/COLS
-   var fluid=sim.fluid
-   var curl: float=absf((fluid.velocity[fluid.index(x+1,y)].y-fluid.velocity[fluid.index(x-1,y)].y-fluid.velocity[fluid.index(x,y+1)].x+fluid.velocity[fluid.index(x,y-1)].x)/(2*SIZE))
-   var boost: float=1+2*curl/(curl+.05)
-   factors[k]=1-exp(-elapsed*boost/relaxation)
+   if speeds[k]>0:factors[k]=1-exp(-elapsed*speeds[k]/relaxation)
   var added:=0.0;var removed:=0.0
   if sim.resident!=null:
    var result: Dictionary=sim.resident.replenish_carbon(0,target,phase,kind,factors)

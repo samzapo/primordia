@@ -646,3 +646,7 @@ experimental world identity. Never stop or modify main, copy stable feedback,
 alias storage, or overwrite experimental feedback. Archive the experimental
 predecessor for rollback; ordinary restarts keep the current experimental pond.
 This supersedes earlier preserve-experimental/reset-input deployment rules.
+
+October18 steady merge selection: read Revision71. Retain actual family-pheromone receipts for five simulation seconds for merge selection/approach only, without live position lookup or refresh from queries. Revalidate donor ownership/contact/life. Provide actual-touch Cancel merge and eligible overlap picking. A committed merge gets a bounded1.2s frozen-art pull-in, no extra biology/death or replay on reconnect/pause. Experimental first, refreshed from main under current policy.
+
+October18 air-exchange correction: use local fluid speed rather than curl for enhanced CO2/O2 exchange. Keep the still-water baseline, saturation and finite accounting. Sample only the current staggered group once for both gases; preserve whole-pond coverage. Read Revision71; no claim that this alone diagnoses the reported phone slowdown.

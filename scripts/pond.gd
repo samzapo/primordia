@@ -35,6 +35,7 @@ var habitat_view := preload("res://scripts/habitat_view.gd").new()
 var currents := Node2D.new()
 var flow_view := FlowView.new()
 var reaction_view := ReactionSparks.new()
+var merge_view := preload("res://scripts/merge_view.gd").new()
 var death_view := preload("res://scripts/death_view.gd").new()
 var death_focus_age := 2.0
 var death_focus_at := Vector2.ZERO
@@ -195,6 +196,7 @@ func _ready() -> void:
 	world_layer.add_child(flow_view)
 	flow_view.use_crests=preferences.current_style=="crests"
 	world_layer.add_child(reaction_view)
+	merge_view.game=self;merge_view.z_index=10;world_layer.add_child(merge_view)
 	death_view.z_index = 11
 	world_layer.add_child(death_view)
 	world_layer.add_child(habitat_view)
@@ -498,6 +500,7 @@ func _update_world(alpha: float) -> void:
 	currents.visible = not flow_streamers
 	flow_view.sync(world,render_camera,world.view_half,zoom,flow_streamers,flow_wakes)
 	reaction_view.sync(world,render_camera,world.view_half,zoom,show_reaction_sparks and perception=="exteroception")
+	merge_view.sync(world,render_camera,death_frame_dt,alpha)
 	death_view.sync(world,render_camera,zoom,death_frame_dt)
 	death_frame_dt = 0
 	# Cached glyph variants preserve facing while dropping subpixel embellishment.
@@ -528,7 +531,7 @@ func _update_world(alpha: float) -> void:
 			node.z_index = 2
 			views[cell.id] = node
 		if views[cell.id].cell != cell: views[cell.id].seen_revision = -1
-		views[cell.id].z_index=8 if merge_selecting() and cell==world.player else 6 if merge_selecting() and merge_candidates.has(cell.id) else 2 if merge_selecting() else 6 if cell == world.player or internal_visible(cell) else 4 if cell.lineage_id() == world.lineage.root_id else 2
+		views[cell.id].z_index=8 if merge_selecting() and cell==world.player else 9 if merge_selecting() and merge_candidates.has(cell.id) else 2 if merge_selecting() else 6 if cell == world.player or internal_visible(cell) else 4 if cell.lineage_id() == world.lineage.root_id else 2
 		views[cell.id].cell = cell
 		var heading := lerp_angle(cell.previous_angle,cell.angle,fraction)
 		views[cell.id].sync(Simulation.Medium.offset(render_camera,p),heading,zoom,world.activity_for_cell(cell))
@@ -1295,7 +1298,7 @@ func _end_merge_selection(restore: bool=true) -> void:
 func _merge_at(screen: Vector2) -> int:
 	var selected_id:=-1;var top:=-1000;var distance:=INF
 	for cell in world.cells:
-		if not views.has(cell.id) or cell.dead:continue
+		if not merge_candidates.has(cell.id) or not views.has(cell.id) or cell.dead:continue
 		var view=views[cell.id]
 		var local: Vector2=view.get_global_transform_with_canvas().affine_inverse()*screen
 		if not Geometry2D.is_point_in_polygon(local,cell.membrane.outline()):continue
