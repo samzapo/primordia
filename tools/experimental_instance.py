@@ -185,7 +185,10 @@ def main():
         path=root/(script+"-fixture.log")
         try:
             with path.open("w") as output:
-                call("timeout","120s","xvfb-run","-a","-s","-screen 0 1280x1000x24 -nolisten tcp",str(godot),
+                # The 300-sim-second cold recovery case is longer than the UI fixtures.
+                # Preserve its full horizon and hard assertions on the shared host.
+                limit="600s" if script=="ambient_carbon_gpu" else "120s"
+                call("timeout",limit,"xvfb-run","-a","-s","-screen 0 1280x1000x24 -nolisten tcp",str(godot),
                     "--path",str(candidate),"--rendering-method","mobile","--rendering-driver","vulkan","--gpu-index","0",
                     "--script","tests/"+script+".gd","--",*flags,
                     env={**environment,"PRIMORDIA_INVITE":"experimental-private-fixture"},stdout=output,stderr=subprocess.STDOUT)

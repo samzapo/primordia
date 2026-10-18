@@ -28,6 +28,7 @@ func start(sim,streaming: bool):
  bridge.gpu.set_activity_views([],true)
  return bridge
 func run() -> void:
+ root.size=Vector2i(64,64) # Compute-only acceptance; no full-size presentation window.
  var adapter: String=RenderingServer.get_video_adapter_name().to_lower()
  check(RenderingServer.get_rendering_device()!=null and not ["llvmpipe","lavapipe","swiftshader"].any(func(name):return adapter.contains(name)),"Resident survival acceptance requires a real hardware rendering device")
  print("SURVIVAL_GPU ",RenderingServer.get_video_adapter_name())
