@@ -20,3 +20,5 @@ Test real exterior intake, empty ATP/biomass, severe existing starvation, Sun/Sh
 Atmospheric exchange also proportionally degasses carbon in oversaturated water toward the same target. Actual removed material is recorded in ambient_carbon_removed and the existing respiration_loss outflow ledger. No cell stocks are debited; this prevents indefinite accumulation in converging currents.
 
 Opted-in Hunter/Producer/Grazer policies establish a missing leaf before further anatomy when both ATP and food reserves are depleted. Manual cells remain entirely manual.
+
+Energy shortage can prioritize another leaf (up to4) in any opted-in strategy, or mitochondrial support (up to2) when real food and oxygen are present. The same caps apply to reabsorption, preventing a later automatic reversal. Connected selected cells and Manual policies remain manual.
