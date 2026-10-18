@@ -6,6 +6,8 @@ const MAX_STREAMERS := 640
 const MAX_CRESTS := 96
 const MAX_DRAWN := 64
 const MAX_INPUT := 32
+var mobile_quality:=false
+var curve_budget=preload("res://scripts/current_curve_budget.gd").new()
 const SOURCE_MARKERS := 64
 const FADE_IN := .4
 const FADE_OUT := .8
@@ -170,6 +172,7 @@ func sync(world,camera: Vector2,half_view: Vector2,zoom: float,show_streams: boo
 	input_streamers.visible=show_streams and use_crests;input_crests.visible=show_streams and not use_crests
 	wakes.visible=show_wakes and world.habitat_geometry.enabled
 	if not show_streams and not show_wakes:return
+	if curve_budget.configure(mobile_quality):curve_time=-INF
 	var reset: bool=habitat_cache!=world.habitat_geometry or crest_world!=world or world.time<crest_clock
 	if reset:
 		crest_tracks.clear();visual_sources.clear();source_clock=-INF;curve_time=-INF;crest_world=world
@@ -206,7 +209,9 @@ func sync(world,camera: Vector2,half_view: Vector2,zoom: float,show_streams: boo
 		view.material.set_shader_parameter("eddy_sources",sources);view.material.set_shader_parameter("zoom",stroke_zoom);view.material.set_shader_parameter("camera",camera)
 	if show_streams:
 		if reset or world.time-curve_time>=CURVE_INTERVAL or curve_field_time!=last_field_time or curve_style!=use_crests or Medium.offset(curve_camera,camera).length()>64 or half_view!=curve_half or not is_equal_approx(stroke_zoom,curve_zoom):
+			var build_start:=Time.get_ticks_usec()
 			_build_curves(world,events,camera,half_view,stroke_zoom)
+			curve_budget.observe(Time.get_ticks_usec()-build_start,Time.get_ticks_usec()/1000000.0)
 		_move_drawn(world.time,camera)
 	prepare_usec=Time.get_ticks_usec()-started
 
@@ -321,15 +326,17 @@ func _build_curves(world,events: Array,camera: Vector2,half_view: Vector2,zoom: 
 		var points:=_current_path(sample)
 		sample.points=points;sample.baseline=sample.track.p
 		layout.reserve(_relative(points,camera),sample.id)
+	_budget_tracks()
 	var counts:=[0,0]
 	var dense_count:=0
+	var limits: Vector2i=curve_budget.limits()
 	for sample in crest_tracks.values():
 		counts[1 if sample.input else 0]+=1
 		if sample.dense and not sample.input:dense_count+=1
 	for key in wanted:
 		if crest_tracks.has(key):continue
 		var item: Dictionary=wanted[key];var group:=1 if item.input else 0
-		if counts[group]>=(MAX_INPUT if item.input else MAX_DRAWN):continue
+		if counts[group]>=(limits.y if item.input else limits.x):continue
 		if item.dense and not item.input and dense_count>=32:continue
 		var seed: Color=item.seed
 		var sample: Dictionary=item.duplicate()
@@ -373,6 +380,15 @@ func _build_curves(world,events: Array,camera: Vector2,half_view: Vector2,zoom: 
 		else:drawn_paths.append(sample.points);drawn_samples.append(sample);curve_baselines.append(sample.baseline)
 	publish_paths(drawn_paths,drawn_samples.map(func(sample):return sample.opacity))
 	_publish_input()
+
+func _budget_tracks() -> void:
+	var limits: Vector2i=curve_budget.limits()
+	var retained:=[0,0]
+	for sample in crest_tracks.values():
+		if sample.retiring:continue
+		var group:=1 if sample.input else 0
+		if retained[group]>=(limits.y if sample.input else limits.x):sample.retiring=true
+		else:retained[group]+=1
 
 func publish_paths(paths: Array[PackedVector2Array],opacities: Array=[],camera: Vector2=Vector2.ZERO) -> void:
 	if curve_image==null:

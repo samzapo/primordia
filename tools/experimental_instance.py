@@ -143,7 +143,7 @@ def main():
         raise RuntimeError("Native Dictionary lifetime fixture failed")
 
     call(str(godot),"--headless","--path",str(candidate),"--editor","--import","--quit",env=environment)
-    for script,marker in [("merge_memory_run","MERGE MEMORY"),("feedback_pass_run","FEEDBACK PASS"),("feedback_latest_run","FEEDBACK LATEST"),("feedback_pass_three_run","FEEDBACK PASS THREE"),("normal_output_run","NORMAL OUTPUT"),("division_access_run","DIVISION ACCESS")]:
+    for script,marker in [("curve_layout_run","CURVE LAYOUT"),("merge_memory_run","MERGE MEMORY"),("feedback_pass_run","FEEDBACK PASS"),("feedback_latest_run","FEEDBACK LATEST"),("feedback_pass_three_run","FEEDBACK PASS THREE"),("normal_output_run","NORMAL OUTPUT"),("division_access_run","DIVISION ACCESS")]:
         path=root/(script+"-fixture.log")
         with path.open("w") as output:
             call("timeout","90s",str(godot),"--headless","--path",str(candidate),"--script","tests/"+script+".gd","--","--particle-backend=cpu",env=environment,stdout=output,stderr=subprocess.STDOUT)

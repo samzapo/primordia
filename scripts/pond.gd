@@ -498,6 +498,7 @@ func _update_world(alpha: float) -> void:
 	currents.position = Simulation.Medium.offset(render_camera,currents_origin)
 	habitat_view.sync(render_camera,world.view_half)
 	currents.visible = not flow_streamers
+	flow_view.mobile_quality=touch_zoom.enabled
 	flow_view.sync(world,render_camera,world.view_half,zoom,flow_streamers,flow_wakes)
 	reaction_view.sync(world,render_camera,world.view_half,zoom,show_reaction_sparks and perception=="exteroception")
 	merge_view.sync(world,render_camera,death_frame_dt,alpha)

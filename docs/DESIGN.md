@@ -760,3 +760,5 @@ October18 Revision69 receptor steering: free Flight/Hunting/Toward family/Away f
 [Revision71](REVISION_71.md) keeps detected relatives selectable for five seconds after a real family signal, adds clear Cancel merge and a brief donor pull-in, and makes surface gas exchange depend on fluid speed. These are bounded local memories/presentation effects; resource transfer stays authoritative and once only.
 
 [Revision72](REVISION_72.md) makes player-selected family merge commit immediately from recent pheromone eligibility, without seeking or waiting for contact. Preserve uncapped biomass/AP, finite transfer and pull-in art; autonomous fusion still requires contact.
+
+[Revision73](REVISION_73.md) reduces redundant current-curve admission work while retaining full geometry, spacing, sample counts and all game state. Performance observations must distinguish actual phone FPS from viewport-matched native CPU diagnostics and idle server telemetry.

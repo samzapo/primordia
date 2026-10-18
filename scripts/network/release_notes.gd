@@ -417,6 +417,17 @@ const RELEASES=[
   ],
   "footer":"Experimental updates start with a fresh copy of the main pond.",
   "button":"Back to the pond"
+ },
+ {
+  "id":"2026-10-18-smoother-current-drawing",
+  "audience":"experimental",
+  "title":"What’s new in the pond",
+  "items":[
+   "Reduced stutters while updating the water-current animation.",
+   "Phones can show fewer full-length current curves to keep the view responsive."
+  ],
+  "footer":"Experimental updates start with a fresh copy of the main pond.",
+  "button":"Back to the pond"
  }
 ]
 const CURRENT=RELEASES[-1]
