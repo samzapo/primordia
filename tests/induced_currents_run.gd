@@ -79,6 +79,16 @@ func run() -> void:
 		var at:=Vector2(i%Sim.Medium.COLS+.5,int(i/Sim.Medium.COLS)+.5)*Sim.Medium.SIZE
 		raster_error=maxf(raster_error,tide[i].distance_to(sim.fluid.current(at)+Currents.forcing(at,items)))
 	check(raster_error<.0001,"Sparse local rasterization matches the authoritative wrapped event field")
+	var before_input_rng: int=sim.rng.state
+	var before_input_velocity: PackedVector2Array=sim.fluid.velocity.duplicate()
+	var input:=Currents.raster_forcing(items)
+	var shared_error:=0.0
+	for i in input.size():
+		var at:=Vector2(i%Sim.Medium.COLS+.5,int(i/Sim.Medium.COLS)+.5)*Sim.Medium.SIZE
+		shared_error=maxf(shared_error,input[i].distance_to(Currents.forcing(at,items)))
+	check(shared_error<.0001,"The shared presentation/physics input raster equals independently sampled analytic forcing")
+	check(sim.rng.state==before_input_rng and sim.fluid.velocity==before_input_velocity,"Reading the input raster leaves ecology RNG and physical velocities unchanged")
+
 	print("CURRENT_EVENTS minimum_active_peak=%.4f minimum_active_count=%d sources=%d" % [minimum_peak,minimum_active,Currents.COUNT])
 	var cell=sim.player;var assembly={"a":.4,"units":3,"capped":false}
 	var state: Array=cell.surface_complexes.duplicate(true)

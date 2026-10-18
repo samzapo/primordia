@@ -59,7 +59,7 @@
       {
         "id": "settings",
         "title": "Pause and personalize",
-        "text": "Pause/settings contains Player name, private bug reports and feature requests, Gameplay, Mechanics, music volume, text size, visual options and fullscreen. Current display switches between broad moving Wave crests and continuous Streamlines. Pausing holds exactly what you see while the shared pond continues. Resume returns you to the live pond.",
+        "text": "Pause/settings contains Player name, private bug reports and feature requests, Gameplay, Mechanics, music volume, text size, visual options and fullscreen. Current display switches between broad moving Wave crests and continuous Streamlines. Pale marks show the water's combined motion; fading gold marks use the other style to show a passing current source. Pausing holds exactly what you see while the shared pond continues. Resume returns you to the live pond.",
         "sources": []
       },
       {

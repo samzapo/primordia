@@ -54,10 +54,15 @@ static func update(sim) -> void:
 			var at:=Vector2(i%Medium.COLS+.5,int(i/Medium.COLS)+.5)*Medium.SIZE
 			sim.fluid.induced_base[i]=sim.fluid.current(at).rotated(sim.environment.get("flow_angle",0.0))*float(sim.environment.get("flow_strength",1.0))
 	sim.fluid.tide=sim.fluid.induced_base.duplicate()
-	var additions:=PackedVector2Array();additions.resize(sim.fluid.tide.size())
-	var weights:=PackedFloat32Array();weights.resize(sim.fluid.tide.size())
+	var additions:=raster_forcing(sources(sim.seed_value,sim.time))
+	for i in additions.size():sim.fluid.tide[i]+=additions[i]
+
+static func raster_forcing(items: Array) -> PackedVector2Array:
+	# Shared sparse raster: physics and presentation use exactly the same input.
+	var additions:=PackedVector2Array();additions.resize(Medium.COLS*Medium.ROWS)
+	var weights:=PackedFloat32Array();weights.resize(Medium.COLS*Medium.ROWS)
 	var touched: Dictionary={}
-	for source in sources(sim.seed_value,sim.time):
+	for source in items:
 		if source.envelope<=0:continue
 		var reach: Vector2=Vector2.ONE*source.radius
 		var low:=Vector2i(((source.p-reach)/Medium.SIZE-Vector2.ONE*.5).ceil())
@@ -70,4 +75,5 @@ static func update(sim) -> void:
 				var fade:=pow(1-q*q,2)*float(source.envelope)
 				var i:=Medium.index(x,y)
 				additions[i]+=_field(delta,source)*fade;weights[i]+=fade;touched[i]=true
-	for i in touched:sim.fluid.tide[i]+=additions[i]/maxf(1.0,weights[i])
+	for i in touched:additions[i]/=maxf(1.0,weights[i])
+	return additions

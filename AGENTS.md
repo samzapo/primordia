@@ -615,3 +615,14 @@ both ponds/accounts/keys/feedback and return experimental to standby afterward.
 October17 survival correction: read Revision65. One healthy leaf must sustain a basic cell throughout the pond, including dim water. Ambient carbon enters only real exterior packets through bounded local saturation and an explicit open-system ledger, independent of cameras/accounts; do not assign stocks to cells. Preserve native pool, dictionary and resident/cold ownership, elapsed time and finite accounting. Settling old carbon precedes mixing fresh material; never export the full GPU pool for supply. Larger anatomy pays shared maintenance, with extra leaves and mitochondrial food allocation providing support. Defer reproductive investment during starvation. Keep the behavior/investment guide, references and stable-only release notice current. Owner authorizes direct main rollout for these rebalances, preserving all live bodies/accounts/keys/feedback and experimental standby.
 
 October18 approved R23–R41: read Revision66. Experimental first; preserve both ponds and main standby separation. Final owner steering adds a small atmospheric O2 source and increases air exchange with absolute fluid curl. Photosynthesis remains the main renewable O2 producer. Manual division defaults off; new cells have one ordinary paid-quote leaf. Fusion reabsorbs all donor organs before same-family physical transfer, never consumes selected donors or awards division AP. Preserve explicit individual investment exceptions and clearly expose Use family. Do not revive live-source navigation, global culling, organ Move or broad rendering-speed benchmarks.
+
+
+October18 induced-current display correction: read the final water-presentation
+sections of Revision66. Denser local-current samples stay pale. A separate gold
+opposite-style layer shows only actual induced forcing (gold Streamlines over
+Wave crests; gold crests over Streamlines), never source migration or ambient
+velocity. Full-source visual footprint replaces the22%gold core; physical
+forcing parameters stay unchanged. Persistent masks/curves fade in/out, and
+conflicting retired curves retain safe geometry through their fade instead of
+vanishing. Preserve complete paths, shared noncrossing admission, remembered
+Pause choice, functional hardware checks and experimental-only notices.

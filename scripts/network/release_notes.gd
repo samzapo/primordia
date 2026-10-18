@@ -331,6 +331,18 @@ const RELEASES=[
   ],
   "footer":"Your cells and their progress carry on between updates.",
   "button":"Back to the pond"
+ },
+ {
+  "id":"2026-10-18-induced-input-overlay",
+  "audience":"experimental",
+  "title":"What’s new in the pond",
+  "items":[
+   "Passing currents now fade gently in and out over a wider area.",
+   "Pale marks show the water’s overall motion. Gold marks show where a passing current is pushing.",
+   "Gold uses the other current style, so you can see both the push and the resulting flow."
+  ],
+  "footer":"Your cells and their progress carry on between updates.",
+  "button":"Back to the pond"
  }
 ]
 const CURRENT=RELEASES[-1]

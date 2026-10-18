@@ -2,6 +2,8 @@ extends RefCounted
 ## Presentation-only admission. Keep whole curves; omit conflicting samples.
 var bins: Dictionary={}
 var segments: Array=[]
+var owners: Array=[]
+var owned: Dictionary={}
 var gap:=1.0
 const BIN:=64.0
 func _init(clearance: float) -> void:gap=clearance
@@ -15,7 +17,7 @@ func cells(a: Vector2,b: Vector2) -> Array[Vector2i]:
 func close(a: Vector2,b: Vector2,c: Vector2,d: Vector2) -> bool:
 	if Geometry2D.segment_intersects_segment(a,b,c,d)!=null:return true
 	return a.distance_to(Geometry2D.get_closest_point_to_segment(a,c,d))<gap or b.distance_to(Geometry2D.get_closest_point_to_segment(b,c,d))<gap or c.distance_to(Geometry2D.get_closest_point_to_segment(c,a,b))<gap or d.distance_to(Geometry2D.get_closest_point_to_segment(d,a,b))<gap
-func accept(points: PackedVector2Array) -> bool:
+func accept(points: PackedVector2Array,owner: int=-1) -> bool:
 	for i in range(1,points.size()):
 		var a:=points[i-1];var b:=points[i]
 		if not a.is_finite() or not b.is_finite():return false
@@ -26,12 +28,21 @@ func accept(points: PackedVector2Array) -> bool:
 			for index in bins.get(cell,[]):
 				if seen.has(index):continue
 				seen[index]=true
+				if segments[index]==null or (owner>=0 and owners[index]==owner):continue
 				var other: PackedVector2Array=segments[index]
 				if close(a,b,other[0],other[1]):return false
+	reserve(points,owner)
+	return true
+
+func reserve(points: PackedVector2Array,owner: int=-1) -> void:
+	# Previously visible curves retain their safe geometry while fading out.
+	if owner>=0:
+		for index in owned.get(owner,[]):segments[index]=null
+		owned[owner]=[]
 	for i in range(1,points.size()):
 		var index:=segments.size()
-		segments.append(PackedVector2Array([points[i-1],points[i]]))
+		segments.append(PackedVector2Array([points[i-1],points[i]]));owners.append(owner)
+		if owner>=0:owned[owner].append(index)
 		for cell in cells(points[i-1],points[i]):
 			if not bins.has(cell):bins[cell]=[]
 			bins[cell].append(index)
-	return true
