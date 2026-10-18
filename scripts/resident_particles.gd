@@ -328,6 +328,18 @@ func thin_sync(probability: float,serial: int) -> Dictionary:
 	_sync_semaphore.wait()
 	return _export_data
 
+func carbon_supply_sync(cold: PackedFloat32Array,factor: float,target: float) -> Dictionary:
+	if cold.size()!=2560 or exchange_inflight>0 or not chemistry_enabled or not _initialized or _closing or not is_finite(factor) or factor<0 or factor>1 or not is_finite(target) or target<0:return {"error":"Invalid atmospheric carbon request"}
+	for value in cold:
+		if not is_finite(value) or value<0:return {"error":"Invalid cold carbon inventory"}
+	RenderingServer.call_on_render_thread(func():
+		if not _grid_valid:_prepare_grid_rd()
+		_export_data=_chemistry.carbon_supply(cold,factor,target)
+		_grid_valid=false
+		_sync_semaphore.post())
+	_sync_semaphore.wait()
+	return _export_data
+
 func project_cached(cells: int) -> void:
 	# The last completed exposure exchange owns these immutable body buffers.
 	# Queue projection without another readback after every contact was delivered.

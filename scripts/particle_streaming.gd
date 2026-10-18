@@ -192,14 +192,14 @@ func service(sim) -> bool:
 	if queue_depth==0: prepared_center=center;prepared_half=half
 	return true
 
-func settle(sim,packets: Array) -> void:
+func settle(sim,packets: Array,only_kind: int=-1) -> void:
 	if packets.is_empty(): return
 	# Promotion pays outstanding unary chemistry once before GPU admission.
 	var held=sim.resident
 	sim.resident=null;sim.particles=packets;sim.grid.rebuild(packets)
 	var ids: Array[int]=[]
 	for i in packets.size():
-		if packets[i].alive and sim.time>packets[i].get("chemical_at",sim.time): ids.append(i)
+		if packets[i].alive and (only_kind<0 or packets[i].kind==only_kind) and sim.time>packets[i].get("chemical_at",sim.time): ids.append(i)
 	var prior: RandomNumberGenerator=sim.rng
 	sim.rng=sim.ecology_rng
 	if not ids.is_empty(): sim._chemistry(0,ids,true)

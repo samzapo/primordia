@@ -21,6 +21,9 @@ const WIDTH := [19.0, 34.0, 26.0, 27.0, 36.0, 20.0, 30.0, 26.0, 26.0, 26.0, 20.0
 const SENSE_MODES := ["flee"]
 const MODES := ["graze"]
 const BASAL_UPKEEP := 0.18
+const ORGAN_UPKEEP := 0.35
+const LEAF_UPKEEP := 0.04
+const MITOCHONDRION_UPKEEP := 0.04
 const MOTION_UPKEEP := 0.20
 const PUMP_UPKEEP := 0.10
 const CILIA_MOTION := 0.16
@@ -488,9 +491,14 @@ func report_energy_gain(amount: float, organ: Dictionary = {}) -> void:
 func receive_particle(kind: int, amount: float, capacity: float, at: Vector2) -> void:
 	chemistry.receive(kind,amount,capacity,at)
 
+static func metabolic_upkeep(organ: Dictionary) -> float:
+	if float(organ.get("hp",1))<=0:return 0.0
+	var base: float=0.0 if inherent(organ) else LEAF_UPKEEP if organ.kind=="photosynthesis" else MITOCHONDRION_UPKEEP if organ.kind=="mitochondrion" else ORGAN_UPKEEP
+	return (base+Genes.factor(organ,"upkeep",0.0))*float(organ.get("scale",1.0))*float(organ.get("scale",1.0))
+
 static func organ_upkeep(organ: Dictionary) -> float:
 	var area: float = float(organ.get("scale",1.0))*float(organ.get("scale",1.0))
-	var rate := area*Genes.factor(organ,"upkeep",0.0)
+	var rate := metabolic_upkeep(organ)
 	if organ.kind == "propulsion": rate += MOTION_UPKEEP*area*Genes.factor(organ,"motion_cost")
 	elif organ.kind == "feeding": rate += PUMP_UPKEEP*area*Genes.output_cost(organ)
 	elif organ.kind == "cilia": rate += (CILIA_MOTION+CILIA_PUMP)*area*Genes.output_cost(organ)

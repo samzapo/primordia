@@ -152,6 +152,11 @@ var spawn_clock := 0.0
 var won := false
 var recycled := 0.0
 var external_input := 0.0
+var ambient_carbon_enabled:=false # Normal Pond/authority enables it; closed fixtures opt in.
+var ambient_carbon_due:=5.0
+var ambient_carbon_at:=0.0
+var ambient_carbon_added:=0.0
+var ambient_carbon_removed:=0.0
 var respiration_loss := 0.0
 var kills := 0
 var active_cells := 0
@@ -592,7 +597,13 @@ func _counter_sense(cell,received: Dictionary) -> void:
 		# Copy received facts only, never a source Cell reference or live lookup.
 		organ["counter_report"]=best.duplicate(true)
 
+func enable_ambient_carbon() -> void:
+	if not ambient_carbon_enabled:
+		ambient_carbon_at=time;ambient_carbon_due=time+preload("res://scripts/ambient_carbon.gd").PERIOD
+	ambient_carbon_enabled=true
+
 func step(dt: float) -> void:
+	var before: float=time
 	prepare_combat_rules()
 	if remote_client: return
 	preload("res://scripts/induced_currents.gd").update(self)
@@ -605,6 +616,7 @@ func step(dt: float) -> void:
 		view_half=resident.detail_half
 		resident.step(dt)
 		view_half=shown_half;camera_position=shown_camera;camera_follows_player=shown_follow
+		if time>before:preload("res://scripts/ambient_carbon.gd").step(self)
 		thin_external_if_due()
 		return
 	var display_half := view_half
@@ -617,6 +629,7 @@ func step(dt: float) -> void:
 	view_half = display_half
 	camera_position = display_camera
 	camera_follows_player = display_follow
+	if time>before:preload("res://scripts/ambient_carbon.gd").step(self)
 	thin_external_if_due()
 
 func thin_external_if_due() -> void:
@@ -1543,7 +1556,7 @@ func _metabolize(cell, dt: float) -> void:
 	cell.Surface.advance(cell,dt,self)
 	cell.decay_energy(dt)
 	cell.spend_energy(dt*Cell.BASAL_UPKEEP*cell.growth_scale())
-	for organ in cell.organs: cell.spend_energy(dt*organ.scale*organ.scale*Genes.factor(organ,"upkeep",0.0),organ)
+	for organ in cell.organs: cell.spend_energy(dt*Cell.metabolic_upkeep(organ),organ)
 	if cell.energy <= 0:
 		var before: float=cell.starvation_seconds
 		cell.starvation_seconds+=dt
@@ -2108,6 +2121,7 @@ func _fund_reproduction(cell,dt: float) -> void:
 	if cell.reproduction_elapsed<.5:return
 	var elapsed: float=cell.reproduction_elapsed;cell.reproduction_elapsed=0
 	if cell.count("feeding")+cell.count("photosynthesis")==0:return
+	if cell.energy<REPRODUCTION_ATP_FLOOR or cell.starvation_seconds>0:return
 	var quote:=offspring_quote(cell)
 	var target_material: float=quote.material
 	var tissue: float=minf(REPRODUCTION_RATE*elapsed,minf(maxf(0,cell.biomass-REPRODUCTION_TISSUE_FLOOR),maxf(0,target_material-cell.brood_mass)))

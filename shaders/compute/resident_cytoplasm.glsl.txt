@@ -137,7 +137,7 @@ void main(){
   if(used>0.0){
    emit_packet(FOOD,used*.65*.75,at,-1,0xffffffffu,-1,0xffffffffu,used*.65*.75*7.5,0.0);
    emit_packet(OXYGEN,used*2.5,at,-1,0xffffffffu,-1,0xffffffffu,0.0,0.0);
-   c[80]+=used*.35;c[82]+=used*4.0;c[21]+=used*11.5;
+   c[80]+=used*.35;c[82]+=used*LEAF_ATP_YIELD;c[20]+=used*(4.0-LEAF_ATP_YIELD);c[21]+=used*11.5;
   }
  }
  else if(code==13){

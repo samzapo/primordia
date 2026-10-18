@@ -50,6 +50,7 @@ func prepare(chem,cell) -> void:
 	chemistry=weakref(chem);body=weakref(cell)
 	species=Catalog.data().species.keys()
 	var constants:="const int SPECIES=%d;\nconst int FOOD=%d;\nconst int WASTE=%d;\nconst int OXYGEN=%d;\nconst int CARBON=%d;\n" % [species.size(),species.find("food"),species.find("waste"),species.find("oxygen"),species.find("carbon")]
+	constants+="const double LEAF_ATP_YIELD=%.6f;\n" % chem.LEAF_ATP_YIELD
 	constants+="const double NUTRIENT_BONUS_LIMIT=%.6f;\n" % Catalog.data().ecology.nutrient_bonus_limit
 	source=FileAccess.get_file_as_string("res://shaders/compute/resident_cytoplasm.glsl.txt").replace("/*CYTOPLASM_CATALOG*/",constants)
 	capacity=64

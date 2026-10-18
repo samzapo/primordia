@@ -31,6 +31,9 @@ const VARIANTS:={
 static func candidate(sim,cell) -> Dictionary:
  var policy:=strategy(sim,cell)
  if policy not in VARIANTS or cell.id in sim.managed_cells:return {}
+ # Survival support comes before expanding any opted-in role. No remote food query.
+ if cell.energy<18*cell.growth_scale() and cell.substrate<1 and working(cell,"photosynthesis")==0 and cell.can_fit("photosynthesis",0,1,false):
+  return {"cell":cell,"kind":"photosynthesis","mutation":"shade_leaf" if sim.light_at(cell.position)<.5 else "sun_leaf"}
  var variant: int=posmod(cell.id*19349663 ^ sim.seed_value*83492791,2)
  var priorities: Array=VARIANTS[policy][variant]
  var best: Dictionary={}

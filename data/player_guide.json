@@ -47,7 +47,7 @@
       {
         "id": "offspring",
         "title": "Cell division",
-        "text": "Surplus tissue and ATP prepare division automatically. Open the small bud: the ring around Divide fills as tissue and ATP accumulate. Green means ready; amber means fully funded but waiting for clear water or room in the pond. Divide makes a living daughter; Investment and Family are available here too. There is no four-cell family limit, but division still needs clear water and room in the pond. Daughters start with a basic oral groove and inherit the parent’s investment strategy; Manual stays Manual.",
+        "text": "Surplus tissue and ATP prepare division automatically. Open the small bud: the ring around Divide fills as tissue and ATP accumulate. Green means ready; amber means fully funded but waiting for clear water or room in the pond. Divide makes a living daughter; Investment and Family are available here too. There is no four-cell family limit, but division still needs clear water and room in the pond. Daughters start with a basic oral groove and inherit the parent’s investment strategy; Manual stays Manual. A starving cell pauses reproductive investment while it recovers.",
         "sources": []
       },
       {
@@ -109,7 +109,7 @@
       {
         "id": "cancel",
         "title": "Cancel placement",
-        "text": "Tap the circular icon of the held organelle at the top left to cancel placing or moving it.",
+        "text": "Tap the circular icon of the held organelle at the top left to cancel placing it.",
         "sources": []
       },
       {
@@ -222,7 +222,7 @@
         {
           "id": "photosynthesis",
           "title": "Carbon + light → food, biomass and oxygen",
-          "text": "Photosynthesis uses carbon particles and light to make food and biomass, releases oxygen, and supplies ATP. Sun favors and seeks bright water. Shade favors soft light, steers away from bright patches and seeks more light when too dark. In nature, oxygen comes from water; the game leaves water implicit. Of the food made, 75% stays inside and 25% is released for the pond. This split is a game rule.",
+          "text": "Leaves use dissolved carbon and light to make food, biomass, oxygen and ATP. Air slowly replenishes carbon throughout the pond, with excess carbon returning to the air near a low local saturation. One healthy leaf can sustain a basic cell even in dim water; larger active builds need more leaves and efficient respiration. Sun and Shade still favor different light conditions. Most new food stays inside, with a little released into the pond. Attacks and damaging acid can still kill a cell.",
           "sources": [
             {
               "title": "Oxygen production in photosynthesis",
@@ -231,6 +231,10 @@
             {
               "title": "Light-guided swimming",
               "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC4868408/"
+            },
+            {
+              "title": "Gas exchange between air and water",
+              "url": "https://pubs.usgs.gov/publication/ofr20261068/full"
             }
           ]
         },

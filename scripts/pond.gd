@@ -149,6 +149,7 @@ var notice := "Establish a lineage through three crises.\nFirst: choose cilia or
 var notice_timer := 12.0
 
 func _ready() -> void:
+	world.enable_ambient_carbon()
 	world.enable_perception_domains()
 	if manage_catchup: Engine.max_physics_steps_per_frame = 2
 	var args := OS.get_cmdline_user_args()
@@ -166,6 +167,7 @@ func _ready() -> void:
 		elif arg.begins_with("--advance="):
 			for i in int(arg.trim_prefix("--advance=")): world.step(1.0/60)
 		elif arg == "--senses": show_senses = true
+	world.enable_ambient_carbon()
 	light_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var light_material := ShaderMaterial.new()
 	light_material.shader = preload("res://shaders/light.gdshader")
@@ -1099,6 +1101,7 @@ func _restart(profile: int = -1) -> void:
 	if world.gpu_transport != null: world.gpu_transport.close()
 	resident_controller=null;resident_starting=false
 	world = Simulation.new(world.seed_value,world.habitat if profile < 0 else profile)
+	world.enable_ambient_carbon()
 	habitat_view.configure(world.habitat_geometry)
 	_configure_backend()
 	_refresh_light_texture()
