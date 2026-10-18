@@ -288,6 +288,31 @@ func family_grid(scene) -> void:
  root.push_input(release_touch,true)
  for frame in 3:ui.sync(0);await process_frame
  check(picker.scroll.scroll_vertical>=130 and scene.world.player.id==original_id and not ui.context.is_empty(),"A real finger swipe scrolls portraits without selecting a relative or moving the world")
+ # Swipes may start on pictures, fixed header buttons or the panel margin.
+ for region in ["portrait","title","merge","close","margin"]:
+  picker.scroll.scroll_vertical=200
+  for frame in 3:await process_frame
+  var swipe_start: Vector2
+  match region:
+   "portrait":
+    var visible_choices: Array=ui.choices.filter(func(choice):return picker.scroll.get_global_rect().encloses(choice.get_global_rect()))
+    check(not visible_choices.is_empty(),"An actual visible portrait is available for swipe capture")
+    if visible_choices.is_empty():continue
+    swipe_start=visible_choices[0].get_global_rect().get_center()
+   "title":swipe_start=picker.title.get_global_rect().get_center()
+   "merge":swipe_start=picker.merge_button.get_global_rect().get_center()
+   "close":swipe_start=picker.close_button.get_global_rect().get_center()
+   "margin":swipe_start=picker.get_global_rect().position+Vector2(2,60)
+  var before_swipe: int=picker.scroll.scroll_vertical
+  var begin:=InputEventScreenTouch.new();begin.index=0;begin.position=swipe_start;begin.pressed=true
+  root.push_input(begin,true)
+  for i in 6:
+   var move:=InputEventScreenDrag.new();move.index=0;move.position=swipe_start+Vector2(0,(i+1)*12);move.relative=Vector2(0,12)
+   root.push_input(move,true);await process_frame
+  var finish: InputEventScreenTouch=begin.duplicate();finish.pressed=false;finish.position=swipe_start+Vector2(0,72)
+  root.push_input(finish,true)
+  for frame in 3:ui.sync(0);await process_frame
+  check(picker.scroll.scroll_vertical<=before_swipe-65 and not ui.context.is_empty() and scene.world.player.id==original_id and not scene.merge_selecting(),"A swipe starting on %s scrolls without activating its button or selecting a cell" % region)
  picker.scroll.scroll_vertical=0
  click(picker.down.get_global_rect().get_center())
  for frame in 3:await process_frame
@@ -295,6 +320,13 @@ func family_grid(scene) -> void:
  click(picker.up.get_global_rect().get_center())
  for frame in 3:await process_frame
  check(picker.scroll.scroll_vertical==0,"Actual pointer on the up arrow returns to the first row")
+ for button in [picker.down,picker.up]:
+  var arrow_touch:=InputEventScreenTouch.new();arrow_touch.index=0;arrow_touch.position=button.get_global_rect().get_center();arrow_touch.pressed=true
+  root.push_input(arrow_touch,true)
+  var arrow_release: InputEventScreenTouch=arrow_touch.duplicate();arrow_release.pressed=false;root.push_input(arrow_release,true)
+  for frame in 3:await process_frame
+  check((picker.scroll.scroll_vertical>0 if button==picker.down else picker.scroll.scroll_vertical==0) and picker.repeat_direction==0,"Touch arrow taps still scroll one row and release their hold after panel capture")
+
  var at: Vector2=picker.scroll.get_global_rect().get_center()
  for i in 6:
   var wheel:=InputEventMouseButton.new();wheel.button_index=MOUSE_BUTTON_WHEEL_DOWN;wheel.pressed=true;wheel.position=at;wheel.global_position=at
@@ -327,7 +359,13 @@ func family_grid(scene) -> void:
  var release_tap: InputEventScreenTouch=tap.duplicate();release_tap.pressed=false;root.push_input(release_tap,true)
  for frame in 3:await process_frame
  check(scene.world.player.id==first_id,"A real finger tap after scrolling still selects exactly the intended living relative")
- ui.close_context()
+ ui.open_context({"kind":"lineage"})
+ for frame in 3:ui.sync(0);await process_frame
+ var close_touch:=InputEventScreenTouch.new();close_touch.index=0;close_touch.position=picker.close_button.get_global_rect().get_center();close_touch.pressed=true
+ root.push_input(close_touch,true)
+ var close_release: InputEventScreenTouch=close_touch.duplicate();close_release.pressed=false;root.push_input(close_release,true)
+ for frame in 3:await process_frame
+ check(ui.context.is_empty() and not picker.visible,"A real finger tap still activates Close after whole-panel swipe capture")
 
 func leaf_selection(scene) -> void:
  var cell=scene.world.player

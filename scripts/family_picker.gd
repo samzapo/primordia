@@ -21,6 +21,7 @@ var touch_index:=-1
 var touch_start:=Vector2.ZERO
 var touch_scroll:=0
 var touch_dragged:=false
+var touch_button: Button
 var last_touch_at:=-1000
 
 
@@ -51,7 +52,7 @@ func _scroll_row(direction: int) -> void:
  scroll.scroll_vertical+=roundi(direction*(80+6)*minf(owner_ui.ui_scale(),minf(owner_ui.get_viewport_rect().size.x/220.0,owner_ui.get_viewport_rect().size.y/170.0)))
 
 func _process(dt: float) -> void:
- if not is_visible_in_tree():repeat_direction=0;touch_index=-1;return
+ if not is_visible_in_tree():repeat_direction=0;touch_index=-1;touch_button=null;return
  var bar=scroll.get_v_scroll_bar()
  up.disabled=scroll.scroll_vertical<=0
  down.disabled=scroll.scroll_vertical>=bar.max_value-bar.page-.5
@@ -122,27 +123,40 @@ func sync() -> void:
  if not visible:get_parent().move_child(self,get_parent().get_child_count()-1)
  show()
 
+func _touch_button_at(at: Vector2) -> Button:
+ # Fixed controls take priority over portraits clipped above/below the list.
+ for button in [close_button,merge_button,up,down]:
+  if button.is_visible_in_tree() and not button.disabled and button.get_global_rect().has_point(at):return button
+ if scroll.is_visible_in_tree() and scroll.get_global_rect().has_point(at):
+  for choice in owner_ui.choices:
+   if not choice.disabled and choice.get_global_rect().has_point(at):return choice
+ return null
+
 func handle_touch(event: InputEvent) -> bool:
  if not is_visible_in_tree():return false
- # Consume emulated mouse input from our own touch gesture, preventing double taps.
+ # Capture the whole panel before GUI buttons can swallow a finger drag.
  if (event is InputEventMouseButton or event is InputEventMouseMotion) and event.device==-1:
-  return Time.get_ticks_msec()-last_touch_at<250 and scroll.get_global_rect().has_point(event.position)
+  return Time.get_ticks_msec()-last_touch_at<250 and get_global_rect().has_point(event.position)
  if event is InputEventScreenTouch:
   if event.pressed:
-   if not scroll.get_global_rect().has_point(event.position):return false
+   if not get_global_rect().has_point(event.position):return false
    if touch_index<0:
     touch_index=event.index;touch_start=event.position;touch_scroll=scroll.scroll_vertical;touch_dragged=false
+    touch_button=_touch_button_at(event.position)
+    if touch_button==up:_start_scroll(-1)
+    elif touch_button==down:_start_scroll(1)
    last_touch_at=Time.get_ticks_msec();return true
-  if event.index!=touch_index:return false
-  last_touch_at=Time.get_ticks_msec();touch_index=-1
-  if not event.canceled and not touch_dragged and scroll.get_global_rect().has_point(event.position):
-   for choice in owner_ui.choices:
-    if choice.get_global_rect().has_point(touch_start) and choice.get_global_rect().has_point(event.position) and not choice.disabled:
-     choice.pressed.emit();break
+  if event.index!=touch_index:return touch_index>=0 or get_global_rect().has_point(event.position)
+  last_touch_at=Time.get_ticks_msec();touch_index=-1;repeat_direction=0
+  var tapped: Button=touch_button;touch_button=null
+  if not event.canceled and not touch_dragged and is_instance_valid(tapped) and _touch_button_at(event.position)==tapped:
+   tapped.pressed.emit()
   return true
- if event is InputEventScreenDrag and event.index==touch_index:
+ if event is InputEventScreenDrag:
+  if event.index!=touch_index:return touch_index>=0 or get_global_rect().has_point(event.position)
   last_touch_at=Time.get_ticks_msec()
   if event.position.distance_to(touch_start)>8*owner_ui.ui_scale():touch_dragged=true
-  if touch_dragged:scroll.scroll_vertical=touch_scroll-roundi(event.position.y-touch_start.y)
+  if touch_dragged:
+   repeat_direction=0;scroll.scroll_vertical=touch_scroll-roundi(event.position.y-touch_start.y)
   return true
  return false

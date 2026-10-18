@@ -16,7 +16,7 @@ Validate authenticated rejection, actual pheromone reception/expiry, no live-pos
 
 ## Family panel follow-up
 
-Owner screenshot reports an oversized panel and unusable touch scrolling while arrows work. Bound the panel to the current viewport independently of content minimums; only the portrait grid expands. Measure current header controls rather than estimating their height. Preserve both arrow controls, wheel and focus scrolling; handle actual touch drags over portraits on web, suppressing accidental tap-selection and emulated duplicate mouse events. Validate64 relatives, dense/short/resized screens, fixed Close/arrows, touch dragging and subsequent tap selection.
+Owner screenshot reports an oversized panel and unusable touch scrolling while arrows work. Bound the panel to the current viewport independently of content minimums; only the portrait grid expands. Measure current header controls rather than estimating their height. Preserve both arrow controls, wheel and focus scrolling; handle actual touch drags anywhere in the panel, including portraits, header buttons and margins on web, suppressing accidental tap-selection and emulated duplicate mouse events. Validate64 relatives, dense/short/resized screens, fixed Close/arrows, touch dragging from each panel region and subsequent tap selection/Close.
 
 ## Friendly fire
 

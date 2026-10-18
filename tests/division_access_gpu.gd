@@ -119,7 +119,8 @@ func division_controls() -> void:
 		# A real Xvfb/display pointer can hover the cell after dismissal. The
 		# empty-water intent readout must be tested outside all anatomy/choices.
 		var water:=InputEventMouseMotion.new();water.position=Vector2(20,200);water.global_position=water.position
-		root.push_input(water,true);await settle_ui();game.cell_ui.sync(0)
+		Input.warp_mouse(water.position);root.push_input(water,true);await settle_ui();game.cell_ui.sync(0)
+		check(game.cell_ui.get_global_mouse_position().distance_to(water.position)<3,"Fixture places the actual display pointer over empty water")
 		check(game.preferences.show_instinct and game.cell_ui.tip_box.visible and game.cell_ui.tip.text.begins_with("Instinct"),"The enabled intent readout survives menu dismissal over empty water: mobile=%s cursor=%s text=%s" % [mobile,game.cell_ui.get_global_mouse_position(),game.cell_ui.tip.text])
 		var saved=preload("res://scripts/preferences.gd").new();saved.path=path;saved.load_settings()
 		check(saved.show_instinct,"Intent toggle is remembered by saved preferences")
