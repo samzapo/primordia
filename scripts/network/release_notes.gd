@@ -309,6 +309,16 @@ const RELEASES=[
   ],
   "footer":"Your cells and their progress carry on between updates.",
   "button":"Back to the pond"
+ },
+ {
+  "id":"2026-10-18-cross-current-crests",
+  "audience":"experimental",
+  "title":"What’s new in the pond",
+  "items":[
+   "Water ripples now stretch across the current as they travel, with clearer crests at every zoom."
+  ],
+  "footer":"Your cells and their progress carry on between updates.",
+  "button":"Back to the pond"
  }
 ]
 const CURRENT=RELEASES[-1]

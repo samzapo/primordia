@@ -29,20 +29,22 @@ void vertex() {
 	vec2 normal = vec2(-v.y,v.x)/max(speed,0.001);
 	// One periodic image for the entire strip avoids a seam-spanning triangle.
 	vec2 relative = mod(INSTANCE_CUSTOM.xy-camera+world_size*0.5,world_size)-world_size*0.5 + p-INSTANCE_CUSTOM.xy;
-	VERTEX = relative+normal*(UV.y-0.5)*3.60/max(zoom,0.001);
+	VERTEX = relative+normal*(UV.y-0.5)*10.0/max(zoom,0.001);
 	opacity = smoothstep(0.2,4.0,age)*(1.0-smoothstep(18.5,20.0,age));
 	opacity *= smoothstep(1.0,8.0,speed)*INSTANCE_CUSTOM.w;
 }
 void fragment() {
 	float taper = smoothstep(0.0,0.18,UV.x)*(1.0-smoothstep(0.94,1.0,UV.x));
-	// Soft wavelet crests follow the cached flow, with a faint full-length trail.
-	// These are material marks on advected strips, not waves that move the water.
+	// A crest is long across the velocity normal and thin along travel.
+	// Screen derivatives keep its thickness independent of flow speed and zoom.
 	float across = abs(UV.y-0.5)*2.0;
-	float core = 1.0-smoothstep(0.10,1.0,across);
-	float phase = fract(UV.x*8.0+ribbon_phase*7.0+0.10*across*across);
-	float crest = smoothstep(0.52,0.78,phase)*(1.0-smoothstep(0.82,0.94,phase));
-	float tail = smoothstep(0.10,0.65,phase)*(1.0-smoothstep(0.80,0.98,phase));
-	float texture_weight = 0.06+0.26*tail+0.68*crest;
+	float core = 1.0-smoothstep(0.55,1.0,across);
+	float phase_coordinate = UV.x*8.0+ribbon_phase*7.0;
+	float phase_per_pixel = max(length(vec2(dFdx(phase_coordinate),dFdy(phase_coordinate))),0.0001);
+	float along = (fract(phase_coordinate)-0.80)/phase_per_pixel+0.8*across*across;
+	float crest = 1.0-smoothstep(0.55,1.25,abs(along));
+	float glow = 1.0-smoothstep(1.0,3.0,abs(along+1.4));
+	float texture_weight = 0.025+0.15*glow+0.825*crest;
 	float head = mix(0.55,1.0,UV.x);
 	float local_source=0.0;
 	for (int i=0; i<32; i++) {
