@@ -13,6 +13,7 @@ var body:=Button.new()
 var manual:=Button.new()
 var inherit:=Button.new()
 var back:=Button.new()
+var adopt:=Button.new()
 var cards: Array[Button]=[]
 var margin:=MarginContainer.new()
 var layout_scale:=-1.0
@@ -33,6 +34,11 @@ func initialize(owner_game) -> void:
  var controls:=HBoxContainer.new();box.add_child(controls)
  for button in [manual,inherit,back]:controls.add_child(button);button.size_flags_horizontal=Control.SIZE_EXPAND_FILL
  manual.pressed.connect(choose.bind("manual"));inherit.pressed.connect(choose.bind("inherit"))
+ box.add_child(adopt);adopt.text="Use family for all relatives"
+ adopt.pressed.connect(func():
+  game.world.edit("investment",{"scope":"family_adopt","kind":"inherit"})
+  game._message("Family settings requested." if game.world.remote_client else "All relatives now use the family strategy.")
+  sync())
  back.text="Back";back.pressed.connect(func():game.cell_ui.open_context({"kind":"nucleus"}))
  status.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;box.add_child(status)
  note.text="Unattended: own AP, one action/min. Selected cells stay manual."
@@ -52,20 +58,28 @@ func choose(kind: String) -> void:
 func sync() -> void:
  var viewport: Vector2=game.get_viewport_rect().size
  # Keep the three choices together even with large UI text on a short phone.
- var s: float=minf(game.cell_ui.ui_scale(),minf(viewport.x/330.0,viewport.y/350.0))
+ var s: float=minf(game.cell_ui.ui_scale(),minf(viewport.x/330.0,viewport.y/390.0))
  var width:=minf(540*s,viewport.x-16*s)
  family.text="Family";body.text="This cell"
  family.icon=SELECTION_MARK if scope=="lineage" else null
  body.icon=SELECTION_MARK if scope=="cell" else null
  var value:=current()
- for card in cards:
-  if card.active!=(card.strategy==value):
-   card.active=card.strategy==value;card.queue_redraw()
- manual.text="Manual";manual.icon=SELECTION_MARK if value=="manual" else null
- inherit.visible=scope=="cell";inherit.text="Inherit"
- inherit.icon=SELECTION_MARK if value=="inherit" else null
  var inherited: String=game.world.investment.lineages.get(game.world.player.lineage_id(),"manual")
- status.text=("Family: "+value.capitalize()) if scope=="lineage" else ("This cell: "+value.capitalize()+(" ("+inherited.capitalize()+")" if value=="inherit" else ""))
+ var effective: String=inherited if value=="inherit" else value
+ for card in cards:
+  if card.active!=(card.strategy==effective):
+   card.active=card.strategy==effective;card.queue_redraw()
+ manual.text="Manual";manual.icon=SELECTION_MARK if value=="manual" else null
+ inherit.visible=scope=="cell";inherit.text="Use family: "+inherited.capitalize()
+ adopt.visible=scope=="lineage"
+ inherit.icon=SELECTION_MARK if value=="inherit" else null
+ var settings: Dictionary=game.world.investment.cells
+ var overrides:=0;var relatives:=0
+ for record in game.world.lineage.records:
+  if record.state not in ["living","active"]:continue
+  relatives+=1
+  if settings.has(record.id):overrides+=1
+ status.text=("Family: %s · %d use Family · %d individual" % [value.capitalize(),relatives-overrides,overrides]) if scope=="lineage" else ("This cell: "+effective.capitalize()+(" · using Family" if value=="inherit" else " · individual setting"))
  if layout_scale!=s or layout_viewport!=viewport:
   layout_scale=s;layout_viewport=viewport
   var style:=StyleBoxFlat.new();style.bg_color=Color("162b49");style.border_color=Color("69a9ab");style.set_border_width_all(roundi(s));style.set_corner_radius_all(roundi(8*s))

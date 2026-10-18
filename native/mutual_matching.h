@@ -71,7 +71,7 @@ void mutual_matching(std::vector<P> &ps,Grid &grid,int lanes,uint32_t tick,
     bool recycling=(a.kind==2&&b.kind==1)||(a.kind==1&&b.kind==2);
     double acidity=(enzyme||recycling)?acid(a.p):0;
     if(!eligible(a,b,acidity))return false;
-    double threshold=.5+(enzyme?.46*std::pow(std::clamp(std::abs(acidity-.4)/.4,0.,1.),2):0);
+    double threshold=.5+(enzyme?.46*std::pow(std::clamp(std::abs(acidity-.25)/.25,0.,1.),2):0);
     double alignment=std::min(double(a.dir.dot(n)),double(b.dir.dot(-n)));
     if(alignment<threshold)return false;
     uint64_t aid=a.handle?a.handle:uint64_t(a.identity)+1,bid=b.handle?b.handle:uint64_t(b.identity)+1;
@@ -105,7 +105,7 @@ void mutual_matching(std::vector<P> &ps,Grid &grid,int lanes,uint32_t tick,
    }else if(u->kind==2&&v->kind==1){
     double amount=u->amount;u->kind=0;u->capacity=0;u->amount=amount*.6;v->kind=5;v->amount=amount*.4;event.event=2;event.recycled=amount*.6;
    }else if(u->kind==0&&v->kind==4){u->kind=2;event.event=4;}
-   else {double total=u->amount+v->amount;u->v=u->v.lerp(v->v,v->amount/total);u->capacity=u->kind==0?primordia_chemistry::nutrient_capacity(u->amount,u->capacity,v->amount,v->capacity):u->capacity+v->capacity;u->amount=total;v->alive=false;event.event=1;}
+   else {double total=u->amount+v->amount;u->v=u->v.lerp(v->v,v->amount/total);u->capacity=u->kind==0?primordia_chemistry::nutrient_capacity(u->amount,u->capacity,v->amount,v->capacity,acid(a.p)):u->capacity+v->capacity;u->amount=total;v->alive=false;event.event=1;}
    a.reacted=b.reacted=true;
   }
  });

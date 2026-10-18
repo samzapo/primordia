@@ -26,7 +26,7 @@ def compile_catalog(source, output):
     def values(key):
         return ", ".join(repr(float(item[key])) for item in species)
     materials = [catalog["species"].get(s["key"], {}).get("material", 0 if s["id"] in [1,3] else 1) for s in species]
-    content = ("#pragma once\n#include <array>\n#include <algorithm>\nnamespace primordia_chemistry {\n"
+    content = ("#pragma once\n#include <array>\n#include <algorithm>\n#include <cmath>\nnamespace primordia_chemistry {\n"
         f"inline constexpr int species_count = {len(species)};\n"
         f"inline constexpr std::array<double,species_count> radii = {{{values('radius')}}};\n"
         f"inline constexpr std::array<double,species_count> decay = {{{values('decay')}}};\n"
@@ -36,7 +36,7 @@ def compile_catalog(source, output):
         f"inline constexpr double nutrient_merge_limit = {catalog['ecology']['nutrient_merge_limit']};\n"
         f"inline constexpr double nutrient_binding_bonus = {catalog['ecology']['nutrient_binding_bonus']};\n"
         f"inline constexpr double nutrient_bonus_limit = {catalog['ecology']['nutrient_bonus_limit']};\n"
-        "inline double nutrient_capacity(double a,double ac,double b,double bc){double total=a+b;double fuel=std::min(a,std::max(0.,ac))+std::min(b,std::max(0.,bc));if(fuel<total)return fuel;return total+std::min(total*nutrient_bonus_limit,std::max(0.,ac-a)+std::max(0.,bc-b)+std::min(a,b)*nutrient_binding_bonus);}\n"
+        "inline double nutrient_capacity(double a,double ac,double b,double bc,double acid=0.){double total=a+b;double fuel=std::min(a,std::max(0.,ac))+std::min(b,std::max(0.,bc));if(fuel<total)return fuel;return total+std::min(total*nutrient_bonus_limit,std::max(0.,ac-a)+std::max(0.,bc-b)+std::min(a,b)*nutrient_binding_bonus*(1+std::max(0.,1-std::abs(acid-.25)/.25)));}\n"
         f"inline constexpr double carbon_capacity = {catalog['ecology']['carbon_capacity']};\n"
         "}\n")
     output.parent.mkdir(parents=True, exist_ok=True)

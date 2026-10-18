@@ -94,6 +94,9 @@ func run() -> void:
 	for kind in ["feeding","neutralizing","acidifying","regenerative","toxin","poreforming"]:
 		var gland=Cell.new(100);gland.biomass=100;gland.energy=2000;gland.acid_stress=1
 		gland.add_organ(kind,0,"graze",false)
+		if kind in ["toxin","poreforming"]:
+			gland.add_organ("hunting",1,"hunt",false)
+			gland.behavior["weapon_cue"]={"at":gland.position+Vector2(100,0),"id":999,"organ_id":gland.organs[-1].id,"expires_at":sim.time+10,"lineage":999}
 		gland.target_id=999;gland.target_memory=10;gland.target_position=gland.position+Vector2(100,0);gland.target_mode="hunt"
 		sim.cells=[gland];sim.player=gland;sim.particles=[]
 		sim.spawn_particle(Sim.WASTE,gland.organ_position(gland.organs[0])+Vector2(15,0),Vector2.ZERO,1,999)

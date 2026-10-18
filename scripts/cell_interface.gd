@@ -40,6 +40,7 @@ var last_ending := ""
 var last_critical := false
 var last_lineage := 0
 var last_goal := ""
+var pending_mutation: Dictionary={}
 
 func initialize(owner_game) -> void:
 	game = owner_game
@@ -175,7 +176,7 @@ func _choice(title: String, description: String, action: Callable, organ_kind: S
 	node.ap_cost = ap_cost
 	node.rate_model = rate_model
 	node.pressed.connect(action)
-	if context.get("kind","")=="lineage":family_picker.grid.add_child(node)
+	if context.get("kind","") in ["lineage","merge_family"]:family_picker.grid.add_child(node)
 	elif mobile():mobile_flow.add_child(node)
 	else:add_child(node)
 	choices.append(node)
@@ -227,6 +228,8 @@ func open_context(target: Dictionary) -> void:
 					close_context()
 					if not ok:game._message("This organelle is no longer available.")
 					elif not sim.remote_client:game._message("Organelle reabsorbed · %d AP returned to this cell." % refund),"","Reabsorb")
+			if organ.kind in ["toxin","poreforming"] and cell.count("hunting")==0:
+				_choice("Hunting receptor","Detect nearby prey through their chemical signals. Build this to guide the gland.",game._select.bind(10),"hunting","",cell.ap>=cell.construction_price(),0,cell.construction_price())
 			if not cell.inherent(organ):
 				for gene in sim.Genes.available(organ,run.learned):
 					var data: Dictionary = sim.Genes.DATA[gene]
@@ -234,9 +237,10 @@ func open_context(target: Dictionary) -> void:
 					var ap: int = sim.Genes.adaptation_price(organ)
 					var rate_model: Dictionary = organ.duplicate(true)
 					rate_model.mutation = gene
-					_choice(data.title,data.text+"\nFree mutation.",func():
-						game._message("Specialization installed." if sim.mutate_organ(target.id,gene) else "This organ cannot accept that mutation.")
-						open_context(target),"" if gene in sim.Genes.LIGHT_ADAPTATIONS else organ.kind,("Sun" if gene == "sun_leaf" else "Shade") if gene in sim.Genes.LIGHT_ADAPTATIONS else "",cell.biomass >= cost and cell.ap >= ap,cost,ap,rate_model)
+					_choice(data.title,data.text+"\nFree mutation.",_specialize.bind(cell.id,target.id,gene),"" if gene in sim.Genes.LIGHT_ADAPTATIONS else organ.kind,("Sun" if gene == "sun_leaf" else "Shade") if gene in sim.Genes.LIGHT_ADAPTATIONS else "",cell.biomass >= cost and cell.ap >= ap,cost,ap,rate_model)
+					if pending_mutation.get("cell",-1)==cell.id and pending_mutation.get("id",-1)==organ.id:
+						choices[-1].disabled=true
+						if pending_mutation.gene==gene:choices[-1].caption+=" (applying)"
 					if organ.get("mutation","") == gene:
 						choices[-1].caption += " (active)"
 						choices[-1].selected = true
@@ -282,13 +286,15 @@ func open_context(target: Dictionary) -> void:
 			choices[-1].radial_progress=readiness.get("progress",0.0);choices[-1].progress_ready=readiness.ready
 			_choice("Investment","Choose Hunter, Producer or Grazer for unattended cells.",open_context.bind({"kind":"investment"}),"","Invest")
 			_choice("Family",sim.lineage.summary(sim),open_context.bind({"kind":"lineage"}),"","Family")
-		"lineage":
+			_choice("Automatic division","Switch automatic division for this cell.",_division_policy.bind("cell",not cell.automatic_division),"","Auto: on" if cell.automatic_division else "Auto: off")
+			_choice("Family division","Set automatic division for the whole family.",_division_policy.bind("lineage",not cell.automatic_division),"","Family auto")
+		"lineage","merge_family":
 			context["roster"]=hash(sim.lineage.records)
 			var records: Array=sim.lineage.records.filter(func(record):return record.state in ["living","active"])
 			family_picker.layout_key=[]
 			for record in records:
 				var can_follow: bool=record.state=="living" and not run.terminal()
-				_choice("Cell %d · %s" % [record.id,record.state],sim.lineage.biography(record),_follow.bind(record.id) if can_follow else game._message.bind(sim.lineage.biography(record)),"","%d" % record.generation)
+				_choice("Cell %d · %s" % [record.id,record.state],sim.lineage.biography(record),_merge.bind(record.id) if target.kind=="merge_family" else _follow.bind(record.id) if can_follow else game._message.bind(sim.lineage.biography(record)),"","%d" % record.generation)
 				choices[-1].selected=record.state=="active"
 				choices[-1].set_meta("family_id",record.id)
 				choices[-1].set_meta("parent_id",record.parent)
@@ -303,7 +309,7 @@ func open_context(target: Dictionary) -> void:
 			if known.size() > 3: _choice("More blueprints","Next page.",open_context.bind({"kind":"archive","page":(page+1)%ceili(known.size()/3.0)}),"","More")
 			_choice("Nucleus","Return to the nucleus.",open_context.bind({"kind":"nucleus"}),"","Back")
 	# At most four actions plus a next-page node around any structure.
-	if choices.size() > 5 and not mobile() and target.kind!="lineage":
+	if choices.size() > 5 and not mobile() and target.kind not in ["lineage","merge_family"]:
 		var all_choices: Array[Button] = choices.duplicate()
 		var page := posmod(int(target.get("menu_page",0)),ceili(all_choices.size()/4.0))
 		choices = []
@@ -322,6 +328,33 @@ func open_context(target: Dictionary) -> void:
 			choices[i].focus_neighbor_top = choices[i].focus_neighbor_left
 			choices[i].focus_neighbor_bottom = choices[i].focus_neighbor_right
 	sync(0)
+
+func _division_policy(scope: String,automatic: bool) -> void:
+	game.world.edit("division_policy",{"scope":scope,"automatic":automatic})
+	close_context()
+
+func _merge(identity: int) -> void:
+	if identity==game.world.player.id:return
+	if game.world.edit("merge",{"id":identity}):game._message("Merge requested. Seeking your relative’s chemical trail.")
+	else:game._message("Choose a living, unattended member of this family.")
+	close_context()
+
+func _specialize(cell_id: int,organ_id: int,gene: String) -> void:
+	var cell=game.world.player
+	if cell.id!=cell_id or cell.organ_by_id(organ_id).is_empty() or not pending_mutation.is_empty():return
+	if game.world.mutate_organ(organ_id,gene):
+		if game.world.remote_client:
+			pending_mutation={"cell":cell_id,"id":organ_id,"gene":gene}
+			game._message("Applying specialization…")
+		else:game._message("Specialization installed.")
+	else:game._message("This organ cannot accept that mutation.")
+	open_context({"kind":"organ","id":organ_id})
+
+func command_result(command: Dictionary,result: Dictionary) -> void:
+	if command.get("action","")!="mutate" or pending_mutation.is_empty():return
+	if not result.get("ok",false):
+		pending_mutation.clear()
+		if context.get("kind","")=="organ":open_context(context.duplicate())
 
 func _reproduce() -> void:
 	# Commit the parent's edits before transferring tissue into a separate body.
@@ -443,7 +476,7 @@ func _events() -> void:
 	last_critical = critical
 
 func _sync_family_portraits() -> void:
-	if context.get("kind","")!="lineage":return
+	if context.get("kind","") not in ["lineage","merge_family"]:return
 	var models: Dictionary=game.family_portraits if game.world.remote_client else preload("res://scripts/cell_portrait.gd").family(game.world,game.world.lineage)
 	for choice in choices:
 		if not choice.has_meta("family_id"):continue
@@ -451,6 +484,13 @@ func _sync_family_portraits() -> void:
 		choice.set_portrait(model,game.world.seed_value,game.lineage_color(int(model.get("lineage",0))))
 
 func sync(_dt: float) -> void:
+	if not pending_mutation.is_empty():
+		var cell=game.world.player
+		var organ: Dictionary=cell.organ_by_id(int(pending_mutation.id))
+		if cell.id!=pending_mutation.cell or organ.is_empty() or organ.get("mutation","")==pending_mutation.gene:
+			pending_mutation.clear()
+			if context.get("kind","")=="organ":open_context(context.duplicate())
+
 	if game == null: return
 	_events()
 	biomass_view.sync()
@@ -458,7 +498,7 @@ func sync(_dt: float) -> void:
 	visible = active
 	if not active:
 		family_picker.hide();return
-	if context.get("kind","")=="lineage" and context.get("roster",0)!=hash(game.world.lineage.records):
+	if context.get("kind","") in ["lineage","merge_family"] and context.get("roster",0)!=hash(game.world.lineage.records):
 		open_context(context.duplicate());return
 	_sync_family_portraits()
 	var s: float = ui_scale()
@@ -470,13 +510,13 @@ func sync(_dt: float) -> void:
 	message.size.x = message.custom_minimum_size.x
 	message.add_theme_font_size_override("font_size",roundi((22 if mobile() else 20)*s))
 	message.position = (cell_screen+Vector2(-message.size.x*0.5,game.world.player.radius*game.zoom+35)).clamp(Vector2(16,16),size-message.size-Vector2(16,16))
-	edit_hint.visible = game.build_open and not mobile() and context.get("kind","")!="lineage" and (game.selected>=0 or game.moving_id>=0 or not context.is_empty())
+	edit_hint.visible = game.build_open and not mobile() and context.get("kind","") not in ["lineage","merge_family"] and (game.selected>=0 or game.moving_id>=0 or not context.is_empty())
 	var placing_kind: String=game.Simulation.KINDS[game.selected] if game.selected>=0 else game.world.player.organ_by_id(game.moving_id).get("kind","")
 	edit_hint.text = "Tab · return to habitat" if placing_kind=="" else ("Place inside the cell · right-click cancels" if game.world.player.internal_organ(placing_kind) else "Place on membrane · right-click cancels")
 	edit_hint.add_theme_font_size_override("font_size",roundi(14*s))
 	edit_hint.size = Vector2(minf(540*s,size.x-32),0)
 	edit_hint.position = Vector2((size.x-edit_hint.size.x)*0.5,14)
-	if not game.build_open and not context.is_empty() and context.kind not in ["lineage","archive","past"]: close_context()
+	if not game.build_open and not context.is_empty() and context.kind not in ["lineage","merge_family","archive","past"]: close_context()
 	if context.get("kind","") == "bud" and not choices.is_empty():
 		var sim = game.world
 		var readiness: Dictionary=sim.division_status()
@@ -484,10 +524,14 @@ func sync(_dt: float) -> void:
 		choices[0].description=readiness.reason
 		choices[0].radial_progress=readiness.get("progress",0.0);choices[0].progress_ready=readiness.ready
 		choices[0].queue_redraw()
-	if context.get("kind","")=="lineage":family_picker.sync()
+	if context.get("kind","") in ["lineage","merge_family"]:family_picker.sync()
 	_layout_mobile()
 	if investment_picker.visible:investment_picker.sync()
-	if not context.is_empty() and context.kind!="lineage":
+	if context.get("kind","")=="behavior" and not choices.is_empty():
+		choices[0].caption=game.world.Behavior.summary(game.world.player)
+		choices[0].description=choices[0].caption
+		choices[0].queue_redraw()
+	if not context.is_empty() and context.kind not in ["lineage","merge_family"]:
 		if mobile():
 			for choice in choices:
 				choice.text_scale=s*.85
@@ -551,7 +595,7 @@ func sync(_dt: float) -> void:
 func _layout_mobile() -> void:
 	var prior_height:=mobile_menu_height
 	var s:=ui_scale();var size:=get_viewport_rect().size
-	mobile_tray.visible=mobile() and not context.is_empty() and context.kind!="lineage" and not choices.is_empty()
+	mobile_tray.visible=mobile() and not context.is_empty() and context.kind not in ["lineage","merge_family"] and not choices.is_empty()
 	mobile_resources.visible=not game.world.player.dead and ((mobile() and game.touch_controls_available()) or (not mobile() and game.build_open))
 	mobile_menu_height=investment_picker.size.y+16*s if mobile() and investment_picker.visible else 0.0
 	if mobile() and family_picker.visible:mobile_menu_height=family_picker.position.y+family_picker.size.y+8*s
@@ -620,7 +664,7 @@ func activate_keyboard() -> bool:
 
 func _draw() -> void:
 	if game == null or game.settings_panel.visible: return
-	if not context.is_empty() and context.kind not in ["investment","lineage"] and not mobile():
+	if not context.is_empty() and context.kind not in ["investment","lineage","merge_family"] and not mobile():
 		draw_line(screen_at(context),menu_center,Color(0.5,0.91,0.85,0.35),1.5,true)
 		for choice in choices:
 			var origin := menu_center

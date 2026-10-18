@@ -55,4 +55,4 @@ static func escape(away: Vector2, families: Dictionary, cell, now: float) -> Dic
 	return {"direction":(away.normalized()*2-delta.normalized()).normalized(),"expires_at":nearest.expires_at}
 
 static func summary(cell) -> String:
-	return "Current intention: "+cell.state.capitalize()+".\n"+DESCRIPTION
+	return cell.state.capitalize()

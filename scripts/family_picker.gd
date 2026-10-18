@@ -10,6 +10,11 @@ var close_button:=Button.new()
 var summary:=Label.new()
 var scroll:=ScrollContainer.new()
 var grid:=GridContainer.new()
+var up:=Button.new()
+var down:=Button.new()
+var merge_button:=Button.new()
+var repeat_direction:=0
+var repeat_after:=0.0
 var empty:=Label.new()
 var layout_key: Array=[]
 
@@ -20,14 +25,40 @@ func initialize(ui) -> void:
  title.text="Family";title.size_flags_horizontal=Control.SIZE_EXPAND_FILL
  close_button.text="×";close_button.tooltip_text="Close family"
  close_button.pressed.connect(ui.close_context)
+ box.add_child(merge_button);merge_button.text="Merge a relative into this cell"
+ merge_button.pressed.connect(func():owner_ui.open_context({"kind":"merge_family"}))
  box.add_child(summary);summary.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+ box.add_child(up);up.icon=preload("res://assets/ui/family-up.svg");up.tooltip_text="Previous family row"
  box.add_child(scroll);scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;scroll.follow_focus=true
  scroll.add_child(grid);grid.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+ box.add_child(down);down.icon=preload("res://assets/ui/family-down.svg");down.tooltip_text="Next family row"
+ for pair in [[up,-1],[down,1]]:
+  pair[0].button_down.connect(_start_scroll.bind(pair[1]))
+  pair[0].button_up.connect(func():repeat_direction=0)
  box.add_child(empty);empty.text="No living relatives."
  hide()
 
+func _start_scroll(direction: int) -> void:
+ repeat_direction=direction;repeat_after=.3;_scroll_row(direction)
+
+func _scroll_row(direction: int) -> void:
+ scroll.scroll_vertical+=roundi(direction*(80+6)*minf(owner_ui.ui_scale(),minf(owner_ui.get_viewport_rect().size.x/220.0,owner_ui.get_viewport_rect().size.y/170.0)))
+
+func _process(dt: float) -> void:
+ if not is_visible_in_tree():repeat_direction=0;return
+ var bar=scroll.get_v_scroll_bar()
+ var overflow: bool=bar.max_value>bar.page+.5
+ up.visible=overflow;down.visible=overflow
+ up.disabled=scroll.scroll_vertical<=0
+ down.disabled=scroll.scroll_vertical>=bar.max_value-bar.page-.5
+ if repeat_direction!=0:
+  repeat_after-=dt
+  if repeat_after<=0:_scroll_row(repeat_direction);repeat_after=.12
+
 func sync() -> void:
  var viewport: Vector2=owner_ui.get_viewport_rect().size
+ title.text="Choose a relative to merge" if owner_ui.context.get("kind","")=="merge_family" else "Family"
+ merge_button.visible=owner_ui.context.get("kind","")!="merge_family"
  var s: float=minf(owner_ui.ui_scale(),minf(viewport.x/220.0,viewport.y/170.0))
  var count: int=owner_ui.choices.size()
  var tile: float=80*s
@@ -53,6 +84,7 @@ func sync() -> void:
   title.add_theme_font_size_override("font_size",roundi(20*s))
   summary.add_theme_font_size_override("font_size",roundi(13*s))
   close_button.custom_minimum_size=Vector2.ONE*32*s
+  up.custom_minimum_size.y=30*s;down.custom_minimum_size.y=30*s
   close_button.add_theme_font_size_override("font_size",roundi(22*s))
   empty.add_theme_font_size_override("font_size",roundi(14*s))
   grid.columns=columns
@@ -68,7 +100,7 @@ func sync() -> void:
    choice.focus_neighbor_bottom=owner_ui.choices[(i+columns)%count].get_path()
   var width: float=minf(viewport.x-2*padding,maxf(220*s,columns*(tile+gap)-gap+2*padding+16*s))
   summary.custom_minimum_size.x=width-2*padding
-  var header: float=76*s # Close/title row, summary and spacing; close stays outside scrolling.
+  var header: float=224*s # Fixed title, merge, summary and arrow rows, including themed button margins.
   var height: float=minf(viewport.y-top-padding,header+2*padding+maxf(tile,rows*(tile+gap)-gap))
   scroll.custom_minimum_size.y=maxf(1,height-header-2*padding)
   size=Vector2(width,height);reset_size()

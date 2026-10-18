@@ -5,9 +5,9 @@ static func state(sim,cell,organ: Dictionary) -> Dictionary:
  var kind: String=organ.kind
  if organ.hp<=0:result.label="Damaged";return result
  if kind=="photosynthesis":
-  if cell.carbon<=.0000001:result.label="Waiting for carbon";return result
+  if cell.carbon<=.0000001:result.label="Waiting for CO2";return result
   var site: Vector2=cell.local_point(organ.a)*.72
-  if not cell.chemistry.vacuoles.any(func(v):return v.get("species","")=="carbon" and v.p.distance_squared_to(site)<=24*24):result.label="Waiting for carbon to reach the leaf";return result
+  if not cell.chemistry.vacuoles.any(func(v):return v.get("species","")=="carbon" and v.p.distance_squared_to(site)<=24*24):result.label="Waiting for CO2 to reach the leaf";return result
   if sim.light_at(cell.organ_position(organ))*cell.Genes.factor(organ,"sun" if sim.light_at(cell.organ_position(organ))>=.5 else "shade")<cell.Chemistry.MIN_LEAF_LIGHT:result.label="Collecting diffuse light";return result
   result.label="Collecting light";result.progress=clampf(float(organ.get("photo_elapsed",0))/.25,0,1)
   return result
@@ -32,7 +32,11 @@ static func state(sim,cell,organ: Dictionary) -> Dictionary:
   if kind=="counterattack":
    var cue: Dictionary=organ.get("counter_report",{})
    if cue.is_empty() or cue.expires_at<=sim.time:result.label="Waiting for an armed cell’s chemical signal";return result
-  elif cell.target_id<0 or cell.target_memory<=0:result.label="Waiting for a chemical target signal";return result
+  else:
+    var cue: Dictionary=cell.behavior.get("weapon_cue",{})
+    var receptor: Dictionary=cell.organ_by_id(int(cue.get("organ_id",-1)))
+    if not cell.organs.any(func(sensor):return sensor.hp>0 and (sensor.kind=="hunting" or (sensor.kind=="sensing" and sensor.mode in ["hunt","flee"]))):result.label="Needs a hunting receptor";return result
+    if cue.is_empty() or cue.expires_at<=sim.time or receptor.is_empty() or receptor.hp<=0:result.label="No eligible chemical target";return result
   result.label="Low ATP · 25% capacity" if capacity<1 else "Ready"
   result.progress=1
  elif kind in ["feeding","acidifying","neutralizing","regenerative","propulsion","cilia"]:

@@ -73,7 +73,7 @@ func internal_and_investment(scene) -> void:
   check(picker.body.text=="This cell" and picker.body.icon!=null and picker.family.icon==null,"Scope marker follows the selected body scope without a font glyph")
   picker.choose("inherit")
   check(not sim.investment.cells.has(sim.player.id) and picker.current()=="inherit","Inherit explicitly removes a body override")
-  check(picker.inherit.text=="Inherit" and picker.inherit.icon!=null,"Inherited mode uses the same visible vector mark")
+  check(picker.inherit.text=="Use family: Hunter" and picker.cards[0].active and picker.inherit.icon!=null,"Inherited mode uses the same visible vector mark")
   picker._scope("lineage");picker.choose("manual")
   check(sim.investment.lineages[sim.player.lineage_id()]=="manual" and not picker.inherit.visible,"Manual is explicit and family scope cannot inherit")
   scene.cell_ui.close_context()
@@ -92,7 +92,7 @@ func internal_and_investment(scene) -> void:
   check(scene.cell_ui.family_picker.summary.text.contains("generation 4") and scene.cell_ui.family_picker.summary.text.contains("%d cells ever" % lifetime),"Both platforms show generation and lifetime count after a death")
   scene.cell_ui.close_context()
   scene.cell_ui.open_context({"kind":"bud"})
-  check(scene.cell_ui.choices.size()==3 and scene.cell_ui.choices[0].caption=="Divide now" and scene.cell_ui.choices[1].caption=="Investment","Both platforms offer direct division without storing, funding or reclaiming buttons")
+  check(scene.cell_ui.choices.size()==5 and scene.cell_ui.choices[0].caption=="Divide now" and scene.cell_ui.choices[1].caption=="Investment","Both platforms offer direct division without storing, funding or reclaiming buttons")
   scene.cell_ui.close_context()
   scene._finish_build()
  scene.touch_zoom.enabled=false;scene.build_open=false

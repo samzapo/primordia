@@ -51,7 +51,7 @@ func _ready() -> void:
 	label.add_theme_color_override("font_outline_color",Color("21375d"))
 	label.add_theme_constant_override("outline_size",4)
 	add_child(label)
-	appendages.z_index = 1
+	appendages.z_index = 0 # Keep each body and all its organs in one cell-local drawing order.
 	add_child(appendages)
 	appendages.draw.connect(_draw_organs)
 	add_child(sound_waves)
@@ -193,6 +193,12 @@ func _draw() -> void:
 		draw_arc(at,4+hole.size*6,0,TAU,16,Color("fc8c90"),1.5,true)
 	if game.show_senses:
 		draw_line(Vector2.ZERO,cell.target.rotated(-cell.angle)*(cell.radius+80),Color("b5a3f4"),2,true)
+	if cell==game.world.player and game.cell_ui.context.get("kind","")=="behavior" and cell.target.length_squared()>.001 and not cell.state.contains("RESTING"):
+		var direction: Vector2=cell.target.rotated(-cell.angle).normalized()
+		var end: Vector2=direction*(cell.extent()+28)
+		draw_line(direction*cell.extent(),end,Color("fff0ac"),2,true)
+		draw_line(end,end-direction.rotated(.55)*9,Color("fff0ac"),2,true)
+		draw_line(end,end-direction.rotated(-.55)*9,Color("fff0ac"),2,true)
 
 	if game.frame_trace != null: game.frame_trace.work("cell_draw_commands",Time.get_ticks_usec()-mark)
 

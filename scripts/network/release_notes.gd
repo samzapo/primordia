@@ -285,6 +285,21 @@ const RELEASES=[
  "footer":"Your cells and their progress carry on between updates.",
  "button":"Back to the pond",
 },
+ {
+  "id":"2026-10-18-family-fusion",
+  "audience":"experimental",
+  "title":"What’s new in the pond",
+  "items":[
+  "Stronger currents carry life through the pond, while plants still soften the water around them.",
+   "New cells start with a leaf. Leaves provide more ATP, and swirling water exchanges gases with the air.",
+   "Choose when to divide, or turn on automatic division. Relatives can merge after reabsorbing the donor’s organs, combining AP and resources.",
+   "Family investment is clearer, with individual exceptions preserved and easier family scrolling.",
+   "Glands keep their attack cues while the cell seeks food or light. Specialization, mouth layering and particle information are clearer."
+  ],
+  "footer":"Your cells and their progress carry on between updates.",
+  "button":"Back to the pond",
+ }
+
 ]
 const CURRENT=RELEASES[-1]
 static func seen_index(account: Dictionary) -> int:

@@ -544,3 +544,9 @@ October17 Revision62: the quarter-capacity operating floor,12/18ATP entry/recove
 **Abstraction:** this is an open-system material source, not carbon created by a cell or a calibrated atmosphere/water-depth model. Tile size, saturation, exchange time, the minimum leaf light response, reaction-centre throughput cap, organ maintenance and ATP allocation are gameplay choices. We do not claim real photosynthesis works in total darkness. The earlier indestructible decorative plants remain scenery and do not create food. Mitochondria still redirect finite food energy with oxygen; ATP and biomass remain numerical quantities.
 
 Atmospheric exchange also proportionally degasses carbon in oversaturated water toward the same target. Actual removed material is recorded in ambient_carbon_removed and the existing respiration_loss outflow ledger. No cell stocks are debited; this prevents indefinite accumulation in converging currents.
+
+## Surface gas exchange and cell fusion — October18,2026
+
+[USGS, Dissolved oxygen: Chapter6](https://www.usgs.gov/publications/dissolved-oxygen-chapter-6) describes air–water exchange responding to undersaturation/supersaturation and the contribution of mixing, respiration and primary production. Primordia models bounded exterior CO2 plus a smaller O2 source; the local curl multiplier is an authored2D proxy for surface mixing, not a calibrated transfer law.
+
+[Millay et al., Myomaker is a membrane activator of myoblast fusion and muscle formation (2013)](https://pmc.ncbi.nlm.nih.gov/articles/PMC3739301/) experimentally demonstrates regulated membrane fusion. Same-lineage game fusion, organ reabsorption, resource/AP transfers,90% yields, cooldowns and crowd-sensitive willingness are fictional mechanics; they do not model chromosomes, ploidy or real microbial kin fusion.

@@ -862,6 +862,7 @@ func _write_metrics() -> void:
 	metrics["internal_packet_limit_per_cell"]=world.Cell.Chemistry.MAX_PACKETS
 	metrics["environment"]=world.environment.duplicate(true)
 	metrics["ambient_carbon"]={"enabled":world.ambient_carbon_enabled,"added":world.ambient_carbon_added,"removed":world.ambient_carbon_removed,"next_at":world.ambient_carbon_due,"saturation":preload("res://scripts/ambient_carbon.gd").SATURATION}
+	metrics["ambient_oxygen"]={"enabled":world.ambient_carbon_enabled,"added":world.ambient_oxygen_added,"removed":world.ambient_oxygen_removed,"saturation":.5}
 	metrics["internal_packets"]=world.cells.reduce(func(total,cell):return total+cell.chemistry.particle_count(),0)
 	metrics["resident_internal_cells"]=world.cells.filter(func(cell):return cell.chemistry.accelerator!=null).size()
 	metrics["internal_parcel_scale"]=world.Catalog.data().ecology.get("internal_parcel_scale",1)

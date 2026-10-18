@@ -738,3 +738,6 @@ both ponds/accounts/keys/feedback and return experimental to standby afterward.
 
 ### Sustainable basic cells and renewable carbon (October17,2026)
 [Revision65](REVISION_65.md) adds bounded atmospheric carbon exchange into real exterior particles everywhere, including unseen water. A healthy one-leaf basic build has a small diffuse-light recovery baseline, while larger builds pay organ maintenance and benefit from extra leaves and mitochondria. Starving cells pause reproductive investment. Preserve the existing pond and actual cells; no login/restart grants or plant food source is introduced.
+
+### Family fusion and surface exchange (October18,2026)
+[Revision66](REVISION_66.md) introduces optional division, physically local same-family merging, clearer investment inheritance, independent weapon cues, small curl-enhanced atmospheric oxygen alongside CO2, gradual gas arrival and readable controls. Stage on experimental while preserving both ponds.

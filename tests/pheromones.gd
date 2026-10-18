@@ -173,11 +173,11 @@ static func _distribution(check: Callable) -> void:
 	sim.grid.rebuild(sim.particles)
 	sim.time = 0
 	for i in 2000: sim.spawn_particle(Sim.PHEROMONE,Vector2(10,10))
-	sim.time = 5
+	sim.time = 15
 	sim._expire_pheromones()
 	var survivors: int = sim.particles.filter(func(packet):return packet.alive).size()
-	check.call(survivors > 640 and survivors < 830,"Exponential five-second mean lifetime decays independently of view and frame rate")
-	sim.time = 25
+	check.call(survivors > 640 and survivors < 830,"Exponential fifteen-second mean lifetime decays independently of view and frame rate")
+	sim.time = 75
 	sim._expire_pheromones()
 	check.call(sim.particles.filter(func(packet):return packet.alive).size() < 35,"Rapid stochastic decay bounds long-lived plume accumulation")
 

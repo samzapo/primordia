@@ -34,7 +34,7 @@ func run(owner_suite) -> void:
 	check(sim.player != original and sim.player.membrane != original.membrane,"planning clones anatomy and membrane")
 	check(sim.player.membrane.skeleton != original.membrane.skeleton,"planning clones tension network")
 	check(sim.install("neutralizing",2.0),"affordable installation accepted")
-	check(sim.player.ap == 3,"A cell’s first added organ is free")
+	check(sim.player.ap == 2,"A starter leaf makes the next added organ cost one AP")
 	sim.player.membrane.skeleton.set_tension(0,0.9)
 	sim.evolution.choose(offers[0])
 	sim.evolution.accept_challenge("stability",sim.player)
@@ -57,7 +57,7 @@ func run(owner_suite) -> void:
 	check(sim.player.brood_mass == 0 and sim.player.brood_energy == 0,"undo restores reserves")
 	sim.install("neutralizing",2.0)
 	sim.commit_build()
-	check(sim.player.count("neutralizing") == 1 and sim.player.ap == 3,"apply keeps paid anatomy")
+	check(sim.player.count("neutralizing") == 1 and sim.player.ap == 2,"apply keeps paid anatomy")
 	var before: float = sim.player.biomass
 	sim.player.ap = 0
 	check(not sim.install("poreforming",1.0) and sim.player.biomass == before,"insufficient AP is atomic")
@@ -248,7 +248,7 @@ func run(owner_suite) -> void:
 	check(secreter.biomass == secretion_mass and secreter.energy == secretion_energy,"clean water does not drain conditional secretions")
 	sim.spawn_particle(sim.WASTE,secreter.organ_position(secreter.organs[0]),Vector2.ZERO,1,999)
 	sim.spawn_particle(sim.TOXIN,secreter.organ_position(secreter.organs[1]),Vector2.ZERO,1,999)
-	sim.acidity.values.fill(0.1)
+	sim.acidity.values.fill(0.5)
 	sim._emit_and_attack(secreter,100)
 	check(is_equal_approx(secreter.biomass,secretion_mass-0.18),"waste, toxin and acid trigger three paid secretions")
 	check(is_equal_approx(secreter.energy,secretion_energy-3*Cell.SECRETION_COST),"conditional secretion pays actual ATP")

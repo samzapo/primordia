@@ -42,6 +42,16 @@ func run() -> void:
  check(absf(packets[0].amount-(6.0*17/18))<.00001 and absf(packets[1].amount-4.5)<.00001,"Resident saturation includes cold stock and relaxes each area toward saturation")
  check(absf(result.added-2.5)<.00001 and absf(result.removed-1.0/3)<.00001 and absf(result.pending[2]-3)<.00001,"Bounded GPU receipt accounts for real deposit and unmaterialized source requests separately")
  check(bridge.gpu.readbacks==1,"Supply itself does not export resident packet poses")
+ var before_phase: int=bridge.gpu.readbacks
+ var selected: int=Supply.group(0,sim.seed_value)
+ var factors:=PackedFloat32Array();factors.resize(Supply.COUNT);factors.fill(.1)
+ var oxygen_cold:=PackedFloat32Array();oxygen_cold.resize(Supply.COUNT)
+ var oxygen_result: Dictionary=bridge.gpu.carbon_supply_sync(oxygen_cold,.1,.5,selected,sim.seed_value,Sim.OXYGEN,factors)
+ check(not oxygen_result.has("error") and bridge.gpu.readbacks==before_phase,"Phase-selective oxygen exchange uses the resident numeric transaction without pose export")
+ for i in Supply.COUNT:
+  if Supply.group(i,sim.seed_value)!=selected:check(oxygen_result.pending[i]==0,"An unselected gas tile receives no source request")
+ var carbon_result: Dictionary=bridge.gpu.carbon_supply_sync(PackedFloat32Array(cold),.1,8,selected,sim.seed_value,Sim.CARBON,factors)
+ check(not carbon_result.has("error"),"Carbon and oxygen share phased exchange without changing species")
  var cell=sim.player
  cell.energy=0;cell.biomass=0
  cell.chemistry.emit("carbon",4,cell.local_point(1.2)*.72)
@@ -49,7 +59,7 @@ func run() -> void:
  check(bridge.gpu.attach_cytoplasm(cell.chemistry,cell),"Visible internal carriers use the resident GPU")
  cell.chemistry.photosynthesize(sim,cell,cell.organs[-1],.5)
  reference.chemistry.photosynthesize(sim,reference,reference.organs[-1],.5)
- check(absf(cell.energy-reference.energy)<.000001 and absf(cell.biomass-reference.biomass)<.000001 and absf(cell.chemistry.heat-reference.chemistry.heat)<.000001,"Resident and CPU photosynthesis agree on lower ATP yield, biomass and explicit heat")
+ check(absf(cell.energy-reference.energy)<.000001 and absf(cell.biomass-reference.biomass)<.000001 and absf(cell.chemistry.heat-reference.chemistry.heat)<.000001,"Resident and CPU photosynthesis agree on ATP yield, biomass and explicit heat")
  check(cell.energy>0 and cell.biomass>0,"Resident leaf recovers real resources from zero")
  cell.chemistry.ensure_cpu()
  bridge.close();await bridge.gpu.closed

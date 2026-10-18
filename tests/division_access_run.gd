@@ -94,7 +94,7 @@ func ui() -> void:
 	game.world.evolution.sandbox=true;game.build_open=true
 	for mobile in [false,true]:
 		game.touch_zoom.enabled=mobile;game.cell_ui.open_context({"kind":"bud"})
-		check(game.cell_ui.choices.map(func(button):return button.symbol)==["Divide","Invest","Family"],"Desktop and mobile bud expose direct division, Investment and Family")
+		check(game.cell_ui.choices.map(func(button):return button.symbol)==["Divide","Invest","Family","Auto: off","Family auto"],"Desktop and mobile bud expose direct division, Investment and Family")
 		game.cell_ui.choices[1].pressed.emit()
 		check(game.cell_ui.investment_picker.visible and game.cell_ui.investment_picker.cards.size()==3,"Investment opens all three illustrated strategies from the bud")
 		game.cell_ui.open_context({"kind":"nucleus"})

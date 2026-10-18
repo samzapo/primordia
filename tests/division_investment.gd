@@ -25,10 +25,10 @@ static func run(check: Callable) -> void:
  parent.organs[1].mutation="shade_leaf"
  parent.organs[1]["photo_elapsed"]=.2
  var quote: Dictionary=sim.offspring_quote(parent)
- check.call(quote.total_material==42 and quote.material==12 and quote.body_transfer==30,"Birth quote funds only basic body and biomass; its inherent oral groove is part of the body")
+ check.call(quote.total_material==54 and quote.material==24 and quote.body_transfer==30,"Birth quote funds only basic body and biomass; its inherent oral groove is part of the body")
  var before: PackedByteArray=var_to_bytes(Codec.new().capture(parent))
  var proposal=sim.make_offspring(parent,quote)
- check.call(proposal.organs.size()==1 and proposal.count("feeding")==1 and proposal.next_organ_id==1,"A new daughter has one fresh inherent oral groove, no copied purchased organs")
+ check.call(proposal.organs.size()==2 and proposal.count("feeding")==1 and proposal.count("photosynthesis")==1 and proposal.next_organ_id==2,"A new daughter has one fresh inherent oral groove, no copied purchased organs")
  check.call(proposal.organs[0].get("mutation","")=="" and proposal.chemistry.particle_count()==0 and proposal.lost_organs.is_empty(),"Daughters do not duplicate adaptations, internal contents or repair history")
  check.call(var_to_bytes(Codec.new().capture(parent))==before,"Preparing a daughter never edits the parent's anatomy")
  check.call(proposal.membrane.skeleton!=parent.membrane.skeleton,"The daughter owns its own sampled skeleton")
@@ -43,12 +43,12 @@ static func run(check: Callable) -> void:
   check.call(sim.divide_lineage(false,false),"Funded living division commits")
   var child=sim.cells[-1]
   check.call(sim.Investment.strategy(sim,child)==role and sim.investment.cells[child.id]==role,"Daughter inherits the effective body strategy, including a family override")
-  check.call(child.organs.size()==1 and child.count("photosynthesis")==0 and parent.count("photosynthesis")==1,"Division keeps parent organs and lets the daughter build its own")
+  check.call(child.organs.size()==2 and child.count("photosynthesis")==1 and parent.count("photosynthesis")==1,"Division keeps parent organs and lets the daughter build its own")
   check.call(absf(material(sim)-mass)<.00001 and absf(parent.energy+parent.brood_energy+child.energy-(energy-20))<.00001,"Basic daughter conserves paid tissue and the existing division ATP transfer")
   check.call(parent.ap==points+1 and child.ap==1,"Committed division awards one AP each to parent and daughter")
   var restored=Codec.new().restore(Codec.new().capture(sim))
   var saved=restored.cells[-1]
-  check.call(restored.Investment.strategy(restored,saved)==role and saved.organs.size()==1,"Daughter strategy and basic anatomy survive checkpoint recovery")
+  check.call(restored.Investment.strategy(restored,saved)==role and saved.organs.size()==2,"Daughter strategy and basic anatomy survive checkpoint recovery")
  # Manual remains Manual, without consuming a strategy RNG draw.
  var observed: Dictionary={}
  for seed_value in range(60):

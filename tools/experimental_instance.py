@@ -150,7 +150,7 @@ def main():
         raise RuntimeError("Native Dictionary lifetime fixture failed")
 
     call(str(godot),"--headless","--path",str(candidate),"--editor","--import","--quit",env=environment)
-    for script,marker in [("feedback_pass_run","FEEDBACK PASS"),("feedback_latest_run","FEEDBACK LATEST"),("normal_output_run","NORMAL OUTPUT"),("division_access_run","DIVISION ACCESS")]:
+    for script,marker in [("feedback_pass_run","FEEDBACK PASS"),("feedback_latest_run","FEEDBACK LATEST"),("feedback_pass_three_run","FEEDBACK PASS THREE"),("normal_output_run","NORMAL OUTPUT"),("division_access_run","DIVISION ACCESS")]:
         path=root/(script+"-fixture.log")
         with path.open("w") as output:
             call("timeout","90s",str(godot),"--headless","--path",str(candidate),"--script","tests/"+script+".gd","--","--particle-backend=cpu",env=environment,stdout=output,stderr=subprocess.STDOUT)
@@ -171,6 +171,7 @@ def main():
     # Focused feature acceptance on the real target; no FPS campaign or live reports.
     for script,flags,marker in [
         ("resident_admission_gpu",[],"RESIDENT ADMISSION"),
+        ("ambient_carbon_gpu",[],"AMBIENT_CARBON_GPU"),
         ("lineage_start_network",["--gpu"],"LINEAGE START NETWORK"),
         ("feedback_pass_gpu",[],"FEEDBACK PASS GPU"),
         ("division_access_gpu",[],"DIVISION ACCESS GPU"),
@@ -191,7 +192,7 @@ def main():
         finally:
             # Retain the real assertion on failure; call() otherwise raises first.
             report=path.read_text();print(report,flush=True)
-        if re.search(r"SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:|returned to CPU|llvmpipe|lavapipe|swiftshader",report,re.M|re.I) or not re.search(marker+r": [0-9]+ assertions, 0 failures",report):
+        if re.search(r"SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:|returned to CPU|llvmpipe|lavapipe|swiftshader",report,re.M|re.I) or not re.search(marker+r": [0-9]+ (?:assertions|checks), 0 failures",report):
             raise RuntimeError("Experimental feature fixture failed: "+script)
     guard(stable,baseline)
     state=root/"state";state.mkdir(mode=0o700,exist_ok=True)

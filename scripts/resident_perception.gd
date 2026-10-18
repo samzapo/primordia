@@ -116,7 +116,7 @@ static func requests(cells: Array, dt: float=0, now: float=0) -> Array:
 		var local_dt: float=dt*cell.activity
 		if cell.dead or cell.activity<=0 or cell.sense_clock>local_dt:continue
 		for organ in cell.organs:
-			if organ.hp<=0 or organ.kind not in ["hunting","sensing","counterattack"]:continue
+			if organ.hp<=0 or organ.kind not in ["feeding","hunting","sensing","counterattack"]:continue
 			var reach: float=(120 if organ.kind=="hunting" else 90)*sqrt(organ.scale)*(1-organ.blocked*.65)*Genes.factor(organ,"sense")
 			result.append({"at":cell.organ_position(organ),"reach":reach,"id":cell.id,"lineage":cell.lineage_id(),"mass":cell.organic_mass(),"mode":"family","target_id":-1,"incumbent":false,"organ_id":organ.id,"center":cell.position,"inner":70.0})
 			break

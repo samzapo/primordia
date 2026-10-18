@@ -44,7 +44,7 @@
     {
       "id": 5,
       "key": "carbon",
-      "name": "Carbon",
+      "name": "Dissolved carbon dioxide",
       "radius": 3,
       "decay": 5e-05,
       "color": "f4a755"
@@ -282,7 +282,7 @@
       "quantum": 0.4
     },
     "carbon": {
-      "name": "Dissolved carbon",
+      "name": "Dissolved carbon dioxide",
       "material": 1,
       "potential": 0,
       "color": "f4a755",

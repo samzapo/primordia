@@ -16,6 +16,8 @@ var external_offscreen := false
 var perception_modes_enabled := false # Explicit old-reference fixtures retain coupled stepping.
 var interoceptive_cells: Dictionary = {}
 var family_ledgers: Array = []
+const FamilyMerging=preload("res://scripts/family_merging.gd")
+var merge_step_at:=0.0
 var automatic_reproduction := true
 const MAX_LIVE_CELLS := 64
 const REPRODUCTION_RATE := 10.0
@@ -95,7 +97,7 @@ const OXYGEN := 1
 const WASTE := 2
 const PHEROMONE := 3
 const PHEROMONE_RATE := 8.0
-const PHEROMONE_DECAY := 0.2 # Exponential lifetime: mean 5 s, half-life 3.47 s.
+const PHEROMONE_DECAY := 1.0/15.0 # New reports: mean 15 s; saved absolute expiries remain unchanged.
 const PHEROMONE_DIFFUSION := 120.0 # World units squared / second (material: 6).
 const TOXIN := 4
 const CARBON := 5
@@ -155,6 +157,10 @@ var external_input := 0.0
 var ambient_carbon_enabled:=false # Normal Pond/authority enables it; closed fixtures opt in.
 var ambient_carbon_due:=5.0
 var ambient_carbon_at:=0.0
+var ambient_oxygen_added:=0.0
+var ambient_oxygen_removed:=0.0
+var ambient_carbon_phase:=0
+var ambient_carbon_times:=PackedFloat64Array()
 var ambient_carbon_added:=0.0
 var ambient_carbon_removed:=0.0
 var respiration_loss := 0.0
@@ -284,6 +290,7 @@ func _init(seed_number: int = 20261004, profile: int = 0, populate: bool = true)
 	player.update_geometry()
 	player.membrane = Cell.Membrane.new(player.radius,absi(seed_value*1000003))
 	player.add_organ("feeding",0,"graze",false)
+	player.add_organ("photosynthesis",PI,"graze",false)
 	cells.append(player)
 	# Whole habitats are stored. Only organisms inside the microscope advance.
 	for i in 18:
@@ -321,8 +328,7 @@ func _make_cell(p: Vector2, role: String):
 			cell.membrane = Cell.Membrane.new(cell.radius,absi(seed_value*1000003+cell.id*9176))
 			for a in [0.6,1.9,2.6,3.7,5.65]: cell.add_organ("protection",a,"graze",false)
 			cell.add_organ("regenerative",4.4,"graze",false)
-	else:
-		cell.add_organ("photosynthesis",0,"graze",false)
+	cell.add_organ("photosynthesis",0,"graze",false)
 	cell.update_geometry()
 	cell.previous_angle = cell.angle
 	if stagger_sensing: cell.sense_clock = (cell.id%9)/60.0
@@ -1068,12 +1074,12 @@ static func binding_threshold(a: int, b: int, acid: float) -> float:
 	if (ENZYME in [a,b] and WASTE in [a,b]) or (a==NUTRIENT and b==NUTRIENT):
 		# A modeled acid hydrolase has an acidic optimum. This is an affinity
 		# abstraction, not a claim that pH literally widens a molecular patch.
-		return 0.5+0.46*pow(clampf(absf(acid-0.4)/0.4,0,1),2)
+		return 0.5+0.46*pow(clampf(absf(acid-0.25)/0.25,0,1),2)
 	return 0.5
 
 func _acid_stress(cell, dt: float) -> void:
 	var exposure := acidity.sample(cell.position)
-	var demand: float = maxf(0,exposure-0.15)*dt*5*cell.growth_scale()
+	var demand: float = maxf(0,exposure-0.4)*dt*5*cell.growth_scale()
 	var spent: float = cell.spend_energy(demand,{},"acid stress")
 	var overload := maxf(0,exposure-0.5)*0.8+(demand-spent)*0.15/maxf(dt,0.00001)
 	cell.acid_stress = clampf(cell.acid_stress+(overload-0.12)*dt,0,1)
@@ -1127,7 +1133,7 @@ func _react_pair(a: Dictionary, b: Dictionary, acid: float = 0.0) -> bool:
 		# Normalize weights before float-vector arithmetic: tiny photosynthetic
 		# remainders can be below float32 range while their ratio is well-defined.
 		a.v = a.v.lerp(b.v,b.amount/total)
-		a.capacity = Catalog.nutrient_capacity(a.amount,float(a.get("capacity",a.amount)),b.amount,float(b.get("capacity",b.amount))) if a.kind==NUTRIENT else float(a.get("capacity",0))+float(b.get("capacity",0))
+		a.capacity = Catalog.nutrient_capacity(a.amount,float(a.get("capacity",a.amount)),b.amount,float(b.get("capacity",b.amount)),acid) if a.kind==NUTRIENT else float(a.get("capacity",0))+float(b.get("capacity",0))
 		a.amount = total
 		b.alive = false
 		chemistry_events.combine += 1
@@ -1285,6 +1291,7 @@ func _sense(cell, dt: float, received_by_organ: Dictionary = {}) -> void:
 	if cell.sense_clock <= 0:
 		cell.sense_clock = 0.15
 		cell.sensed = false
+		cell.behavior.erase("weapon_cue")
 		var best: Dictionary = {}
 		var best_score := -1.0
 		var best_priority: int=-1
@@ -1294,6 +1301,7 @@ func _sense(cell, dt: float, received_by_organ: Dictionary = {}) -> void:
 			if received.has("families"):prepared_family=true
 			for id in received.get("families",{}):families[id]=received.families[id]
 		if not prepared_family:families=_family_reports(cell)
+		cell.behavior["family_cues"]=families.duplicate(true)
 		for organ in cell.organs:
 			if organ.kind not in ["feeding","sensing","hunting","photosynthesis"] or organ.hp <= 0: continue
 			var mode: String = "hunt" if organ.kind == "hunting" else "light" if organ.kind == "photosynthesis" else organ.mode
@@ -1361,6 +1369,10 @@ func _sense(cell, dt: float, received_by_organ: Dictionary = {}) -> void:
 				var score: float = (100.0 if mode == "flee" else 2.0)+1.0/(1+age)+0.1/(1+detected.distance)
 				if mode == "flee" and report.hostile: score += 1.0
 				if report.id == cell.target_id: score += 0.05
+				if mode=="hunt" or (mode=="flee" and report.hostile):
+					var held: Dictionary=cell.behavior.get("weapon_cue",{})
+					if held.is_empty() or held.expires_at<=time or score>float(held.score):
+						cell.behavior["weapon_cue"]={"at":report.at,"id":report.id,"organ_id":organ.id,"expires_at":detected.expires_at,"score":score,"lineage":report.lineage}
 				var weighted: float = _candidate_score(cell,score*strength,organ.id,mode,report.id)
 				if _better_intention(cell,mode,weighted,best_priority,best_score):
 					best_priority=Behavior.priority(cell,mode)
@@ -1424,6 +1436,12 @@ func _sense(cell, dt: float, received_by_organ: Dictionary = {}) -> void:
 		var fallback: Dictionary=Behavior.fallback(cell,seed_value)
 		cell.target=fallback.direction;cell.facing=cell.target;cell.threat=Vector2.ZERO
 		cell.target_id=-1;cell.target_mouth=0;cell.state=fallback.state
+	var merge_direction: Vector2=FamilyMerging.direction(self,cell)
+	if merge_direction.length_squared()>.001 and cell.target_mode not in ["acid","flee","evade"]:
+		for motor in cell.organs:
+			if motor.hp<=0 or motor.kind not in ["propulsion","cilia","photosynthesis"]:continue
+			cell.target=merge_direction;cell.facing=merge_direction;cell.drive_active=true
+			cell.target_organ_id=motor.id;cell.state="SEEKING FAMILY TO MERGE";break
 	if cell.count("propulsion")+cell.count("cilia")==0 and not (cell.drive_active and organ.get("kind","") in ["hunting","photosynthesis"]):
 		cell.state="DRIFTING · "+cell.state
 
@@ -1433,7 +1451,7 @@ func _better_intention(cell,mode: String,score: float,held_priority: int,held_sc
 
 func _family_reports(cell) -> Dictionary:
 	for organ in cell.organs:
-		if organ.hp<=0 or organ.kind not in ["hunting","sensing","counterattack"]:continue
+		if organ.hp<=0 or organ.kind not in ["feeding","hunting","sensing","counterattack"]:continue
 		var at: Vector2=cell.organ_position(organ)
 		var reach: float=(120 if organ.kind=="hunting" else 90)*sqrt(organ.scale)*(1-organ.blocked*.65)*Genes.factor(organ,"sense")
 		var reports: Dictionary={}
@@ -1567,7 +1585,7 @@ func _metabolize(cell, dt: float) -> void:
 		cell.starvation_seconds=maxf(0,cell.starvation_seconds-dt*4)
 
 func _secretion_needed(cell, organ: Dictionary, kind: int) -> bool:
-	if kind == BUFFER: return acidity.sample(cell.organ_position(organ)) > 0.02 or cell.acid_stress > 0.03
+	if kind == BUFFER: return acidity.sample(cell.organ_position(organ)) > 0.4 or cell.acid_stress > 0.03
 	if kind not in [ENZYME,ANTITOXIN]: return true
 	if resident != null: return resident.needed.get(Vector2i(cell.id,organ.id),false)
 	var wanted := WASTE if kind == ENZYME else TOXIN
@@ -1626,7 +1644,11 @@ func _emit_and_attack(cell, dt: float) -> void:
 			var detected: Dictionary=organ.get("counter_report",{})
 			if detected.is_empty() or detected.expires_at<=time or not detected.report.hostile:continue
 			aim=Medium.offset(cell.organ_position(organ),detected.report.at).normalized()
-		elif cell.target_id<0 or cell.target_memory<=0:continue
+		else:
+			var cue: Dictionary=cell.behavior.get("weapon_cue",{})
+			var receptor: Dictionary=cell.organ_by_id(int(cue.get("organ_id",-1)))
+			if cue.is_empty() or cue.expires_at<=time or receptor.is_empty() or receptor.hp<=0 or cue.lineage==cell.lineage_id():continue
+			aim=Medium.offset(cell.organ_position(organ),cue.at).normalized()
 		if organ.burst_clock>0 or aim.length_squared()<.01:continue
 		if cell.biomass < 0.18*burst: continue
 		cell.spend_energy(2*burst*Genes.inefficiency(organ),organ,"combat")
@@ -1995,8 +2017,9 @@ func offspring_quote(subject = null) -> Dictionary:
 	var parent=player if subject==null else subject
 	# A new body has only its inherent oral groove, not the parent's paid build.
 	var body := 30.0
+	var leaf_material: float=Cell.COST[Cell.KINDS.find("photosynthesis")]
 	var inherited_body := minf(body,maxf(0,parent.body-30))
-	return {"body":body,"body_transfer":inherited_body,"biomass":12.0,"material":body+12-inherited_body,"total_material":body+12,"energy":60.0,"oxygen":0.0}
+	return {"body":body,"body_transfer":inherited_body,"biomass":12.0,"material":body+12+leaf_material-inherited_body,"total_material":body+12+leaf_material,"energy":60.0,"oxygen":0.0}
 
 func safe_birth_position(at: Vector2, radius: float) -> bool:
 	if not habitat_geometry.clear_at(at,radius): return false
@@ -2017,6 +2040,8 @@ func make_offspring(parent, quote: Dictionary):
 	child.oxygen = 0
 	child.energy = 40
 	child.add_organ("feeding",0,"graze",false)
+	child.add_organ("photosynthesis",PI,"graze",false)
+	child.automatic_division=parent.automatic_division
 	child.update_geometry()
 	child.membrane = Cell.Membrane.new(child.radius,child.id)
 	child.update_geometry()
@@ -2144,11 +2169,12 @@ func _family_ledger(cell):
 
 func _step_reproduction() -> void:
 	if remote_client:return
+	FamilyMerging.step(self)
 	lineage.discard_stored(self)
 	for ledger in family_ledgers:ledger.discard_stored(self)
 	if not automatic_reproduction:return
 	for cell in cells.duplicate():
-		if cell.dead or cell.health<=0 or cell.brood_mass<=0 or cell.brood_energy<60 or time<cell.reproduction_retry_at:continue
+		if cell.dead or cell.health<=0 or not cell.automatic_division or cell.brood_mass<=0 or cell.brood_energy<60 or time<cell.reproduction_retry_at:continue
 		if cell==player and (build_original!=null or (not server_mode and evolution.terminal())):continue
 		var quote:=offspring_quote(cell)
 		if cell.brood_mass+.000001<quote.material:continue

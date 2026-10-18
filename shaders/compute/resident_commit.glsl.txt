@@ -61,7 +61,7 @@ void main(){
   }
   else if(uv.w==0.&&vv.w==4.){uv.w=2.;atomicAdd(stats[9],1u);event=true;}
   else if(uv.w==vv.w&&(uv.w==0.||uv.w==1.||uv.w==2.||uv.w==5.)&&um.y+vm.y<=(uv.w==0.?nutrient_merge_limit:/*CATALOG_MERGE_LIMIT*/)&&um.y+vm.y>0.) {
-   float total=um.y+vm.y;uv.xy=mix(uv.xy,vv.xy,vm.y/total);um.z=uv.w==0.?nutrient_capacity(um.y,um.z,vm.y,vm.z):um.z+vm.z;um.y=total;vv.w=-1.;vm.y=0.;atomicAdd(stats[10],1u);event=true;
+   float total=um.y+vm.y;uv.xy=mix(uv.xy,vv.xy,vm.y/total);um.z=uv.w==0.?nutrient_capacity(um.y,um.z,vm.y,vm.z,acid):um.z+vm.z;um.y=total;vv.w=-1.;vm.y=0.;atomicAdd(stats[10],1u);event=true;
   }
 
  if(event){

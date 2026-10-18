@@ -276,7 +276,7 @@ func _connect(manual: bool=true) -> void:
 		return
 	if socket.get_ready_state()!=WebSocketPeer.STATE_CLOSED: socket.close(-1)
 	socket=WebSocketPeer.new();socket.inbound_buffer_size=Protocol.MAX_FRAME;socket.outbound_buffer_size=65536;socket.max_queued_packets=8
-	hello_sent=false;connected=false;connecting=true;attempted=true;retry_enabled=true;reconnect_due=3;inflight.clear();commands.clear()
+	hello_sent=false;connected=false;connecting=true;attempted=true;retry_enabled=true;reconnect_due=3;inflight.clear();commands.clear();cell_ui.pending_mutation.clear()
 	view_announced=false;view_clock=0;keepalive_clock=0;received_usec=0
 	update_popup.close();pending_release_updates=[]
 	playback.reset();playback_domain="";playback_after_tick=-1;user_paused=false;paused_snapshot={};touch_zoom.cancel();camera_initialized=false
@@ -294,7 +294,7 @@ func _connect(manual: bool=true) -> void:
 func _connection_closed(code: int,reason: String) -> void:
 	update_popup.close();pending_release_updates=[];player_help.close()
 	playback.reset();playback_domain="";playback_after_tick=-1
-	connecting=false;connected=false;loading_world=false;commands.clear();inflight.clear();connection_stage="disconnected"
+	connecting=false;connected=false;loading_world=false;commands.clear();inflight.clear();cell_ui.pending_mutation.clear();connection_stage="disconnected"
 	if code==1008:
 		retry_enabled=false
 		var explanation:="The server refused this connection. Check your access key and try again."
@@ -344,6 +344,7 @@ func _poll_network() -> void:
 					if int(message.sequence)==int(inflight.get("sequence",-2)):
 						edit_revision=message.get("edit",edit_revision)
 						command_sequence=message.get("server_sequence",message.sequence)
+						cell_ui.command_result(inflight,message)
 						inflight.clear()
 						_message(message.message)
 						if cell_ui.pathways.visible: cell_ui.pathways._rebuild()
@@ -518,7 +519,7 @@ func _debug_population_lines() -> String:
 
 static func population_text(server_census: Dictionary,local_count: int) -> String:
 	if server_census.is_empty():return "\nCamera region: %d particles\nHabitat total: waiting for server" % local_count
-	return "\nCamera region: %d particles\nHabitat total: %d living cells / %d particles\nExterior: %d · Inside cells: %d\nGPU nearby: %d · Offscreen: %d · Queued: %d" % [server_census.get("camera_particles",local_count),server_census.get("living_cells",0),server_census.get("total",server_census.get("external",0)),server_census.get("external",0),server_census.get("internal",0),server_census.get("gpu",0),server_census.get("cold",0),server_census.get("pending",0)]
+	return "\nCamera region: %d particles\nHabitat total: %d living cells / %d particles\nExterior: %d · Inside cells: %d\nGPU resident: %d · Offscreen: %d · Queued: %d" % [server_census.get("camera_particles",local_count),server_census.get("living_cells",0),server_census.get("total",server_census.get("external",0)),server_census.get("external",0),server_census.get("internal",0),server_census.get("gpu",0),server_census.get("cold",0),server_census.get("pending",0)]
 
 func _copy_cell(incoming):
 	var cell=cells_by_id.get(incoming.id)

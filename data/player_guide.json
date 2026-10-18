@@ -135,6 +135,11 @@
         "title": "Pause, resume and music",
         "text": "Tap Pause for the menu and Resume to return to the live view. Tap Enable music when shown, then Music to mute or resume; the slider changes volume.",
         "sources": []
+      },
+      {
+        "id": "family_tools",
+        "title": "Family and growth",
+        "text": "Tap Family to switch relatives or choose a relative to merge into this cell. Use the up/down arrows to scroll long families. Open the division bud for Divide and automatic-division controls. Investment shows all three strategies and whether this cell uses Family or an individual setting."
       }
     ],
     "desktop": [
@@ -185,6 +190,11 @@
         "title": "Pause, settings and display",
         "text": "P pauses or resumes your view. M opens or closes settings. F11 toggles fullscreen. S toggles sensed signals; F3 toggles the information overlay. Music and resource controls are in the cell and Pause menu.",
         "sources": []
+      },
+      {
+        "id": "family_tools",
+        "title": "Family and growth",
+        "text": "Click Family to switch relatives or choose a relative to merge into this cell. Use the up/down arrows to scroll long families. Open the division bud for Divide and automatic-division controls. Investment shows all three strategies and whether this cell uses Family or an individual setting."
       }
     ]
   },
@@ -222,7 +232,7 @@
         {
           "id": "photosynthesis",
           "title": "Carbon + light → food, biomass and oxygen",
-          "text": "Leaves use dissolved carbon and light to make food, biomass, oxygen and ATP. Air slowly replenishes carbon throughout the pond, with excess carbon returning to the air near a low local saturation. One healthy leaf can sustain a basic cell even in dim water; larger active builds need more leaves and efficient respiration. Sun and Shade still favor different light conditions. Most new food stays inside, with a little released into the pond. Attacks and damaging acid can still kill a cell.",
+          "text": "Leaves use dissolved CO2 and light to make food, biomass, oxygen and ATP. Air slowly replenishes carbon throughout the pond, with excess carbon returning to the air near a low local saturation. One healthy leaf can sustain a basic cell even in dim water; larger active builds need more leaves and efficient respiration. Sun and Shade still favor different light conditions. Most new food stays inside, with a little released into the pond. Attacks and damaging acid can still kill a cell.",
           "sources": [
             {
               "title": "Oxygen production in photosynthesis",
@@ -641,7 +651,7 @@
         {
           "id": "division",
           "title": "Reproduction and AP",
-          "text": "Surplus biomass and ATP automatically grow a daughter inside the cell. A funded cell divides when there is clear water and the pond is below its population limit; families are not limited to four cells. The bud explains what is missing. Each committed division gives the parent 1 AP and the daughter 1 AP; each cell’s first added organelle costs 0 AP, its second 1 AP, its third 2 AP, and so on. The oral groove does not count. Reabsorbing any added organelle returns the current build tier: four added organs return 3 AP, three return 2, and one returns 0. The oral groove does not count. Selling lowers the next price; restoring an absent organ uses the next price. AP is a game resource. Daughters start with a basic oral groove and rebuild their own organs. They inherit the parent’s investment choice; Manual stays Manual. AP is stored separately by each cell. Switching family members shows that cell’s own balance.",
+          "text": "Cells prepare division using surplus biomass and ATP. New cells have an oral groove and one ordinary leaf, paid for by the division's material budget. Divide when the ring is full, or enable automatic division for a cell or the family. Automatic division starts off. A committed division gives 1 AP to the parent and 1 AP to the daughter. A full pond waits for room; merging can free space. These costs and AP awards are game rules.",
           "sources": [
             {
               "title": "Cell division",
@@ -706,7 +716,7 @@
         {
           "id": "npc_growth",
           "title": "Other cells develop too",
-          "text": "Every cell defaults to Manual. Opt into Hunter, Producer or Grazer through Investment. Unattended cells use their own AP to build complementary organs or reabsorb unsuitable and excess organs while retaining essential food and energy support. Automatic buying and reabsorption share a one-minute cooldown per cell. Daughters inherit the chosen strategy, including Manual. Your selected cell stays manual. These are game rules.",
+          "text": "Every cell defaults to Manual investment. Choose Hunter, Producer or Grazer for unattended cells; each uses its own AP and can make one purchase or Reabsorb action per minute. Family is the default, while individual cell settings stay separate. Use family returns a cell to that default. Daughters follow Family when their parent does, or keep a parent's individual exception. Your selected cell does not spend AP automatically.",
           "sources": []
         }
       ]
@@ -718,7 +728,7 @@
         {
           "id": "currents",
           "title": "Currents and plants",
-          "text": "Swimming and feeding disturb the water, which carries chemical parcels. Plants damp flow; cells meet plant branches while chemistry can pass through. This is a stylized fluid world, not a calibrated microscopic-water model.",
+          "text": "Broad currents carry chemical parcels through the pond. Swimming and feeding disturb the water locally. Plants damp flow; cells meet plant branches while chemistry can pass through. This is a stylized fluid world, not a calibrated microscopic-water model.",
           "sources": [
             {
               "title": "Life at low Reynolds number",
@@ -771,7 +781,7 @@
         {
           "id": "cell_instincts",
           "title": "Shared instincts, different bodies",
-          "text": "Every cell uses the same priorities: escape harm, recover ATP, rebuild biomass, then hunt or explore. Food and prey must be sensed locally. Leaves seek useful light; a flight receptor can sense harmful acidity. A hit can trigger a short retreat. Received family traces help attacked cells spread out. Low reserves recover through a quiet range before the goal changes. Resting stops active swimming while real digestion continues. These priorities and thresholds are game choices, not a literal biological brain.",
+          "text": "Instinct shows what your cell is trying to do now, with an arrow for its intended direction. All cells escape harm, recover ATP, rebuild biomass, then hunt or explore using their actual organs and locally received chemical, light and acidity signals. Unattended relatives can follow family traces to merge; crowding makes this more likely.",
           "sources": [
             {
               "title": "Chemical sensing under flow",
@@ -784,6 +794,43 @@
             {
               "title": "Responses to acidity",
               "url": "https://www.nature.com/articles/s42003-024-06698-1"
+            }
+          ]
+        },
+        {
+          "id": "surface_gases",
+          "title": "Air, CO2 and oxygen",
+          "text": "CO2 enters the water gradually from the air. A much smaller amount of oxygen also dissolves from air; leaves produce oxygen through photosynthesis. Swirling water exchanges gases faster. The gases remain real moving parcels that must reach the cell. Saturation levels, parcel sizes and the use of curl as a surface-mixing cue are game choices.",
+          "sources": [
+            {
+              "title": "Air–water oxygen exchange",
+              "url": "https://www.usgs.gov/publications/dissolved-oxygen-chapter-6"
+            }
+          ]
+        },
+        {
+          "id": "family_fusion",
+          "title": "Merging relatives",
+          "text": "Merge a relative into this cell through Family. Only members of the same lineage can merge, and they must meet physically. The donor's organs are reabsorbed first using normal AP refunds. All remaining AP and internal food/gases transfer; 90% of the remaining body material and ATP are retained. Some material becomes waste and some ATP becomes heat. The receiving cell keeps its organs. Unattended family cells can merge on their own, more often in a crowd. A player's selected cell cannot be an automatic donor. Fusion earns no division AP. These yields and restrictions are game rules inspired by cell fusion.",
+          "sources": [
+            {
+              "title": "Cell fusion and membrane merger",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3739301/"
+            }
+          ]
+        },
+        {
+          "id": "mild_acidity",
+          "title": "Acid can help—and harm",
+          "text": "Mild acidity helps nutrients join and digestive enzymes recycle waste. Joined food can deliver a larger share of its existing fuel as ATP; spent food cannot be refueled this way. Excess acid costs ATP and damages cells. Buffer/repair glands respond to harmful exposure, protecting the cell without immediately erasing useful mild acidity. Water tint and reaction flashes show the chemistry.",
+          "sources": [
+            {
+              "title": "Acid-dependent digestive enzyme activity",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC6027330/"
+            },
+            {
+              "title": "Cellular cost of acid stress",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3678083/"
             }
           ]
         }

@@ -57,6 +57,7 @@ func run() -> void:
  scene._update_world(1)
  check(scene.views[cell.id].art.colors[1].is_equal_approx(Color("#23dc7e")),"Every viewed member reads its lineage’s chosen body color")
  await investment_input(scene)
+ await leaf_selection(scene)
  await family_portraits(scene)
  await family_grid(scene)
  vp.queue_free();scene.queue_free();await process_frame
@@ -270,7 +271,14 @@ func family_grid(scene) -> void:
  for frame in 6:ui.sync(0);await process_frame
  var picker=ui.family_picker
  check(ui.choices.size()==64 and picker.scroll.get_v_scroll_bar().max_value>picker.scroll.size.y,"An overflowing family keeps all 64 entries in one scrollable menu: count=%d viewport=%s columns=%d panel=%s max=%f page=%f" % [ui.choices.size(),scene.get_viewport_rect(),picker.grid.columns,picker.get_global_rect(),picker.scroll.get_v_scroll_bar().max_value,picker.scroll.get_v_scroll_bar().page])
+ check(picker.down.visible and picker.up.visible and picker.up.disabled and not picker.down.disabled,"Overflow displays fixed vector arrow controls with correct end states")
  var close_at: Vector2=picker.close_button.global_position
+ click(picker.down.get_global_rect().get_center())
+ for frame in 3:await process_frame
+ check(picker.scroll.scroll_vertical>0,"Actual pointer on the down arrow scrolls a family row")
+ click(picker.up.get_global_rect().get_center())
+ for frame in 3:await process_frame
+ check(picker.scroll.scroll_vertical==0,"Actual pointer on the up arrow returns to the first row")
  var at: Vector2=picker.scroll.get_global_rect().get_center()
  for i in 6:
   var wheel:=InputEventMouseButton.new();wheel.button_index=MOUSE_BUTTON_WHEEL_DOWN;wheel.pressed=true;wheel.position=at;wheel.global_position=at
@@ -294,3 +302,20 @@ func family_grid(scene) -> void:
 
  check(scene.world.player.id==relative_id,"The last scrolled portrait still switches through the validated family action")
  ui.close_context()
+
+func leaf_selection(scene) -> void:
+ var cell=scene.world.player
+ if cell.count("photosynthesis")==0:cell.add_organ("photosynthesis",1,"graze",false)
+ var leaf: Dictionary=cell.organs.filter(func(o):return o.kind=="photosynthesis")[0]
+ for mobile in [false,true]:
+  root.content_scale_size=Vector2i.ZERO;root.size=Vector2i(390,844) if mobile else Vector2i(1280,800)
+  scene.touch_zoom.enabled=mobile;scene.touch_zoom.pixels=1;scene.preferences.hud_scale=1
+  leaf.mutation="shade_leaf";scene.cell_ui.open_context({"kind":"organ","id":leaf.id})
+  for frame in 4:scene.cell_ui.sync(0);await process_frame
+  var options: Array=scene.cell_ui.choices.filter(func(choice):return choice.caption.begins_with("Sun"))
+  check(options.size()==1 and not options[0].disabled,"Sun is an available ordinary specialization on both platforms")
+  if options.is_empty():continue
+  click(options[0].get_global_rect().get_center())
+  for frame in 3:scene.cell_ui.sync(0);await process_frame
+  check(cell.organ_by_id(leaf.id).mutation=="sun_leaf","Actual pointer commits Sun specialization to the selected leaf")
+  scene.cell_ui.close_context()

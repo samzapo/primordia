@@ -165,9 +165,10 @@ func run(test_host) -> void:
 	scene._update_world(1)
 	expect(cell.count("protection") == 0 and scene.views[cell.id].seen_revision > seen,"Recycling refreshes the paused drawing before resuming")
 	expect(scene.world.player.ap == points+refund,"Reabsorption returns the current construction tier to this cell")
+	points=scene.world.player.ap
 	scene.cell_ui.open_context({"kind":"behavior"})
-	expect(scene.cell_ui.choices.size()==2 and scene.cell_ui.choices[0].caption=="Cell instincts","The nucleus describes shared instincts without manual exploration controls")
-	expect(scene.cell_ui.choices[0].description.contains("Current intention:") and scene.cell_ui.choices[0].description.contains("local"),"The existing temporary menu explains the current intention and local-signal rule")
+	expect(scene.cell_ui.choices.size()==2 and scene.cell_ui.choices[0].caption==cell.state.capitalize(),"The nucleus describes shared instincts without manual exploration controls")
+	expect(scene.cell_ui.choices[0].description==cell.state.capitalize(),"The temporary menu shows only the live current intention")
 	var pore: Dictionary=cell.organs.filter(func(item):return item.kind=="feeding")[0]
 	scene.cell_ui.open_context({"kind":"organ","id":pore.id})
 	expect(scene.cell_ui.choices.all(func(choice):return not choice.caption.begins_with("Steering") and not choice.caption.begins_with("Output")),"Organs expose no retired percentage controls")
@@ -269,7 +270,7 @@ func run(test_host) -> void:
 	scene.cell_ui.choices[0].pressed.emit()
 	expect(scene.world.evolution.chosen and offered in scene.world.evolution.learned,"Nucleus keeps a blueprint using the existing run rules")
 	scene.cell_ui.open_context({"kind":"bud"})
-	expect(scene.cell_ui.choices.size()==3 and scene.cell_ui.choices[0].caption=="Divide now","The bud offers direct division without banking controls")
+	expect(scene.cell_ui.choices.size()==5 and scene.cell_ui.choices[0].caption=="Divide now","The bud offers direct division without banking controls")
 	cell.brood_mass=0;cell.brood_energy=0
 	var population: int=scene.world.cells.size()
 	scene.cell_ui.choices[0].pressed.emit()
@@ -277,7 +278,7 @@ func run(test_host) -> void:
 	expect(scene.world.cells.size()==population and cell.brood_mass==0 and cell.brood_energy==0,"An unfunded division cannot grant tissue, ATP or a free daughter")
 	scene.world.evolution.offspring_id = cell.id
 	scene.cell_ui.open_context({"kind":"bud"})
-	expect(scene.cell_ui.choices.size()==3 and scene.cell_ui.choices[0].radial_progress>=0,"The bud reports automatic division growth after a prior birth")
+	expect(scene.cell_ui.choices.size()==5 and scene.cell_ui.choices[0].radial_progress>=0,"The bud reports automatic division growth after a prior birth")
 	scene.world.evolution.offspring_id = -1
 	scene.cell_ui.close_context()
 	cell.energy = 0

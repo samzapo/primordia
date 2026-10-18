@@ -135,6 +135,26 @@ func run() -> void:
  socket.send_text(JSON.stringify(command))
  check(await until(func():return not result(7).is_empty()),"An unfunded second division returns a clear rejection")
  check(not result(7).ok and result(7).message.contains("still needed"),"Rejected division explains actual missing funding")
+ # New family settings and fusion use the same authenticated, durable command path.
+ command={"op":"command","epoch":host.epoch,"cell":selected.id,"edit":account.edit,"sequence":8,"action":"division_policy","args":{"scope":"lineage","automatic":true}}
+ socket.send_text(JSON.stringify(command))
+ check(await until(func():return not result(8).is_empty()),"Family division setting receives a sequenced receipt")
+ check(result(8).ok and host.world.cells.filter(func(body):return body.lineage_id()==account.root).all(func(body):return body.automatic_division),"Family automatic division changes only its own current relatives")
+ var donor=host.world.cells.filter(func(body):return not body.dead and body.lineage_id()==account.root and body!=selected)[-1]
+ for body in host.world.cells:
+  if body!=selected and body!=donor:body.position=Vector2(2600+body.id*10,2200);body.previous_position=body.position
+ donor.position=selected.position+Vector2(selected.support(0)+donor.support(PI)-5,0);donor.previous_position=donor.position
+ var donor_id: int=donor.id;var combined_ap: int=selected.ap+donor.ap
+ command={"op":"command","epoch":host.epoch,"cell":selected.id,"edit":account.edit,"sequence":9,"action":"merge","args":{"id":donor.id}}
+ socket.send_text(JSON.stringify(command))
+ check(await until(func():return not result(9).is_empty()),"Same-family physical fusion receives an authenticated receipt")
+ if not result(9).ok:print("FUSION_REJECT ",result(9)," distance=",Sim.Medium.offset(selected.position,donor.position).length()," supports=",selected.support(0)+donor.support(PI))
+ check(result(9).ok and not host.world.cells.any(func(body):return body.id==donor_id) and selected.ap==combined_ap,"Fusion combines existing cell AP exactly once without a division award")
+ saved=Codec.new().restore(host.store.load_latest().graph)
+ check(not saved.world.cells.any(func(body):return body.id==donor_id) and saved.accounts[welcome.token.sha256_text()].current.id==selected.id,"Fusion is durable before success and retains the receiver identity")
+ socket.send_text(JSON.stringify(command))
+ check(await until(func():return messages.filter(func(m):return m.get("kind","")=="result" and m.get("sequence",-1)==9).size()==2),"Retried fusion receives its original receipt")
+ check(selected.ap==combined_ap and account.lineage.births==births+1,"Retried fusion cannot duplicate AP or births")
  socket.close();host.running=false;host.listener.stop();host._finish_snapshots()
  if host.world.resident!=null:
   host.world.resident.gpu.close();await host.world.resident.gpu.closed

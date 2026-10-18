@@ -17,7 +17,7 @@ static func strategy(sim,cell) -> String:
 
 static func inherit_strategy(sim,parent,child) -> void:
  # Manual is inherited too: birth never opts a player into automatic spending.
- sim.investment.cells[child.id]=strategy(sim,parent)
+ if sim.investment.cells.has(parent.id):sim.investment.cells[child.id]=strategy(sim,parent)
 
 # Variants are deterministic preferences, never free organs or hidden ecology knowledge.
 const VARIANTS:={
@@ -94,9 +94,12 @@ static func working(cell,kind: String) -> int:
  return count
 
 static func set_strategy(sim,scope: String,value: String) -> bool:
- if scope not in ["cell","lineage"] or (value not in STRATEGIES and not (scope=="cell" and value=="inherit")):return false
+ if scope not in ["cell","lineage","family_adopt"] or (value not in STRATEGIES and not (scope in ["cell","family_adopt"] and value=="inherit")):return false
  if sim.player.dead:return false
- if scope=="cell":
+ if scope=="family_adopt":
+  for member in sim.cells:
+   if member.lineage_id()==sim.player.lineage_id():sim.investment.cells.erase(member.id)
+ elif scope=="cell":
   if value=="inherit":sim.investment.cells.erase(sim.player.id)
   else:sim.investment.cells[sim.player.id]=value
  else:sim.investment.lineages[sim.player.lineage_id()]=value

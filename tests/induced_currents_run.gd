@@ -85,5 +85,16 @@ func run() -> void:
 	var pose:=preload("res://scripts/pore_art.gd").layout(cell,assembly)
 	check((pose.at-cell.local_point(.4)).dot(cell.local_normal(.4))>0 and pose.units==3,"Pore assemblies attach to the actual membrane with their retained part count")
 	check(cell.surface_complexes==state,"Pore presentation cannot add material or change chemistry")
+	# An existing saved weather sample upgrades its target without resetting water.
+	var weather=preload("res://scripts/environment_cycle.gd")
+	var saved_flow=Sim.new(17,0,false);saved_flow.time=123
+	var now:=1792324800.0
+	weather.update(saved_flow,now)
+	var stronger: PackedVector2Array=saved_flow.fluid.tide.duplicate()
+	check(saved_flow.environment.flow_strength>=1.3 and saved_flow.environment.flow_strength<=2.6,"Hourly broad forcing is twice the former range")
+	var retained_velocity: PackedVector2Array=saved_flow.fluid.velocity.duplicate()
+	saved_flow.environment.flow_version=3;saved_flow.fluid.induced_base_key="stale"
+	check(weather.update(saved_flow,now) and saved_flow.fluid.velocity==retained_velocity and saved_flow.fluid.tide==stronger,"Saved weather upgrades within the hour without resetting physical flow")
+	check(saved_flow.fluid.induced_base_key=="","A flow upgrade invalidates derived induced-current bases")
 	print("INDUCED CURRENTS: %d assertions, %d failures" % [assertions,failures])
 	quit(0 if failures==0 else 1)
