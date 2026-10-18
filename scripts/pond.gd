@@ -93,6 +93,9 @@ var scale_select := OptionButton.new()
 var fullscreen_check := CheckButton.new()
 var bloom_check := CheckButton.new()
 var ripple_check := CheckButton.new()
+var current_style_choices:=GridContainer.new()
+var crest_style_button: Button
+var streamline_style_button: Button
 var batches: Array[MultiMeshInstance2D] = []
 var buffers: Array[PackedFloat32Array] = []
 var views: Dictionary = {}
@@ -187,6 +190,7 @@ func _ready() -> void:
 	free_camera = world.player.position
 	add_child(world_layer)
 	world_layer.add_child(flow_view)
+	flow_view.use_crests=preferences.current_style=="crests"
 	world_layer.add_child(reaction_view)
 	death_view.z_index = 11
 	world_layer.add_child(death_view)
@@ -817,6 +821,15 @@ func _build_ui() -> void:
 	feedback_menu_button=_button(options,"Feature request / Bug report",feedback.open)
 	gameplay_menu_button=_button(options,"Gameplay",player_help.open.bind("gameplay"))
 	mechanics_menu_button=_button(options,"Mechanics",player_help.open.bind("mechanics"))
+	_label(options,"Current display")
+	var current_styles:=current_style_choices;current_styles.columns=2;options.add_child(current_styles)
+	var current_group:=ButtonGroup.new()
+	crest_style_button=_button(current_styles,"Wave crests",set_current_style.bind("crests"))
+	streamline_style_button=_button(current_styles,"Streamlines",set_current_style.bind("streamlines"))
+	for button in [crest_style_button,streamline_style_button]:
+		button.toggle_mode=true;button.button_group=current_group;button.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	crest_style_button.set_pressed_no_signal(preferences.current_style=="crests")
+	streamline_style_button.set_pressed_no_signal(preferences.current_style=="streamlines")
 	_label(options,"Text and interaction size")
 	options.add_child(scale_select)
 	for scale_value in Preferences.SCALES: scale_select.add_item("%d%%" % roundi(scale_value*100))
@@ -829,7 +842,7 @@ func _build_ui() -> void:
 	bloom_check.set_pressed_no_signal(preferences.bloom)
 	bloom_check.toggled.connect(set_bloom)
 	options.add_child(ripple_check)
-	ripple_check.text = "Water shimmer (background only)"
+	ripple_check.text = "Background shimmer"
 	ripple_check.set_pressed_no_signal(preferences.water_ripples)
 	ripple_check.toggled.connect(set_water_ripples)
 	var music_label := _label(options,"Music volume · %d%%" % roundi(preferences.music_volume*100))
@@ -901,6 +914,7 @@ func _apply_ui_scale(value: float) -> void:
 
 func _layout() -> void:
 	var size := get_viewport_rect().size
+	current_style_choices.columns=1 if touch_zoom.enabled else 2
 	touch_zoom.layout()
 	light_layer.size = size
 	microscope_layer.size = size
@@ -922,6 +936,14 @@ func _layout() -> void:
 func set_particle_collisions(on: bool) -> void:
 	# Explicit profiling comparison only; ordinary starts/restarts keep collisions.
 	world.particle_collisions = on
+
+func set_current_style(style: String) -> void:
+	if style not in ["crests","streamlines"]:return
+	preferences.current_style=style
+	flow_view.use_crests=style=="crests"
+	crest_style_button.set_pressed_no_signal(style=="crests")
+	streamline_style_button.set_pressed_no_signal(style=="streamlines")
+	preferences.save_settings()
 
 func set_water_ripples(on: bool) -> void:
 	preferences.water_ripples = on

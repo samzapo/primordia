@@ -319,6 +319,18 @@ const RELEASES=[
   ],
   "footer":"Your cells and their progress carry on between updates.",
   "button":"Back to the pond"
+ },
+ {
+  "id":"2026-10-18-current-display-choice",
+  "audience":"experimental",
+  "title":"What’s new in the pond",
+  "items":[
+   "Wave crests are now broad, continuous arcs drifting with the water.",
+   "In Pause, choose Wave crests or the familiar continuous Streamlines. Your choice is remembered.",
+   "Current markers no longer crisscross around moving eddies."
+  ],
+  "footer":"Your cells and their progress carry on between updates.",
+  "button":"Back to the pond"
  }
 ]
 const CURRENT=RELEASES[-1]
