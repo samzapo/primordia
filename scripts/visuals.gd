@@ -105,7 +105,7 @@ class DimmedInk extends RefCounted:
 	func draw_polyline(points: PackedVector2Array,color: Color,width: float=-1,antialias: bool=false) -> void:canvas.draw_polyline(points,tint(color),width,antialias)
 	func draw_colored_polygon(points: PackedVector2Array,color: Color) -> void:canvas.draw_colored_polygon(points,tint(color))
 
-static func icon(c, p: Vector2, kind: String, rotation: float, scale: float, animation_time: float = 0, mode: String = "graze", pulse: float = 0, detail: bool = true, charge: float = 0, depleted: bool=false) -> void:
+static func icon(c, p: Vector2, kind: String, rotation: float, scale: float, animation_time: float = 0, mode: String = "graze", pulse: float = 0, detail: bool = true, charge: float = 0, depleted: bool=false, stored: float=0.0) -> void:
 	if depleted:c=DimmedInk.new(c)
 	c.draw_set_transform(p,rotation,Vector2.ONE*scale)
 	var steps := 24 if detail else 10
@@ -155,6 +155,15 @@ static func icon(c, p: Vector2, kind: String, rotation: float, scale: float, ani
 			c.draw_line(Vector2(1,0),Vector2(15,0),Color("ff80ae"),7,true)
 			c.draw_line(Vector2(-7,0),Vector2(1,0),Color("fff2c3"),3,true)
 			c.draw_line(Vector2(-3,-4),Vector2(-3,4),Color("fff2c3"),3,true)
+		"toxin_sac":
+			c.draw_set_transform(p,rotation,Vector2(.85,1.1)*scale)
+			c.draw_circle(Vector2.ZERO,15,Color("663657"))
+			c.draw_circle(Vector2(-1,-1),12,Color("b35b98"))
+			c.draw_circle(Vector2(0,2),3+7*clampf(stored,0,1),Color("ff407b"))
+			for i in 3:
+				c.draw_circle(Vector2.from_angle(TAU*i/3)*4,1.7+stored,Color("ffb3d0"))
+			c.draw_arc(Vector2.ZERO,13,3.3,4.6,12,Color("ffe3f5"),2,true)
+			c.draw_set_transform(p,rotation,Vector2.ONE*scale)
 		"mitochondrion":
 			c.draw_set_transform(p,rotation,Vector2(1.25,.75)*scale)
 			c.draw_circle(Vector2.ZERO,13,Color("8a3954"))

@@ -1,6 +1,5 @@
 extends RefCounted
 ## Current living family and lifetime counters; reproduction makes living daughters.
-const MAX_ACTIVE := 4
 var root_id := 0
 var dormant: Array = [] # Retired checkpoint field; discarded on the next authority tick.
 var records: Array = []

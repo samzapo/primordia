@@ -13,22 +13,17 @@ static func run(check: Callable) -> void:
   var cell=Sim.Cell.new(100+i);cell.lineage=cell.id;cell.add_organ("feeding",0,"graze",false)
   sim.cells.append(cell);bodies.append(cell)
  sim.Investment.npc_assignments(sim)
- var counts: Dictionary={"hunter":0,"producer":0,"grazer":0}
- for value in sim.investment.npc.values():counts[value]+=1
- check.call(counts=={"hunter":10,"producer":45,"grazer":45},"NPC strategies use 10% hunters and equal producer/grazer quotas")
- var before: Dictionary=sim.investment.npc.duplicate()
- sim.Investment.npc_assignments(sim)
- check.call(before==sim.investment.npc,"Unchanged population retains each NPC strategy across scheduling")
+ check.call(sim.investment.npc.is_empty(),"No NPC is automatically assigned an investment policy")
  for cell in bodies:
-  var candidate: Dictionary=sim.Investment.candidate(sim,cell)
-  check.call(not candidate.is_empty() and candidate.kind==sim.Investment.PRIORITIES[before[cell.id]][0],"NPC purchases obey their strategy instead of the random catalog")
- for body in bodies:sim._family_ledger(body).progression.points=0
- var ledger=sim._family_ledger(bodies[0]);ledger.progression.points=1
+  check.call(sim.Investment.strategy(sim,cell)=="manual" and sim.Investment.candidate(sim,cell).is_empty(),"Every unchosen NPC defaults to Manual")
+ sim.investment.cells[bodies[0].id]="grazer"
+ for body in bodies:body.ap=0
+ var ledger=sim._family_ledger(bodies[0]);bodies[0].ap=1
  var input: float=sim.external_input;var mass: float=bodies[0].organic_mass()
  sim.managed_cells=bodies.slice(1).map(func(cell):return cell.id)
  sim.step_autonomous_builds()
  sim.managed_cells=[]
- check.call(ledger.progression.points==1 and is_equal_approx(bodies[0].organic_mass()-mass,sim.external_input-input),"Strategy buys one ordinary first-free organ with conserved construction input")
+ check.call(bodies[0].ap==1 and is_equal_approx(bodies[0].organic_mass()-mass,sim.external_input-input),"Strategy buys one ordinary first-free organ with conserved construction input")
  sim.managed_lineages=[bodies[1].lineage_id()]
  sim.player=bodies[1]
  check.call(sim.Investment.set_strategy(sim,"lineage","producer"),"Owner can save a family investment strategy")

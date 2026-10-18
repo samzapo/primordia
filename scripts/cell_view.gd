@@ -223,7 +223,7 @@ func _draw_organs() -> void:
 		if cell.inherent(organ):
 			Visuals.oral_groove(appendages,cell,organ,cell.age,not simple_view)
 		else:
-			Visuals.icon(appendages,at,organ.kind,heading,drawn_scale,cell.age,organ.mode,organ.consume_flash,not simple_view,charge,readiness.depleted)
+			Visuals.icon(appendages,at,organ.kind,heading,drawn_scale,cell.age,organ.mode,organ.consume_flash,not simple_view,charge,readiness.depleted,preload("res://scripts/toxin_sac.gd").fraction(organ) if organ.kind=="toxin_sac" else 0)
 		if readiness.progress>=0:
 			appendages.draw_arc(at,19*organ.scale,-PI/2,-PI/2+TAU*maxf(.001,readiness.progress),28,Color("fff0ac") if not readiness.depleted else Color("8c969f"),1.8*organ.scale,true)
 		if organ.get("mutation","") != "": appendages.draw_circle(at,3.5*organ.scale,Color("fff2a3"))

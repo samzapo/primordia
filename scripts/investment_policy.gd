@@ -8,54 +8,23 @@ const PRIORITIES:={
  "grazer":["cilia","protection","propulsion","regenerative","mitochondrion","sensing"],
 }
 static func npc_assignments(sim) -> void:
- var bodies: Array=[]
- for cell in sim.cells:
-  if not cell.dead and cell.health>0 and cell.lineage_id()!=sim.lineage.root_id and cell.lineage_id() not in sim.managed_lineages:bodies.append(cell)
- bodies.sort_custom(func(a,b):return a.id<b.id)
- var hunters:=floori(bodies.size()*.1)
- var remaining:=bodies.size()-hunters
- var quotas: Dictionary={"hunter":hunters,"producer":ceili(remaining*.5),"grazer":floori(remaining*.5)}
- var assigned: Dictionary={}
- var waiting: Array=[]
- # Birth intent is explicit: descendants keep their inherited choice even when
- # reproduction changes the population mix. Quotas guide unassigned NPCs.
- for cell in bodies:
-  var inherited: String=sim.investment.cells.get(cell.id,"")
-  if inherited in ["hunter","producer","grazer"]:
-   assigned[cell.id]=inherited;quotas[inherited]-=1
-  else:waiting.append(cell)
- var unassigned: Array=[]
- for cell in waiting:
-  var strategy: String=sim.investment.npc.get(cell.id,"")
-  if quotas.get(strategy,0)>0:assigned[cell.id]=strategy;quotas[strategy]-=1
-  else:unassigned.append(cell)
- for cell in unassigned:
-  for strategy in ["hunter","producer","grazer"]:
-   if quotas[strategy]>0:
-    assigned[cell.id]=strategy;quotas[strategy]-=1;break
- sim.investment.npc=assigned
+ # Former automatic quotas are retired; all unchosen policies are Manual.
+ sim.investment.npc.clear()
 
 static func strategy(sim,cell) -> String:
  if sim.investment.cells.has(cell.id):return sim.investment.cells[cell.id]
- var root: int=cell.lineage_id()
- if root!=sim.lineage.root_id and root not in sim.managed_lineages:return sim.investment.npc.get(cell.id,"manual")
- return sim.investment.lineages.get(root,"manual")
+ return sim.investment.lineages.get(cell.lineage_id(),"manual")
 
-# Commit only after placement succeeds. Failed proposals never consume RNG or
-# leave an override for an identity that has not been born.
 static func inherit_strategy(sim,parent,child) -> void:
- var inherited: String=strategy(sim,parent)
- if inherited=="manual":inherited=STRATEGIES[sim.rng.randi_range(1,3)]
- sim.investment.cells[child.id]=inherited
- if child.lineage_id()!=sim.lineage.root_id and child.lineage_id() not in sim.managed_lineages:
-  sim.investment.npc[child.id]=inherited
+ # Manual is inherited too: birth never opts a player into automatic spending.
+ sim.investment.cells[child.id]=strategy(sim,parent)
 
 # Variants are deterministic preferences, never free organs or hidden ecology knowledge.
 const VARIANTS:={
  "hunter":[["hunting","toxin","propulsion","poreforming","sensing","protection","mitochondrion","regenerative"],
-           ["hunting","poreforming","cilia","counterattack","protection","neutralizing","mitochondrion","regenerative"]],
- "producer":[["photosynthesis","protection","regenerative","mitochondrion","neutralizing","cilia","sensing"],
-             ["photosynthesis","cilia","neutralizing","mitochondrion","counterattack","regenerative","protection","sensing"]],
+           ["hunting","poreforming","cilia","counterattack","protection","neutralizing","mitochondrion","regenerative","toxin_sac"]],
+ "producer":[["photosynthesis","protection","regenerative","mitochondrion","neutralizing","cilia","sensing","toxin_sac"],
+             ["photosynthesis","cilia","neutralizing","mitochondrion","counterattack","regenerative","protection","sensing","toxin_sac"]],
  "grazer":[["cilia","mitochondrion","regenerative","sensing","feeding","protection","neutralizing"],
            ["cilia","neutralizing","regenerative","acidifying","mitochondrion","feeding","sensing","protection"]],
 }
@@ -90,6 +59,27 @@ static func candidate(sim,cell) -> Dictionary:
    if kind=="photosynthesis":
     best["mutation"]="shade_leaf" if sim.light_at(cell.position)<.5 else "sun_leaf"
  return best
+
+static func decision(sim,cell) -> Dictionary:
+ var policy:=strategy(sim,cell)
+ if policy not in VARIANTS or cell.id in sim.managed_cells:return {}
+ var choice:=candidate(sim,cell)
+ if not choice.is_empty() and cell.ap>=cell.construction_price():
+  choice["action"]="install";return choice
+ var priorities: Array=VARIANTS[policy][posmod(cell.id*19349663 ^ sim.seed_value*83492791,2)]
+ var missing_core: bool=working(cell,priorities[0])==0
+ # Only replace unsuitable/excess anatomy; do not liquidate useful support just
+ # to chase another purchase. Keep passive food/energy and last defenses.
+ for organ in cell.organs:
+  if cell.inherent(organ):continue
+  if organ.hp>0 and organ.kind in ["feeding","photosynthesis","mitochondrion"] and working(cell,organ.kind)<=1:continue
+  if organ.hp>0 and organ.kind in ["protection","regenerative","neutralizing"] and working(cell,organ.kind)<=1:continue
+  var limit: int=4 if organ.kind=="photosynthesis" else 2 if organ.kind in ["feeding","cilia","protection"] else 1
+  var excess: bool=working(cell,organ.kind)>limit
+  var unsuitable: bool=missing_core and organ.kind not in priorities
+  if organ.hp<=0 or excess or unsuitable:
+   return {"action":"remove","id":organ.id}
+ return {}
 
 static func working(cell,kind: String) -> int:
  var count:=0

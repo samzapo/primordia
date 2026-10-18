@@ -15,12 +15,12 @@ func run() -> void:
 	var parent=sim.player
 	var quote: Dictionary=sim.offspring_quote()
 	parent.brood_mass=quote.material;parent.brood_energy=quote.energy
-	var ap: int=sim.evolution.points
+	var ap: int=sim.player.ap
 	check(sim._divide_paid(parent,sim.lineage,false,false,true),"A paid division succeeds")
-	check(sim.evolution.points==ap+2 and sim.evolution.division_count==1,"Exactly two AP is awarded at a committed division")
-	check(not sim._divide_paid(parent,sim.lineage,false,false,true) and sim.evolution.points==ap+2,"Failed division cannot award AP")
+	check(sim.player.ap==ap+1 and sim.evolution.division_count==1,"One AP goes to each body at a committed division")
+	check(not sim._divide_paid(parent,sim.lineage,false,false,true) and sim.player.ap==ap+1,"Failed division cannot award AP")
 	var saved=Codec.new().restore(Codec.new().capture(sim))
-	check(saved.evolution.points==ap+2 and saved.lineage.progression==saved.evolution,"Checkpoint keeps reward totals and shared account progression")
+	check(saved.player.ap==ap+1 and saved.lineage.progression==saved.evolution,"Checkpoint keeps reward totals and shared account progression")
 	var mixed=Cell.new(99);mixed.chemistry.emit("food",1,Vector2(30,0),-1,-1,0);mixed.chemistry.emit("food",1,Vector2(-30,0),-1,-1,7.5);mixed.chemistry.solar_work=8
 	var mixed_copy=Cell.clone_state(mixed)
 	check(mixed_copy.chemistry.particles==mixed.chemistry.particles and mixed_copy.chemistry.solar_work==8,"Editor cloning preserves individual finite fuel and solar accounting")
@@ -35,8 +35,8 @@ func run() -> void:
 	check(not sim.edit("choose_mutation",{"gene":"economical_flagellum"}),"Replayed acquisition cannot duplicate an offer")
 	parent.add_organ("propulsion",PI,"graze",false)
 	var organ: Dictionary=parent.organs[-1]
-	sim.evolution.points=0;parent.biomass=0
-	check(sim.mutate_organ(organ.id,"economical_flagellum") and parent.biomass==0 and sim.evolution.points==0,"Applying a mutation costs neither biomass nor AP")
+	sim.player.ap=0;parent.biomass=0
+	check(sim.mutate_organ(organ.id,"economical_flagellum") and parent.biomass==0 and sim.player.ap==0,"Applying a mutation costs neither biomass nor AP")
 	check(not sim.mutate_organ(organ.id,"economical_flagellum"),"An organ accepts its mutation once")
 	for action in ["tension","link_add","link_remove"]:
 		check(sim.edit(action,{"id":0,"value":.8})==false,"Live commands cannot edit procedural microtubules")

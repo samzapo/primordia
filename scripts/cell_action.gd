@@ -10,6 +10,8 @@ var portrait_geometry:=0
 var lettering:=Node2D.new()
 const SELECTION_MARK=preload("res://assets/ui/selection-mark.svg")
 var selected:=false
+var radial_progress:=-1.0
+var progress_ready:=false
 const Visuals = preload("res://scripts/visuals.gd")
 var structure_art: Dictionary={}
 var scar:=false
@@ -57,9 +59,13 @@ func _draw() -> void:
 			extent = font.get_string_size(symbol,HORIZONTAL_ALIGNMENT_LEFT,-1,pixels)
 		draw_string(font,center+Vector2(-extent.x*0.5,pixels*0.34),symbol,HORIZONTAL_ALIGNMENT_LEFT,-1,pixels,tint)
 	lettering.queue_redraw()
+	if radial_progress>=0:
+		var color:=Color("86f5b5") if progress_ready else Color("ffd784") if radial_progress>=.999999 else Color("79d7ed")
+		draw_arc(center,r*1.01,-PI/2,-PI/2+TAU,48,Color("15283c"),3.5*text_scale,true)
+		if radial_progress>0:draw_arc(center,r*1.01,-PI/2,-PI/2+TAU*clampf(radial_progress,0,1),48,color,3.5*text_scale,true)
 	if selected:draw_texture_rect(SELECTION_MARK,Rect2(center+Vector2(r*.35,-r*.8),Vector2.ONE*16*text_scale),false)
 	if scar:draw_arc(center,r*.75,0,TAU,24,Color("ffb6ca"),2*text_scale,true)
-	if not affordable: draw_circle(center+Vector2(r*0.65,-r*0.65),4*text_scale,Color("f68899"))
+	if not affordable and radial_progress<0: draw_circle(center+Vector2(r*0.65,-r*0.65),4*text_scale,Color("f68899"))
 
 func set_portrait(model: Dictionary,seed_value: int,paint: String) -> void:
 	portrait=model

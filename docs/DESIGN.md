@@ -717,3 +717,21 @@ nothing. Do not depend on construction_ap history or migrate saved anatomy.
 Menu actions resolve organ IDs at click time because live snapshots replace
 dictionaries while menus stay open. Only authoritative committed receipts report
 AP returned in multiplayer; preserve exactly-once refunds and checkpointing.
+
+### Growing families and finite toxin sacs (October 17, 2026)
+
+[Revision 63](REVISION_63.md) removes the four-living-cell family cap while retaining paid tissue/ATP, safe placement and whole-pond capacity. The bud explains readiness and opens Invest/Family. A new finite toxin sac fills from surplus biomass and releases its actual stored toxin on death. Free pore-forming packets disperse faster; membrane-bound assembly is unchanged. Stage this owner-approved batch on experimental only.
+
+October17 final AP/investment correction: read Revision64. AP belongs to each
+cell; relatives cannot spend it. Committed division grants parent1AP and
+daughter1AP; readiness grants nothing. One-time legacy pools go to the
+authenticated selected body without duplicating AP or altering cells/anatomy.
+This update starts all saved investment on Manual. NPCs and Manual daughters
+also default Manual; remove old quotas/random birth choices. Explicit strategies
+may buy or reabsorb unsuitable/excess anatomy using their own AP, with one saved
+automatic action per cell per60 simulation seconds. Keep essential food/energy
+and last defenses. Remove organ Move and reject stale commands. The player
+action is Reabsorb; its unchanged current-count refund goes to that body.
+Update guides/notices and validate ownership, migration, cooldown and receipts.
+Owner authorizes these corrections with the pending main promotion; preserve
+both ponds/accounts/keys/feedback and return experimental to standby afterward.

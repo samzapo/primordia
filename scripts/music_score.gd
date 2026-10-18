@@ -76,9 +76,10 @@ func observe(world, camera: Vector2, half: Vector2, editing: bool, focus = null)
 		counts.resize(KINDS.size())
 		for organ in cell.organs:
 			if cell.inherent(organ) or organ.hp <= 0: continue
-			if not mounts.has(organ.kind): mounts[organ.kind] = []
-			mounts[organ.kind].append(organ.id)
-			var kind := KINDS.find(organ.kind)
+			var voice: String="toxin" if organ.kind=="toxin_sac" else organ.kind
+			if not mounts.has(voice): mounts[voice] = []
+			mounts[voice].append(organ.id)
+			var kind := KINDS.find(voice)
 			if kind >= 0: counts[kind] += 0.35+0.65*clampf(organ.hp/maxf(organ.max_hp,0.01),0,1)
 		# A circulating digestive vacuole has its own soft pluck, distinct from
 		# the permanent oral groove (which is membrane rather than an instrument).

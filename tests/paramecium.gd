@@ -22,9 +22,9 @@ static func run(check: Callable) -> void:
 	check.call(crowded.count("feeding") == 1 and crowded.organs.all(func(o):return crowded.inherent(o)),"Shrinkage sheds crowded attachments but never sheds inherent membrane anatomy")
 	var cell = sim.player
 	var mouth: Dictionary = cell.organs[0]
-	var before: Array = [cell.organic_mass(),cell.biomass,sim.evolution.points]
+	var before: Array = [cell.organic_mass(),cell.biomass,sim.player.ap]
 	check.call(not sim.install("feeding",1) and not sim.remove(0) and not cell.move_organ(mouth.id,PI) and not cell.specialize(mouth.id,"wide_pore"),"The membrane groove cannot be bought, recycled, detached or specialized")
-	check.call(before == [cell.organic_mass(),cell.biomass,sim.evolution.points],"Rejected membrane transactions spend no tissue or AP")
+	check.call(before == [cell.organic_mass(),cell.biomass,sim.player.ap],"Rejected membrane transactions spend no tissue or AP")
 	cell.damage(5,mouth.a+cell.angle)
 	check.call(cell.health == 95 and cell.organs.has(mouth) and not cell.holes.is_empty(),"Oral membrane is vulnerable tissue, not free armor")
 	cell.health = 100

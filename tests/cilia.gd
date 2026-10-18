@@ -31,11 +31,11 @@ static func run(check: Callable) -> void:
 	check.call(sim.lineage.dormant.is_empty(),"Founder has no hidden reserve body")
 	var material: float = sim.player.organic_mass()
 	var tissue: float = sim.player.biomass
-	var ap: int = sim.evolution.points
+	var ap: int = sim.player.ap
 	var external: float=sim.external_input
 	var build_energy: float=sim.player.energy
 	check.call(sim.install("cilia",PI/2) and sim.install("propulsion",PI),"Cilia and flagellum are separate buildable purchases")
-	check.call(sim.player.biomass == tissue and sim.player.energy==build_energy and sim.evolution.points == ap-1 and is_equal_approx(material+sim.external_input-external,sim.player.organic_mass()),"The first two propulsion purchases cost zero and one AP with tissue accounted as external input")
+	check.call(sim.player.biomass == tissue and sim.player.energy==build_energy and sim.player.ap == ap-1 and is_equal_approx(material+sim.external_input-external,sim.player.organic_mass()),"The first two propulsion purchases cost zero and one AP with tissue accounted as external input")
 	sim.begin_build()
 	check.call(sim.player.count("cilia") == 1 and sim.player.count("propulsion") == 1,"Both purchases survive entering the cell editor")
 	sim.commit_build()

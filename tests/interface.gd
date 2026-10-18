@@ -158,13 +158,13 @@ func run(test_host) -> void:
 	click(at(cell.local_point(2.15)),MOUSE_BUTTON_RIGHT)
 	expect(scene.selected == -1 and not cell.organ_by_id(organ_id).is_empty(),"Right-click cancels the held ghost without recycling installed anatomy")
 	scene.cell_ui.open_context({"kind":"organ","id":organ_id})
-	expect(scene.cell_ui.choices.size() == 2 and scene.cell_ui.choices[0].caption == "Move" and scene.cell_ui.choices[1].caption == "Recycle","An unmodified organ exposes Move and Recycle without retired output")
-	var points: int = scene.world.evolution.points
+	expect(scene.cell_ui.choices.size() == 1 and scene.cell_ui.choices[0].caption == "Reabsorb","An unmodified organ exposes Reabsorb without retired Move or output")
+	var points: int = scene.world.player.ap
 	var refund: int = cell.construction_refund(cell.organ_by_id(organ_id))
-	scene.cell_ui.choices[1].pressed.emit()
+	scene.cell_ui.choices[0].pressed.emit()
 	scene._update_world(1)
 	expect(cell.count("protection") == 0 and scene.views[cell.id].seen_revision > seen,"Recycling refreshes the paused drawing before resuming")
-	expect(scene.world.evolution.points == points+refund,"Recycling returns the actual installation AP minus one")
+	expect(scene.world.player.ap == points+refund,"Reabsorption returns the current construction tier to this cell")
 	scene.cell_ui.open_context({"kind":"behavior"})
 	expect(scene.cell_ui.choices.size()==2 and scene.cell_ui.choices[0].caption=="Cell instincts","The nucleus describes shared instincts without manual exploration controls")
 	expect(scene.cell_ui.choices[0].description.contains("Current intention:") and scene.cell_ui.choices[0].description.contains("local"),"The existing temporary menu explains the current intention and local-signal rule")
@@ -197,13 +197,13 @@ func run(test_host) -> void:
 	scene.preferences.hud_scale = type_scale
 	scene.cell_ui.sync(0)
 	var saved_upgrade_tissue: float = cell.biomass
-	var saved_upgrade_ap: int = scene.world.evolution.points
+	var saved_upgrade_ap: int = scene.world.player.ap
 	cell.biomass = 0
-	scene.world.evolution.points = 0
+	scene.world.player.ap = 0
 	scene.cell_ui.sync(0)
 	expect(scene.cell_ui.biomass_view.quote.enough and scene.cell_ui.biomass_view.quote.ap_ready,"Free mutation remains available with empty biomass and AP")
 	cell.biomass = saved_upgrade_tissue
-	scene.world.evolution.points = saved_upgrade_ap
+	scene.world.player.ap = saved_upgrade_ap
 	scene.cell_ui.close_context()
 	expect(not scene.cell_ui.biomass_view.quote.show_cost,"Closing upgrade choices clears the visual price")
 	scene.selected = 0
@@ -243,10 +243,10 @@ func run(test_host) -> void:
 	key(KEY_M)
 	expect(scene.settings_panel.visible and scene.build_open and scene.world.player == cell,"Settings preserves current paid edits")
 	key(KEY_M)
-	expect(scene.build_open and scene.world.evolution.points == points,"Closing settings returns to the same paused cell")
+	expect(scene.build_open and scene.world.player.ap == points,"Closing settings returns to the same paused cell")
 	key(KEY_TAB)
 	expect(not scene.cell_ui.biomass_view.visible,"Biomass comparison disappears during ordinary play")
-	expect(not scene.build_open and scene.world.build_original == null and scene.world.evolution.points == points,"Tab keeps edits without an Apply or Undo button")
+	expect(not scene.build_open and scene.world.build_original == null and scene.world.player.ap == points,"Tab keeps edits without an Apply or Undo button")
 	settle()
 	expect(is_equal_approx(scene.manual_zoom,0.8),"Leaving edit restores the observation magnification")
 	# Factory, nucleus, bud and keyboard access retain the run's decision economy.
@@ -269,7 +269,7 @@ func run(test_host) -> void:
 	scene.cell_ui.choices[0].pressed.emit()
 	expect(scene.world.evolution.chosen and offered in scene.world.evolution.learned,"Nucleus keeps a blueprint using the existing run rules")
 	scene.cell_ui.open_context({"kind":"bud"})
-	expect(scene.cell_ui.choices.size()==1 and scene.cell_ui.choices[0].caption=="Divide now","The bud offers direct division without banking controls")
+	expect(scene.cell_ui.choices.size()==3 and scene.cell_ui.choices[0].caption=="Divide now","The bud offers direct division without banking controls")
 	cell.brood_mass=0;cell.brood_energy=0
 	var population: int=scene.world.cells.size()
 	scene.cell_ui.choices[0].pressed.emit()
@@ -277,22 +277,22 @@ func run(test_host) -> void:
 	expect(scene.world.cells.size()==population and cell.brood_mass==0 and cell.brood_energy==0,"An unfunded division cannot grant tissue, ATP or a free daughter")
 	scene.world.evolution.offspring_id = cell.id
 	scene.cell_ui.open_context({"kind":"bud"})
-	expect(scene.cell_ui.choices.size()==1 and "tissue" in scene.cell_ui.describe({"kind":"bud"}),"The bud reports automatic division growth after a prior birth")
+	expect(scene.cell_ui.choices.size()==3 and scene.cell_ui.choices[0].radial_progress>=0,"The bud reports automatic division growth after a prior birth")
 	scene.world.evolution.offspring_id = -1
 	scene.cell_ui.close_context()
 	cell.energy = 0
 	scene.cell_ui.interior.sync()
 	expect(scene.cell_ui.interior.atp_size == 0,"An empty ATP resource renders an empty sac")
 	cell.energy = cell.energy_reference()
-	scene.world.evolution.points = 7
+	scene.world.player.ap = 7
 	scene.cell_ui.interior.sync()
 	expect(scene.cell_ui.interior.atp_size > 0,"Positive ATP produces a nonempty elastic sac")
 	scene.cell_ui.biomass_view.sync()
 	expect(scene.cell_ui.biomass_view.quote.ap_count == 7,"The cost comparison reads actual available AP")
-	scene.world.evolution.points = 0
+	scene.world.player.ap = 0
 	scene.cell_ui.biomass_view.sync()
 	expect(scene.cell_ui.biomass_view.quote.ap_count == 0,"Empty AP stock shows no available gold blobs")
-	scene.world.evolution.points = 7
+	scene.world.player.ap = 7
 	scene.cell_ui.biomass_view.sync()
 	expect(not scene.cell_ui.interior.anchors.has("coins") and scene.cell_ui.targets().all(func(target): return target.kind != "coins"),"Removed internal coins leave no invisible clickable node")
 	var saved_age: float = cell.age
@@ -595,7 +595,7 @@ func _lineage() -> void:
 	parent.energy = 100
 	parent.reserve(maxf(60,quote.material),quote.material)
 	var mass: float = parent.organic_mass()
-	var points: int = sim.evolution.points
+	var points: int = sim.player.ap
 	scene.cell_ui.open_context({"kind":"bud"})
 	parent.brood_energy = 50
 	scene.cell_ui.sync(0)
@@ -606,7 +606,7 @@ func _lineage() -> void:
 	scene.cell_ui.choices[0].pressed.emit()
 	scene._update_world(1)
 	expect(sim.lineage.births == 1 and sim.cells.size() == 2 and sim.player.id == parent.id,"Release from the bud creates a real autonomous family member")
-	expect(scene.build_open and sim.build_original != null and sim.player.organic_mass() < mass and sim.evolution.points == points+2,"Birth awards two AP, commits paid anatomy and resumes editing the depleted parent")
+	expect(scene.build_open and sim.build_original != null and sim.player.organic_mass() < mass and sim.player.ap == points+1,"Birth awards one AP to each body, commits paid anatomy and resumes editing the depleted parent")
 	var child = sim.cells[-1]
 	expect(scene.views.has(child.id) and scene.views[sim.player.id].cell == sim.player,"Parent and offspring drawings update immediately during editing")
 	scene.cell_ui.open_context({"kind":"lineage"})
@@ -632,7 +632,7 @@ func _lineage() -> void:
 	scene._physics_process(DT)
 	scene._process(DT)
 	expect(scene.world == sim and sim.player.id != identity and sim.time > time and not sim.evolution.terminal(),"The scene continues the same habitat after fatal damage")
-	expect(sim.evolution.points == points+2 and sim.evolution.learned == learned,"Scene handoff keeps the expedition economy")
+	expect(sim.player.ap == 1 and sim.evolution.learned == learned,"Scene handoff shows the daughter\'s own AP and shared learned mutations")
 	expect(scene.music.frame_cursor >= score_clock,"Succession does not reset the musical transport")
 	var death_at: Vector2 = sim.death_bursts[-1].at
 	expect(scene.death_focus_age < 0.1 and Sim.Medium.offset(scene.render_camera,camera_before_death).length() < 0.001,"Rupture relocation begins from the current view without a camera jump")
@@ -686,7 +686,7 @@ func _lineage() -> void:
 	scene.archive.sync(sim)
 	scene._restart()
 	expect(scene.world != sim and gene in scene.archive.discovered and not scene.archive.expeditions.is_empty(),"An explicit new expedition retains history and blueprint discoveries")
-	expect(scene.world.evolution.points == 3 and scene.world.evolution.learned.is_empty(),"Discoveries never create a free starting stat or AP advantage")
+	expect(scene.world.player.ap == 3 and scene.world.evolution.learned.is_empty(),"Discoveries never create a free starting stat or AP advantage")
 	await host.process_frame
 
 func _native_pool() -> void:

@@ -14,7 +14,7 @@ func run() -> void:
  var cell=sim.player
  scene.build_open=true;scene.cell_ui.context={};scene.cell_ui.sync(0)
  check(not scene.cell_ui.edit_hint.visible,"No irrelevant Tab hint remains after the interaction closes")
- check(scene.cell_ui.mobile_resources.visible and scene.cell_ui.mobile_stocks.text.contains("AP %d" % sim.evolution.points),"Desktop construction shows AP supply, not just its price")
+ check(scene.cell_ui.mobile_resources.visible and scene.cell_ui.mobile_stocks.text.contains("AP %d" % sim.player.ap),"Desktop construction shows AP supply, not just its price")
  scene.build_open=false;scene.cell_ui.sync(0)
  check(not scene.cell_ui.mobile_resources.visible,"Desktop resource strip leaves the ordinary world uncluttered")
  var sibling=sim.Cell.new(777,cell.position+Vector2(600,0));sibling.lineage=cell.lineage_id();sim.cells.append(sibling)
@@ -48,7 +48,7 @@ func internal_and_investment(scene) -> void:
   check(scene.cell_ui.interior.visible and scene.cell_ui._hit_candidates(scene.cell_ui.screen_at({"kind":"chemistry"})).any(func(item):return item.target.kind=="chemistry"),"The factory remains clickable from outside on both platforms")
   scene.cell_ui.open_context({"kind":"chemistry"})
   scene._toggle_build();scene.cell_ui.open_context({"kind":"chemistry"})
-  check(scene.build_open and scene.cell_ui.choices[0].kind=="mitochondrion" and scene.cell_ui.choices[1].kind=="photosynthesis","Internal organ choices remain available without a permanent screen label")
+  check(scene.build_open and scene.cell_ui.choices[0].kind=="mitochondrion" and scene.cell_ui.choices[1].kind=="toxin_sac" and scene.cell_ui.choices[2].kind=="photosynthesis","Internal organ choices remain available without a permanent screen label")
   scene._select(12)
   check(scene.perception=="interoception" and scene.selected==12 and scene.camera_locked,"Selecting mitochondria attaches the interior camera on either platform")
   check(scene.camera_motion.active,"Automatic interior entry uses the existing smooth camera transition")
@@ -92,7 +92,7 @@ func internal_and_investment(scene) -> void:
   check(scene.cell_ui.family_picker.summary.text.contains("generation 4") and scene.cell_ui.family_picker.summary.text.contains("%d cells ever" % lifetime),"Both platforms show generation and lifetime count after a death")
   scene.cell_ui.close_context()
   scene.cell_ui.open_context({"kind":"bud"})
-  check(scene.cell_ui.choices.size()==1 and scene.cell_ui.choices[0].caption=="Divide now","Both platforms offer direct division without storing, funding or reclaiming buttons")
+  check(scene.cell_ui.choices.size()==3 and scene.cell_ui.choices[0].caption=="Divide now" and scene.cell_ui.choices[1].caption=="Investment","Both platforms offer direct division without storing, funding or reclaiming buttons")
   scene.cell_ui.close_context()
   scene._finish_build()
  scene.touch_zoom.enabled=false;scene.build_open=false

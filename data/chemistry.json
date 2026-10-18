@@ -94,7 +94,7 @@
       "key": "tag",
       "name": "Surface tag",
       "radius": 3.5,
-      "decay": 0.04,
+      "decay": 0.8,
       "color": "ff985c"
     },
     {
@@ -102,7 +102,7 @@
       "key": "pore",
       "name": "Pore subunit",
       "radius": 4,
-      "decay": 0.03,
+      "decay": 0.8,
       "color": "ffdc83"
     },
     {
@@ -520,6 +520,12 @@
   "combat": {
     "toxin_damage_per_unit": 75.0,
     "pore_damage_per_second": 16.0,
-    "acid_secretion_capacity": 0.5
+    "acid_secretion_capacity": 0.5,
+    "toxin_sac": {
+      "capacity": 2.0,
+      "fill_rate": 0.04,
+      "atp_per_unit": 1.0,
+      "biomass_floor": 12.0
+    }
   }
 }

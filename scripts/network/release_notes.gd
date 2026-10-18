@@ -240,6 +240,39 @@ const RELEASES=[
  "footer":"Your living cells and their progress carry on between updates.",
  "button":"Back to the pond",
 },
+{
+	"id":"2026-10-17-growing-families-and-toxin-sacs",
+	"audience":"experimental",
+	"title":"What’s new in the pond",
+	"items":[
+		"Families can grow beyond four cells. The ring around Divide shows progress and turns green when ready. The bud also opens Investment and Family.",
+		"Toxin sacs store a little surplus biomass as toxin, then spill it into nearby water when the cell dies.",
+		"Pore-forming attacks stay closer to their source. Pieces already on a membrane can still finish assembling.",
+		"Each cell now keeps its own AP. Division gives 1 AP to the parent and 1 AP to the daughter.",
+		"Investment starts on Manual for everyone. Chosen strategies can build or reabsorb organs at most once a minute per cell.",
+		"Reabsorb returns AP to that cell. Installed organs stay where you built them.",
+
+	],
+	"footer":"Your cell and its progress carry on between updates.",
+	"button":"Back to the pond",
+},
+{
+	"id":"2026-10-17-stable-growing-families",
+	"audience":"stable",
+	"title":"What’s new in the pond",
+	"items":[
+		"Families can grow beyond four cells. The ring around Divide fills as your cell prepares and turns green when ready.",
+		"Open the division bud or nucleus to choose Investment. The bud also opens Family.",
+		"Toxin sacs store a little surplus biomass as toxin, then spill it into nearby water when the cell dies.",
+		"Pore-forming attacks stay closer to their source. Pieces already on a membrane can still finish assembling.",
+		"Each cell now keeps its own AP. Division gives 1 AP to the parent and 1 AP to the daughter.",
+		"Investment starts on Manual for everyone. Chosen strategies can build or reabsorb organs at most once a minute per cell.",
+		"Reabsorb returns AP to that cell. Installed organs stay where you built them.",
+
+	],
+	"footer":"Your cell and its progress carry on between updates.",
+	"button":"Back to the pond",
+},
 ]
 const CURRENT=RELEASES[-1]
 static func seen_index(account: Dictionary) -> int:

@@ -19,7 +19,7 @@ static func execute(sim, action: String, args: Dictionary):
 		"remove":
 			var organ: Dictionary = cell.organ_by_id(identity)
 			return sim.remove(cell.organs.find(organ)) if not organ.is_empty() else false
-		"move": return cell.move_organ(identity,float(args.get("angle",0)))
+		"move": return false # Installed organs cannot be relocated.
 		"mutate": return sim.mutate_organ(identity,str(args.get("gene","")))
 		"choose_mutation": return sim.evolution.accept_division_offer(str(args.get("gene","")))
 		"restore": return sim.restore(identity)

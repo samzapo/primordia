@@ -20,7 +20,7 @@ var enabled := true
 var sandbox := false
 var clock := 0.0
 var tide := 0
-var points := 3
+var points := 0 # Legacy shared AP, consumed once by the cell-AP save migration.
 var offers: Array[String] = []
 var learned: Array[String] = []
 var division_offers: Array[String] = []
@@ -68,7 +68,7 @@ func terminal() -> bool:
 
 func divided(_cell) -> bool:
 	# Called only at the committed paid birth, never on hatch, follow or login.
-	points+=2;division_count+=1
+	division_count+=1
 	if random.randf()>=0.10:return false
 	var pool: Array=[]
 	for gene in Genes.DATA:
@@ -106,18 +106,6 @@ func choose(identity: String) -> bool:
 	learned.append(identity)
 	chosen = true
 	return true
-
-func spend(amount: int, action: String) -> bool:
-	if amount < 0 or (enabled and (terminal() or points < amount)): return false
-	if enabled:
-		points -= amount
-		spending.append({"time":clock,"action":action,"points":amount})
-	return true
-
-func refund(amount: int, action: String) -> void:
-	if not enabled or amount<=0:return
-	points+=amount
-	spending.append({"time":clock,"action":action,"points":-amount})
 
 func accept_challenge(kind: String, cell) -> bool:
 	if not enabled or terminal() or tide >= 6 or challenge != "" or clock-tide*TIDE_SECONDS >= 90: return false
@@ -192,12 +180,12 @@ func advance(dt: float, sim) -> void:
 		passed = passed or (same and challenge == "stability" and stable_seconds >= 30)
 		passed = passed or (same and challenge == "metabolism" and sim.player.foreign_intake-challenge_intake+sim.player.fixed_carbon-challenge_fixed >= 12)
 		challenge_result = "+2 adaptation: challenge complete" if passed else "Challenge ended" if challenge != "" else ""
-		if passed: points += 2
+		if passed: sim.player.ap += 2
 		challenge = ""
 		stable_seconds = 0
 		tide = next_tide
 		if tide < 6:
-			points += 2
+			sim.player.ap += 2
 			_draft()
 		else:
 			offers.clear()

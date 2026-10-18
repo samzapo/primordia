@@ -1,0 +1,15 @@
+# Revision 63 — growing families and finite death defense
+
+The owner approves removing the four-living-cell family cap and collecting the two remaining suggestions in one experimental playtest. Stable remains unchanged until explicit promotion.
+
+## Division and access
+Paid growth, safe placement and the 64-living-body resident limit remain. Families can exceed four living members. One read-only authority status reports funding, anatomy, pond capacity and safe placement; it travels with the selected cell snapshot, so a partial camera cannot guess whole-pond readiness. Checking consumes no resources, identities, AP or ecological RNG. Actual committed births alone award 2 AP. The Divide button has a radial progress ring using the minimum of paid tissue and ATP fractions. Green means ready; a full amber ring means funded but blocked by space/capacity. No large numerical division readout. The bud offers Divide, Invest and Family; the nucleus still opens Investment. Browser messages wait for the authoritative receipt.
+
+## Toxin sac
+Append the internal toxin_sac organ without renumbering existing kinds. At ordinary AP construction prices it starts empty, fills at 0.04 tissue/second up to 2 units per scale-squared, retaining 12 biomass and spending 1 ATP/unit. Shared 25% low-power work applies. Contents are finite organ-local stock included in body material and inertia; they survive saves and are never copied to basic daughters. Death drains contents exactly once into at most 32 ordinary outward toxin parcels per sac before ordinary structural lysis. No toxin is also converted to food. Recycling dismantles contents through the normal salvage/debris split; lost-organ templates contain no refillable stock. A filled sac marks its owner defended in the existing emitted chemical snapshot; old cues remain immutable. There is no new chemical sensor or suicidal navigation. Producer variants and one hunter variant may invest in this defensive support. Artwork and live family portraits show the actual fill. Science links distinguish the bacterial lysis motivation from the fictional organelle and numerical balance.
+
+## Free pore range
+Both free surface tags and pore subunits decay at 0.8/second instead of 0.04/0.03. This uses the existing first-order whole-packet disappearance probability with explicit material outflow, not a hard distance cutoff or a change to membrane-bound complexes. All backends derive rates from data/chemistry.json; bound assembly, inhibitors, repair and damage remain unchanged.
+
+## Acceptance
+Exercise paid division past four relatives, full-pond and geometry rejection without side effects, live desktop/touch access, authoritative network status/receipt, storage/filling/lysis/recycling/lost-organ/save conservation and free versus bound pore lifetime. Run current correctness suites and real resident target checks. No broad rendering-speed campaign, pond reset, synthetic production sign-in/report, router or GPU settings changes. Resume the saved experimental pond and verify stable keeps its build, process, cells/accounts/keys and time.

@@ -35,7 +35,7 @@ func initialize(owner_game) -> void:
  manual.pressed.connect(choose.bind("manual"));inherit.pressed.connect(choose.bind("inherit"))
  back.text="Back";back.pressed.connect(func():game.cell_ui.open_context({"kind":"nucleus"}))
  status.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;box.add_child(status)
- note.text="Only unattended cells spend AP. Selected cells stay manual."
+ note.text="Unattended: own AP, one action/min. Selected cells stay manual."
  note.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;box.add_child(note)
  hide()
 func open() -> void:

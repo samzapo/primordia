@@ -30,7 +30,7 @@ func sync() -> void:
 		rotation = cell.angle
 	# A full, elastic sac changes size rather than filling a fixed tank.
 	atp_size = anchors.radius*0.13*sqrt(log(1+maxf(0,cell.energy)/cell.energy_reference()*3))
-	ecology.sync(cell,game.world.evolution.points)
+	ecology.sync(cell,game.world.player.ap)
 	bud_material = clampf(cell.brood_mass/maxf(0.01,game.world.offspring_quote().material),0,1)
 	bud_energy = clampf(cell.brood_energy/60,0,1)
 	visible = not cell.dead and game.views.has(cell.id)

@@ -112,8 +112,10 @@ func advance_body(sim, cell, h: float) -> void:
 	_resize(cell)
 	while cell.occupied() > cell.perimeter() and not cell.organs.is_empty():
 		var organ: Dictionary = cell.organs.pop_back()
-		cell.lost_organs.append(organ.duplicate(true))
-		sim.spawn_particle(sim.WASTE,cell.organ_position(organ),Vector2.ZERO,organ.material,cell.id)
+		var lost: Dictionary=organ.duplicate(true)
+		if lost.has("stored_toxin"):lost.stored_toxin=0.0
+		cell.lost_organs.append(lost)
+		sim.spawn_particle(sim.WASTE,cell.organ_position(organ),Vector2.ZERO,organ.material+float(organ.get("stored_toxin",0)),cell.id)
 	sim._emit_and_attack(cell,h)
 	sim._suction_cell(cell,h)
 	var mark := Time.get_ticks_usec() if sim.profiling else 0
