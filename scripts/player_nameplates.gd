@@ -15,6 +15,7 @@ func sync(alpha: float) -> void:
 	var font: Font=ThemeDB.fallback_font
 	for cell in game.world.cells:
 		if cell.dead or not owners.has(cell.lineage_id()):continue
+		if game.merge_selecting() and not game._merge_bright(cell):continue
 		if game.perception=="interoception" and cell!=game._follow_cell():continue
 		var owner: Dictionary=owners[cell.lineage_id()]
 		var at: Vector2=cell.previous_position+game.Simulation.Medium.offset(cell.previous_position,cell.position)*game._cell_render_alpha(cell,alpha)

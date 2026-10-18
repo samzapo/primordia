@@ -162,17 +162,18 @@ func run(owner_suite) -> void:
 	check(not sim.divide_lineage(),"another offspring still needs a separately funded reserve")
 	check(sim.player.membrane.skeleton != parent.membrane.skeleton,"offspring tension network is independent")
 	check(sim.player.lineage_id() == parent.lineage_id(),"offspring inherits self-recognition")
-	sim.spawn_particle(sim.TOXIN,sim.player.position+Vector2.RIGHT*sim.player.radius,Vector2.ZERO,1,parent.id)
+	parent.activity=1;sim.player.activity=1
+	sim.spawn_particle(sim.TOXIN,sim.player.position,Vector2.ZERO,1,parent.id)
 	sim._toxin_contacts()
-	check(sim.player.health == 100,"parental toxin is recognized as self")
-	sim.spawn_particle(sim.TOXIN,parent.position+Vector2.RIGHT*parent.radius,Vector2.ZERO,1,sim.player.id)
+	check(sim.player.health < 100 or sim.player.organs.any(func(o):return o.hp<o.max_hp),"parental toxin can harm the contacted daughter")
+	sim.spawn_particle(sim.TOXIN,parent.position,Vector2.ZERO,1,sim.player.id)
 	sim._toxin_contacts()
-	check(parent.health == 100,"offspring toxin is recognized by parent")
+	check(parent.health < 100 or parent.organs.any(func(o):return o.hp<o.max_hp),"offspring toxin can harm the contacted parent")
 	parent.add_organ("poreforming",0,"graze",false)
 	sim.spawn_particle(sim.TAG,sim.player.position+Vector2.RIGHT*sim.player.radius,Vector2.ZERO,0.03,parent.id)
 	sim.particles[-1].direction=Vector2.LEFT
 	sim._surface_contacts()
-	check(sim.player.surface_complexes.is_empty(),"Parent chemical secretion cannot mark offspring")
+	check(not sim.player.surface_complexes.is_empty(),"Parent chemical secretion can mark the contacted offspring")
 
 	sim.spawn_particle(sim.TOXIN,sim.player.position+Vector2.RIGHT*sim.player.radius,Vector2.ZERO,0.1,999)
 	sim._toxin_contacts()

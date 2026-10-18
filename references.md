@@ -553,3 +553,7 @@ Atmospheric exchange also proportionally degasses carbon in oversaturated water 
 
 ## Revision68: recoverable mitochondrial energy
 The existing Alberts mitochondrial and ATP-coupling sources motivate recovery of chemical energy as ATP. Fresh-food18-unit potential, unchanged7.5-unit tissue energy,50% aerobic increments and5x cap are authored game abstractions. Additional mitochondrial ATP comes from otherwise dissipated finite food energy; it does not debit biomass or create fuel. Photosynthetic solar-work accounting funds the higher fresh-food potential. Tissue debris, legacy saved food and depleted parcels retain their actual energy. These are not ATP-per-glucose measurements or a stoichiometric respiratory model.
+
+### Revision69 receptor choices and local attraction/avoidance (October18,2026)
+
+Motivation: the flow-transported chemical communication and chemotaxis study by Scheidweiler et al. (2024), cited above, supports only the broad use of transported local chemical cues. The game's Toward family/Away from family receptors, encoded lineage reports, free build price, hunter choice of any non-family cell and explicit avoidance of armed non-family cells/toxin positions are authored gameplay abstractions. No molecular identification of family, precise hostility inference or this exact sensory policy is claimed. Existing chemistry contacts now have no kinship immunity; finite toxin/pore/decoy encounters affect relatives and their source as well.

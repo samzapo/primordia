@@ -456,10 +456,12 @@ func _snapshot(message: Dictionary) -> void:
 		if not retained_ids.has(identity):cells_by_id.erase(identity)
 	world.lineage=data.lineage;world.evolution=data.evolution
 	world.remote_division=message.get("division",{}).duplicate(true)
+	merge_available=message.get("merge_available",{}).duplicate(true)
 	world.investment=data.get("investment",{"npc":{},"lineages":{},"cells":{}})
 	family_portraits=message.get("family_portraits",{})
 	family_recovery=message.get("family_recovery",{})
 	if not camera_initialized or previous_player!=world.player.id:
+		merge_selection.clear();merge_candidates.clear()
 		cell_ui.close_context();build_open=false;moving_id=-1;selected=-1
 		touch_zoom.cancel()
 		camera_offset=Vector2.ZERO;free_camera=_follow_cell().position;camera_locked=can_follow();camera_rotation=0

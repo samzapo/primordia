@@ -1,7 +1,7 @@
 extends RefCounted
 ## Shared priority selector. Only own physiology and received local cues enter it.
 ## This policy proposes intentions; organs, ATP and physical contact do the work.
-const DESCRIPTION:="Escape harmful acid or an attack first. Use only locally received chemical, light and acidity cues. With low ATP, find food or useful light; rest if food is already digesting. With little biomass, forage or follow prey traces. With healthy reserves, hunt when equipped, seek suitable light, or explore. Under attack, nearby family traces help the cell spread out. Organs determine the senses and movement available."
+const DESCRIPTION:="Escape harmful acid or an attack first. Use only locally received chemical, light and acidity cues. With low ATP, find food or useful light; rest if food is already digesting. With little biomass, forage or follow prey traces. With healthy reserves, hunt when equipped, seek suitable light, or explore. Under attack, nearby family traces help the cell spread out. Family receptors can follow relatives or spread away from their received chemical trails; survival needs take priority. Organs determine the senses and movement available."
 static func update(cell) -> void:
 	var scale: float=cell.growth_scale()
 	var low_energy: bool=cell.behavior.get("low_energy",false)
@@ -17,7 +17,9 @@ static func priority(cell, mode: String) -> int:
 	match mode:
 		"acid":return 1000
 		"evade":return 950
+		"toxin":return 920
 		"flee":return 900
+		"kin_toward","kin_away":return 100 if cell.behavior.get("low_energy",false) or cell.behavior.get("low_mass",false) else 280
 		"graze":
 			if cell.behavior.get("low_energy",false):return 800
 			if cell.behavior.get("low_mass",false):return 600

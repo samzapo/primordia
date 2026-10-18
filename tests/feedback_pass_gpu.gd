@@ -69,13 +69,16 @@ func run() -> void:
  # Same-family fusion releases only the two internal owners and can resume residency.
  var fusion=Sim.new(612,0,false);fusion.server_mode=true;fusion.cells=[fusion.player]
  fusion.habitat_geometry=Sim.Habitat.new(612,fusion.cells);fusion.habitat_geometry.enabled=false
- var recipient=fusion.player;recipient.position=Vector2(500,500)
+ var recipient=fusion.player;recipient.position=Vector2(500,500);recipient.add_organ("feeding",0,"graze",false)
  var donor=Sim.Cell.new(713,Vector2(600,500));donor.lineage=recipient.lineage_id()
  donor.add_organ("feeding",0,"graze",false);donor.add_organ("photosynthesis",1,"graze",false)
  donor.chemistry.emit("food",2,Vector2.ZERO,-1,-1,15);donor.chemistry.particles[0].age=6
  donor.chemistry.emit("waste",.5,Vector2.ZERO,-1,donor.chemistry.particles[0].compartment,0)
  fusion.cells.append(donor);fusion.lineage.register(donor,recipient.id,1,"living",0)
  donor.position=recipient.position+Vector2(recipient.extent()+donor.extent()-2,0)
+ var family_trace: Dictionary=fusion._emit_pheromone(donor)
+ family_trace.p=recipient.organ_position(recipient.organs.filter(func(o):return o.kind=="feeding")[0])
+ fusion.grid.rebuild(fusion.particles);recipient.behavior["family_cues"]=fusion._family_reports(recipient)
  check(Cytoplasm.new().attach(gpu,recipient.chemistry,recipient) and Cytoplasm.new().attach(gpu,donor.chemistry,donor),"Both merging cells own hardware-resident internal chemistry")
  check(fusion.FamilyMerging.request(fusion,donor.id) and recipient.substrate==2 and recipient.waste==.5,"A real resident fusion transfers the vacuole without duplicating either owner")
  check(Cytoplasm.new().attach(gpu,recipient.chemistry,recipient),"The fused cell returns to resident internal chemistry")

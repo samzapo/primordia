@@ -22,11 +22,11 @@ static func inherit_strategy(sim,parent,child) -> void:
 # Variants are deterministic preferences, never free organs or hidden ecology knowledge.
 const VARIANTS:={
  "hunter":[["hunting","toxin","propulsion","poreforming","sensing","protection","mitochondrion","regenerative"],
-           ["hunting","poreforming","cilia","counterattack","protection","neutralizing","mitochondrion","regenerative","toxin_sac"]],
- "producer":[["photosynthesis","protection","regenerative","mitochondrion","neutralizing","cilia","sensing","toxin_sac"],
-             ["photosynthesis","cilia","neutralizing","mitochondrion","counterattack","regenerative","protection","sensing","toxin_sac"]],
- "grazer":[["cilia","mitochondrion","regenerative","sensing","feeding","protection","neutralizing"],
-           ["cilia","neutralizing","regenerative","acidifying","mitochondrion","feeding","sensing","protection"]],
+           ["hunting","poreforming","cilia","counterattack","protection","neutralizing","mitochondrion","regenerative","toxin_sac","family_toward"]],
+ "producer":[["photosynthesis","protection","regenerative","mitochondrion","neutralizing","cilia","sensing","family_away","toxin_sac"],
+             ["photosynthesis","cilia","neutralizing","mitochondrion","counterattack","regenerative","protection","sensing","family_toward","toxin_sac"]],
+ "grazer":[["cilia","mitochondrion","regenerative","sensing","feeding","protection","neutralizing","family_toward"],
+           ["cilia","neutralizing","regenerative","acidifying","mitochondrion","feeding","sensing","protection","family_away"]],
 }
 static func candidate(sim,cell) -> Dictionary:
  var policy:=strategy(sim,cell)
@@ -70,7 +70,7 @@ static func decision(sim,cell) -> Dictionary:
  var policy:=strategy(sim,cell)
  if policy not in VARIANTS or cell.id in sim.managed_cells:return {}
  var choice:=candidate(sim,cell)
- if not choice.is_empty() and cell.ap>=cell.construction_price():
+ if not choice.is_empty() and cell.ap>=cell.construction_price(choice.kind):
   choice["action"]="install";return choice
  var priorities: Array=VARIANTS[policy][posmod(cell.id*19349663 ^ sim.seed_value*83492791,2)]
  var missing_core: bool=working(cell,priorities[0])==0

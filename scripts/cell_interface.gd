@@ -57,7 +57,9 @@ func initialize(owner_game) -> void:
 	stock_row.add_child(mobile_stocks);mobile_stocks.add_theme_font_override("font",COMIC);mobile_stocks.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	stock_row.add_child(mobile_hide);mobile_hide.pressed.connect(func():resources_hidden=not resources_hidden)
 	cancel_icon.z_index=90;cancel_icon.caption="Cancel placement";cancel_icon.description="Tap to cancel";add_child(cancel_icon)
-	cancel_icon.pressed.connect(game._cancel_placement)
+	cancel_icon.pressed.connect(func():
+		if game.merge_selecting():game._end_merge_selection()
+		else:game._cancel_placement())
 	message.z_index=100
 	message.add_theme_font_override("font",COMIC)
 	add_child(pathways)
@@ -131,7 +133,7 @@ func screen_at(target: Dictionary) -> Vector2:
 
 func targets() -> Array:
 	var result: Array = []
-	for kind in ["assembly","chemistry","nucleus","bud","atp"]: result.append({"kind":kind})
+	for kind in ["assembly","chemistry","receptors","nucleus","bud","atp"]: result.append({"kind":kind})
 	for organ in game.world.player.organs: result.append({"kind":"organ","id":organ.id})
 	for scar in game.world.player.lost_organs: result.append({"kind":"scar","id":scar.id})
 	return result
@@ -163,7 +165,7 @@ func target_title(target: Dictionary) -> String:
 	if target.kind == "organ":
 		var organ: Dictionary = game.world.player.organ_by_id(target.id)
 		return game.TITLES[game.Simulation.KINDS.find(organ.kind)] if not organ.is_empty() else "Organelle"
-	return {"assembly":"Assembly factory","chemistry":"Chemistry factory","nucleus":"Nucleus","bud":"Division","atp":"ATP","scar":"Restore organelle"}.get(target.kind,"Cell")
+	return {"assembly":"Assembly factory","chemistry":"Chemistry factory","receptors":"Receptor factory","nucleus":"Nucleus","bud":"Division","atp":"ATP","scar":"Restore organelle"}.get(target.kind,"Cell")
 
 func _choice(title: String, description: String, action: Callable, organ_kind: String = "", symbol: String = "", affordable: bool = true, tissue_cost: float = -1.0, ap_cost: int = 0, rate_model: Dictionary = {}) -> void:
 	var node = Action.new()
@@ -182,6 +184,7 @@ func _choice(title: String, description: String, action: Callable, organ_kind: S
 	choices.append(node)
 
 func open_context(target: Dictionary) -> void:
+	if target.get("kind","")=="merge_family":game._begin_merge_selection();return
 	close_context()
 	context = target.duplicate()
 	game.selected = -1
@@ -193,7 +196,7 @@ func open_context(target: Dictionary) -> void:
 	match target.kind:
 		"overlap":
 			for entry in target.targets:
-				var kind: String={"assembly":"assembly_factory","chemistry":"internal_factory","nucleus":"cell_nucleus","atp":"atp_store","bud":"offspring_store"}.get(entry.kind,"")
+				var kind: String={"assembly":"assembly_factory","chemistry":"internal_factory","receptors":"receptor_factory","nucleus":"cell_nucleus","atp":"atp_store","bud":"offspring_store"}.get(entry.kind,"")
 				if entry.kind == "organ":
 					var organ: Dictionary = cell.organ_by_id(entry.id)
 					if organ.is_empty(): continue
@@ -205,11 +208,12 @@ func open_context(target: Dictionary) -> void:
 				_choice(target_title(entry),describe(entry),open_context.bind(entry),kind,symbol)
 				choices[-1].scar=entry.kind=="scar"
 				if entry.kind=="nucleus" and game.views.has(cell.id):choices[-1].structure_art=game.views[cell.id].art
-		"assembly","chemistry":
-			for index in ([0,1,2,3,5,10,11,13] if target.kind == "assembly" else [12,14,6,7,9,3,8]):
+		"assembly","chemistry","receptors":
+			for index in ([0,1,2,3,11,13] if target.kind == "assembly" else [5,10,15,16] if target.kind=="receptors" else [12,14,6,7,9,3,8]):
 				var kind: String = sim.KINDS[index]
 				var cost := 0.0
-				_choice(game.TITLES[index],"%d AP\n%s" % [cell.construction_price(),game.HELP[index]],game._select.bind(index),kind,"",cell.ap >= cell.construction_price(),cost,cell.construction_price(),{"kind":kind,"scale":1.0,"mutation":""})
+				var price: int=cell.construction_price(kind)
+				_choice(game.TITLES[index],"%d AP\n%s" % [price,game.HELP[index]],game._select.bind(index),kind,"",cell.ap >= price,cost,price,{"kind":kind,"scale":1.0,"mutation":""})
 			if target.kind == "chemistry":
 				_choice("Food vacuoles","Inspect oxygen-dependent digestion, fermentation, photosynthesis and waste expulsion.",func():
 					close_context()
@@ -218,7 +222,7 @@ func open_context(target: Dictionary) -> void:
 			var organ: Dictionary = cell.organ_by_id(target.id)
 			if organ.is_empty(): close_context(); return
 			if not cell.inherent(organ):
-				_choice("Reabsorb","Returns half the tissue and %d AP. Four added organelles return 3 AP; three return 2. Lowers the next build price." % cell.construction_refund(organ),func():
+				_choice("Reabsorb","Returns half the tissue and %d AP. Four non-receptor organelles return 3 AP; three return 2. Lowers the next build price." % cell.construction_refund(organ),func():
 					# Snapshots replace organ dictionaries while this menu stays open.
 					# Resolve the stable ID at click time; never compare an old snapshot.
 					var current=sim.player
@@ -229,7 +233,7 @@ func open_context(target: Dictionary) -> void:
 					if not ok:game._message("This organelle is no longer available.")
 					elif not sim.remote_client:game._message("Organelle reabsorbed · %d AP returned to this cell." % refund),"","Reabsorb")
 			if organ.kind in ["toxin","poreforming"] and cell.count("hunting")==0:
-				_choice("Hunting receptor","Detect nearby prey through their chemical signals. Build this to guide the gland.",game._select.bind(10),"hunting","",cell.ap>=cell.construction_price(),0,cell.construction_price())
+				_choice("Hunting receptor","Detect nearby prey through their chemical signals. Build this to guide the gland.",game._select.bind(10),"hunting","",cell.ap>=cell.construction_price("hunting"),0,cell.construction_price("hunting"))
 			if not cell.inherent(organ):
 				for gene in sim.Genes.available(organ,run.learned):
 					var data: Dictionary = sim.Genes.DATA[gene]
@@ -249,9 +253,9 @@ func open_context(target: Dictionary) -> void:
 		"scar":
 			for scar in cell.lost_organs:
 				if scar.id != target.id: continue
-				_choice("Restore "+game.TITLES[sim.KINDS.find(scar.kind)],"%d AP\nRestore the lost organ in its original form." % cell.construction_price(),func():
-					game._message("Organelle restored." if sim.edit("restore",{"id":target.id}) else "Needs %d AP and membrane room." % cell.construction_price())
-					close_context(),scar.kind,"",cell.ap >= cell.construction_price(),0,cell.construction_price(),scar)
+				_choice("Restore "+game.TITLES[sim.KINDS.find(scar.kind)],"%d AP\nRestore the lost organ in its original form." % cell.construction_price(scar.kind),func():
+					game._message("Organelle restored." if sim.edit("restore",{"id":target.id}) else "Needs %d AP and membrane room." % cell.construction_price(scar.kind))
+					close_context(),scar.kind,"",cell.ap >= cell.construction_price(scar.kind),0,cell.construction_price(scar.kind),scar)
 		"nucleus":
 			for gene in run.division_offers:
 				var data: Dictionary=sim.Genes.DATA[gene]
@@ -396,7 +400,8 @@ func describe(target: Dictionary) -> String:
 	var run = sim.evolution
 	match target.kind:
 		"overlap": return "Choose a structure\nSeveral controls overlap here."
-		"assembly": return "Assembly factory\nCilia, flagella, armor, chemical glands, repair and receptors."
+		"assembly": return "Assembly factory\nCilia, flagella, armor, chemical glands and repair."
+		"receptors": return "Receptor factory\nFree Flight, Hunting, Toward family and Away from family receptors. Receptors do not raise other organelle prices."
 		"chemistry": return "Chemistry factory\nPhotosynthesis, mitochondria, toxin sacs, toxin, acid, buffer/repair and toxin-neutralizing glands."
 		"atp":
 			var rates: Dictionary = cell.energy_budget.rates(cell.age)
@@ -425,7 +430,10 @@ func describe(target: Dictionary) -> String:
 			if organ.kind=="toxin_sac":result+="\nStored toxin %.2f / %.2f" % [float(organ.get("stored_toxin",0)),preload("res://scripts/toxin_sac.gd").capacity(organ)]
 			return result+"\n"+game.HELP[sim.KINDS.find(organ.kind)]
 		"body": return "Membrane · health %d%%\nAcid stress %d%% · local light %d%%\nPunctures lose tissue; repair needs biomass and ATP." % [roundi(cell.health),roundi(cell.acid_stress*100),roundi(sim.light_at(cell.position)*100)]
-		"scar": return "Lost organelle\nRestore for %d AP." % game.world.player.construction_price()
+		"scar":
+			for scar in cell.lost_organs:
+				if scar.id==target.id:return "Lost organelle\nRestore for %d AP." % cell.construction_price(scar.kind)
+			return "Lost organelle"
 	return ""
 
 func _tooltip(value: String, at: Vector2) -> void:
@@ -450,7 +458,7 @@ func _tooltip(value: String, at: Vector2) -> void:
 	var extent := tip_box.get_combined_minimum_size()
 	tip_box.size = extent # Shrink after text reflow; stale tall panels otherwise clip at large UI scales.
 	tip_box.position = (at+Vector2(18,18)).clamp(Vector2(12,12),get_viewport_rect().size-extent-Vector2(12,12))
-	if mobile() or context.get("kind","")=="organ" or value.begins_with("Instinct ·"):
+	if mobile() or game.merge_selecting() or context.get("kind","")=="organ" or value.begins_with("Instinct ·"):
 		tip.custom_minimum_size.x=maxf(50,get_viewport_rect().size.x-32*s)
 		tip.max_lines_visible=3
 		tip.add_theme_font_size_override("font_size",roundi((22 if game.notice_timer>3 else 18)*s))
@@ -601,11 +609,12 @@ func sync(_dt: float) -> void:
 		if inspected_choice.tissue_cost >= 0:
 			hovered_price = {"tissue":inspected_choice.tissue_cost,"ap":inspected_choice.ap_cost,"rate_model":inspected_choice.rate_model}
 	else:
-		if not context.is_empty() and choices.is_empty() and context.kind!="investment": _tooltip(describe(context),screen_at(context))
+		if game.merge_selecting():_tooltip("No available relatives detected yet. Wait for a family trail, or Cancel." if game.merge_candidates.is_empty() else "Tap a bright relative to merge. Tap Cancel to go back." if mobile() else "Click a bright relative to merge. Right-click or Cancel to go back.",Vector2.ZERO)
+		elif not context.is_empty() and choices.is_empty() and context.kind!="investment": _tooltip(describe(context),screen_at(context))
 		elif not hovered.is_empty() and (game.build_open or Input.is_key_pressed(KEY_ALT)) and (hovered.kind != "body" or Input.is_key_pressed(KEY_ALT)) and game.selected < 0 and game.moving_id < 0: _tooltip(describe(hovered),screen_at(hovered))
 		elif not keyboard_target.is_empty() and game.selected < 0: _tooltip(describe(keyboard_target),screen_at(keyboard_target))
 		elif game.selected >= 0:
-			_tooltip("%s\nCost %d AP · You have %d AP\n%s" % [game.TITLES[game.selected],game.world.player.construction_price(),game.world.player.ap,game.placement_status()],cursor)
+			_tooltip("%s\nCost %d AP · You have %d AP\n%s" % [game.TITLES[game.selected],game.world.player.construction_price(game.Simulation.KINDS[game.selected]),game.world.player.ap,game.placement_status()],cursor)
 		elif game.preferences.show_instinct and not game.world.player.dead:
 			_tooltip("Instinct · "+game.world.Behavior.summary(game.world.player),Vector2.ZERO)
 		else:
@@ -624,11 +633,13 @@ func _layout_mobile() -> void:
 	mobile_resources.visible=not game.world.player.dead and ((mobile() and game.touch_controls_available()) or (not mobile() and game.build_open))
 	mobile_menu_height=investment_picker.size.y+16*s if mobile() and investment_picker.visible else 0.0
 	if mobile() and family_picker.visible:mobile_menu_height=family_picker.position.y+family_picker.size.y+8*s
-	cancel_icon.visible=mobile() and (game.selected>=0 or game.moving_id>=0) and not game.settings_panel.visible
+	cancel_icon.visible=(game.merge_selecting() or (mobile() and (game.selected>=0 or game.moving_id>=0))) and not game.settings_panel.visible
 	if cancel_icon.visible:
 		var organ: Dictionary=game.world.player.organ_by_id(game.moving_id)
-		cancel_icon.kind=game.Simulation.KINDS[game.selected] if game.selected>=0 else organ.get("kind","")
-		cancel_icon.position=Vector2(8,8)*s;cancel_icon.size=Vector2.ONE*54*s;cancel_icon.text_scale=s*.75;cancel_icon.queue_redraw()
+		cancel_icon.kind="" if game.merge_selecting() else game.Simulation.KINDS[game.selected] if game.selected>=0 else organ.get("kind","")
+		cancel_icon.symbol="Cancel" if game.merge_selecting() else ""
+		cancel_icon.caption="Cancel merge" if game.merge_selecting() else "Cancel placement"
+		cancel_icon.position=Vector2(8,38 if game.merge_selecting() else 8)*s;cancel_icon.size=Vector2.ONE*54*s;cancel_icon.text_scale=s*.75;cancel_icon.queue_redraw()
 	if mobile_tray.visible:
 		var columns:=maxi(1,int((size.x-64*s)/(65*s)))
 		var height:=minf(size.y*.32,ceilf(float(choices.size())/columns)*65*s+12*s)
@@ -644,7 +655,7 @@ func _layout_mobile() -> void:
 		mobile_hide.visible=mobile()
 		mobile_stocks.add_theme_font_size_override("font_size",roundi(18*s))
 		mobile_stocks.text="Biomass %.1f   AP %d   ATP %.1f" % [game.world.player.biomass,game.world.player.ap,game.world.player.energy]
-		if game.selected>=0:mobile_stocks.text+="\nCost %d AP" % game.world.player.construction_price()
+		if game.selected>=0:mobile_stocks.text+="\nCost %d AP" % game.world.player.construction_price(game.Simulation.KINDS[game.selected])
 		mobile_hide.text="Resources" if resources_hidden else "−"
 		mobile_hide.add_theme_font_size_override("font_size",roundi(16*s))
 		mobile_hide.custom_minimum_size=Vector2(30,30)*s

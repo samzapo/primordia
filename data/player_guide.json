@@ -17,7 +17,7 @@
       {
         "id": "build",
         "title": "Build and restore",
-        "text": "Open the Assembly or Chemistry factory for membrane organs. The three teal chambers with a small + are the Chemistry factory: open it from either view for mitochondria. Choosing an internal organ switches smoothly to Interoception so you can place it inside. The first added organelle is free, the second costs 1 AP, the third 2 AP, and so on. The oral groove does not count. Reabsorbing any added organelle returns the current build tier: four added organs return 3 AP, three return 2, and one returns 0. The oral groove does not count. Selling lowers the next price; restoration uses that same next price. While building, the resource strip shows your AP and the cost. AP belongs to this cell; relatives cannot spend it.",
+        "text": "Open Assembly for movement, armor and glands, Chemistry for internal organs and photosynthesis, or the purple Receptor factory for Flight, Hunting, Toward family and Away from family. All receptors cost 0 AP and do not raise other prices. Other added organs cost 0 AP for the first, 1 for the second, 2 for the third, and so on; the oral groove does not count. Reabsorbing one of four non-receptor organs returns 3 AP; from three it returns 2. Free receptors return no AP. AP belongs to this cell. Choosing an internal organ switches smoothly to Internal for placement.",
         "sources": []
       },
       {
@@ -97,7 +97,7 @@
       {
         "id": "follow",
         "title": "Follow and look inside",
-        "text": "Tap Follow to center on your cell. Tap Interoception to look inside, or Exteroception to return to the pond. Inside, gestures stay relative to your cell and you can zoom much closer. Returning outside keeps your zoom within the pond view limits.",
+        "text": "Tap Follow to center on your cell. Tap Internal to look inside, or External to return to the pond. Inside, gestures stay relative to your cell and you can zoom much closer. Returning outside keeps your zoom within the pond view limits.",
         "sources": []
       },
       {
@@ -139,7 +139,7 @@
       {
         "id": "family_tools",
         "title": "Family and growth",
-        "text": "Tap Family to switch relatives or choose a relative to merge into this cell. Use the up/down arrows to scroll long families. Open the division bud, then Divide for continuous Auto divide or a single queued birth. Investment shows all three strategies and whether this cell uses Family or an individual setting."
+        "text": "Tap Family to switch relatives. Merge zooms to nearby water: tap a bright relative to merge it into your current cell. Only unattended relatives whose pheromones your cell detects are selectable; other cells are dim. Tap Cancel to leave. Swipe through long families, or use the up/down arrows. Open the division bud, then Divide for continuous Auto divide or a single queued birth. Investment shows all three strategies and whether this cell uses Family or an individual setting."
       }
     ],
     "desktop": [
@@ -152,7 +152,7 @@
       {
         "id": "follow",
         "title": "Follow and look inside",
-        "text": "Space toggles Follow / Free view outside the cell and recenters the cell frame inside. I switches Interoception / Exteroception.",
+        "text": "Space toggles Follow / Free view outside the cell and recenters the cell frame inside. I switches Internal / External.",
         "sources": []
       },
       {
@@ -194,7 +194,7 @@
       {
         "id": "family_tools",
         "title": "Family and growth",
-        "text": "Click Family to switch relatives or choose a relative to merge into this cell. Use the up/down arrows to scroll long families. Open the division bud, then Divide for continuous Auto divide or a single queued birth. Investment shows all three strategies and whether this cell uses Family or an individual setting."
+        "text": "Click Family to switch relatives. Merge zooms to nearby water: click a bright relative to merge it into your current cell. Only unattended relatives whose pheromones your cell detects are selectable; other cells are dim. Right-click or use Cancel to leave. Use the up/down arrows to scroll long families. Open the division bud, then Divide for continuous Auto divide or a single queued birth. Investment shows all three strategies and whether this cell uses Family or an individual setting."
       }
     ]
   },
@@ -384,8 +384,8 @@
         },
         {
           "id": "toxin_contact",
-          "title": "Toxin + foreign cell → damage",
-          "text": "Toxin packets hurt cells outside their own lineage. A neutralizer can intercept them. Defense and repair compete with the attacker’s finite supplies.",
+          "title": "Toxin + cell → damage",
+          "text": "Toxin packets can hurt any cell they reach, including relatives and their source. A neutralizer can intercept them. Defense and repair compete with the attacker’s finite supplies.",
           "sources": [
             {
               "title": "Toxin–antitoxin binding",
@@ -415,7 +415,7 @@
         {
           "id": "decoys",
           "title": "Decoy + receptor → weaker sensing",
-          "text": "Foreign decoys temporarily occupy receptors. They can release on their own; ATP and repair help clear them sooner. Light seeking is separate.",
+          "text": "Decoys temporarily occupy receptors, including those of relatives. They can release on their own; ATP and repair help clear them sooner. Light seeking is separate.",
           "sources": [
             {
               "title": "Receptor recovery",
@@ -426,7 +426,7 @@
         {
           "id": "signals",
           "title": "Pheromones carry old reports",
-          "text": "Hunting and flight receptors read drifting reports of nearby cells. Reports age and expire; they do not reveal another cell’s live location. Family signatures help relatives recognize one another.",
+          "text": "Hunting and flight receptors read drifting reports of nearby cells. Reports age and expire; they do not reveal another cell’s live location. Family signatures help relatives recognize one another. Hunters still choose non-family targets, but stray toxin, pores and decoys can affect relatives.",
           "sources": [
             {
               "title": "Chemical signals in flowing habitats",
@@ -497,7 +497,7 @@
         {
           "id": "organ_hunting",
           "title": "Hunting receptor",
-          "text": "Follows pheromone reports of smaller or undefended foreign cells. It senses; glands provide the attack.",
+          "text": "Free Hunting receptors follow any detected non-family pheromone report, regardless of size or defenses. Glands provide the attack.",
           "sources": [
             {
               "title": "Chemical signals in flowing habitats",
@@ -508,7 +508,7 @@
         {
           "id": "organ_sensing",
           "title": "Flight receptor",
-          "text": "Responds to reports of threatening foreign cells. Escape takes priority over other steering.",
+          "text": "Free Flight receptors steer away from nearby toxin particles and armed non-family cells detected through pheromones. An unarmed cell’s size alone does not trigger flight.",
           "sources": [
             {
               "title": "Chemical signals in flowing habitats",
@@ -549,7 +549,7 @@
         {
           "id": "organ_poreforming",
           "title": "Pore-forming gland",
-          "text": "Releases tags and pore parts toward a local target report. Damage requires assembly on a foreign membrane.",
+          "text": "Releases tags and pore parts toward a local target report. Damage requires assembly on an actual membrane, including a relative’s.",
           "sources": [
             {
               "title": "Structure of a membrane pore",
@@ -628,6 +628,28 @@
             {
               "title": "Toxin accumulation and release by cell lysis",
               "url": "https://www.nature.com/articles/s41598-020-61086-z"
+            }
+          ]
+        },
+        {
+          "id": "organ_family_toward",
+          "title": "Toward family receptor",
+          "text": "A free receptor from the purple Receptor factory. Steers toward locally detected family pheromone trails. Food, energy recovery and danger take priority. It needs movement organs to swim; it cannot locate relatives that it has not sensed.",
+          "sources": [
+            {
+              "title": "Chemical sensing under flow",
+              "url": "https://www.nature.com/articles/s41467-023-44267-y"
+            }
+          ]
+        },
+        {
+          "id": "organ_family_away",
+          "title": "Away from family receptor",
+          "text": "A free receptor from the purple Receptor factory. Steers away from locally detected family pheromone trails, helping relatives spread out. Survival needs take priority. Free receptors do not raise the next organelle’s AP price and return no AP when reabsorbed.",
+          "sources": [
+            {
+              "title": "Chemical sensing under flow",
+              "url": "https://www.nature.com/articles/s41467-023-44267-y"
             }
           ]
         }
@@ -758,7 +780,7 @@
         {
           "id": "views",
           "title": "Inside and outside views",
-          "text": "Exteroception shows exterior chemistry. Interoception focuses on the followed cell’s contents and dims the exterior. The rest of the pond keeps evolving.",
+          "text": "External shows exterior chemistry. Internal focuses on the followed cell’s contents and dims the exterior. The rest of the pond keeps evolving.",
           "sources": []
         },
         {

@@ -15,9 +15,9 @@ var raw_fuel: float:
 var surface_complexes: Array = []
 const Genes = preload("res://scripts/mutations.gd")
 const Membrane = preload("res://scripts/membrane.gd")
-const KINDS := ["propulsion", "protection", "poreforming", "regenerative", "feeding", "sensing", "photosynthesis", "toxin", "neutralizing", "acidifying", "hunting", "cilia", "mitochondrion", "counterattack", "toxin_sac"]
-const COST := [8.0, 10.0, 12.0, 10.0, 8.0, 6.0, 12.0, 12.0, 10.0, 12.0, 6.0, 8.0, 10.0, 12.0, 10.0]
-const WIDTH := [19.0, 34.0, 26.0, 27.0, 36.0, 20.0, 30.0, 26.0, 26.0, 26.0, 20.0, 24.0, 0.0, 24.0, 0.0]
+const KINDS := ["propulsion", "protection", "poreforming", "regenerative", "feeding", "sensing", "photosynthesis", "toxin", "neutralizing", "acidifying", "hunting", "cilia", "mitochondrion", "counterattack", "toxin_sac", "family_toward", "family_away"]
+const COST := [8.0, 10.0, 12.0, 10.0, 8.0, 0.0, 12.0, 12.0, 10.0, 12.0, 0.0, 8.0, 10.0, 12.0, 10.0, 0.0, 0.0]
+const WIDTH := [19.0, 34.0, 26.0, 27.0, 36.0, 20.0, 30.0, 26.0, 26.0, 26.0, 20.0, 24.0, 0.0, 24.0, 0.0, 20.0, 20.0]
 const SENSE_MODES := ["flee"]
 const MODES := ["graze"]
 const BASAL_UPKEEP := 0.18
@@ -169,13 +169,17 @@ func refund_ap(amount: int,action: String,progression) -> void:
 	ap+=amount
 	progression.spending.append({"time":progression.clock,"cell":id,"action":action,"points":-amount})
 
-func construction_price() -> int:
-	# The inherent oral groove belongs to the body, not the purchased build.
-	return organs.filter(func(organ):return not inherent(organ)).size()
+const RECEPTORS:=["sensing","hunting","family_toward","family_away"]
+static func receptor(kind: String) -> bool:return kind in RECEPTORS
+
+func construction_price(kind: String="") -> int:
+	# Free sensing receptors never advance the paid-organ tier.
+	if receptor(kind):return 0
+	return organs.filter(func(organ):return not inherent(organ) and not receptor(organ.kind)).size()
 
 func construction_refund(organ: Dictionary) -> int:
 	var current: Dictionary=organ_by_id(int(organ.get("id",-1)))
-	if current.is_empty() or inherent(current):return 0
+	if current.is_empty() or inherent(current) or receptor(current.kind):return 0
 	# Reverse the current build tier, independent of this organ's purchase history.
 	return maxi(0,construction_price()-1)
 
@@ -413,7 +417,7 @@ func _make_room(anchor: float, width: float, length: float) -> void:
 
 static func steering_strength(organ: Dictionary) -> float:
 	# Legacy percentages remain saved verbatim; all working senses are automatic.
-	return 1.0 if organ.get("kind","") in ["feeding","hunting","photosynthesis","sensing","counterattack"] else 0.0
+	return 1.0 if organ.get("kind","") in ["feeding","hunting","photosynthesis","sensing","counterattack","family_toward","family_away"] else 0.0
 
 func set_steering_strength(_identity: int, _strength: float) -> bool:return false
 func set_exploration(_strength: float) -> bool:return false
@@ -422,8 +426,8 @@ func set_response_cycle(_seconds: float) -> bool:return false
 func add_organ(kind: String, a: float, mode: String = "graze", paid: bool = true, size: float = 1.0) -> bool:
 	var k := KINDS.find(kind)
 	if dead or k < 0 or not can_fit(kind,a,size,paid): return false
-	if kind in ["sensing","hunting"]:
-		var required := "flee" if kind == "sensing" else "hunt"
+	if receptor(kind):
+		var required: String={"sensing":"flee","hunting":"hunt","family_toward":"kin_toward","family_away":"kin_away"}[kind]
 		if mode == "graze": mode = required
 		if mode != required: return false
 	elif not MODES.has(mode): return false
@@ -508,7 +512,7 @@ static func organ_upkeep(organ: Dictionary) -> float:
 	if organ.kind=="toxin_sac" and float(organ.get("stored_toxin",0))<preload("res://scripts/toxin_sac.gd").capacity(organ):
 		var rule: Dictionary=preload("res://scripts/chemistry_catalog.gd").data().combat.toxin_sac
 		rate+=float(rule.fill_rate)*float(rule.atp_per_unit)*area
-	if organ.kind in ["feeding","sensing","hunting","photosynthesis"]:
+	if organ.kind in ["feeding","sensing","hunting","photosynthesis","family_toward","family_away"]:
 		rate += .1*(Genes.output(organ)-1)*Genes.inefficiency(organ)*area
 	if organ.kind in ["feeding","neutralizing","acidifying","regenerative"]:
 		rate += (0.35 if organ.kind == "feeding" else 2.0)*area*Genes.factor(organ,"secretion")*SECRETION_COST*Genes.factor(organ,"secretion_cost")

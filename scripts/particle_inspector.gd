@@ -6,7 +6,7 @@ const DETAILS := [
 	"Supports efficient respiration.",
 	"Enzymes can convert it into food.",
 	"A drifting cell report. Hunting and flight receptors read its last-known location, size and hostility.",
-	"Damages foreign cells; antitoxin can neutralize it.",
+	"Damages any cell it contacts, including relatives; antitoxin can neutralize it.",
 	"Photosynthesis uses it in bright water.",
 	"Reuses waste as food when its binding face aligns.",
 	"Binds toxins into harmless waste.",

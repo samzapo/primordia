@@ -872,7 +872,6 @@ public:
       const auto &s=packet_slots[int64_t(ids[k])]; const auto &p=s.value;
       if (!p.alive || (wanted==4 ? p.kind!=4 && p.kind!=11 && p.kind!=12 : p.kind!=wanted) || (!coarse && activity(p.p,camera,half)<=0)) continue;
       int owner=s.d.get("owner",-1);
-      if (wanted==4 && (p.kind!=7 && int(inherited.get(owner,owner))==lineage)) continue;
       if (perception_delta(at,p.p).length_squared()<=reach*reach) return true;
     }
     return false;
@@ -884,7 +883,7 @@ public:
     double radius=12*double(organ["scale"]); int lineage=cell->call("lineage_id");
     for (int k=0;k<ids.size();++k) {
       auto &s=packet_slots[int64_t(ids[k])]; auto &p=s.value; int owner=s.d.get("owner",-1);
-      if (!p.alive || p.kind!=10 || int(inherited.get(owner,owner))==lineage || activity(p.p,camera,half)<=0) continue;
+      if (!p.alive || p.kind!=10 || activity(p.p,camera,half)<=0) continue;
       Vector2 d=perception_delta(at,p.p); if (d.length()>radius+3.5*std::clamp(std::sqrt(p.amount/.3),.8,1.7)) continue;
       Vector2 n=d.normalized(); if (forward.dot(n)<.25 || p.dir.dot(-n)<.5) continue;
       organ["blocked"]=std::min(1.,double(organ["blocked"])+.65);
@@ -901,7 +900,6 @@ public:
       for (int i=0;i<cells.size();++i) {
         Object *cell=cells[i];
         if (bool(cell->get("dead")) || double(cell->get("activity"))<=0) continue;
-        if (p.kind!=7 && int(cell->call("lineage_id"))==int(inherited.get(owner,owner))) continue;
         Vector2 d=perception_delta(cell->get("position"),p.p);
         if (d.length()>double(cell->call("extent"))+5 || d.length()>double(cell->call("support",d.angle()))+5 || p.dir.dot(-d.normalized())<.5) continue;
         if (bool(cell->call("accept_surface",p.kind,p.amount,d.angle(),owner))) {p.alive=false;break;}
@@ -920,8 +918,7 @@ public:
       int owner=s.d.get("owner",-1);
       for (int i=0;i<candidates.size();++i) {
         Object *cell=cells[int(candidates[i])];
-        if (bool(cell->get("dead")) || double(cell->get("activity"))<=0 ||
-            int(cell->call("lineage_id"))==int(inherited.get(owner,owner))) continue;
+        if (bool(cell->get("dead")) || double(cell->get("activity"))<=0) continue;
         Vector2 d=perception_delta(cell->get("position"),p.p);
         if (d.length()>double(cell->call("support",d.angle()))+5) continue;
         double debris=cell->call("damage",p.amount*primordia_chemistry::toxin_damage_per_unit,d.angle(),owner);
@@ -938,7 +935,7 @@ public:
     int lineage=cell->call("lineage_id"); Array organs=cell->get("organs");
     for (int k=0;k<ids.size();++k) {
       auto &s=packet_slots[int64_t(ids[k])]; auto &p=s.value; int owner=s.d.get("owner",-1);
-      if (!p.alive || (p.kind!=4 && p.kind!=10 && p.kind!=7 && p.kind!=11 && p.kind!=12) || activity(p.p,camera,half)>0 || (p.kind!=7 && int(inherited.get(owner,owner))==lineage)) continue;
+      if (!p.alive || (p.kind!=4 && p.kind!=10 && p.kind!=7 && p.kind!=11 && p.kind!=12) || activity(p.p,camera,half)>0) continue;
       Vector2 d=perception_delta(at,p.p);
       if (d.length()>radius || rng->randf()>=1-std::exp(-2*std::max(0.,dt))) continue;
       if (p.kind==7 || p.kind==11 || p.kind==12) {
@@ -949,7 +946,7 @@ public:
         bool bound=false;
         for (int i=0;i<organs.size();++i) {
           Dictionary organ=organs[i]; String kind=organ["kind"];
-          if (kind!="feeding" && kind!="sensing" && kind!="hunting") continue;
+          if (kind!="feeding" && kind!="sensing" && kind!="hunting" && kind!="family_toward" && kind!="family_away") continue;
           Vector2 contact=perception_delta(cell->call("organ_position",organ),p.p);
           if (contact.length()>12*double(organ["scale"])+3.5*std::clamp(std::sqrt(p.amount/.3),.8,1.7)) continue;
           Vector2 forward=Vector2(cell->call("organ_normal",organ)).rotated(cell->get("angle")), n=contact.normalized();

@@ -144,6 +144,17 @@ func run() -> void:
  for body in host.world.cells:
   if body!=selected and body!=donor:body.position=Vector2(2600+body.id*10,2200);body.previous_position=body.position
  donor.position=selected.position+Vector2(selected.support(0)+donor.support(PI)-5,0);donor.previous_position=donor.position
+ var family_trace: Dictionary=host.world._emit_pheromone(donor)
+ family_trace.p=selected.organ_position(selected.organs.filter(func(o):return o.kind=="feeding")[0]);family_trace.previous=family_trace.p
+ family_trace.expires_at=host.world.time+8
+ host.world._commit_spawn_metadata()
+ if host.cpu:
+  host.world.grid.rebuild(host.world.particles);selected.behavior["family_cues"]=host.world._family_reports(selected)
+ check(await until(func():return Sim.FamilyMerging.detected(host.world,selected,donor.id)),"The receiver detects a real emitted family tracer through its active chemistry backend")
+ # Actual contact is a separate physical precondition, never a navigation input.
+ donor.position=selected.position+Vector2(selected.support(0)+donor.support(PI)-5,0);donor.previous_position=donor.position
+ var eligibility: Dictionary=host._frame(peer).merge_available
+ check(eligibility.cell==selected.id and eligibility.targets.has(donor.id),"The real socket snapshot exposes only current detected merge target identities")
  var donor_id: int=donor.id;var combined_ap: int=selected.ap+donor.ap
  command={"op":"command","epoch":host.epoch,"cell":selected.id,"edit":account.edit,"sequence":9,"action":"merge","args":{"id":donor.id}}
  socket.send_text(JSON.stringify(command))
@@ -180,6 +191,14 @@ func run() -> void:
  socket.send_text(JSON.stringify(command))
  check(await until(func():return not result(11).is_empty()),"Forged division target receives a rejection")
  check(not result(11).ok and not selected.division_requested,"A queued division cannot target another body")
+ var unseen=Sim.Cell.new(host.world.next_id,Sim.Medium.wrap_position(selected.position+Vector2(1600,900)));host.world.next_id+=1
+ unseen.lineage=account.root;host.world.cells.append(unseen);account.lineage.register(unseen,selected.id,1,"living",host.world.time)
+ points=selected.ap
+ command={"op":"command","epoch":host.epoch,"cell":selected.id,"edit":account.edit,"sequence":12,"action":"merge","args":{"id":unseen.id,"detected":true}}
+ socket.send_text(JSON.stringify(command))
+ check(await until(func():return not result(12).is_empty()),"An undetected family target receives an authenticated rejection")
+ check(not result(12).ok and result(12).message.contains("pheromones") and selected.ap==points and host.world.cells.has(unseen),"A forged client detection claim cannot authorize merging or spend resources")
+ check(not host._frame(peer).merge_available.targets.has(unseen.id),"Off-camera family portraits do not become merge selection permission")
  socket.close();host.running=false;host.listener.stop();host._finish_snapshots()
  if host.world.resident!=null:
   host.world.resident.gpu.close();await host.world.resident.gpu.closed

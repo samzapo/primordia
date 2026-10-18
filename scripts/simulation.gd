@@ -408,7 +408,7 @@ func _construction_input(amount: float) -> void:
 
 func _install_for(cell, progression, kind: String, local_angle: float, mode: String = "graze", size: float = 1.0) -> bool:
 	if kind == "feeding": return false # Inherent membrane anatomy is never purchased.
-	var cost: int = cell.construction_price()
+	var cost: int = cell.construction_price(kind)
 	if progression.terminal() or (progression.enabled and cell.ap < cost): return false
 	if not cell.add_organ(kind,local_angle,mode,false,size): return false
 	cell.spend_ap(cost,"Install "+kind,progression)
@@ -418,7 +418,11 @@ func _install_for(cell, progression, kind: String, local_angle: float, mode: Str
 
 func restore(identity: int) -> bool:
 	if remote_client: return edit("restore",{"id":identity})
-	var cost: int = player.construction_price()
+	var scar: Dictionary={}
+	for lost in player.lost_organs:
+		if lost.id==identity:scar=lost;break
+	if scar.is_empty():return false
+	var cost: int = player.construction_price(scar.kind)
 	if evolution.terminal() or (evolution.enabled and player.ap < cost): return false
 	if not player.restore_organ(identity,false): return false
 	player.spend_ap(cost,"Restore organ",evolution)
@@ -1307,7 +1311,7 @@ func _sense(cell, dt: float, received_by_organ: Dictionary = {}) -> void:
 		if not prepared_family:families=_family_reports(cell)
 		cell.behavior["family_cues"]=families.duplicate(true)
 		for organ in cell.organs:
-			if organ.kind not in ["feeding","sensing","hunting","photosynthesis"] or organ.hp <= 0: continue
+			if organ.kind not in ["feeding","sensing","hunting","photosynthesis","family_toward","family_away"] or organ.hp <= 0: continue
 			var mode: String = "hunt" if organ.kind == "hunting" else "light" if organ.kind == "photosynthesis" else organ.mode
 			var strength: float = _steering_weight(organ,mode)
 			if strength <= 0: continue
@@ -1323,6 +1327,18 @@ func _sense(cell, dt: float, received_by_organ: Dictionary = {}) -> void:
 					best_priority=Behavior.priority(cell,"light")
 					best_score = light_score
 					best = {"score":0.7,"mode":"light","id":-1,"at":cell.position+direction*150,"a":organ.a,"organ_id":organ.id}
+				continue
+			if mode in ["kin_toward","kin_away"]:
+				var social: Dictionary=received_by_organ.get(organ.id,{}).get("families",{}) if received_by_organ.has(organ.id) else _family_reports(cell,organ)
+				for detected in social.values():
+					var report: Dictionary=detected.report
+					if detected.expires_at<=time or report.id==cell.id or report.lineage!=cell.lineage_id():continue
+					families[report.id]=detected
+					var score: float=1.0/(1+detected.distance)
+					var weighted: float=_candidate_score(cell,score,organ.id,mode,report.id)
+					if _better_intention(cell,mode,weighted,best_priority,best_score):
+						best_priority=Behavior.priority(cell,mode);best_score=weighted
+						best={"lineage":report.lineage,"score":score,"mode":mode,"id":report.id,"at":report.at,"a":organ.a,"organ_id":organ.id,"expires_at":detected.expires_at}
 				continue
 			var food_bins: Dictionary = {}
 			var reports: Dictionary = {}
@@ -1367,8 +1383,10 @@ func _sense(cell, dt: float, received_by_organ: Dictionary = {}) -> void:
 				if detected.expires_at<=time:continue
 				if report.lineage==cell.lineage_id():
 					continue
-				if mode == "hunt" and report.mass >= cell.organic_mass() and report.get("defended",true): continue
-				if mode == "flee" and not report.hostile and report.mass <= cell.organic_mass(): continue
+				if mode=="flee" and not report.hostile:
+					if cell.target_mode=="flee" and cell.target_id==report.id:cell.target_memory=0
+					cell.signals=cell.signals.filter(func(packet):return packet.mode!="flee" or packet.id!=report.id)
+					continue
 				var age: float = maxf(0,time-report.emitted_at)
 				var score: float = (100.0 if mode == "flee" else 2.0)+1.0/(1+age)+0.1/(1+detected.distance)
 				if mode == "flee" and report.hostile: score += 1.0
@@ -1388,8 +1406,13 @@ func _sense(cell, dt: float, received_by_organ: Dictionary = {}) -> void:
 				best_priority=Behavior.priority(cell,"graze")
 				best_score = food_score
 				best = {"score":1.0,"mode":"graze","id":-1,"at":patch.at,"a":organ.a,"organ_id":organ.id}
+		cell.behavior["family_cues"]=families.duplicate(true)
 		for sensor in cell.organs:
 			if sensor.kind!="sensing" or sensor.hp<=0:continue
+			var danger: Dictionary=received_by_organ.get(sensor.id,{}).get("danger",{}) if received_by_organ.has(sensor.id) else _toxin_report(cell,sensor)
+			if not danger.is_empty() and Behavior.priority(cell,"toxin")>best_priority:
+				best_priority=Behavior.priority(cell,"toxin")
+				best={"score":101.0,"mode":"toxin","id":-1,"at":danger.at,"a":sensor.a,"organ_id":sensor.id,"expires_at":time+.3}
 			var direction: Vector2=_acid_direction(cell,sensor)
 			if direction.length_squared()>.0001:
 				best={"score":1.0,"mode":"acid","id":-1,"at":cell.position+direction*150,"a":sensor.a,"organ_id":sensor.id}
@@ -1427,13 +1450,13 @@ func _sense(cell, dt: float, received_by_organ: Dictionary = {}) -> void:
 	if cell.drive_active:
 		cell.facing=Medium.offset(cell.position,cell.target_position).normalized()
 		cell.threat=cell.facing if cell.target_mode=="flee" and cell.target_id>=0 else Vector2.ZERO
-		cell.target=-cell.facing if cell.target_mode=="flee" else cell.facing
+		cell.target=-cell.facing if cell.target_mode in ["flee","kin_away","toxin"] else cell.facing
 		if cell.target_mode in ["flee","evade"] and float(cell.behavior.get("escape_expires_at",INF))>time and cell.behavior.get("escape",Vector2.ZERO).length_squared()>.0001:
 			cell.target=cell.behavior.escape
 			# Resolve the turn as well as stroke reversal, keeping attack aim on
 			# the received threat rather than on the family separation heading.
 			cell.facing=-cell.target if cell.target_mode=="flee" else cell.target
-		cell.state={"graze":"FORAGING","hunt":"FOLLOWING PREY PHEROMONE","light":"SEEKING LIGHT","flee":"FLEEING","evade":"ESCAPING AN ATTACK","acid":"LEAVING HARMFUL ACID"}.get(cell.target_mode,"EXPLORING")
+		cell.state={"graze":"FORAGING","hunt":"FOLLOWING PREY PHEROMONE","light":"SEEKING LIGHT","flee":"FLEEING","evade":"ESCAPING AN ATTACK","acid":"LEAVING HARMFUL ACID","kin_toward":"FOLLOWING FAMILY PHEROMONES","kin_away":"SPREADING OUT FROM FAMILY","toxin":"AVOIDING TOXIN"}.get(cell.target_mode,"EXPLORING")
 		if cell.target_mode=="light" and organ.get("mutation","")=="shade_leaf":cell.state="SEEKING SOFT LIGHT"
 		cell.target_mouth=cell.organ_normal(organ).angle() if not organ.is_empty() else 0.0
 	else:
@@ -1441,7 +1464,7 @@ func _sense(cell, dt: float, received_by_organ: Dictionary = {}) -> void:
 		cell.target=fallback.direction;cell.facing=cell.target;cell.threat=Vector2.ZERO
 		cell.target_id=-1;cell.target_mouth=0;cell.state=fallback.state
 	var merge_direction: Vector2=FamilyMerging.direction(self,cell)
-	if merge_direction.length_squared()>.001 and cell.target_mode not in ["acid","flee","evade"]:
+	if merge_direction.length_squared()>.001 and cell.target_mode not in ["acid","flee","evade","toxin"]:
 		for motor in cell.organs:
 			if motor.hp<=0 or motor.kind not in ["propulsion","cilia","photosynthesis"]:continue
 			cell.target=merge_direction;cell.facing=merge_direction;cell.drive_active=true
@@ -1453,9 +1476,9 @@ func _better_intention(cell,mode: String,score: float,held_priority: int,held_sc
 	var priority: int=Behavior.priority(cell,mode)
 	return priority>0 and (priority>held_priority or (priority==held_priority and score>held_score))
 
-func _family_reports(cell) -> Dictionary:
-	for organ in cell.organs:
-		if organ.hp<=0 or organ.kind not in ["feeding","hunting","sensing","counterattack"]:continue
+func _family_reports(cell,only_organ: Dictionary={}) -> Dictionary:
+	for organ in ([only_organ] if not only_organ.is_empty() else cell.organs):
+		if organ.hp<=0 or organ.kind not in ["feeding","hunting","sensing","counterattack","family_toward","family_away"]:continue
 		var at: Vector2=cell.organ_position(organ)
 		var reach: float=(120 if organ.kind=="hunting" else 90)*sqrt(organ.scale)*(1-organ.blocked*.65)*Genes.factor(organ,"sense")
 		var reports: Dictionary={}
@@ -1475,6 +1498,17 @@ func _family_reports(cell) -> Dictionary:
 			if reports[id].report.lineage!=cell.lineage_id():reports.erase(id)
 		return reports
 	return {}
+
+func _toxin_report(cell,organ: Dictionary) -> Dictionary:
+	var at: Vector2=cell.organ_position(organ)
+	var reach: float=90*sqrt(organ.scale)*(1-organ.blocked*.65)*Genes.factor(organ,"sense")
+	var best: Dictionary={}
+	for index in grid.query_kind(particles,at,reach,TOXIN):
+		var packet: Dictionary=particle_snapshot(index)
+		if not packet.alive or packet.kind!=TOXIN:continue
+		var distance: float=Medium.offset(at,packet.p).length()
+		if distance<=reach and (best.is_empty() or distance<best.distance):best={"at":packet.p,"distance":distance}
+	return best
 
 func _acid_direction(cell,sensor: Dictionary) -> Vector2:
 	var at: Vector2=cell.organ_position(sensor)
@@ -1600,7 +1634,6 @@ func _secretion_needed(cell, organ: Dictionary, kind: int) -> bool:
 	for index in grid.query(at,reach):
 		var packet: Dictionary = particles[index]
 		if not packet.alive or (packet.kind not in [TOXIN,TAG,PORE_SUBUNIT] if wanted==TOXIN else packet.kind != wanted) or (not coarse_mode and activity_at(packet.p) <= 0): continue
-		if wanted == TOXIN and inherited_lineages.get(packet.owner,packet.owner) == cell.lineage_id(): continue
 		if Medium.offset(at,packet.p).length_squared() <= reach*reach: return true
 	return false
 
@@ -1809,7 +1842,7 @@ func _receptor_contacts() -> void:
 	for cell in cells:
 		if cell.dead or cell.activity <= 0: continue
 		for organ in cell.organs:
-			if organ.kind not in ["feeding","sensing","hunting"]: continue
+			if organ.kind not in ["feeding","sensing","hunting","family_toward","family_away"]: continue
 			var at: Vector2 = cell.organ_position(organ)
 			var forward: Vector2 = cell.organ_normal(organ).rotated(cell.angle)
 			var radius: float = 12*organ.scale
@@ -1818,7 +1851,7 @@ func _receptor_contacts() -> void:
 				continue
 			for index in grid.query_kind(particles,at,radius+6,DECOY):
 				var p: Dictionary = particles[index]
-				if not p.alive or p.kind != DECOY or inherited_lineages.get(p.owner,p.owner) == cell.lineage_id() or activity_at(p.p) <= 0: continue
+				if not p.alive or p.kind != DECOY or activity_at(p.p) <= 0: continue
 				var delta := Medium.offset(at,p.p)
 				if delta.length() > radius+particle_radius(p.kind)*particle_scale(p.amount): continue
 				var normal := delta.normalized()
@@ -1839,7 +1872,6 @@ func _surface_contacts() -> void:
 		if not packet.alive or packet.kind not in [TAG,PORE_SUBUNIT,ANTITOXIN]: continue
 		for cell in cells:
 			if cell.dead or cell.activity <= 0: continue
-			if packet.kind != ANTITOXIN and cell.lineage_id() == inherited_lineages.get(packet.owner,packet.owner): continue
 			var d := Medium.offset(cell.position,packet.p)
 			if d.length() > cell.extent()+5 or d.length() > cell.support(d.angle())+5: continue
 			if packet.direction.dot(-d.normalized()) < 0.5: continue
@@ -1858,7 +1890,7 @@ func _toxin_contacts() -> void:
 		if not p.alive or p.kind != TOXIN or activity_at(p.p) <= 0: continue
 		for cell_id in cell_index.at(p.p) if spatial_queries else range(cells.size()):
 			var cell = cells[cell_id]
-			if cell.dead or cell.activity <= 0 or cell.lineage_id() == inherited_lineages.get(p.owner,p.owner): continue
+			if cell.dead or cell.activity <= 0: continue
 			var d = Medium.offset(cell.position,p.p)
 			if d.length() <= cell.support(d.angle())+5:
 				cell.waste += cell.damage(p.amount*Catalog.data().combat.toxin_damage_per_unit,d.angle(),p.owner) + p.amount

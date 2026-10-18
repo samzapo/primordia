@@ -138,12 +138,15 @@ func run(test_host) -> void:
 	expect(scene.cell_ui.choices.size() == 5,"Factory offers four choices plus another page")
 	scene.cell_ui.choices[-1].pressed.emit()
 	var found_cilia := false
-	var hunt
 	for choice in scene.cell_ui.choices:
 		found_cilia = found_cilia or choice.kind == "cilia"
-		if choice.kind == "hunting": hunt = choice
-	expect(found_cilia and hunt != null,"Cilia and hunting remain illustrated purchases on the second page")
-	hunt.pressed.emit()
+	expect(found_cilia and not scene.cell_ui.choices.any(func(choice):return choice.kind=="hunting"),"Cilia stay at Assembly while sensing moves to its own factory")
+	click(scene.cell_ui.screen_at({"kind":"receptors"}))
+	if scene.cell_ui.context.kind=="overlap":
+		scene.cell_ui.choices.filter(func(choice):return choice.kind=="receptor_factory")[0].pressed.emit()
+	var receptors: Array=scene.cell_ui.choices.filter(func(choice):return choice.kind=="hunting")
+	expect(receptors.size()==1 and receptors[0].ap_cost==0,"The dedicated receptor factory offers free Hunting")
+	receptors[0].pressed.emit()
 	expect(scene.selected == 10,"Hunting receptor selection reaches the normal membrane placement flow")
 	click(scene.cell_ui.screen_at({"kind":"assembly"}))
 	scene.cell_ui.choices[1].pressed.emit()

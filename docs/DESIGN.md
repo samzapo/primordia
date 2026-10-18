@@ -747,3 +747,9 @@ both ponds/accounts/keys/feedback and return experimental to standby afterward.
 [Revision67](REVISION_67.md) makes Instinct a saved presentation toggle and nests continuous or one-shot paid division under Divide. A pending one-shot waits for resources and safe space, clears on one committed birth and is never inherited. Wave crests become the initial view once for this update; later choices remain saved. Preserve both ponds and stage on experimental.
 
 [Revision68](REVISION_68.md) makes mitochondria recover additional finite food energy without reducing biomass. Healthy organs add50% of baseline aerobic ATP each, capped5x; no oxygen or fuel means no extra work. Keep fresh food/solar/tissue-debris energy explicit and all saved parcels unchanged.
+
+[Revision69](REVISION_69.md) replaces the merge portrait picker with smooth nearby world selection, limited by authoritative family pheromone reception. Dim unselectable cells; preserve physical fusion and saved cells. Player-facing view names are Internal/External.
+
+October18 Revision69 follow-up: bound the Family panel to the visible viewport with measured header rows and actual touch dragging; retain arrow/wheel/focus controls. Disable kinship immunity for offensive particle contacts across CPU/coarse/resident GPU, including self exposure; keep hunter receptors targeting non-family cells. Preserve both ponds; experimental first.
+
+October18 Revision69 receptor steering: free Flight/Hunting/Toward family/Away from family at a dedicated receptor factory; exclude these from AP build tiers/refunds. Hunter selects any detected non-family cell without size/defense filters. Flight avoids real nearby toxins and armed non-family signals. Family receptors use actual local chemical snapshots and survival-first shared behavior; no live-ID navigation. Counterattack remains a productive gland. Experimental first, preserve ponds.

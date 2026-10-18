@@ -146,11 +146,11 @@ if [[ "${1:-}" == gpu ]]; then
     if grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"; then exit 1; fi
     grep -Eq 'ANATOMY RENDER GPU: [0-9]+ assertions, 0 failures' "$report_file"
   done
-  xvfb-run -a -s '-screen 0 640x400x24 -nolisten tcp' "$godot_bin" --path "$project_dir" --rendering-method mobile --rendering-driver vulkan --gpu-index 0 --script tests/division_access_gpu.gd 2>&1 | tee "$report_file"
+  xvfb-run -a -s '-screen 0 640x400x24 -nolisten tcp' "$godot_bin" --path "$project_dir" --rendering-method mobile --rendering-driver vulkan --gpu-index 0 --display-driver x11 --disable-vsync --max-fps 60 --script tests/division_access_gpu.gd 2>&1 | tee "$report_file"
   if grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"; then exit 1; fi
   grep -Eq 'DIVISION ACCESS GPU: [0-9]+ assertions, 0 failures' "$report_file"
   # Browser-compatible controls require no RenderingDevice or chemistry fallback.
-  xvfb-run -a -s '-screen 0 1280x1000x24 -nolisten tcp' "$godot_bin" --path "$project_dir" --rendering-method gl_compatibility --rendering-driver opengl3 --script tests/division_access_gpu.gd -- --controls-only --particle-backend=cpu 2>&1 | tee "$report_file"
+  xvfb-run -a -s '-screen 0 1280x1000x24 -nolisten tcp' "$godot_bin" --path "$project_dir" --rendering-method gl_compatibility --rendering-driver opengl3 --display-driver x11 --disable-vsync --max-fps 60 --script tests/division_access_gpu.gd -- --controls-only --particle-backend=cpu 2>&1 | tee "$report_file"
   if grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"; then exit 1; fi
   grep -Eq 'DIVISION CONTROLS GPU: [0-9]+ assertions, 0 failures' "$report_file"
   # Match run_service.py presentation pacing; chemistry/physics remain at 30 Hz.

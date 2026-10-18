@@ -14,7 +14,7 @@ static func layout(cell) -> Dictionary:
 	for point in cell.membrane.points: radius = minf(radius,point.length())
 	return {"radius":radius,"nucleus":Vector2(-0.12,-0.10)*radius,
 		"assembly":Vector2(-0.38,0.29)*radius,"chemistry":Vector2(0.39,0.16)*radius,
-		"atp":Vector2(0.32,-0.39)*radius,
+		"atp":Vector2(0.32,-0.39)*radius,"receptors":Vector2(.02,.60)*radius,
 		"bud":Vector2(-0.43,-0.44)*radius}
 
 func sync() -> void:
@@ -85,6 +85,8 @@ func _draw() -> void:
 	var active: bool=game.cell_ui.hovered.get("kind","")=="chemistry" or game.cell_ui.context.get("kind","")=="chemistry"
 	preload("res://scripts/visuals.gd").internal_factory(self,at,r*.21,active)
 
+	Visuals.receptor_factory(self,anchors.receptors,r*.19)
+
 	at = anchors.bud
 	Visuals.offspring_store(self,at,r,bud_material,bud_energy)
 	if game.world.evolution.offspring_id >= 0:
@@ -100,7 +102,7 @@ func _draw() -> void:
 	if game.build_open and (not game.world.evolution.division_offers.is_empty() or (not game.world.evolution.sandbox and not game.world.evolution.chosen)):
 		draw_circle(anchors.nucleus+Vector2(0.22,-0.20)*r,r*(0.04+0.008*sin(game.ui_time*2)),Color("fff19c"))
 	if game.build_open:
-		for key in ["assembly","chemistry","nucleus","bud"]:
+		for key in ["assembly","chemistry","receptors","nucleus","bud"]:
 			draw_arc(anchors[key],r*(0.34 if key == "nucleus" else 0.20),0,TAU,28,Color(0.75,1,0.91,0.18),1.2/game.zoom,true)
 		for scar in cell.lost_organs:
 			var p: Vector2 = cell.local_point(scar.a)

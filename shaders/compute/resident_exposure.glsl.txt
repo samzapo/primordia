@@ -50,9 +50,7 @@ void main(){
   vec4 v=imageLoad(state,pixel(i)+ivec2(1,0));
   if(v.w!=4.&&v.w!=10.&&v.w!=7.&&v.w!=11.&&v.w!=12.)return;
   vec4 p=imageLoad(state,pixel(i));float radius=imageLoad(state,pixel(i)+ivec2(2,0)).x*.5;
-  uint lineage=floatBitsToUint(reports[i*4u+3u].y);
   for(uint b=0u;b<pc.bodies_count;b++){
-   if(v.w!=7.&&info[b].y==lineage)continue;
    if(v.w==7.&&(info[b].w&0x80000000u)==0u)continue;
    vec4 body=bodies[b*4u];vec2 delta=offset(body.xy,p.xy);
    float coarse_dt=bodies[b*4u+3u].x;

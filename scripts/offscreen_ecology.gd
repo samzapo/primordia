@@ -239,7 +239,6 @@ func _exposure(sim, cell, dt: float) -> void:
 	for index in sim.grid.query(cell.position,radius):
 		var p: Dictionary = sim.particles[index]
 		if not p.alive or p.kind not in [sim.TOXIN,sim.DECOY,sim.ANTITOXIN,sim.TAG,sim.PORE_SUBUNIT] or sim.activity_at(p.p) > 0: continue
-		if p.kind != sim.ANTITOXIN and sim.inherited_lineages.get(p.owner,p.owner) == cell.lineage_id(): continue
 		var delta := Medium.offset(cell.position,p.p)
 		if delta.length() > radius or not sim.chance(2.0,dt): continue
 		if not sim.habitat_geometry.particles_permeable and not _clear_path(sim,cell.position,p.p): continue
@@ -250,7 +249,7 @@ func _exposure(sim, cell, dt: float) -> void:
 		if p.kind == sim.DECOY:
 			var bound := false
 			for organ in cell.organs:
-				if organ.kind not in ["feeding","sensing","hunting"]: continue
+				if organ.kind not in ["feeding","sensing","hunting","family_toward","family_away"]: continue
 				var contact := Medium.offset(cell.organ_position(organ),p.p)
 				if contact.length() > 12*organ.scale+sim.particle_radius(p.kind)*sim.particle_scale(p.amount): continue
 				var forward: Vector2 = cell.organ_normal(organ).rotated(cell.angle)

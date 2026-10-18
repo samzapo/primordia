@@ -20,6 +20,9 @@ func fixture():
  sim.player.add_organ("feeding",0,"graze",false)
  return sim
 func run() -> void:
+ receptors()
+ friendly_contacts()
+ merge_gates()
  var sim=fixture();var cell=sim.player
  check(not cell.automatic_division,"All cells default to manual division")
  var child=sim.make_offspring(cell,sim.offspring_quote(cell))
@@ -80,19 +83,20 @@ func run() -> void:
  donor.lineage=42
  check(not sim.FamilyMerging.request(sim,donor.id),"Unrelated lineages cannot merge")
  donor.lineage=cell.lineage_id()
+ detect(sim,cell,donor)
  check(sim.FamilyMerging.request(sim,donor.id) and sim.cells.size()==1,"Same-family contact commits merging")
- check(cell.ap==11,"All four organs reabsorb first, then donor AP transfers exactly once")
+ check(cell.ap==8,"Three paid organs refund their tiers, the free receptor refunds zero, then donor AP transfers exactly once")
  check(cell.count("toxin_sac")==0 and cell.count("feeding")==1,"The receiver keeps its build without donor organ duplication")
  var after: float=cell.organic_mass()
  for p in sim.particles:after+=p.amount*sim.Catalog.material(p.kind)
  check(absf(after-before)<.0001,"Merging and Reabsorb waste preserve all material")
  check(absf(cell.substrate-2)<.000001 and absf(cell.oxygen-1)<.000001,"Internal food, true fuel and oxygen transfer")
  check(cell.chemistry.particles.filter(func(p):return p.species=="food")[0].age==6 and cell.chemistry.vacuoles.filter(func(v):return not v.has("species")).size()==1,"Transferred food and waste retain their shared vacuole and digestion age")
- check(not sim.FamilyMerging.request(sim,donor.id) and cell.ap==11,"Duplicate merging cannot repeat AP or contents")
+ check(not sim.FamilyMerging.request(sim,donor.id) and cell.ap==8,"Duplicate merging cannot repeat AP or contents")
  check(sim.lineage.total_cells==2 and sim.lineage.records.size()==1,"Merging neither awards a birth nor retains a deceased family portrait")
  check(sim.death_bursts.is_empty(),"Living reabsorption does not burst a toxin sac or play death")
  var restored=Codec.new().restore(Codec.new().capture(sim))
- check(restored.player.ap==11 and restored.player.merge_after==cell.merge_after and not restored.player.automatic_division,"AP, division choice and merge cooldown survive a checkpoint")
+ check(restored.player.ap==8 and restored.player.merge_after==cell.merge_after and not restored.player.automatic_division,"AP, division choice and merge cooldown survive a checkpoint")
  # Navigation and weapons consume the same immutable cues independently.
  sim=fixture();cell=sim.player;cell.energy=10
  cell.add_organ("hunting",1,"hunt",false);var receptor: Dictionary=cell.organs[-1]
@@ -164,3 +168,111 @@ func crowded_merging() -> void:
   counts.append(selected)
   check(sim.cells.size()==2 and sim.player.ap==3,"Distant family signals never bypass physical contact or mint AP")
  check(counts[1]>counts[0]*4,"Crowded family cues substantially increase automatic merge willingness at equal elapsed time")
+
+func detect(sim,receiver,donor) -> void:
+ var trace: Dictionary=sim._emit_pheromone(donor)
+ trace.p=receiver.organ_position(receiver.organs.filter(func(o):return o.hp>0 and o.kind in ["feeding","hunting","sensing","counterattack"])[0])
+ sim.grid.rebuild(sim.particles)
+ receiver.behavior["family_cues"]=sim._family_reports(receiver)
+
+func merge_gates() -> void:
+ var sim=fixture();var receiver=sim.player
+ var donor=Sim.Cell.new(880,receiver.position+Vector2(500,0));donor.lineage=receiver.lineage_id();sim.cells.append(donor)
+ var stranger=Sim.Cell.new(881,receiver.position+Vector2(5,0));sim.cells.append(stranger)
+ check(not sim.FamilyMerging.request(sim,donor.id) and sim.FamilyMerging.candidates(sim,receiver).is_empty(),"A family roster or nearby body alone does not grant merge selection")
+ detect(sim,receiver,donor)
+ check(sim.FamilyMerging.candidates(sim,receiver).keys()==[donor.id],"Only a real received family trace enables the same-lineage donor")
+ check(sim.FamilyMerging.request(sim,donor.id) and receiver.behavior.has("merge_order"),"A detected relative can be chosen for physical approach")
+ var report: Dictionary=receiver.behavior.family_cues[donor.id].report
+ var expected: Vector2=sim.Medium.offset(receiver.position,report.at).normalized()
+ donor.position+=Vector2(0,300)
+ check(sim.FamilyMerging.direction(sim,receiver).is_equal_approx(expected),"Moving the donor cannot reveal its live position through merge navigation")
+ sim.managed_cells=[donor.id]
+ check(sim.FamilyMerging.candidates(sim,receiver).is_empty() and not sim.FamilyMerging.request(sim,donor.id),"A controlled donor remains ineligible even when detected")
+ sim.managed_cells=[]
+ var cue: Dictionary=receiver.behavior.family_cues[donor.id]
+ var expiry: float=cue.expires_at
+ cue.expires_at=sim.time
+ donor.position=receiver.position
+ check(not sim.FamilyMerging.request(sim,donor.id) and not sim.FamilyMerging.commit(sim,receiver,donor),"Expired cues reject both selection and direct physical commit")
+ var bodies: int=sim.cells.size();sim.FamilyMerging.step(sim)
+ check(sim.cells.size()==bodies,"An old merge order cannot consume an undetected touching relative")
+ cue.expires_at=expiry
+ for organ in receiver.organs:
+  if organ.kind in ["feeding","hunting","sensing","counterattack"]:organ.hp=0
+ check(sim.FamilyMerging.candidates(sim,receiver).is_empty(),"Losing the sensing organ removes selection despite a retained cue")
+ for organ in receiver.organs:organ.hp=organ.max_hp
+ cue.report.lineage=9999
+ check(not sim.FamilyMerging.detected(sim,receiver,donor.id),"A foreign lineage report cannot authorize family fusion")
+
+func receive_trace(sim,cell,source,organ) -> void:
+ sim.particles.clear();sim.grid.clear()
+ sim.time+=.1
+ var trace: Dictionary=sim._emit_pheromone(source)
+ trace.p=cell.organ_position(organ)+Vector2(4,0);trace.previous=trace.p;trace.expires_at=sim.time+5
+ sim._commit_spawn_metadata()
+ sim.grid.rebuild(sim.particles)
+ cell.signals.clear();cell.target_memory=0;cell.sense_clock=0
+ for i in 40:sim._sense(cell,1.0/60)
+
+func receptors() -> void:
+ var sim=fixture();var cell=sim.player;cell.ap=0
+ check(Sim.Cell.KINDS.size()==Sim.Cell.COST.size() and Sim.Cell.KINDS.size()==Sim.Cell.WIDTH.size(),"All new receptor types have complete authored anatomy tables")
+ for kind in Sim.Cell.RECEPTORS:
+  check(sim.install(kind,cell.organs.size()*.8) and cell.ap==0 and cell.construction_price()==0,"A free "+kind+" builds at zero AP without raising the paid tier")
+ check(sim.install("protection",3) and cell.construction_price()==1,"The first productive organ is still free after building receptors")
+ var organ: Dictionary=cell.organs.filter(func(o):return o.kind=="hunting")[0]
+ check(cell.construction_refund(organ)==0,"Free receptor reabsorption cannot manufacture AP")
+ sim._recycle_for(cell,sim.evolution,cell.organs.find(organ))
+ check(cell.ap==0 and cell.construction_price()==1,"Reabsorbing a free receptor preserves the productive build tier")
+ var saved=Codec.new().restore(Codec.new().capture({"world":sim}))
+ check(saved.world.player.count("family_toward")==1 and saved.world.player.count("family_away")==1,"New receptors survive an ordinary full-world checkpoint without changing cell identity")
+ for kind in ["family_toward","family_away"]:
+  sim=fixture();cell=sim.player;cell.organs.clear();cell.energy=100;cell.biomass=40
+  cell.add_organ(kind,0,"graze",false)
+  var source=Sim.Cell.new(981,cell.position+Vector2(300,0));source.lineage=cell.lineage_id()
+  receive_trace(sim,cell,source,cell.organs[0])
+  var expected:=Vector2.RIGHT if kind=="family_toward" else Vector2.LEFT
+  check(cell.target_id==source.id and cell.target.dot(expected)>.9,"The "+kind+" steers in its declared direction using an actual received trace")
+  source.position=cell.position-Vector2(300,0)
+  sim._sense(cell,1.0/60)
+  check(cell.target_position.x>cell.position.x,"Family navigation does not read a source's live location")
+  sim.time=10;sim._sense(cell,1.0/60)
+  check(cell.target_memory==0,"Expired family signals cannot keep steering")
+  source.lineage=999
+  receive_trace(sim,cell,source,cell.organs[0])
+  check(cell.target_id==-1,"Family receptors ignore non-family reports")
+ for kind in ["hunting","sensing"]:
+  sim=fixture();cell=sim.player;cell.organs.clear();cell.energy=100;cell.biomass=40
+  cell.add_organ(kind,0,"graze",false)
+  var source=Sim.Cell.new(982,cell.position+Vector2(300,0));source.body=10000;source.update_geometry()
+  if kind=="hunting":source.add_organ("protection",0,"graze",false)
+  receive_trace(sim,cell,source,cell.organs[0])
+  check(cell.target_id==source.id if kind=="hunting" else cell.target_id==-1,"Hunting accepts a huge defended non-family cell; Flight ignores a huge unarmed one")
+  if kind=="sensing":
+   source.add_organ("toxin",0,"graze",false);receive_trace(sim,cell,source,cell.organs[0])
+   check(cell.target_id==source.id and cell.target.dot(Vector2.RIGHT)<-.9,"Flight retreats from an armed non-family report")
+   source.lineage=cell.lineage_id();receive_trace(sim,cell,source,cell.organs[0])
+   check(cell.target_id==-1,"Flight does not treat an armed relative as a target")
+ for pooled in [false,true]:
+  sim=fixture();cell=sim.player;cell.organs.clear();cell.energy=100;cell.biomass=40
+  cell.add_organ("sensing",0,"graze",false)
+  sim.spawn_particle(sim.TOXIN,cell.organ_position(cell.organs[0])+Vector2(10,0),Vector2.ZERO,.1,cell.id)
+  if pooled and sim.kernels!=null:sim.enable_particle_pool()
+  sim.grid.rebuild(sim.particles)
+  for i in 40:sim._sense(cell,1.0/60)
+  check(cell.target_mode=="toxin" and cell.target.dot(Vector2.RIGHT)<-.9,"Flight senses actual nearby toxin including its own source in dictionary/native ownership")
+
+func friendly_contacts() -> void:
+ for pooled in [false,true]:
+  for hidden in [false,true]:
+   var sim=fixture();var cell=sim.player
+   sim.camera_follows_player=not hidden;sim.camera_position=Vector2.ZERO;sim.view_half=Vector2(10,10) if hidden else Vector2(1000,1000);cell.activity=0 if hidden else 1
+   var family_source:=990;sim.inherited_lineages[family_source]=cell.lineage_id()
+   sim.spawn_particle(sim.TOXIN,cell.position,Vector2.ZERO,.1,family_source)
+   if pooled and sim.kernels!=null:sim.enable_particle_pool()
+   sim.grid.rebuild(sim.particles)
+   var hp: float=cell.health
+   if hidden:sim.offscreen_ecology._exposure(sim,cell,100)
+   else:sim._toxin_contacts()
+   check(cell.health<hp and sim.particle_count()==1 and not sim.particle_snapshot(0).alive,"Real family toxin is consumed once and damages the membrane in detailed/coarse dictionary/native ownership")

@@ -171,6 +171,8 @@ def main():
     # Focused feature acceptance on the real target; no FPS campaign or live reports.
     for script,flags,marker in [
         ("resident_admission_gpu",[],"RESIDENT ADMISSION"),
+        ("resident_exposure_gpu",[],"RESIDENT EXPOSURE"),
+        ("resident_perception_gpu",[],"RESIDENT PERCEPTION"),
         ("ambient_carbon_gpu",[],"AMBIENT_CARBON_GPU"),
         ("lineage_start_network",["--gpu"],"LINEAGE START NETWORK"),
         ("feedback_pass_gpu",[],"FEEDBACK PASS GPU"),
@@ -188,9 +190,11 @@ def main():
                 # The 300-sim-second cold recovery case is longer than the UI fixtures.
                 # Preserve its full horizon and hard assertions on the shared host.
                 limit="600s" if script=="ambient_carbon_gpu" else "120s"
+                # Give the UI fixture a paced, explicit display path on Xwayland/Xvfb.
+                ui_flags=["--display-driver","x11","--disable-vsync","--max-fps","60"] if script=="division_access_gpu" else []
                 call("timeout",limit,"xvfb-run","-a","-s","-screen 0 1280x1000x24 -nolisten tcp",str(godot),
                     "--path",str(candidate),"--rendering-method","mobile","--rendering-driver","vulkan","--gpu-index","0",
-                    "--script","tests/"+script+".gd","--",*flags,
+                    *ui_flags,"--script","tests/"+script+".gd","--",*flags,
                     env={**environment,"PRIMORDIA_INVITE":"experimental-private-fixture"},stdout=output,stderr=subprocess.STDOUT)
         finally:
             # Retain the real assertion on failure; call() otherwise raises first.

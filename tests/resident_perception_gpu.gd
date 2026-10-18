@@ -27,6 +27,9 @@ func sense(gpu,queries: Array,emissions: Array=[]) -> Dictionary:
 func run() -> void:
 	Fixture.load_native()
 	validation()
+	await full_receptor_pond()
+	await resident_navigation()
+	await social_and_danger()
 	await reports_and_expiry()
 	await emission_identity()
 	await exact_identities()
@@ -35,6 +38,7 @@ func run() -> void:
 	await food_patches()
 	await maximum_capacity()
 	print("PERCEPTION_VALIDATION ",checks," checks")
+	print("RESIDENT PERCEPTION: %d checks, 0 failures" % checks)
 	quit()
 func validation() -> void:
 	var p=Perception.new()
@@ -73,14 +77,14 @@ func reports_and_expiry() -> void:
 		meta(5,5,5,10,Vector2(1234,567),8,11,false),meta(6,6,6,20,Vector2(800,900),9,30,true)]
 	var gpu=await setup(data,metadata)
 	# Mutating caller data cannot refresh an already emitted report.
-	metadata[6].report.at=Vector2.ZERO
+	metadata[1].report.at=Vector2.ZERO
 	var r:=await sense(gpu,[query(),query("flee")])
 	gpu.perception_spread_queries=false
 	var packed:=await sense(gpu,[query(),query("flee")])
 	check(r.senses==packed.senses,"Packed and spread pheromone results are identical")
 	gpu.perception_spread_queries=true
-	check(r.senses[0].valid and r.senses[0].report.id==6,"Latest oversized defended report suppresses older edible report; family and expiry filtered")
-	check(r.senses[0].report.at==Vector2(800,900),"Target is emission-time location, not packet or current source location")
+	check(r.senses[0].valid and r.senses[0].report.id==2,"Hunting accepts the latest detected foreign cell regardless of size and defenses")
+	check(r.senses[0].report.at==Vector2(3001,2000),"Target is emission-time location, not packet or current source location")
 	check(r.senses[1].report.id==2,"Flight sees newest larger hostile source")
 	check(r.readback_bytes==160 and gpu.readbacks==0,"Only compact receptor receipts, no state download")
 	gpu.advance(1.0,0)
@@ -176,13 +180,13 @@ func maximum_capacity() -> void:
 		metadata.append(meta(i,i+10,i+10,20,Vector2(i,200),9,30))
 	var gpu=await setup(data,metadata,"contacts")
 	var queries: Array=[]
-	for i in 256:
+	for i in Perception.MAX_QUERIES:
 		var q:=query()
 		q.target_id=1033;q.incumbent=true
 		queries.append(q)
 	var r:=await sense(gpu,queries)
 	for result in r.senses: check(result.valid and result.report.id==1033,"Full source and receptor capacity, incumbent preserved")
-	check(r.readback_bytes==256*80,"Bounded maximum receipt")
+	check(r.readback_bytes==Perception.MAX_QUERIES*80,"Bounded maximum receipt")
 	var extra:=meta(0,2000,2000);extra["state"]=packet(3,Vector2.ZERO)
 	check(not gpu.exchange([], [extra],[],false,queries),"Source overflow explicitly rejected")
 	check(gpu._perception.sources.size()==1024,"Overflow does not partially register sources")
@@ -255,4 +259,65 @@ func exact_identities() -> void:
 	var family:=query();family.lineage=2147483646
 	r=await sense(gpu,[family])
 	check(not r.senses[0].valid,"Exact lineage prevents sensing relatives")
+	gpu.close();await gpu.closed
+
+func social_and_danger() -> void:
+	var data:=packet(3,Vector2(25,100))
+	data.append_array(packet(3,Vector2(30,100)))
+	data.append_array(packet(4,Vector2(40,100)))
+	var metadata: Array=[meta(0,2,1,20,Vector2(300,100)),meta(1,3,3,10000,Vector2(400,100),9,30,false,true),{"slot":2,"owner":1,"lineage":1}]
+	var gpu=await setup(data,metadata)
+	var r:=await sense(gpu,[query("family"),query("hunt"),query("flee"),query("danger")])
+	check(r.senses[0].valid and r.senses[0].report.id==2,"Family receptors receive actual same-lineage tracers")
+	check(r.senses[1].valid and r.senses[1].report.id==3,"Hunter has no mass or defense exclusion for a non-family signal")
+	check(not r.senses[2].valid,"Flight ignores a huge unarmed non-family signal and an armed relative")
+	check(r.senses[3].valid and r.senses[3].danger.at==Vector2(40,100),"Flight receives actual local toxin coordinates, including family/source toxin, without a full pool download")
+	var cell=Cell.new(1,Vector2(10,100));cell.add_organ("family_toward",0,"graze",false)
+	var requests: Array=Perception.requests([cell],.2,10)
+	check(requests.size()==1 and requests[0].mode=="family","A dedicated family receptor uses the actual bounded family query instead of a foreign-target query")
+	var received: Dictionary=Perception.for_cell(requests,[r.senses[0]],cell)
+	check(received[cell.organs[0].id].families.has(2),"The GPU family receipt reaches the organ's ordinary behavior input")
+	gpu.close();await gpu.closed
+
+func resident_navigation() -> void:
+	for kind in ["sensing","family_toward","family_away"]:
+		var sim=preload("res://scripts/simulation.gd").new(690,0,false)
+		sim.cells=[sim.player];sim.automatic_reproduction=false
+		sim.habitat_geometry=sim.Habitat.new(690,sim.cells);sim.habitat_geometry.enabled=false
+		sim.fluid.driven=false;sim.fluid.velocity.fill(Vector2.ZERO)
+		var cell=sim.player;cell.energy=100;cell.biomass=40
+		cell.add_organ(kind,0,"graze",false);cell.add_organ("propulsion",PI,"graze",false)
+		var at: Vector2=cell.organ_position(cell.organs[0])
+		if kind=="sensing":sim.spawn_particle(sim.TOXIN,at+Vector2(60,0),Vector2.ZERO,.1,cell.id)
+		else:
+			var source=Cell.new(999,cell.position+Vector2(300,0));source.lineage=cell.lineage_id()
+			var trace: Dictionary=sim._emit_pheromone(source);trace.p=at+Vector2(20,0);trace.previous=trace.p;trace.expires_at=10
+		var bridge=preload("res://scripts/resident_ecology.gd").new();bridge.start(sim,8192)
+		var ready: Array=await bridge.initialized;check(ready[0],str(ready[1]))
+		check(bridge.streaming!=null,"Navigation fixture uses actual resident/cold ownership")
+		var seen:=false
+		for i in 60:
+			sim.step(1.0/60)
+			if cell.target_mode==("toxin" if kind=="sensing" else "kin_toward" if kind=="family_toward" else "kin_away") and cell.drive_active:
+				var expected:=Vector2.RIGHT if kind=="family_toward" else Vector2.LEFT
+				if cell.target.dot(expected)>.8:seen=true
+		check(seen,"Actual resident/cold "+kind+" steers from compact local sensory receipts")
+		check(sim.resident==bridge and sim.particles.is_empty() and bridge.gpu.readbacks==0,"Navigation keeps real GPU authority without full exports or live source bodies")
+		bridge.close();await bridge.gpu.closed
+
+func full_receptor_pond() -> void:
+	var cells: Array=[]
+	for i in 64:
+		var cell=Cell.new(i+1,Vector2(400+(i%8)*350,400+(i/8)*250))
+		for kind in ["feeding","sensing","hunting","family_toward","family_away","counterattack","neutralizing"]:check(cell.add_organ(kind,cell.organs.size()*.8,"graze",false),"Capacity fixture fits its ordinary receptor/support anatomy")
+		cells.append(cell)
+	var clock=preload("res://scripts/simulation.gd").new(691,0,false);clock.time=10
+	var queries: Array=preload("res://scripts/resident_ecology.gd").new()._queries(clock,cells,.2)
+	check(queries.size()==576,"All64 cells can sense through every free receptor and both secretion-demand channels")
+	var gpu=GPU.new();gpu.configure_interactions("chemistry");gpu.configure_exchange();gpu.configure_perception(10);gpu.configure_exposure()
+	gpu.initialize(packet(0,Vector2(50,50)),Fixture.flow())
+	var ready: Array=await gpu.ready;check(ready[0],str(ready[1]))
+	var receipt: Dictionary=gpu.exchange_sync(cells,[],[],queries,{"feeding":false,"projection":false,"exposure":true})
+	check(not receipt.has("error") and receipt.senses.size()==576,"A whole pond of free receptors stays on hardware with complete compact query receipts")
+	check(receipt.exposure.decoys.size()==320 and gpu.readbacks==0,"All ordinary and family receptor contact sites fit without a full pool export")
 	gpu.close();await gpu.closed

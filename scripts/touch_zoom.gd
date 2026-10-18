@@ -78,7 +78,7 @@ func layout() -> void:
 	follow_button.set_pressed_no_signal(game.camera_locked and game.can_follow())
 	follow_button.disabled=not game.can_follow()
 	perception_button.visible=bar.visible and not game.settings_panel.visible
-	perception_button.text="Interoception" if game.perception=="exteroception" else "Exteroception"
+	perception_button.text="Internal" if game.perception=="exteroception" else "External"
 	perception_button.add_theme_font_size_override("font_size",roundi(18*pixels*.7))
 	perception_button.custom_minimum_size=Vector2(208,48)*pixels*.7;perception_button.size=perception_button.custom_minimum_size
 	perception_button.position=Vector2(size.x-220*pixels*.7,120*pixels*.7+tray_offset)
@@ -129,6 +129,9 @@ func cancel() -> void:
 	if game!=null:game.tube_start.clear();game.camera_dragging=false
 
 func _tap(at: Vector2) -> void:
+	if game.merge_selecting():
+		if not game.user_paused:game._choose_merge_at(at)
+		return
 	game.inspector.inspect_touch(at)
 	if game.user_paused:return
 	var now := Time.get_ticks_msec()
@@ -155,7 +158,8 @@ func handle(event: InputEvent) -> bool:
 			if _over_gui(game.ui,event.position):return false
 			fingers[event.index]=event.position
 			if fingers.size()==1:
-				start=event.position;moved=false;game.inspector.inspect_touch(event.position)
+				start=event.position;moved=false
+				if not game.merge_selecting():game.inspector.inspect_touch(event.position)
 			elif fingers.size()==2:
 				last_tap_family = -1
 				game.inspector.touch_until=0

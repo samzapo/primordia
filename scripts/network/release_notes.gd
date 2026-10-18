@@ -366,6 +366,22 @@ const RELEASES=[
   ],
   "footer":"Your cells and their progress carry on between updates.",
   "button":"Back to the pond"
+ },
+ {
+  "id":"2026-10-18-local-merge-selection",
+  "audience":"experimental",
+  "title":"What’s new in the pond",
+  "items":[
+   "Merge now zooms smoothly to nearby water. Choose a bright relative directly; only relatives your cell detects through pheromones can be selected.",
+   "Other cells dim while you choose. Cancel returns to your previous view.",
+   "The view controls now say Internal and External.",
+   "The Family window fits your screen, and you can swipe through larger families or use the arrow buttons.",
+   "Stray offensive particles can now affect relatives. Hunters still choose targets outside the family.",
+   "The new Receptor factory offers free Flight, Hunting, Toward family and Away from family receptors.",
+   "Hunters can pursue any detected non-family cell. Flight avoids nearby toxins and armed non-family cells."
+  ],
+  "footer":"Your cells and their progress carry on between updates.",
+  "button":"Back to the pond"
  }
 ]
 const CURRENT=RELEASES[-1]

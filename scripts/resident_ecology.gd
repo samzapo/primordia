@@ -379,6 +379,11 @@ func step(dt: float) -> void:
 				received[queries[i].organ_id]=combined[i]
 		if streaming!=null:
 			for i in queries.size():
+				if queries[i].id==cell.id and queries[i].mode=="danger":
+					var danger: Dictionary=receipt.senses[i].get("danger",{})
+					var local: Dictionary=local_senses[i].get("danger",{})
+					if not local.is_empty() and (danger.is_empty() or local.distance<danger.distance):danger=local
+					received[queries[i].organ_id]["danger"]=danger
 				if queries[i].id!=cell.id or queries[i].mode!="family":continue
 				var id: int=queries[i].organ_id
 				if not received.has(id):received[id]={"food":{},"reports":{},"patch":{}}

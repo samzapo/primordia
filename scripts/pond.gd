@@ -16,8 +16,8 @@ const MINT := Color("80efce")
 const GOLD := Color("f5d47b")
 const TEXT := Color("e5f5ec")
 const MUTED := Color("a3bfc5")
-const TITLES := ["Flagellum","Protective cortex","Pore-forming gland","Buffer / repair gland","Oral groove","Flight receptor","Photosynthesis","Toxin gland","Toxin neutralizer","Acid gland","Hunting receptor","Cilia","Mitochondrion","Counterattack gland","Toxin sac"]
-const HELP := ["Flagella provide thrust. Anatomy chooses travel direction.","Protects the membrane directly beneath it. Coverage follows its membrane attachment.","Spends tissue and ATP to emit surface tags and pore subunits toward a local pheromone report. Four aligned subunits assemble a membrane pore; inhibitors and repair can stop it.","Uses biomass and ATP to repair organs and close punctures faster. Releases buffers that neutralize local acidity and accelerates receptor cleaning.","Senses and pumps nutrients into its opening. Secretes reusable enzymes that turn waste into food when aligned.","Reads nearby pheromones reporting larger or armed cells and retreats from their last reported location. It also senses harmful acidity; an actual hit can trigger a short escape reflex.","Seeks brighter water, or soft light with the Shade adaptation. Light fixes dissolved CO2 into biomass and food, releasing oxygen. Works best in bright habitat patches.","Spends ATP and biomass to fire toxins and receptor-blocking decoys toward a pheromone report received by a hunting or flight receptor.","Releases complementary particles that bind toxin into harmless waste. Costs small amounts of biomass and ATP.","Releases acidifying particles. Moderate acidity helps nutrients bind for higher ATP yield and favors digestive enzymes; excess acidity costs ATP and damages cells. Repair bodies release buffers.","Reads local pheromones reporting smaller or undefended prey. Faces and pursues the last reported location. Undefended means no functional pore-forming gland, toxin vesicle or protective cortex at emission. Pair with secretory attack glands.","A short beating ciliary band provides propulsion and a strong local feeding current from the receptor-selected direction. Draws all particles with the water, including hazards; a grazing pore still consumes food.","An internal organelle that gets more ATP from food when oxygen is available. It redirects some food fuel from growth to energy.","Responds to locally received chemical warnings from armed cells. Its toxin spares cells without offensive organs.","Stores toxin using surplus biomass and ATP. Bursts into a cloud of ordinary toxin particles when the cell dies. Does not steer or fire at targets."]
+const TITLES := ["Flagellum","Protective cortex","Pore-forming gland","Buffer / repair gland","Oral groove","Flight receptor","Photosynthesis","Toxin gland","Toxin neutralizer","Acid gland","Hunting receptor","Cilia","Mitochondrion","Counterattack gland","Toxin sac","Toward family receptor","Away from family receptor"]
+const HELP := ["Flagella provide thrust. Anatomy chooses travel direction.","Protects the membrane directly beneath it. Coverage follows its membrane attachment.","Spends tissue and ATP to emit surface tags and pore subunits toward a local pheromone report. Four aligned subunits assemble a membrane pore; inhibitors and repair can stop it.","Uses biomass and ATP to repair organs and close punctures faster. Releases buffers that neutralize local acidity and accelerates receptor cleaning.","Senses and pumps nutrients into its opening. Secretes reusable enzymes that turn waste into food when aligned.","Reads nearby pheromones reporting armed non-family cells and retreats from their last reported location. Also moves away from locally sensed toxin particles. It also senses harmful acidity; an actual hit can trigger a short escape reflex.","Seeks brighter water, or soft light with the Shade adaptation. Light fixes dissolved CO2 into biomass and food, releasing oxygen. Works best in bright habitat patches.","Spends ATP and biomass to fire toxins and receptor-blocking decoys toward a pheromone report received by a hunting or flight receptor.","Releases complementary particles that bind toxin into harmless waste. Costs small amounts of biomass and ATP.","Releases acidifying particles. Moderate acidity helps nutrients bind for higher ATP yield and favors digestive enzymes; excess acidity costs ATP and damages cells. Repair bodies release buffers.","Reads local pheromones from any non-family cell, regardless of size or defenses. Faces and pursues the last reported location. Pair with secretory attack glands.","A short beating ciliary band provides propulsion and a strong local feeding current from the receptor-selected direction. Draws all particles with the water, including hazards; a grazing pore still consumes food.","An internal organelle that gets more ATP from food when oxygen is available. Each healthy mitochondrion adds50% baseline aerobic ATP without reducing biomass, using finite food fuel.","Responds to locally received chemical warnings from armed cells. Its toxin spares cells without offensive organs.","Stores toxin using surplus biomass and ATP. Bursts into a cloud of ordinary toxin particles when the cell dies. Does not steer or fire at targets.","Follows locally detected family pheromone trails. Survival needs take priority; movement organs provide thrust.","Steers away from locally detected family pheromone trails. Survival needs take priority; movement organs provide thrust."]
 var music := preload("res://scripts/music_director.gd").new()
 var music_slider := HSlider.new()
 var world: Simulation = Simulation.new()
@@ -72,6 +72,9 @@ var follow_heading:=0.0
 var follow_origin:=Vector2.ZERO
 var focus_animating := false
 var observation_view: Dictionary = {}
+var merge_selection: Dictionary={}
+var merge_candidates: Dictionary={}
+var merge_available: Dictionary={} # Ephemeral authoritative eligibility, never saved anatomy.
 var scale_bar := preload("res://scripts/scale_bar.gd").new()
 var settings_panel := PanelContainer.new()
 var lineage_confirmation := ConfirmationDialog.new()
@@ -315,6 +318,7 @@ func _process(dt: float) -> void:
 			perf_wall_seconds = 0;perf_sim_seconds = 0
 	var process_start := Time.get_ticks_usec() if frame_trace != null else 0
 	if not user_paused:ui_time += dt
+	if merge_selecting() and (world.player.id!=merge_selection.cell or world.player.dead or user_paused):_end_merge_selection()
 	camera_motion.advance(dt,user_paused)
 	if lineage_confirming and OS.has_feature("web"):
 		var action=JSON.parse_string(str(JavaScriptBridge.eval("window.primordiaReaders.take('lineage')")))
@@ -360,7 +364,7 @@ func _process(dt: float) -> void:
 
 	var inspection_start := Time.get_ticks_usec() if frame_trace != null else 0
 	var cursor := inspector.cursor_at(get_global_mouse_position())
-	var inspect_allowed := death_focus_age >= 1.8 and get_viewport_rect().has_point(cursor) and not settings_panel.visible and not camera_dragging and selected < 0 and moving_id < 0 and tube_start.is_empty() and cell_ui.context.is_empty() and get_viewport().gui_get_hovered_control() == null
+	var inspect_allowed := death_focus_age >= 1.8 and get_viewport_rect().has_point(cursor) and not settings_panel.visible and not camera_dragging and not merge_selecting() and selected < 0 and moving_id < 0 and tube_start.is_empty() and cell_ui.context.is_empty() and get_viewport().gui_get_hovered_control() == null
 	inspector.update_lens(dt,cursor,alpha,inspect_allowed)
 	preview.queue_redraw()
 	var hover := _nearest_tubule(_player_relative(get_global_mouse_position()).rotated(-world.player.angle)) if _can_edit_tubules() and selected < 0 and moving_id < 0 and cell_ui.hit(get_global_mouse_position()).is_empty() else {}
@@ -407,6 +411,7 @@ func _maximum_zoom() -> float:
 	return MAX_ZOOM*10 if perception=="interoception" else MAX_ZOOM
 
 func _toggle_perception() -> void:
+	if merge_selecting():_end_merge_selection(false)
 	_ease_camera()
 	perception="interoception" if perception=="exteroception" else "exteroception"
 	camera_locked=true;camera_offset=Vector2.ZERO;intero_rotation=0;camera_rotation=0
@@ -418,7 +423,7 @@ func _toggle_perception() -> void:
 	for view in views.values():view.seen_revision=-1;view.queue_redraw()
 	_update_world(1.0 if is_paused() else Engine.get_physics_interpolation_fraction())
 	touch_zoom.layout();_update_perception_menu()
-	_message("Interoception · camera attached to the cell." if perception=="interoception" else "Exteroception · zoom retained within pond limits.")
+	_message("Internal · camera attached to the cell." if perception=="interoception" else "External · zoom retained within pond limits.")
 
 func can_follow() -> bool:
 	return _follow_cell()!=null and not _follow_cell().dead
@@ -507,6 +512,7 @@ func _update_world(alpha: float) -> void:
 	if frame_trace != null: frame_trace.work("particle_sync",Time.get_ticks_usec()-particle_start)
 	var cells_start := Time.get_ticks_usec() if frame_trace != null else 0
 	var alive_ids: Dictionary = {}
+	_refresh_merge_candidates()
 	for cell in world.cells:
 		if cell.dead: continue
 		var fraction: float = _cell_render_alpha(cell,alpha)
@@ -522,7 +528,7 @@ func _update_world(alpha: float) -> void:
 			node.z_index = 2
 			views[cell.id] = node
 		if views[cell.id].cell != cell: views[cell.id].seen_revision = -1
-		views[cell.id].z_index=6 if cell == world.player or internal_visible(cell) else 4 if cell.lineage_id() == world.lineage.root_id else 2
+		views[cell.id].z_index=8 if merge_selecting() and cell==world.player else 6 if merge_selecting() and merge_candidates.has(cell.id) else 2 if merge_selecting() else 6 if cell == world.player or internal_visible(cell) else 4 if cell.lineage_id() == world.lineage.root_id else 2
 		views[cell.id].cell = cell
 		var heading := lerp_angle(cell.previous_angle,cell.angle,fraction)
 		views[cell.id].sync(Simulation.Medium.offset(render_camera,p),heading,zoom,world.activity_for_cell(cell))
@@ -644,7 +650,7 @@ func _draw_preview() -> void:
 	var kind: String = organ.kind if not organ.is_empty() else Simulation.KINDS[selected]
 	var normal: Vector2 = cell.local_normal(a)
 	var point: Vector2 = cell.organ_local_position({"kind":kind,"a":a,"scale":size}).rotated(cell.angle)
-	var fits: bool = moving_id >= 0 or (cell.can_fit(kind,a,1,false) and world.player.ap >= cell.construction_price())
+	var fits: bool = moving_id >= 0 or (cell.can_fit(kind,a,1,false) and world.player.ap >= cell.construction_price(kind))
 	Visuals.icon(preview,point,kind,normal.angle()+cell.angle,size,ui_time)
 	preview.draw_arc(point,22*size,0,TAU,32,MINT if fits else Color("fc8c90"),2/zoom,true)
 	if selected >= 0:
@@ -745,7 +751,7 @@ func _camera_gesture(anchor_a: Vector2,anchor_b: Vector2,screen_a: Vector2,scree
 
 func _update_perception_menu() -> void:
 	if perception_menu_button!=null:
-		perception_menu_button.text=("Interoception" if perception=="exteroception" else "Exteroception")+" [I]"
+		perception_menu_button.text=("Internal" if perception=="exteroception" else "External")+" [I]"
 
 func lineage_color(root_id: int) -> String:
 	for row in lineage_names:
@@ -761,6 +767,7 @@ func _submit_feedback(_report: Dictionary) -> String:
 	return "Connect to the shared pond to submit feedback. Your draft is kept."
 
 func _toggle_settings() -> void:
+	if merge_selecting():_end_merge_selection()
 	_update_perception_menu()
 	settings_panel.visible = not settings_panel.visible
 	tube_start.clear()
@@ -854,7 +861,7 @@ func _build_ui() -> void:
 		preferences.music_volume = value/100
 		music_label.text = "Music volume · %d%%" % roundi(value)
 		preferences.save_settings())
-	perception_menu_button=_button(options,"Interoception [I]",_toggle_perception)
+	perception_menu_button=_button(options,"Internal [I]",_toggle_perception)
 	perception_menu_button.tooltip_text="Switch between the cell interior and the surrounding water"
 	_button(options,"Sense view [S]",func(): show_senses = not show_senses)
 	_button(options,"Performance overlay [F3]",func(): show_debug = not show_debug)
@@ -869,7 +876,7 @@ func _build_ui() -> void:
 	lineage_confirmation.dialog_text="Your current family will stay in the pond and live under computer control. You will begin with a new cell. The shared pond will continue."
 	lineage_confirmation.ok_button_text="Start new lineage"
 	lineage_confirmation.confirmed.connect(_start_new_lineage)
-	settings_help=_label(options,"Tab: enter cell / keep edits and resume\nClick factories, nucleus, bud or installed organs\nNew organs have a fixed size · no Undo\nRight-click: cancel a held organ or close choices\nMicrotubules are sampled per cell\nWheel elsewhere: zoom · middle-drag: pan\nSpace: follow/free outside · recenter inside\nM: open / close settings\nI: interoception / exteroception · inside zoom up to 120×\n[ / ]: cycle cell targets · Enter: choose / place\nArrow keys: navigate choices or membrane placement\nHover particles: inspect through a local lens\nNo movement keys: anatomy steers.",MUTED)
+	settings_help=_label(options,"Tab: enter cell / keep edits and resume\nClick factories, nucleus, bud or installed organs\nNew organs have a fixed size · no Undo\nRight-click: cancel a held organ or close choices\nMicrotubules are sampled per cell\nWheel elsewhere: zoom · middle-drag: pan\nSpace: follow/free outside · recenter inside\nM: open / close settings\nI: Internal / External · inside zoom up to 120×\n[ / ]: cycle cell targets · Enter: choose / place\nArrow keys: navigate choices or membrane placement\nHover particles: inspect through a local lens\nNo movement keys: anatomy steers.",MUTED)
 	_button(options,"Resume / Close [M]",func():
 		if touch_zoom.enabled and user_paused:_toggle_user_pause()
 		else:_toggle_settings())
@@ -998,6 +1005,7 @@ func _update_hud() -> void:
 
 
 func _toggle_build() -> void:
+	if merge_selecting():_end_merge_selection()
 	if user_paused:_message("Resume before editing the cell.");return
 	if death_focus_age < 1.8: return
 	if settings_panel.visible or world.player.dead or world.evolution.terminal(): return
@@ -1047,7 +1055,7 @@ func _finish_build() -> void:
 
 func placement_status() -> String:
 	if selected < 0: return ""
-	if world.player.ap < world.player.construction_price(): return "Needs %d AP." % world.player.construction_price()
+	if world.player.ap < world.player.construction_price(Simulation.KINDS[selected]): return "Needs %d AP." % world.player.construction_price(Simulation.KINDS[selected])
 	if not world.player.can_fit(Simulation.KINDS[selected],0,1,false): return "Needs more membrane area."
 	var place: String="inside the cell" if world.player.internal_organ(Simulation.KINDS[selected]) else "the membrane"
 	return "Tap "+place+" · tap the held icon to cancel." if touch_zoom.enabled else "Click "+place+" · right-click cancels."
@@ -1115,6 +1123,7 @@ func _start_new_lineage() -> void:
 	pass # Only the authenticated multiplayer client supplies this action.
 
 func _restart(profile: int = -1) -> void:
+	if merge_selecting():_end_merge_selection(false)
 	user_paused=false;touch_zoom.cancel()
 	archive.sync(world)
 	archive.begin()
@@ -1185,6 +1194,7 @@ func _notification(what: int) -> void:
 
 func _input(event: InputEvent) -> void:
 	if feedback.opened or profile.opened or palette.opened or player_help.opened or lineage_confirming:return
+	if cell_ui.family_picker.handle_touch(event):get_viewport().set_input_as_handled();return
 	if event is InputEventScreenTouch or event is InputEventScreenDrag:
 		if touch_zoom.handle(event):get_viewport().set_input_as_handled()
 		return
@@ -1242,6 +1252,68 @@ func _input(event: InputEvent) -> void:
 				else: return
 		get_viewport().set_input_as_handled()
 
+func merge_selecting() -> bool:return not merge_selection.is_empty()
+
+func _refresh_merge_candidates() -> void:
+	merge_candidates.clear()
+	if not merge_selecting():return
+	if world.remote_client:
+		if int(merge_available.get("cell",-1))!=world.player.id:return
+		for id in merge_available.get("targets",{}):
+			if float(merge_available.targets[id])>world.time and world.cells.any(func(cell):return cell.id==int(id) and cell.id!=world.player.id and not cell.dead and cell.health>0 and cell.lineage_id()==world.player.lineage_id()):merge_candidates[int(id)]=true
+	else:
+		for id in world.FamilyMerging.candidates(world,world.player):merge_candidates[id]=true
+
+func _merge_bright(cell) -> bool:
+	return cell.id==world.player.id or merge_candidates.has(cell.id)
+
+func _begin_merge_selection() -> void:
+	if merge_selecting() or user_paused or settings_panel.visible or world.player.dead:return
+	if build_open:_finish_build()
+	cell_ui.close_context()
+	merge_selection={"cell":world.player.id,"zoom":manual_zoom,"locked":camera_locked,"free":free_camera,"offset":camera_offset,"rotation":camera_rotation,"intero_rotation":intero_rotation,"perception":perception}
+	_ease_camera()
+	perception="exteroception";camera_locked=true;camera_offset=Vector2.ZERO;camera_rotation=0;intero_rotation=0
+	var size:=get_viewport_rect().size
+	var base: float=minf(size.x/Simulation.VIEW.x,size.y/Simulation.VIEW.y)
+	var radius: float=world.FamilyMerging.neighborhood(world.player)
+	manual_zoom=clampf(minf(size.x,size.y)/(2.4*radius*base),MIN_ZOOM,MAX_ZOOM);camera_zoom=manual_zoom;focus_animating=false
+	touch_zoom.cancel();inspector.box.hide();inspector.touch_until=0
+	_update_perception_menu();_update_world(1);touch_zoom.layout();cell_ui.sync(0)
+	_message("No available relatives detected yet. Wait for a family trail, or Cancel." if merge_candidates.is_empty() else "Choose a bright relative to merge. Dim cells cannot be selected.")
+
+func _end_merge_selection(restore: bool=true) -> void:
+	if not merge_selecting():return
+	var previous: Dictionary=merge_selection
+	merge_selection={};merge_candidates.clear()
+	_ease_camera()
+	if restore and world.player.id==previous.cell and not world.player.dead:
+		perception=previous.perception;camera_locked=previous.locked;free_camera=previous.free;camera_offset=previous.offset
+		camera_rotation=previous.rotation;intero_rotation=previous.intero_rotation;manual_zoom=previous.zoom;camera_zoom=manual_zoom;focus_animating=false
+	touch_zoom.cancel();_update_perception_menu();_update_world(1);touch_zoom.layout();cell_ui.sync(0)
+
+func _merge_at(screen: Vector2) -> int:
+	var selected_id:=-1;var top:=-1000;var distance:=INF
+	for cell in world.cells:
+		if not views.has(cell.id) or cell.dead:continue
+		var view=views[cell.id]
+		var local: Vector2=view.get_global_transform_with_canvas().affine_inverse()*screen
+		if not Geometry2D.is_point_in_polygon(local,cell.membrane.outline()):continue
+		var score: float=local.length()/maxf(1,cell.radius)
+		if view.z_index>top or (view.z_index==top and score<distance):
+			top=view.z_index;distance=score;selected_id=cell.id
+	return selected_id if merge_candidates.has(selected_id) else -1
+
+func _choose_merge_at(screen: Vector2) -> void:
+	_refresh_merge_candidates()
+	var identity: int=_merge_at(screen)
+	if identity<0:
+		_message("Choose a bright relative whose pheromones this cell can detect.");return
+	if world.edit("merge",{"id":identity}):
+		_end_merge_selection()
+		_message("Merge requested. Following the detected family trail." if world.remote_client else "Following the detected family trail to merge.")
+	else:_message("That relative is no longer available. Choose another bright cell.")
+
 func _family_at(screen: Vector2) -> int:
 	var nearest := -1
 	var distance := INF
@@ -1257,6 +1329,7 @@ func _family_at(screen: Vector2) -> int:
 	return nearest
 
 func _switch_family(identity: int) -> bool:
+	if merge_selecting():return false
 	if identity < 0 or identity == world.player.id or selected >= 0 or moving_id >= 0: return false
 	if world.remote_client:
 		# Owned off-camera relatives have ledger/portrait data, not client bodies.
@@ -1277,6 +1350,9 @@ func _switch_family(identity: int) -> bool:
 func _unhandled_input(event: InputEvent) -> void:
 	if feedback.opened or profile.opened or palette.opened or player_help.opened or lineage_confirming:return
 	if touch_zoom.enabled and (event is InputEventMouseButton or event is InputEventMouseMotion) and event.device==-1:return
+	if merge_selecting() and event is InputEventMouseButton and event.pressed:
+		if event.button_index==MOUSE_BUTTON_RIGHT:_end_merge_selection();return
+		if event.button_index==MOUSE_BUTTON_LEFT:_choose_merge_at(event.position);return
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT and not cell_ui.context.is_empty():
 		cell_ui.close_context()
 		return
@@ -1301,7 +1377,7 @@ func _unhandled_input(event: InputEvent) -> void:
 					_message("Microtubule placed · hover and scroll to set tension.")
 			tube_start.clear()
 		return
-	if event.button_index == MOUSE_BUTTON_MIDDLE and (build_open or not camera_locked or perception=="interoception"):
+	if event.button_index == MOUSE_BUTTON_MIDDLE and (merge_selecting() or build_open or not camera_locked or perception=="interoception"):
 		_direct_camera()
 		camera_dragging = true
 		camera_button = event.button_index

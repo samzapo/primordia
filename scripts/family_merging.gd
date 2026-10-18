@@ -8,10 +8,32 @@ static func managed(sim,cell) -> bool:
 static func eligible(sim,receiver,donor) -> bool:
  return receiver!=donor and not receiver.dead and receiver.health>0 and not donor.dead and donor.health>0 and receiver.lineage_id()==donor.lineage_id() and not managed(sim,donor)
 
+static func detected(sim,receiver,donor_id: int) -> bool:
+ var cue: Dictionary=receiver.behavior.get("family_cues",{}).get(donor_id,{})
+ var report: Dictionary=cue.get("report",{})
+ if cue.is_empty() or float(cue.get("expires_at",0))<=sim.time:return false
+ if int(report.get("id",-1))!=donor_id or int(report.get("lineage",-1))!=receiver.lineage_id():return false
+ return receiver.organs.any(func(organ):return organ.hp>0 and organ.kind in ["feeding","hunting","sensing","counterattack","family_toward","family_away"])
+
+static func candidates(sim,receiver) -> Dictionary:
+ var result: Dictionary={}
+ for donor in sim.cells:
+  if eligible(sim,receiver,donor) and detected(sim,receiver,donor.id):
+   result[donor.id]=float(receiver.behavior.family_cues[donor.id].expires_at)
+ return result
+
+static func neighborhood(receiver) -> float:
+ # Fit the receiving cell and its local sensory neighborhood, never remote kin.
+ var reach:=90.0
+ for organ in receiver.organs:
+  if organ.hp>0 and organ.kind in ["feeding","hunting","sensing","counterattack","family_toward","family_away"]:
+   reach=maxf(reach,(120 if organ.kind=="hunting" else 90)*sqrt(organ.scale)*(1-organ.blocked*.65)*receiver.Genes.factor(organ,"sense"))
+ return maxf(receiver.extent()*3,receiver.extent()+reach+32)
+
 static func request(sim,donor_id: int) -> bool:
  var receiver=sim.player
  for donor in sim.cells:
-  if donor.id==donor_id and eligible(sim,receiver,donor):
+  if donor.id==donor_id and eligible(sim,receiver,donor) and detected(sim,receiver,donor_id):
    receiver.behavior["merge_order"]={"id":donor.id,"expires_at":sim.time+60,"automatic":false}
    if touching(sim,receiver,donor):return commit(sim,receiver,donor)
    return true
@@ -48,7 +70,7 @@ static func step(sim) -> void:
      if int(id)>cell.id:
       cell.behavior["merge_order"]={"id":int(id),"expires_at":sim.time+60,"automatic":true}
       order=cell.behavior.merge_order;break
-  if order.is_empty():continue
+  if order.is_empty() or not detected(sim,cell,int(order.id)):continue
   for donor in sim.cells.duplicate():
    if donor.id!=int(order.id) or not eligible(sim,cell,donor):continue
    if order.get("automatic",false) and (donor.age<MIN_AGE or sim.time<donor.merge_after):continue
@@ -58,7 +80,7 @@ static func step(sim) -> void:
    break
 
 static func commit(sim,receiver,donor) -> bool:
- if not eligible(sim,receiver,donor) or not touching(sim,receiver,donor):return false
+ if not eligible(sim,receiver,donor) or not detected(sim,receiver,donor.id) or not touching(sim,receiver,donor):return false
  var organ_material: float=donor.organ_mass()
  var solids: float=donor.body+donor.biomass+donor.brood_mass+donor.surface_material()+organ_material*.5
  var radius: float=receiver.tissue_radius(receiver.body+receiver.biomass+receiver.brood_mass+solids*.9)

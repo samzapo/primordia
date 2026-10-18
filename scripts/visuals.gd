@@ -73,6 +73,16 @@ static func nucleus_art(c,at: Vector2,extent: float,core: PackedVector2Array,pal
 	c.draw_colored_polygon(Transform2D(0,Vector2.ONE*extent*.74,0,at-Vector2.ONE*extent*.08)*core,palette[5])
 	if detail:c.draw_colored_polygon(Transform2D(-.3,Vector2(.30,.38)*extent,0,at-Vector2.ONE*extent*.22)*core,palette[6])
 
+static func receptor_factory(c,at: Vector2,r: float) -> void:
+	c.draw_circle(at,r,Color("332349"));c.draw_arc(at,r,0,TAU,28,Color("c997ef"),r*.10,true)
+	for side in [-1,1]:
+		c.draw_line(at+Vector2(-.55,side*.3)*r,at+Vector2(.20,side*.3)*r,Color("c997ef"),r*.12,true)
+		for direction in [-1,1]:
+			c.draw_line(at+Vector2(.15,side*.3)*r,at+Vector2(.55,side*.3+direction*.23)*r,Color("edbfff"),r*.10,true)
+	c.draw_circle(at+Vector2(.72,.72)*r,r*.30,Color("204954"))
+	c.draw_line(at+Vector2(.55,.72)*r,at+Vector2(.89,.72)*r,Color("ccffe8"),r*.08,true)
+	c.draw_line(at+Vector2(.72,.55)*r,at+Vector2(.72,.89)*r,Color("ccffe8"),r*.08,true)
+
 static func internal_factory(c,at: Vector2,radius: float,active: bool=false) -> void:
 	# Shared factory/overlap-menu artwork. This is a build affordance, not an organ.
 	c.draw_circle(at+Vector2(0,radius*.12),radius,Color("122d51"))
@@ -116,6 +126,8 @@ static func icon(c, p: Vector2, kind: String, rotation: float, scale: float, ani
 			offspring_store(c,Vector2.ZERO,115)
 		"atp_store":
 			atp_store(c,Vector2.ZERO,19)
+		"receptor_factory":
+			receptor_factory(c,Vector2.ZERO,23)
 		"internal_factory":
 			internal_factory(c,Vector2.ZERO,23)
 		"propulsion":
@@ -209,6 +221,15 @@ static func icon(c, p: Vector2, kind: String, rotation: float, scale: float, ani
 					var tip := hair+Vector2(7+2*sin(animation_time*7+i),-hair.y*0.18)
 					c.draw_line(hair,tip,Color("caf7be"),1.5,true)
 			c.draw_circle(Vector2(-14,0),4*(1+0.3*pulse),Color("e1f5ac"))
+		"family_toward","family_away":
+			var color:=Color("8ee9c7") if kind=="family_toward" else Color("b9b3ff")
+			c.draw_line(Vector2(-7,0),Vector2(16,0),color,5,true)
+			for side in [-1,1]:
+				var x:=12.0 if kind=="family_toward" else 23.0
+				var tip:=23.0 if kind=="family_toward" else 12.0
+				c.draw_line(Vector2(x,side*9),Vector2(tip,0),color,4,true)
+			c.draw_circle(Vector2(-5,0),6,color)
+			c.draw_circle(Vector2(-5,0),2.8,Color("285876"))
 		"sensing":
 			c.draw_line(Vector2(-6,0),Vector2(11,0),Color("7634b2"),8,true)
 			c.draw_line(Vector2(-3,0),Vector2(12,0),PURPLE,5,true)
