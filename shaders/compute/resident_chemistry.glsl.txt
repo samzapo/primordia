@@ -11,6 +11,8 @@ layout(set=0,binding=6,std430) readonly buffer PairStats { uint pair_stats[]; };
 layout(set=0,binding=7,std430) readonly buffer Identity { uvec2 identity[]; };
 layout(set=0,binding=8,std430) readonly buffer Events { vec4 events[]; };
 layout(set=0,binding=9,std430) buffer Thinning {vec4 thinning_result[2];};
+layout(set=0,binding=10,std430) buffer CarbonSupply {vec4 carbon_supply[2560];};
+/*CATALOG_RADII*/
 layout(push_constant,std430) uniform Params {uint count;uint stage;float dt;uint tick;float now;uint output_at;uint groups;uint seed;vec4 scope;} pc;
 shared vec4 sums[128];
 shared vec4 shown[128];
@@ -19,6 +21,39 @@ ivec2 pixel(uint i){return ivec2(int(i%256u)*3,int(i/256u));}
 uint hash32(uint x){x=((x^(x>>16))*0x7feb352du);x=((x^(x>>15))*0x846ca68bu);return x^(x>>16);}
 void main(){
  uint i=gl_GlobalInvocationID.x,lane=gl_LocalInvocationID.x;
+ if(pc.stage==6u){
+  if(i>=2560u)return;
+  uint x=i%64u,y=i/64u,first=0xffffffffu;float total=carbon_supply[i].x;
+  for(uint dx=0u;dx<4u;dx++)for(uint dy=0u;dy<4u;dy++){
+   uvec2 range=ranges[(y*4u+dy)*256u+x*4u+dx];
+   for(uint k=range.x;k<range.y;k++){
+    uint slot=order[k].y;
+    if(imageLoad(state,pixel(slot)+ivec2(1,0)).w!=5.)continue;
+    total+=imageLoad(state,pixel(slot)+ivec2(2,0)).y;first=min(first,slot);
+   }
+  }
+  float q=max(0.,pc.scope.x-total)*pc.dt,added=0.,pending=q;
+  float ratio=total>pc.scope.x?1.-pc.dt*(1.-pc.scope.x/total):1.;
+  if(ratio<1.){
+   for(uint dx=0u;dx<4u;dx++)for(uint dy=0u;dy<4u;dy++){
+    uvec2 range=ranges[(y*4u+dy)*256u+x*4u+dx];
+    for(uint k=range.x;k<range.y;k++){
+     uint slot=order[k].y;
+     if(imageLoad(state,pixel(slot)+ivec2(1,0)).w!=5.)continue;
+     vec4 m=imageLoad(state,pixel(slot)+ivec2(2,0));float before=m.y;
+     m.y*=ratio;m.z*=ratio;added+=m.y-before;m.x=2.*radii[5]*clamp(sqrt(m.y/.3),.8,1.7);
+     imageStore(state,pixel(slot)+ivec2(2,0),m);
+    }
+   }
+   carbon_supply[i]=vec4(added,0.,ratio,0.);return;
+  }
+  if(first!=0xffffffffu){
+   vec4 m=imageLoad(state,pixel(first)+ivec2(2,0));float next=m.y+q;added=next-m.y;
+   m.y=next;m.z+=added;m.x=2.*radii[5]*clamp(sqrt(m.y/.3),.8,1.7);
+   imageStore(state,pixel(first)+ivec2(2,0),m);pending=0.;
+  }
+  carbon_supply[i]=vec4(added,pending,1,0);return;
+ }
  if(pc.stage==0u){
   if(i>=2560u)return;
   uint x=i%64u,y=i/64u;

@@ -97,7 +97,7 @@ func run() -> void:
 		sim.player.chemistry.emit("carbon",20,site)
 		if gpu: check(preload("res://scripts/resident_cytoplasm.gd").new().attach(resident,sim.player.chemistry,sim.player),"Photosynthesis shares the resident intracellular owner")
 		var carbon_before: float = sim.player.carbon; var biomass_before: float = sim.player.biomass
-		var expected: float = 3.5*sim.light_at(sim.player.organ_position(leaf))*.3
+		var expected: float = minf(sim.player.Chemistry.MAX_LEAF_FIXATION,3.5*maxf(sim.player.Chemistry.MIN_LEAF_LIGHT,sim.light_at(sim.player.organ_position(leaf))))*.3
 		for pulse in 3:sim._photosynthesize(sim.player,.1)
 		var consumed: float = carbon_before-sim.player.carbon
 		check(absf(consumed-expected)<.00001,"Photosynthesis uses normal local carbon throughput regardless of saved percentage")
@@ -106,7 +106,7 @@ func run() -> void:
 		sim.player.chemistry.ensure_cpu()
 	var photo = fixture("photosynthesis",4); photo.player.energy = 0
 	photo.player.chemistry.emit("carbon",20,photo.player.local_point(0)*.72)
-	var baseline: float = 3.5*photo.light_at(photo.player.organ_position(photo.player.organs[0]))*.3
+	var baseline: float = minf(photo.player.Chemistry.MAX_LEAF_FIXATION,3.5*maxf(photo.player.Chemistry.MIN_LEAF_LIGHT,photo.light_at(photo.player.organ_position(photo.player.organs[0]))))*.3
 	var carbon: float = photo.player.carbon
 	for pulse in 3:photo._photosynthesize(photo.player,.1)
 	check(absf(carbon-photo.player.carbon-baseline)<.00001 and photo.player.energy>0,"Ordinary photosynthesis remains available at zero ATP")

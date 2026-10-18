@@ -158,7 +158,7 @@ func _ready() -> void:
 	world.pending_replacements.clear()
 	introduced_cells+=Population.replenish(world)
 	world.particle_limit=int(OS.get_environment("PRIMORDIA_PARTICLE_LIMIT")) if OS.has_environment("PRIMORDIA_PARTICLE_LIMIT") else 5000
-	world.server_mode = true; world.camera_views.clear();world.enable_perception_domains();world.external_offscreen=false;world.interoceptive_cells.clear()
+	world.server_mode = true; world.enable_ambient_carbon(); world.camera_views.clear();world.enable_perception_domains();world.external_offscreen=false;world.interoceptive_cells.clear()
 	world.evolution.sandbox = true
 	for account in accounts.values():account.lineage.progression=account.evolution
 	world.grid.rebuild(world.particles)
@@ -861,6 +861,7 @@ func _write_metrics() -> void:
 	metrics["biochemistry_version"]=1
 	metrics["internal_packet_limit_per_cell"]=world.Cell.Chemistry.MAX_PACKETS
 	metrics["environment"]=world.environment.duplicate(true)
+	metrics["ambient_carbon"]={"enabled":world.ambient_carbon_enabled,"added":world.ambient_carbon_added,"removed":world.ambient_carbon_removed,"next_at":world.ambient_carbon_due,"saturation":preload("res://scripts/ambient_carbon.gd").SATURATION}
 	metrics["internal_packets"]=world.cells.reduce(func(total,cell):return total+cell.chemistry.particle_count(),0)
 	metrics["resident_internal_cells"]=world.cells.filter(func(cell):return cell.chemistry.accelerator!=null).size()
 	metrics["internal_parcel_scale"]=world.Catalog.data().ecology.get("internal_parcel_scale",1)

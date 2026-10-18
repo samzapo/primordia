@@ -72,7 +72,7 @@ static func run(check: Callable) -> void:
 	sim._motion_cell(cell,0.1)
 	check.call(cell.velocity.length() > 0 and (sim.fluid.momentum()+cell.velocity*cell.mass-before).length() < 0.01,"Cilia propel the body through conservative fluid impulses")
 	check.call(is_equal_approx(energy-cell.energy,Cell.CILIA_MOTION*0.1),"Ciliary motion pays its own ATP rate")
-	check.call(Cell.organ_upkeep(cell.organs[0]) == Cell.CILIA_PUMP+Cell.CILIA_MOTION,"Cilia preview includes both motion and feeding-current upkeep")
+	check.call(Cell.organ_upkeep(cell.organs[0]) == Cell.CILIA_PUMP+Cell.CILIA_MOTION+Cell.ORGAN_UPKEEP,"Cilia preview includes maintenance, motion and feeding-current upkeep")
 
 	# Steering torque must be paired too, not add the same rotation to water.
 	sim = fixture()

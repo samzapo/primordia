@@ -6,7 +6,9 @@ static func state(sim,cell,organ: Dictionary) -> Dictionary:
  if organ.hp<=0:result.label="Damaged";return result
  if kind=="photosynthesis":
   if cell.carbon<=.0000001:result.label="Waiting for carbon";return result
-  if sim.light_at(cell.organ_position(organ))<=.001:result.label="Waiting for light";return result
+  var site: Vector2=cell.local_point(organ.a)*.72
+  if not cell.chemistry.vacuoles.any(func(v):return v.get("species","")=="carbon" and v.p.distance_squared_to(site)<=24*24):result.label="Waiting for carbon to reach the leaf";return result
+  if sim.light_at(cell.organ_position(organ))*cell.Genes.factor(organ,"sun" if sim.light_at(cell.organ_position(organ))>=.5 else "shade")<cell.Chemistry.MIN_LEAF_LIGHT:result.label="Collecting diffuse light";return result
   result.label="Collecting light";result.progress=clampf(float(organ.get("photo_elapsed",0))/.25,0,1)
   return result
  if kind=="toxin_sac":

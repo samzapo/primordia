@@ -31,6 +31,12 @@ const VARIANTS:={
 static func candidate(sim,cell) -> Dictionary:
  var policy:=strategy(sim,cell)
  if policy not in VARIANTS or cell.id in sim.managed_cells:return {}
+ # Survival support comes before expanding any opted-in role. No remote food query.
+ if cell.energy<18*cell.growth_scale():
+  if cell.substrate>.1 and cell.oxygen>.1 and working(cell,"mitochondrion")<2 and cell.can_fit("mitochondrion",0,1,false):
+   return {"cell":cell,"kind":"mitochondrion"}
+  if working(cell,"photosynthesis")<4 and (working(cell,"photosynthesis")==0 or cell.carbon>.001) and cell.can_fit("photosynthesis",0,1,false):
+   return {"cell":cell,"kind":"photosynthesis","mutation":"shade_leaf" if sim.light_at(cell.position)<.5 else "sun_leaf"}
  var variant: int=posmod(cell.id*19349663 ^ sim.seed_value*83492791,2)
  var priorities: Array=VARIANTS[policy][variant]
  var best: Dictionary={}
@@ -38,7 +44,7 @@ static func candidate(sim,cell) -> Dictionary:
  for index in priorities.size():
   var kind: String=priorities[index]
   var count: int=working(cell,kind)
-  var limit: int=4 if kind=="photosynthesis" else 2 if kind in ["feeding","cilia","protection"] else 1
+  var limit: int=4 if kind=="photosynthesis" else 2 if kind in ["feeding","cilia","protection","mitochondrion"] else 1
   if count>=limit or not cell.can_fit(kind,0,1,false):continue
   var value: float=(priorities.size()-index)/pow(1+count,1.7)
   if working(cell,priorities[0])==0 and index==0:value+=100
@@ -74,7 +80,7 @@ static func decision(sim,cell) -> Dictionary:
   if cell.inherent(organ):continue
   if organ.hp>0 and organ.kind in ["feeding","photosynthesis","mitochondrion"] and working(cell,organ.kind)<=1:continue
   if organ.hp>0 and organ.kind in ["protection","regenerative","neutralizing"] and working(cell,organ.kind)<=1:continue
-  var limit: int=4 if organ.kind=="photosynthesis" else 2 if organ.kind in ["feeding","cilia","protection"] else 1
+  var limit: int=4 if organ.kind=="photosynthesis" else 2 if organ.kind in ["feeding","cilia","protection","mitochondrion"] else 1
   var excess: bool=working(cell,organ.kind)>limit
   var unsuitable: bool=missing_core and organ.kind not in priorities
   if organ.hp<=0 or excess or unsuitable:

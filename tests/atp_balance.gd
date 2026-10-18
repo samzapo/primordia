@@ -13,15 +13,16 @@ static func run(check: Callable) -> void:
 	cell.add_organ("feeding",0,"graze",false)
 	cell.add_organ("propulsion",PI,"graze",false)
 	cell.add_organ("propulsion",2.2,"graze",false)
+	cell.add_organ("mitochondrion",.4,"graze",false)
 	cell.biomass = 18
 	cell.substrate = 0
 	cell.oxygen = 0
 	cell.energy = 60
-	# A finite external stock fed at 0.5 units/s for four minutes, no photo input.
-	var stock := 120.0
+	# A finite external stock fed at 1 unit/s for four minutes, no photo input.
+	var stock := 240.0
 	var before: float = cell.organic_mass()+stock
 	for i in 14400:
-		var amount: float = minf(stock,0.5*DT)
+		var amount: float = minf(stock,DT)
 		stock -= amount
 		cell.substrate += amount
 		cell.oxygen += amount # Finite oxygen accompanies this fixture's finite food stock.
@@ -30,7 +31,8 @@ static func run(check: Callable) -> void:
 		for organ in cell.organs:
 			if organ.kind == "propulsion": cell.spend_energy(Cell.MOTION_UPKEEP*DT,organ,"movement")
 			elif organ.kind == "feeding": cell.spend_energy((Cell.PUMP_UPKEEP+0.35*Cell.SECRETION_COST)*DT,organ,"pumping")
-	check.call(cell.energy > 12 and cell.health == 100 and cell.reserve_used == 0,"A finite steady food and oxygen supply supports two flagella and a pore without burning construction tissue")
+	print("STEADY RESPIRATION ",{"ATP":cell.energy,"biomass":cell.biomass,"reserved_use":cell.reserve_used,"processed":cell.processed,"mitochondria":cell.count("mitochondrion"),"food":cell.substrate,"oxygen":cell.oxygen})
+	check.call(cell.energy > 12 and cell.health == 100 and cell.reserve_used == 0,"A finite steady food and oxygen supply plus mitochondrial respiration supports two flagella and a pore without burning construction tissue")
 	check.call(cell.biomass > 30 and cell.add_organ("photosynthesis",1.2),"Ordinary digestive growth leaves tissue for another paid organ")
 	check.call(absf(cell.organic_mass()+stock+sim.respiration_loss-before) < 0.00001,"Easier ATP yields still conserve finite food and ordinary material losses")
 	# Empty reserves still impose scarcity; there is no passive free ATP.

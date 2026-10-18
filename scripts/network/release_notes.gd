@@ -273,6 +273,18 @@ const RELEASES=[
 	"footer":"Your cell and its progress carry on between updates.",
 	"button":"Back to the pond",
 },
+{
+ "id":"2026-10-17-stable-renewable-carbon",
+ "audience":"stable",
+ "title":"What’s new in the pond",
+ "items":[
+  "Air slowly replenishes dissolved carbon throughout the pond, so the food chain can keep going.",
+  "One healthy leaf can sustain a basic cell even in dim water. Larger builds need more leaves and efficient respiration.",
+  "Starving cells pause reproductive investment while they recover. Select a leaf to see what it is waiting for.",
+ ],
+ "footer":"Your cells and their progress carry on between updates.",
+ "button":"Back to the pond",
+},
 ]
 const CURRENT=RELEASES[-1]
 static func seen_index(account: Dictionary) -> int:

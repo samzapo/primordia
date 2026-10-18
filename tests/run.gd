@@ -882,8 +882,11 @@ func _test_autonomous_hunting() -> void:
 	cell.add_organ("poreforming",0.45,"graze",false)
 	cell.add_organ("hunting",0,"hunt",false)
 	cell.add_organ("propulsion",PI,"graze",false)
-	# Explicit finite meal funds sustained chemical predation; no retired emergency tissue burning.
+	sim.automatic_reproduction=false # This fixture isolates funded pursuit, not offspring investment.
+	cell.add_organ("mitochondrion",.2,"graze",false)
+	# Finite aerobic fuel supports this expanded hunter under ordinary organ upkeep.
 	cell.chemistry.emit("food",120,cell.local_point(1.3)*.6)
+	cell.chemistry.emit("oxygen",120,cell.local_point(1.3)*.6)
 	# Pin this pursuit fixture to its original sampled prey anatomy; retired
 	# founder-reserve allocation must not silently choose a different ID/shape.
 	sim.next_id = 17

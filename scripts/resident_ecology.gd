@@ -136,6 +136,25 @@ func thin(probability: float,serial: int,random: RandomNumberGenerator) -> Dicti
 		if not trace_emissions[key].alive:trace_emissions.erase(key)
 	return result
 
+func replenish_carbon(factor: float,target: float) -> Dictionary:
+	var sim=world.get_ref()
+	var supply=preload("res://scripts/ambient_carbon.gd")
+	var cold: Array=[]
+	if streaming!=null:
+		assert(streaming.borrowed.is_empty())
+		for key in streaming.cold.chunks.keys():cold.append_array(streaming.cold.take(key))
+		streaming.advance(sim,cold,true)
+		streaming.settle(sim,cold,sim.CARBON)
+	var stock: Dictionary=supply.inventory(cold+pending+trace_emissions.values())
+	var result: Dictionary=gpu.carbon_supply_sync(stock.mass,factor,target)
+	if result.has("error"):
+		if streaming!=null:streaming.cold.put_all(cold,sim.time)
+		fallback(result.error);return result
+	var removed: float=float(result.removed)+supply.degas(cold+pending+trace_emissions.values(),result.ratios)
+	var added: float=float(result.added)+supply.deposit(sim,result.pending,stock.first)
+	if streaming!=null:streaming.cold.put_all(cold,sim.time)
+	return {"added":added,"removed":removed}
+
 func stored_count() -> int:
 	return streaming.cold.count if streaming!=null else 0
 

@@ -7,6 +7,7 @@ var shader:=RID()
 var pipeline:=RID()
 var partials:=RID()
 var thinning_stats:=RID()
+var carbon_stats:=RID()
 var sets: Array[RID]=[]
 var count:=0
 var seed:=0
@@ -18,13 +19,14 @@ func initialize(device: RenderingDevice, state: RID, acid: RID, order: RID, rang
 	var zero:=PackedByteArray();zero.resize(ceili(count/128.0)*80)
 	partials=rd.storage_buffer_create(zero.size(),zero)
 	thinning_stats=rd.storage_buffer_create(32)
+	carbon_stats=rd.storage_buffer_create(2560*16)
 	var text:=RDShaderSource.new();text.source_compute=Catalog.glsl(source)
 	var spirv:=rd.shader_compile_spirv_from_source(text)
 	if spirv.compile_error_compute!="": push_error(spirv.compile_error_compute);return false
 	shader=rd.shader_create_from_spirv(spirv);pipeline=rd.compute_pipeline_create(shader)
 	for receipt in receipts:
 		var uniforms: Array[RDUniform]=[]
-		var resources: Array=[state,acid,order,ranges,partials,receipt,pair_stats,identity,events,thinning_stats]
+		var resources: Array=[state,acid,order,ranges,partials,receipt,pair_stats,identity,events,thinning_stats,carbon_stats]
 		for i in resources.size():
 			var uniform:=RDUniform.new();uniform.binding=i
 			uniform.uniform_type=RenderingDevice.UNIFORM_TYPE_IMAGE if i==0 else RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
@@ -67,6 +69,18 @@ func thin(probability: float,serial: int) -> Dictionary:
 	var values:=bytes.to_float32_array()
 	return {"readback_bytes":bytes.size(),"loss":values[0],"removed":int(values[1]),"alive":int(values[2]),"signals":int(values[3]),"high_water":int(values[4]),"fuel_loss":values[5]}
 
+func carbon_supply(cold: PackedFloat32Array,factor: float,target: float) -> Dictionary:
+	var input:=PackedFloat32Array();input.resize(2560*4)
+	for i in 2560:input[i*4]=cold[i]
+	rd.buffer_update(carbon_stats,0,input.size()*4,input.to_byte_array())
+	dispatch(6,20,{"probability":factor,"count_scope":Vector4(target,0,0,0)})
+	var values:=rd.buffer_get_data(carbon_stats).to_float32_array()
+	var added:=0.0;var removed:=0.0;var pending:=PackedFloat32Array();pending.resize(2560)
+	var ratios:=PackedFloat32Array();ratios.resize(2560)
+	for i in 2560:
+		added+=maxf(0,values[i*4]);removed+=maxf(0,-values[i*4]);pending[i]=values[i*4+1];ratios[i]=values[i*4+2]
+	return {"added":added,"removed":removed,"pending":pending,"ratios":ratios}
+
 func close() -> void:
-	for resource in sets+[pipeline,shader,partials,thinning_stats]:
+	for resource in sets+[pipeline,shader,partials,thinning_stats,carbon_stats]:
 		if resource.is_valid(): rd.free_rid(resource)

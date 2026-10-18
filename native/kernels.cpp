@@ -515,6 +515,8 @@ protected:
     ClassDB::bind_method(D_METHOD("pool_snapshot"), &PrimordiaKernels::pool_snapshot);
     ClassDB::bind_method(D_METHOD("pool_resolve"), &PrimordiaKernels::pool_resolve);
     ClassDB::bind_method(D_METHOD("pool_snapshots"), &PrimordiaKernels::pool_snapshots);
+    ClassDB::bind_method(D_METHOD("pool_carbon_ids"), &PrimordiaKernels::pool_carbon_ids);
+    ClassDB::bind_method(D_METHOD("pool_carbon_supply"), &PrimordiaKernels::pool_carbon_supply);
     ClassDB::bind_method(D_METHOD("pool_stop"), &PrimordiaKernels::pool_stop);
     ClassDB::bind_method(D_METHOD("pool_metrics"), &PrimordiaKernels::pool_metrics);
     ClassDB::bind_method(D_METHOD("pool_expire"), &PrimordiaKernels::pool_expire);
@@ -660,6 +662,32 @@ public:
   }
   Array pool_snapshots() {
     Array out; for (int i=0;i<pool_size();++i) out.push_back(snapshot(i)); return out;
+  }
+  Array pool_carbon_ids() {
+    Array ids; for (int i=0;i<pool_size();++i) if(packet_slots[i].value.alive && packet_slots[i].value.kind==5) ids.push_back(i);
+    return ids;
+  }
+  Dictionary pool_carbon_supply(double factor,double target) {
+    Dictionary out;PackedFloat64Array pending;pending.resize(2560);pending.fill(0.);
+    if(!std::isfinite(factor)||factor<0||factor>1||!std::isfinite(target)||target<0){out["error"]="Invalid carbon supply";return out;}
+    std::array<double,2560> mass{};std::array<int,2560> first;first.fill(-1);
+    for(int i=0;i<pool_size();++i){
+      auto &v=packet_slots[i].value;if(!v.alive||v.kind!=5)continue;
+      int k=node(int(std::floor(wrap(v.p.x,4096)/64)),int(std::floor(wrap(v.p.y,2560)/64)));
+      mass[k]+=v.amount;if(first[k]<0)first[k]=i;
+    }
+    double added=0,removed=0;
+    for(int i=0;i<pool_size();++i){
+      auto &v=packet_slots[i].value;if(!v.alive||v.kind!=5)continue;
+      int k=node(int(std::floor(wrap(v.p.x,4096)/64)),int(std::floor(wrap(v.p.y,2560)/64)));
+      if(mass[k]>target){double ratio=1-factor*(1-target/mass[k]),before=v.amount;v.amount*=ratio;v.capacity*=ratio;removed+=before-v.amount;}
+    }
+    for(int k=0;k<2560;++k){
+      double q=std::max(0.,target-mass[k])*factor;
+      if(first[k]<0)pending.set(k,q);
+      else{auto &v=packet_slots[first[k]].value;v.amount+=q;v.capacity+=q;added+=q;}
+    }
+    invalidate_particle_render();out["added"]=added;out["removed"]=removed;out["pending"]=pending;return out;
   }
   Array pool_stop() {
     Array out=pool_snapshots(); pool_enabled=false; packet_frame=false;

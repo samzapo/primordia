@@ -9,6 +9,9 @@ const REACTION_REACH := 20.0
 const DIGESTION_RATE := 1.8
 const RESIDENCE_SECONDS := 10.0
 const BIOMASS_YIELD := 0.7
+const MAX_LEAF_FIXATION := 0.7
+const LEAF_ATP_YIELD := 2.0
+const MIN_LEAF_LIGHT := 0.08 # Authored diffuse-light survival floor, with real carbon costs.
 var model_version := 2
 var batching:=false
 var particles: Array = []
@@ -274,7 +277,8 @@ func photosynthesize(sim,cell,organ: Dictionary,dt: float) -> void:
 	dt=organ.photo_elapsed;organ.photo_elapsed=0.0
 	if dt<=0 or amount("carbon")<=.0000001:return
 	var light: float=sim.light_at(cell.organ_position(organ))
-	var budget: float=3.5*light*organ.scale*organ.scale*organ.hp/organ.max_hp*cell.Genes.factor(organ,"sun" if light>=.5 else "shade")*dt
+	var response: float=maxf(MIN_LEAF_LIGHT,light*cell.Genes.factor(organ,"sun" if light>=.5 else "shade"))
+	var budget: float=minf(MAX_LEAF_FIXATION,3.5*response)*organ.scale*organ.scale*organ.hp/organ.max_hp*dt
 	var baseline_budget: float = budget/cell.Genes.output(organ)
 	var extra_cost: float = .2*cell.Genes.inefficiency(organ)
 	budget = baseline_budget+minf(budget-baseline_budget,cell.energy/extra_cost)
@@ -289,13 +293,13 @@ func photosynthesize(sim,cell,organ: Dictionary,dt: float) -> void:
 		if used>0:
 			emit("food",used*.65*.75,site,organ.id,-1,used*.65*.75*7.5)
 			emit("oxygen",used*2.5,site,organ.id,-1,0)
-			cell.biomass+=used*.35;solar_work+=used*11.5
+			cell.biomass+=used*.35;solar_work+=used*11.5;heat+=used*(4-LEAF_ATP_YIELD)
 		batching=false;refresh()
 	if used>0:
 		var normal: Vector2=cell.organ_normal(organ).rotated(cell.angle)
 		sim.spawn_particle(0,cell.organ_position(organ)+normal*12,normal*12,used*.65*.25,cell.id)
 		cell.spend_energy(maxf(0,used-baseline_budget)*extra_cost,organ,"photosynthesis")
-		cell.gain_energy(used*4,organ)
+		cell.gain_energy(used*LEAF_ATP_YIELD,organ)
 		cell.fixed_carbon+=used;cell.oxygen_produced+=used*2.5
 		light_flux+=used/maxf(dt,.00000001)
 		cell.consumed(organ,used);cell.emitted(organ)
