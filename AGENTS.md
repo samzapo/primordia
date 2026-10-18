@@ -638,3 +638,11 @@ October18 Revision69 follow-up: bound the Family panel to the visible viewport w
 October18 Revision69 receptor steering: free Flight/Hunting/Toward family/Away from family at a dedicated receptor factory; exclude these from AP build tiers/refunds. Hunter selects any detected non-family cell without size/defense filters. Flight avoids real nearby toxins and armed non-family signals. Family receptors use actual local chemical snapshots and survival-first shared behavior; no live-ID navigation. Counterattack remains a productive gland. Experimental first, preserve ponds.
 
 October18 resource-warning correction: read Revision70. Replace the critical-resource text with independent amber ATP-sac and coral actual-membrane blinks at the existing10ATP/30health thresholds. Only the selected living cell signals; preserve empty-sac quantity, anatomy visibility, pause-aware presentation, input and all biology/RNG/saved state. Experimental first; frozen-view investigation remains open pending actual connected-device evidence.
+
+October18 experimental reset policy: on every experimental deploy, replace its
+pond with an independent copy of main's latest valid published checkpoint.
+Preserve the exact cell/account/lineage/chemistry graph and keys, but issue a new
+experimental world identity. Never stop or modify main, copy stable feedback,
+alias storage, or overwrite experimental feedback. Archive the experimental
+predecessor for rollback; ordinary restarts keep the current experimental pond.
+This supersedes earlier preserve-experimental/reset-input deployment rules.

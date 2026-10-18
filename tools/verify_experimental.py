@@ -29,7 +29,13 @@ def main(restart=False):
     record=json.loads((root/"last-deploy.json").read_text())
     expected=os.environ.get("GITHUB_SHA",record["revision"])
     assert expected==record["revision"]
+    copy=record["pond_copy"]
+    assert copy["graph_unchanged"] and copy["source_world_id"]==baseline["world_id"]
+    assert copy["world_id"]!=baseline["world_id"] and record["feedback_retained"]
+    assert record["initial"]["cell_retention"]["ok"]
+    assert record["initial"]["cell_retention"]["before_digest"]==copy["cells_digest"]
     before=health(expected,baseline["world_id"])
+    assert before["world_id"]==copy["world_id"] and before["tick"]>=copy["source_tick"]
     if restart:
         subprocess.run(["systemctl","--user","restart",UNIT],check=True)
         after=health(expected,baseline["world_id"],before)
@@ -90,7 +96,7 @@ def main(restart=False):
     installed=hashlib_sha(Path("/etc/caddy/Caddyfile"))==manifest["candidate_sha256"]
     persistence="installed" if installed else record["routing"]["persistence"]
     report={"revision":expected,"experimental":after,"stable_before":baseline,"stable_after":final,
-        "public_delivery":deliveries,"restart_tested":restart,"stable_unit_restarted":False,
+        "public_delivery":deliveries,"pond_copy":copy,"restart_tested":restart,"stable_unit_restarted":False,
         "routing_persistence":persistence,"operator_command":None if installed else record["routing"]["operator_command"],
         "scope":"Server-origin trusted HTTPS/WSS, no physical-phone claim or synthetic production sign-in/report"}
     (root/"last-verify.json").write_text(json.dumps(report,indent=2))

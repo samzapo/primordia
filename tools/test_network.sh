@@ -5,6 +5,7 @@ source "$project_dir/tools/godot.sh"
 godot_bin="$(resolve_godot)"
 export PRIMORDIA_INVITE=bounded-infrastructure-fixture
 python3 "$project_dir/tests/test_experimental.py"
+GODOT_BIN="$godot_bin" python3 "$project_dir/tests/test_experimental_snapshot.py"
 python3 "$project_dir/tests/test_experimental_standby.py"
 report_file="$(mktemp "${TMPDIR:-/tmp}/primordia-network.XXXXXX")"
 trap 'rm -f -- "$report_file"; if [[ -n ${recovery_state:-} ]]; then rm -rf -- "$recovery_state"; fi' EXIT

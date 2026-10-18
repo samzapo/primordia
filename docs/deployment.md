@@ -150,8 +150,13 @@ discovery/metrics endpoints remain denied in that prefix too.
 The experimental deployment root is ~/.local/share/primordia-experimental,
 service primordia-experimental.service. Saves, feedback, accounts, opaque browser
 identities, deploy lock, runtime, releases and current symlink are independent.
-Existing access-key hashes are copied once, never plaintext keys or stable
-accounts/cells/checkpoints/feedback. A key signs into separate lineages per pond.
+Every experimental update starts from a fresh, checksummed copy of main's latest
+published pond checkpoint. Cells, anatomy, chemistry, player names/accounts,
+lineages, AP and command receipts are copied exactly, then the copy receives a
+new independent world identity. The existing five-key registry stays unchanged.
+Stable feedback, TLS keys and service credentials are never copied. Experimental
+feedback remains in its own inbox; progress made in experimental is replaced at
+its next update and never written back to main.
 The experimental web build uses a different IndexedDB mount and custom user
 directory, plus separate feedback draft storage. Its visible badge identifies
 the pond. All URLs/assets/music/secure WebSockets retain the /experimental/
@@ -189,15 +194,28 @@ an account or clears a visible message. The supervisor selects the audience from
 its configured pond before launching the authority, independently of inherited
 build variables or browser input. Review these audiences during every promotion.
 
-### Explicit fresh experimental pond
+### Refresh experimental from main on every deployment
 
-The experimental.yml manual dispatch has an optional reset_pond boolean, default false. Use it only for an owner-authorized ecology reset, such as Revision60. The job retains the stopped predecessor, prepares a new world with existing account credentials/names and update acknowledgements, preserves the five-key registry and private feedback, and then validates normal hardware/backend delivery and saved-world restart. Pushes cannot activate this reset. Stable is never a target of this tool. A failed install restores the predecessor and previous release.
+Every deploy operation (push or manual dispatch) captures main's latest valid
+published checkpoint pair immediately before experimental cutover. Main keeps
+running: its atomic checkpoint publication lets the copy read complete inode
+generations without stopping or editing the stable authority. The copy may lag
+live play by the normal checkpoint interval, up to about 30 seconds. No optional
+reset switch is needed, and ordinary service restarts do not refresh the pond.
+
+The deployment stages independent files under the experimental root, validates
+their checksums and source world identity, and preserves the exact data graph.
+It overwrites both experimental checkpoint generations with a fresh world ID,
+checks exact cell retention on startup and an independent restart, and verifies
+the unchanged stable process, epoch, build, world and keys. Stable CD's deployment
+lock prevents a simultaneous stable cutover during this boundary. Failed updates
+restore the archived experimental predecessor and prior release. Private feedback
+is preserved separately and is neither copied from main nor reset.
 
 ## Experimental standby after stable promotion
 
 After the stable CD and saved-world checks succeed, dispatch
-experimental.yml on that same main revision with operation=standby and
-reset_pond=false. This explicit operation gracefully stops and disables only
+experimental.yml on that same main revision with operation=standby. This\nexplicit operation gracefully stops and disables only
 primordia-experimental.service. The helper checks stable's exact build and
 continued world time, then records checksums of experimental checkpoints, key
 registry and private feedback. It does not modify stable or router/proxy settings.
@@ -205,6 +223,6 @@ registry and private feedback. It does not modify stable or router/proxy setting
 The /experimental/ game is unavailable while on standby. Its release, pond,
 accounts, keys and feedback remain stored. Stable CD recognizes and preserves
 this state. For the next authorized batch, use the ordinary experimental deploy
-operation (the default), leaving reset false: it resumes the saved pond and
+operation (the default): it refreshes from main as described above and
 enables the experimental service. Failed experimental upgrades restore the
 previous saved state and leave a formerly suspended instance on standby.
