@@ -115,8 +115,12 @@ func division_controls() -> void:
 			for x in range(maxi(0,int(point.x)-12),mini(off.get_width(),int(point.x)+12)):
 				if on.get_pixel(x,y).get_luminance()>off.get_pixel(x,y).get_luminance()+.08:pixels+=1
 		check(not game.preferences.show_instinct and not choices[0].selected and pixels>2,"Actual pointer toggles off the rendered intent arrow: mobile=%s pixels=%s" % [mobile,pixels])
-		await press_ui(choices[0]);game.cell_ui.close_context();game.notice_timer=0;game.cell_ui.sync(0)
-		check(game.preferences.show_instinct and game.cell_ui.tip_box.visible and game.cell_ui.tip.text.begins_with("Instinct"),"The enabled intent readout survives menu dismissal without another pane")
+		await press_ui(choices[0]);game.cell_ui.close_context();game.notice_timer=0
+		# A real Xvfb/display pointer can hover the cell after dismissal. The
+		# empty-water intent readout must be tested outside all anatomy/choices.
+		var water:=InputEventMouseMotion.new();water.position=Vector2(20,200);water.global_position=water.position
+		root.push_input(water,true);await settle_ui();game.cell_ui.sync(0)
+		check(game.preferences.show_instinct and game.cell_ui.tip_box.visible and game.cell_ui.tip.text.begins_with("Instinct"),"The enabled intent readout survives menu dismissal over empty water: mobile=%s cursor=%s text=%s" % [mobile,game.cell_ui.get_global_mouse_position(),game.cell_ui.tip.text])
 		var saved=preload("res://scripts/preferences.gd").new();saved.path=path;saved.load_settings()
 		check(saved.show_instinct,"Intent toggle is remembered by saved preferences")
 		game.cell_ui.open_context({"kind":"bud"});await settle_ui()
