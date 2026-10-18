@@ -595,3 +595,19 @@ dictionaries while menus stay open. Only authoritative committed receipts report
 AP returned in multiplayer; preserve exactly-once refunds and checkpointing.
 
 October 17 growing-family correction: read Revision63. The owner approves R21/R22 and removal of the four-cell family limit for experimental first. Retain paid live division, safe placement and64-body resident safety. Report authoritative whole-pond readiness, never infer it from camera-visible cells; bud and nucleus both expose Investment. Toxin sacs store finite paid material, included once in mass/inertia and saved anatomy, and release ordinary toxin exactly once on death before nutrient lysis. Recycling/loss/restoration must not duplicate contents. No extra senses, remote damage or suicide behavior. Keep behavior/investment roles, art, live portraits, science guide and experimental-only release copy current. Faster free tag/subunit decay must not change bound assembly. Resume saved experimental without reset and preserve stable; promotion awaits playtest.
+
+October17 growing-family promotion: the owner authorizes deploying the tested Revision63 batch to main. Preserve the exact tested gameplay from experimental e2d6cc0, keep experimental-only notice IDs/audiences, and add a separate stable gameplay notice. Preserve both living ponds, accounts, five-key registries and private feedback through deployment/restart checks. After stable acceptance, return experimental to standby through the documented explicit workflow, retaining its saved state for the next batch.
+
+October17 final AP/investment correction: read Revision64. AP belongs to each
+cell; relatives cannot spend it. Committed division grants parent1AP and
+daughter1AP; readiness grants nothing. One-time legacy pools go to the
+authenticated selected body without duplicating AP or altering cells/anatomy.
+This update starts all saved investment on Manual. NPCs and Manual daughters
+also default Manual; remove old quotas/random birth choices. Explicit strategies
+may buy or reabsorb unsuitable/excess anatomy using their own AP, with one saved
+automatic action per cell per60 simulation seconds. Keep essential food/energy
+and last defenses. Remove organ Move and reject stale commands. The player
+action is Reabsorb; its unchanged current-count refund goes to that body.
+Update guides/notices and validate ownership, migration, cooldown and receipts.
+Owner authorizes these corrections with the pending main promotion; preserve
+both ponds/accounts/keys/feedback and return experimental to standby afterward.

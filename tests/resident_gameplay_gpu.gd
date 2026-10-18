@@ -78,12 +78,12 @@ func lifecycle() -> void:
 	check(sim.divide_lineage(false,false),"A paid living daughter exists before succession")
 	var before:=organic(sim,bridge.snapshots())
 	var old_id: int=sim.player.id
-	var points: int=sim.evolution.points
+	var points: int=sim.player.ap
 	sim._die(sim.player)
 	sim.lineage.recover(sim,1.0/60)
 	check(sim.player.id!=old_id and not sim.player.dead,"Paid successor inherits the same habitat")
 	check(sim.death_bursts.size()>0 and sim.death_bursts[-1].player,"Player lysis remains visible")
-	check(sim.evolution.points==points,"Death does not reset adaptation points")
+	check(sim.player.ap==points,"Death does not reset adaptation points")
 	var after:=organic(sim,bridge.snapshots())
 	check(absf(before-after)<.002,"Lysis and living succession conserve organic inventory")
 	sim.step(1.0/60)

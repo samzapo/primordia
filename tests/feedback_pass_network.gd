@@ -19,16 +19,16 @@ func run() -> void:
  var welcome: Dictionary=messages.filter(func(m):return m.get("kind","")=="welcome")[0]
  var account: Dictionary=host.accounts[welcome.token.sha256_text()]
  var selected=host._selected(account)
- var points: int=account.evolution.points
+ var points: int=selected.ap
  var command: Dictionary={"op":"command","epoch":host.epoch,"cell":selected.id,"edit":account.edit,"sequence":1,"action":"investment","args":{"scope":"lineage","kind":"producer"}}
  socket.send_text(JSON.stringify(command))
  check(await until(func():return not result(1).is_empty()),"Investment command returns a durable receipt")
- check(result(1).ok and account.evolution.points==points and host.world.investment.lineages[account.root]=="producer","Changing strategy is free and scoped to the authenticated family")
+ check(result(1).ok and selected.ap==points and host.world.investment.lineages[account.root]=="producer","Changing strategy is free and scoped to the authenticated family")
  var saved=Codec.new().restore(host.store.load_latest().graph)
  check(saved.world.investment.lineages[account.root]=="producer","Successful policy edit is already in the checkpoint")
  socket.send_text(JSON.stringify(command))
  check(await until(func():return messages.filter(func(m):return m.get("kind","")=="result" and m.get("sequence",-1)==1).size()==2),"Retried policy command returns its original receipt")
- check(host.world.investment.lineages.size()==1 and account.evolution.points==points,"Duplicate policy changes cannot spend or grant AP")
+ check(host.world.investment.lineages.size()==1 and selected.ap==points,"Duplicate policy changes cannot spend or grant AP")
  command.sequence=2;command.edit=account.edit;command.args={"scope":"cell","kind":"grazer"}
  socket.send_text(JSON.stringify(command))
  check(await until(func():return not result(2).is_empty()),"Body override has a sequenced receipt")
@@ -46,6 +46,8 @@ func run() -> void:
  var frame: Dictionary=host._frame(peer)
  var visible=Codec.new().restore(frame.graph)
  check(visible.investment.lineages.size()==1 and visible.investment.npc.is_empty(),"Policy snapshot does not reveal another family's settings")
+ check(visible.player.ap==selected.ap and visible.evolution.points==selected.ap and account.evolution.points==0,"New and already-open older clients see the selected cell's AP without mutating a shared pool")
+
  # Portraits include the owner's off-camera family, without widening live camera models.
  var relative=Sim.Cell.clone_state(selected);relative.id=host.world.next_id;host.world.next_id+=1
  relative.lineage=account.root;relative.position=Sim.Medium.wrap_position(selected.position+Vector2(1700,900))
@@ -79,23 +81,37 @@ func run() -> void:
  check(await until(func():return messages.any(func(m):return m.get("kind","")=="lineage_color_result")),"Invalid color has an explicit rejection")
  check(not messages.filter(func(m):return m.get("kind","")=="lineage_color_result")[-1].ok and account.lineage_color=="#32d4a7","Untrusted strings cannot replace a validated color")
  # The authenticated sale reverses the current build tier exactly once.
- account.evolution.points=20
- for kind in ["cilia","photosynthesis","mitochondrion"]:
+ selected.ap=20
+ for kind in ["cilia","photosynthesis","mitochondrion","regenerative"]:
   check(host.world._install_for(selected,account.evolution,kind,1),"Refund fixture builds through the actual AP-funded installation path")
  var sold: Dictionary=selected.organs[-1]
  var refund: int=selected.construction_refund(sold)
  check(sold.construction_ap>=2 and refund==selected.construction_price()-1,"Recycling uses the current tier, not the individual organ price")
- var before_refund: int=account.evolution.points
+ var before_refund: int=selected.ap
  command={"op":"command","epoch":host.epoch,"cell":selected.id,"edit":account.edit,"sequence":4,"action":"remove","args":{"id":sold.id}}
  socket.send_text(JSON.stringify(command))
  check(await until(func():return not result(4).is_empty()),"Sale receives an authenticated durable receipt")
  check(result(4).get("ap_refund",-1)==refund and result(4).message.contains("%d AP returned" % refund),"The durable receipt reports the actual AP returned")
- check(result(4).ok and selected.organ_by_id(sold.id).is_empty() and account.evolution.points==before_refund+refund,"Sale returns the current build tier exactly once")
+ check(result(4).ok and selected.organ_by_id(sold.id).is_empty() and selected.ap==before_refund+refund,"Sale returns the current build tier exactly once")
  socket.send_text(JSON.stringify(command))
  check(await until(func():return messages.filter(func(m):return m.get("kind","")=="result" and m.get("sequence",-1)==4).size()==2),"A repeated sale returns its original receipt")
- check(account.evolution.points==before_refund+refund,"Retrying a sale cannot duplicate its AP refund")
+ check(selected.ap==before_refund+refund,"Retrying a sale cannot duplicate its AP refund")
  saved=Codec.new().restore(host.store.load_latest().graph)
- check(saved.accounts[welcome.token.sha256_text()].evolution.points==account.evolution.points,"Sale AP refund is already in the saved account")
+ check(saved.accounts[welcome.token.sha256_text()].current.ap==selected.ap,"Sale AP refund is already in the saved account")
+ # The fourth and third added organs must return3+2 to the same body.
+ var relative_ap: int=relative.ap
+ check(refund==3,"Four installed added organs have a three-AP return tier")
+ sold=selected.organs[-1]
+ command={"op":"command","epoch":host.epoch,"cell":selected.id,"edit":account.edit,"sequence":5,"action":"remove","args":{"id":sold.id}}
+ socket.send_text(JSON.stringify(command))
+ check(await until(func():return not result(5).is_empty()),"Second successive reabsorption receives a durable receipt")
+ check(result(5).ok and result(5).ap_refund==2 and selected.ap==before_refund+5,"Real authenticated successive removals return exactly3+2AP")
+ check(relative.ap==relative_ap,"Neither refund changes another relative's balance")
+ socket.send_text(JSON.stringify(command))
+ check(await until(func():return messages.filter(func(m):return m.get("kind","")=="result" and m.get("sequence",-1)==5).size()==2),"Second reabsorption retries return the original receipt")
+ check(selected.ap==before_refund+5,"Retry cannot duplicate the second refund")
+ saved=Codec.new().restore(host.store.load_latest().graph)
+ check(saved.accounts[welcome.token.sha256_text()].current.ap==before_refund+5,"Both refunds are saved before success")
  # Division readiness is captured by authority even when the camera misses relatives.
  host.world.habitat_geometry.enabled=false
  selected.brood_mass=host.world.offspring_quote(selected).material;selected.brood_energy=60;selected.biomass=200;selected.energy=100
@@ -105,20 +121,20 @@ func run() -> void:
   account.lineage.register(extra,selected.id,1,"living",host.world.time)
  frame=host._frame(peer)
  check(frame.division.cell==selected.id and frame.division.ready and frame.division.progress==1,"Authoritative snapshot reports funded readiness with four living relatives")
- var births: int=account.lineage.births;points=account.evolution.points
- command={"op":"command","epoch":host.epoch,"cell":selected.id,"edit":account.edit,"sequence":5,"action":"divide","args":{}}
+ var births: int=account.lineage.births;points=selected.ap
+ command={"op":"command","epoch":host.epoch,"cell":selected.id,"edit":account.edit,"sequence":6,"action":"divide","args":{}}
  socket.send_text(JSON.stringify(command))
- check(await until(func():return not result(5).is_empty()),"Paid division returns an authenticated receipt")
- check(result(5).ok and result(5).message.contains("Cell divided") and account.lineage.births==births+1 and account.evolution.points==points+2,"A fifth relative is born with a real receipt and exactly two AP")
+ check(await until(func():return not result(6).is_empty()),"Paid division returns an authenticated receipt")
+ check(result(6).ok and result(6).message.contains("Cell divided") and account.lineage.births==births+1 and selected.ap==points+1 and host.world.cells[-1].ap==1,"A fifth relative is born with a real receipt and one AP per parent/daughter")
  saved=Codec.new().restore(host.store.load_latest().graph)
  check(saved.accounts[welcome.token.sha256_text()].lineage.births==births+1,"Division and its receipt are durable before success")
  socket.send_text(JSON.stringify(command))
- check(await until(func():return messages.filter(func(m):return m.get("kind","")=="result" and m.get("sequence",-1)==5).size()==2),"Retried division returns its original receipt")
- check(account.lineage.births==births+1 and account.evolution.points==points+2,"Retry cannot duplicate a daughter or AP")
- command.sequence=6;command.edit=account.edit
+ check(await until(func():return messages.filter(func(m):return m.get("kind","")=="result" and m.get("sequence",-1)==6).size()==2),"Retried division returns its original receipt")
+ check(account.lineage.births==births+1 and selected.ap==points+1 and host.world.cells[-1].ap==1,"Retry cannot duplicate a daughter or AP")
+ command.sequence=7;command.edit=account.edit
  socket.send_text(JSON.stringify(command))
- check(await until(func():return not result(6).is_empty()),"An unfunded second division returns a clear rejection")
- check(not result(6).ok and result(6).message.contains("still needed"),"Rejected division explains actual missing funding")
+ check(await until(func():return not result(7).is_empty()),"An unfunded second division returns a clear rejection")
+ check(not result(7).ok and result(7).message.contains("still needed"),"Rejected division explains actual missing funding")
  socket.close();host.running=false;host.listener.stop();host._finish_snapshots()
  if host.world.resident!=null:
   host.world.resident.gpu.close();await host.world.resident.gpu.closed

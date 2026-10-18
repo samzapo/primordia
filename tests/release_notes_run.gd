@@ -29,6 +29,8 @@ func run() -> void:
 	check(experimental_id not in stable_ids and experimental_id in experimental_ids,"The experimental pond announcement never enters main’s queue")
 	check("2026-10-17-pond-exploration" in stable_ids and "2026-10-17-pond-exploration" not in experimental_ids,"Stable promotion messages stay in the main pond")
 	check("2026-10-17-stable-cell-families" in stable_ids and "2026-10-17-stable-cell-families" not in experimental_ids,"Family promotion appears only in the main pond")
+	check("2026-10-17-growing-families-and-toxin-sacs" not in stable_ids and "2026-10-17-growing-families-and-toxin-sacs" in experimental_ids,"The growing-family playtest notice stays out of the main pond")
+	check("2026-10-17-stable-growing-families" in stable_ids and "2026-10-17-stable-growing-families" not in experimental_ids,"The main growing-family update does not replay in experimental")
 	for id in ["2026-10-17-family-grid","2026-10-17-family-pictures"]:
 		check(id not in stable_ids and id in experimental_ids,"Experimental playtest notices stay out of the stable queue")
 	var before_hidden: Dictionary={"seen_release":"2026-10-16-rippling-sunlight"}

@@ -32,7 +32,7 @@ static func run(check: Callable) -> void:
 	var run = sim.evolution
 	var offered: Array = run.offers.duplicate()
 	run.choose(offered[0])
-	run.spend(1,"fixture purchase")
+	sim.player.spend_ap(1,"fixture purchase",run)
 	run.clock = 170
 	run.crisis_seconds[0] = 21
 	check.call(sim.lineage.dormant.is_empty() and sim.lineage.total_cells==1,"Founders start without a stored backup")
@@ -49,16 +49,16 @@ static func run(check: Callable) -> void:
 	sim._die(parent)
 	check.call(sim.lineage.recover(sim,0.01) and sim.player == child,"Death continues through an existing living family member")
 	check.call(child.position == child_position and child.health == child_health,"Handoff neither teleports nor heals a descendant")
-	check.call(run.clock == 170 and run.points == 4 and run.learned == [offered[0]] and run.offers == offered and run.chosen and run.crisis_seconds[0] == 21,"Death preserves clock, earned AP, drafts and crisis progress")
+	check.call(run.clock == 170 and sim.player.ap == 1 and parent.ap==3 and run.learned == [offered[0]] and run.offers == offered and run.chosen and run.crisis_seconds[0] == 21,"Death selects the child\'s own AP while preserving clock, drafts and crisis progress")
 	check.call(Score.lineage_motif(sim.seed_value,child.lineage_id()) == motif,"The family theme continues through living succession")
 	check.call(sim.lineage.record_for(parent.id).is_empty() and sim.lineage.total_cells==2,"Dead records leave the menu while lifetime total remains")
 	fund(sim)
 	var next_id: int=sim.next_id
 	initial=mass(sim)
 	var rng_state: int=sim.rng.state
-	var points: int=run.points
+	var points: int=sim.player.ap
 	check.call(not sim.divide_lineage(true,false) and not sim.edit("reserve",{"value":10}),"Retired store-offspring and manual banking commands are rejected")
-	check.call(sim.next_id==next_id and mass(sim)==initial and sim.rng.state==rng_state and run.points==points and sim.lineage.dormant.is_empty(),"Rejected storage cannot consume resources, award AP or create a body")
+	check.call(sim.next_id==next_id and mass(sim)==initial and sim.rng.state==rng_state and sim.player.ap==points and sim.lineage.dormant.is_empty(),"Rejected storage cannot consume resources, award AP or create a body")
 	sim._die(child)
 	check.call(not sim.lineage.recover(sim,1) and run.status=="lost","Exhausting the living family cannot hatch a hidden backup")
 
@@ -85,11 +85,11 @@ static func run(check: Callable) -> void:
 	sim.lineage.register(legacy,sim.player.id,2,"dormant",sim.time)
 	var waste: float=sim.build_waste
 	var legacy_mass: float=legacy.organic_mass()
-	var count: int=sim.cells.size();next_id=sim.next_id;points=sim.evolution.points
+	var count: int=sim.cells.size();next_id=sim.next_id;points=sim.player.ap
 	sim.lineage.discard_stored(sim)
 	sim.lineage.discard_stored(sim)
 	check.call(sim.lineage.dormant.is_empty() and sim.lineage.record_for(legacy.id).is_empty() and sim.cells.size()==count,"Retired checkpoint reserves leave the ledger without hatching")
-	check.call(sim.next_id==next_id and sim.evolution.points==points and is_equal_approx(sim.build_waste,waste+legacy_mass),"Discarding reserves is idempotent, records removed tissue and grants nothing")
+	check.call(sim.next_id==next_id and sim.player.ap==points and is_equal_approx(sim.build_waste,waste+legacy_mass),"Discarding reserves is idempotent, records removed tissue and grants nothing")
 	if preload("res://tests/test_policy.gd").GAMEPLAY_OBJECTIVES_ENABLED:
 		# Three crises, not three instants alive or a timer alone.
 		sim = world()

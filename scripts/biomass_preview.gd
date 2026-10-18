@@ -43,8 +43,8 @@ func sync() -> void:
 	var factor := minf(sqrt(game.Simulation.Cell.TISSUE_AREA/PI)*game.zoom,maximum/sqrt(maxf(1,maxf(amount,cost))))
 	quote = {"available":amount,"cost":cost,"stock_radius":sqrt(amount)*factor,
 		"cost_radius":sqrt(cost)*factor,"maximum":maximum,
-		"ap_count":maxi(0,game.world.evolution.points),"ap_needed":ap_needed,"show_cost":showing_cost,
-		"enough":amount+0.000001 >= cost,"ap_ready":not game.world.evolution.enabled or game.world.evolution.points >= ap_needed}
+		"ap_count":maxi(0,game.world.player.ap),"ap_needed":ap_needed,"show_cost":showing_cost,
+		"enough":amount+0.000001 >= cost,"ap_ready":not game.world.evolution.enabled or game.world.player.ap >= ap_needed}
 	var cell = game.world.player
 	var rates: Dictionary = cell.energy_budget.rates(cell.age)
 	var model: Dictionary = price.get("rate_model",{})

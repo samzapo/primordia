@@ -60,17 +60,17 @@ func run() -> void:
 	game.cell_ui.open_context({"kind":"chemistry"});await process_frame;game.cell_ui.sync(0)
 	check(game.cell_ui.choices.map(func(choice):return choice.kind)==["mitochondrion","toxin_sac","photosynthesis","toxin","acidifying","regenerative","neutralizing",""] and game.cell_ui.choices.all(func(choice):return choice.get_parent()==game.cell_ui.mobile_flow),"Mobile chemistry tray exposes the active catalog and food inspection, without Sanctuary")
 	check(game.cell_ui.describe({"kind":"chemistry"}).contains("buffer/repair") and game.cell_ui.describe({"kind":"chemistry"}).to_lower().contains("photosynthesis"),"Factory description matches the active simplified chemistry")
-	game.world.player.biomass=100;game.world.player.update_geometry();game.world.evolution.points=100
+	game.world.player.biomass=100;game.world.player.update_geometry();game.world.player.ap=100
 	for index in [7,9,3,8]:
 		game.cell_ui.open_context({"kind":"chemistry"});game.cell_ui.sync(0)
 		var options: Array=game.cell_ui.choices.filter(func(choice):return choice.kind==game.Simulation.KINDS[index])
 		check(options.size()==1,"Each requested chemical gland has one unambiguous factory choice")
-		var before_biomass: float=game.world.player.biomass;var before_ap: int=game.world.evolution.points
+		var before_biomass: float=game.world.player.biomass;var before_ap: int=game.world.player.ap
 		options[0].pressed.emit();game.cell_ui.sync(0)
 		check(game.selected==index and not game.cell_ui.mobile_tray.visible and game.cell_ui.mobile_stocks.text.contains("Cost"),"Choosing each gland enters the existing placement flow with visible resource cost")
 		var price: int=game.world.player.construction_price()
 		check(game._place_at(1.0+[7,9,3,8].find(index)),"Each restored gland can be placed on the membrane")
-		check(game.world.player.biomass==before_biomass and before_ap-game.world.evolution.points==price,"Gland placement charges AP exactly once without debiting biomass")
+		check(game.world.player.biomass==before_biomass and before_ap-game.world.player.ap==price,"Gland placement charges AP exactly once without debiting biomass")
 	game._select(6);game.cell_ui.sync(0)
 	check(game.cell_ui.cancel_icon.visible and game.cell_ui.cancel_icon.kind=="photosynthesis" and game.cell_ui.cancel_icon.position.x<30,"Selected organ remains as a circular top-left cancel action")
 	game.cell_ui.cancel_icon.pressed.emit();game.cell_ui.sync(0)
@@ -89,7 +89,7 @@ func run() -> void:
 	var retained_zoom: float=clampf(game.manual_zoom,game.MIN_ZOOM,game.MAX_ZOOM)
 	game._toggle_perception()
 	check(game.perception=="exteroception" and game.manual_zoom==retained_zoom and game.camera_locked,"Leaving interoception retains zoom within exterior bounds")
-	game.world.evolution.points=10000;game.cell_ui.interior.sync()
-	check(game.cell_ui.interior.ecology.parcels.size()<=16 and game.world.evolution.points==10000,"A long-lived lineage keeps exact AP with bounded decorative tokens")
+	game.world.player.ap=10000;game.cell_ui.interior.sync()
+	check(game.cell_ui.interior.ecology.parcels.size()<=16 and game.world.player.ap==10000,"A long-lived lineage keeps exact AP with bounded decorative tokens")
 	game.queue_free();await process_frame
 	print("MOBILE VACUOLES: %d assertions, %d failures" % [assertions,failures]);quit(0 if failures==0 else 1)

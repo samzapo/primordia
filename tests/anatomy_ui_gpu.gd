@@ -17,7 +17,7 @@ func run() -> void:
 	scene.set_physics_process(false)
 	scene.world.player.add_organ("propulsion",PI,"graze",false)
 	scene.world.player.substrate = 12
-	scene.world.evolution.points = 7
+	scene.world.player.ap = 7
 	scene._update_world(1)
 	var world_clock: float = scene.world.time
 	var energy: float = scene.world.player.energy

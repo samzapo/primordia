@@ -14,7 +14,7 @@ func run() -> void:
  var cell=sim.player
  scene.build_open=true;scene.cell_ui.context={};scene.cell_ui.sync(0)
  check(not scene.cell_ui.edit_hint.visible,"No irrelevant Tab hint remains after the interaction closes")
- check(scene.cell_ui.mobile_resources.visible and scene.cell_ui.mobile_stocks.text.contains("AP %d" % sim.evolution.points),"Desktop construction shows AP supply, not just its price")
+ check(scene.cell_ui.mobile_resources.visible and scene.cell_ui.mobile_stocks.text.contains("AP %d" % sim.player.ap),"Desktop construction shows AP supply, not just its price")
  scene.build_open=false;scene.cell_ui.sync(0)
  check(not scene.cell_ui.mobile_resources.visible,"Desktop resource strip leaves the ordinary world uncluttered")
  var sibling=sim.Cell.new(777,cell.position+Vector2(600,0));sibling.lineage=cell.lineage_id();sim.cells.append(sibling)

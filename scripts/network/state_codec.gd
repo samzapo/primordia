@@ -116,6 +116,12 @@ func restore(document: Dictionary):
 			record.source.invalidate()
 		elif record.kind == "habitat": record.source.rebuild()
 	var root = _decode(document.root)
+	for i in objects.size():
+		var record: Dictionary=objects[i]
+		if record.kind=="simulation" and (not document.objects[i].fields.has("ap_model_version") or record.source.ap_model_version<1):
+			record.source.ap_model_version=0
+			var accounts: Dictionary=root.get("accounts",{}) if root is Dictionary and root.get("world")==record.source else {}
+			preload("res://scripts/network/ap_migration.gd").apply(record.source,accounts)
 	objects.clear()
 	return root
 

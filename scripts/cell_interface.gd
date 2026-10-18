@@ -208,7 +208,7 @@ func open_context(target: Dictionary) -> void:
 			for index in ([0,1,2,3,5,10,11,13] if target.kind == "assembly" else [12,14,6,7,9,3,8]):
 				var kind: String = sim.KINDS[index]
 				var cost := 0.0
-				_choice(game.TITLES[index],"%d AP\n%s" % [cell.construction_price(),game.HELP[index]],game._select.bind(index),kind,"",run.points >= cell.construction_price(),cost,cell.construction_price(),{"kind":kind,"scale":1.0,"mutation":""})
+				_choice(game.TITLES[index],"%d AP\n%s" % [cell.construction_price(),game.HELP[index]],game._select.bind(index),kind,"",cell.ap >= cell.construction_price(),cost,cell.construction_price(),{"kind":kind,"scale":1.0,"mutation":""})
 			if target.kind == "chemistry":
 				_choice("Food vacuoles","Inspect oxygen-dependent digestion, fermentation, photosynthesis and waste expulsion.",func():
 					close_context()
@@ -217,13 +217,7 @@ func open_context(target: Dictionary) -> void:
 			var organ: Dictionary = cell.organ_by_id(target.id)
 			if organ.is_empty(): close_context(); return
 			if not cell.inherent(organ):
-				_choice("Move",("Choose a new location inside the cell." if cell.internal_organ(organ.kind) else "Choose a new membrane location.")+" No resource cost.",func():
-					game.moving_id = target.id
-					game._prepare_placement(organ.kind)
-					game.placement_angle = organ.a
-					close_context()
-					game._message(("Tap inside the cell to move it. Tap its icon to cancel." if mobile() else "Choose a location inside the cell · right-click cancels the move.") if cell.internal_organ(organ.kind) else ("Tap the membrane to move it. Tap its icon to cancel." if mobile() else "Choose a membrane location · right-click cancels the move.")),"","Move")
-				_choice("Recycle","Returns half the tissue and %d AP. Four added organelles return 3 AP; three return 2. Lowers the next build price." % cell.construction_refund(organ),func():
+				_choice("Reabsorb","Returns half the tissue and %d AP. Four added organelles return 3 AP; three return 2. Lowers the next build price." % cell.construction_refund(organ),func():
 					# Snapshots replace organ dictionaries while this menu stays open.
 					# Resolve the stable ID at click time; never compare an old snapshot.
 					var current=sim.player
@@ -232,7 +226,7 @@ func open_context(target: Dictionary) -> void:
 					var ok: bool=not live.is_empty() and sim.edit("remove",{"id":target.id})
 					close_context()
 					if not ok:game._message("This organelle is no longer available.")
-					elif not sim.remote_client:game._message("Organelle recycled · %d AP returned." % refund),"","Recycle")
+					elif not sim.remote_client:game._message("Organelle reabsorbed · %d AP returned to this cell." % refund),"","Reabsorb")
 			if not cell.inherent(organ):
 				for gene in sim.Genes.available(organ,run.learned):
 					var data: Dictionary = sim.Genes.DATA[gene]
@@ -242,7 +236,7 @@ func open_context(target: Dictionary) -> void:
 					rate_model.mutation = gene
 					_choice(data.title,data.text+"\nFree mutation.",func():
 						game._message("Specialization installed." if sim.mutate_organ(target.id,gene) else "This organ cannot accept that mutation.")
-						open_context(target),"" if gene in sim.Genes.LIGHT_ADAPTATIONS else organ.kind,("Sun" if gene == "sun_leaf" else "Shade") if gene in sim.Genes.LIGHT_ADAPTATIONS else "",cell.biomass >= cost and run.points >= ap,cost,ap,rate_model)
+						open_context(target),"" if gene in sim.Genes.LIGHT_ADAPTATIONS else organ.kind,("Sun" if gene == "sun_leaf" else "Shade") if gene in sim.Genes.LIGHT_ADAPTATIONS else "",cell.biomass >= cost and cell.ap >= ap,cost,ap,rate_model)
 					if organ.get("mutation","") == gene:
 						choices[-1].caption += " (active)"
 						choices[-1].selected = true
@@ -253,7 +247,7 @@ func open_context(target: Dictionary) -> void:
 				if scar.id != target.id: continue
 				_choice("Restore "+game.TITLES[sim.KINDS.find(scar.kind)],"%d AP\nRestore the lost organ in its original form." % cell.construction_price(),func():
 					game._message("Organelle restored." if sim.edit("restore",{"id":target.id}) else "Needs %d AP and membrane room." % cell.construction_price())
-					close_context(),scar.kind,"",run.points >= cell.construction_price(),0,cell.construction_price(),scar)
+					close_context(),scar.kind,"",cell.ap >= cell.construction_price(),0,cell.construction_price(),scar)
 		"nucleus":
 			for gene in run.division_offers:
 				var data: Dictionary=sim.Genes.DATA[gene]
@@ -544,7 +538,7 @@ func sync(_dt: float) -> void:
 		elif not hovered.is_empty() and (game.build_open or Input.is_key_pressed(KEY_ALT)) and (hovered.kind != "body" or Input.is_key_pressed(KEY_ALT)) and game.selected < 0 and game.moving_id < 0: _tooltip(describe(hovered),screen_at(hovered))
 		elif not keyboard_target.is_empty() and game.selected < 0: _tooltip(describe(keyboard_target),screen_at(keyboard_target))
 		elif game.selected >= 0:
-			_tooltip("%s\nCost %d AP · You have %d AP\n%s" % [game.TITLES[game.selected],game.world.player.construction_price(),game.world.evolution.points,game.placement_status()],cursor)
+			_tooltip("%s\nCost %d AP · You have %d AP\n%s" % [game.TITLES[game.selected],game.world.player.construction_price(),game.world.player.ap,game.placement_status()],cursor)
 		else:
 			tip_box.hide()
 	if context.get("kind","")=="organ" and not tip_box.visible:_tooltip(describe(context),Vector2.ZERO)
@@ -580,7 +574,7 @@ func _layout_mobile() -> void:
 		mobile_stocks.visible=not resources_hidden or not mobile()
 		mobile_hide.visible=mobile()
 		mobile_stocks.add_theme_font_size_override("font_size",roundi(18*s))
-		mobile_stocks.text="Biomass %.1f   AP %d   ATP %.1f" % [game.world.player.biomass,game.world.evolution.points,game.world.player.energy]
+		mobile_stocks.text="Biomass %.1f   AP %d   ATP %.1f" % [game.world.player.biomass,game.world.player.ap,game.world.player.energy]
 		if game.selected>=0:mobile_stocks.text+="\nCost %d AP" % game.world.player.construction_price()
 		mobile_hide.text="Resources" if resources_hidden else "−"
 		mobile_hide.add_theme_font_size_override("font_size",roundi(16*s))

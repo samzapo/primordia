@@ -17,7 +17,7 @@
       {
         "id": "build",
         "title": "Build and restore",
-        "text": "Open the Assembly or Chemistry factory for membrane organs. The three teal chambers with a small + are the Chemistry factory: open it from either view for mitochondria. Choosing an internal organ switches smoothly to Interoception so you can place it inside. The first added organelle is free, the second costs 1 AP, the third 2 AP, and so on. The oral groove does not count. Recycling any added organelle returns the current build tier: four added organs return 3 AP, three return 2, and one returns 0. The oral groove does not count. Selling lowers the next price; restoration uses that same next price. While building, the resource strip shows your AP and the cost.",
+        "text": "Open the Assembly or Chemistry factory for membrane organs. The three teal chambers with a small + are the Chemistry factory: open it from either view for mitochondria. Choosing an internal organ switches smoothly to Interoception so you can place it inside. The first added organelle is free, the second costs 1 AP, the third 2 AP, and so on. The oral groove does not count. Reabsorbing any added organelle returns the current build tier: four added organs return 3 AP, three return 2, and one returns 0. The oral groove does not count. Selling lowers the next price; restoration uses that same next price. While building, the resource strip shows your AP and the cost. AP belongs to this cell; relatives cannot spend it.",
         "sources": []
       },
       {
@@ -28,8 +28,8 @@
       },
       {
         "id": "organs",
-        "title": "Move, recycle and specialize",
-        "text": "Open an installed organelle to move, recycle or specialize it. Organs work at their normal rate. A small ring shows recharge progress. Select an organelle to read its state at the bottom; energy-starved organs lose their color.",
+        "title": "Reabsorb and specialize",
+        "text": "Open an installed organelle to reabsorb or specialize it. Its position stays fixed after construction. Organs work at their normal rate. A small ring shows recharge progress. Select an organelle to read its state at the bottom; energy-starved organs lose their color.",
         "sources": []
       },
       {
@@ -47,7 +47,7 @@
       {
         "id": "offspring",
         "title": "Cell division",
-        "text": "Surplus tissue and ATP prepare division automatically. Open the small bud: the ring around Divide fills as tissue and ATP accumulate. Green means ready; amber means fully funded but waiting for clear water or room in the pond. Divide makes a living daughter; Investment and Family are available here too. There is no four-cell family limit, but division still needs clear water and room in the pond. Daughters start with a basic oral groove and inherit the parent’s investment strategy; Manual gives a random Hunter, Producer or Grazer.",
+        "text": "Surplus tissue and ATP prepare division automatically. Open the small bud: the ring around Divide fills as tissue and ATP accumulate. Green means ready; amber means fully funded but waiting for clear water or room in the pond. Divide makes a living daughter; Investment and Family are available here too. There is no four-cell family limit, but division still needs clear water and room in the pond. Daughters start with a basic oral groove and inherit the parent’s investment strategy; Manual stays Manual.",
         "sources": []
       },
       {
@@ -77,7 +77,7 @@
       {
         "id": "investment",
         "title": "Choose unattended investments",
-        "text": "Open the large orange nucleus or the small division bud, then Invest. Investment shows Hunter, Producer and Grazer cells together. Choose Family or This cell, then a picture. Hunter builds pursuit, weapons and movement; Producer builds leaves and support; Grazer builds feeding currents and recycling support. Each can develop different supporting organs and respond to damage. Only unattended cells buy; your selected cell stays manual. Manual saves AP; Inherit uses the family choice. Low-power cells favor a mitochondrion when they already have food and oxygen.",
+        "text": "Open the large orange nucleus or the small division bud, then Invest. All cells default to Manual. Choose Family or This cell, then a Hunter, Producer or Grazer picture to opt in. Hunter favors pursuit and weapons; Producer favors leaves and support; Grazer favors feeding and movement. Unattended cells may buy or reabsorb unsuitable or excess organs, at most once a minute per cell. Essential food and energy support is kept. Each uses only its own AP. Your selected cell stays manual. Inherit uses the family choice; Manual saves this cell’s AP.",
         "sources": []
       },
       {
@@ -310,9 +310,9 @@
           ]
         },
         {
-          "id": "oxygen_recycling",
+          "id": "oxygen_reabsorption",
           "title": "Waste + oxygen → food and carbon",
-          "text": "When conditions permit, oxygen helps turn waste into reusable food material and carbon. Recycled food has no fresh fuel. This contact rule stands in for wider microbial recycling, rather than a literal chemical equation.",
+          "text": "When conditions permit, oxygen helps turn waste into reusable food material and carbon. Recycled food has no fresh fuel. This contact rule stands in for wider microbial reabsorption, rather than a literal chemical equation.",
           "sources": [
             {
               "title": "Microbial respiration and growth",
@@ -609,7 +609,7 @@
         {
           "id": "organ_toxin_sac",
           "title": "Toxin sac",
-          "text": "Stores toxin slowly from surplus biomass, using ATP while filling. A fuller sac has a larger pink center. When its cell dies, the stored toxin spills into nearby water as ordinary toxin particles. Recycling safely dismantles it. It gives no new senses or suicidal behavior. This defensive organelle and its quantities are game choices.",
+          "text": "Stores toxin slowly from surplus biomass, using ATP while filling. A fuller sac has a larger pink center. When its cell dies, the stored toxin spills into nearby water as ordinary toxin particles. Reabsorbing safely dismantles it. It gives no new senses or suicidal behavior. This defensive organelle and its quantities are game choices.",
           "sources": [
             {
               "title": "Toxin accumulation and release by cell lysis",
@@ -637,7 +637,7 @@
         {
           "id": "division",
           "title": "Reproduction and AP",
-          "text": "Surplus biomass and ATP automatically grow a daughter inside the cell. A funded cell divides when there is clear water and the pond is below its population limit; families are not limited to four cells. The bud explains what is missing. Each committed division awards 2 AP; each cell’s first added organelle costs 0 AP, its second 1 AP, its third 2 AP, and so on. The oral groove does not count. Recycling any added organelle returns the current build tier: four added organs return 3 AP, three return 2, and one returns 0. The oral groove does not count. Selling lowers the next price; restoring an absent organ uses the next price. AP is a game resource. Daughters start with a basic oral groove and rebuild their own organs. They inherit the parent’s investment choice; Manual gives a random Hunter, Producer or Grazer.",
+          "text": "Surplus biomass and ATP automatically grow a daughter inside the cell. A funded cell divides when there is clear water and the pond is below its population limit; families are not limited to four cells. The bud explains what is missing. Each committed division gives the parent 1 AP and the daughter 1 AP; each cell’s first added organelle costs 0 AP, its second 1 AP, its third 2 AP, and so on. The oral groove does not count. Reabsorbing any added organelle returns the current build tier: four added organs return 3 AP, three return 2, and one returns 0. The oral groove does not count. Selling lowers the next price; restoring an absent organ uses the next price. AP is a game resource. Daughters start with a basic oral groove and rebuild their own organs. They inherit the parent’s investment choice; Manual stays Manual. AP is stored separately by each cell. Switching family members shows that cell’s own balance.",
           "sources": [
             {
               "title": "Cell division",
@@ -702,7 +702,7 @@
         {
           "id": "npc_growth",
           "title": "Other cells develop too",
-          "text": "Unassigned computer-controlled cells are balanced toward one in ten Hunters, with the rest split between Producers and Grazers. Daughters keep their parent’s investment strategy; a Manual parent gives a random Hunter, Producer or Grazer. Inherited choices stay with each daughter, so reproduction can change the mix. Strategies build a core and complementary support; injury favors repair and escape senses. Your selected cell stays manual to build, while unattended cells follow their saved strategy. These are game rules.",
+          "text": "Every cell defaults to Manual. Opt into Hunter, Producer or Grazer through Investment. Unattended cells use their own AP to build complementary organs or reabsorb unsuitable and excess organs while retaining essential food and energy support. Automatic buying and reabsorption share a one-minute cooldown per cell. Daughters inherit the chosen strategy, including Manual. Your selected cell stays manual. These are game rules.",
           "sources": []
         }
       ]

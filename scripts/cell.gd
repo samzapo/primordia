@@ -78,6 +78,8 @@ var velocity := Vector2.ZERO
 var angle := 0.0
 var angular_velocity := 0.0
 var body := 60.0
+var ap := 3 # Cell-local adaptation points; daughters start with their division award.
+var investment_retry_at:=0.0 # Saved cell-local automatic buy/sell cooldown.
 var biomass := 18.0
 var substrate: float:
 	get: return chemistry.amount("food")
@@ -148,6 +150,18 @@ func count(kind: String) -> int:
 	for organ in organs:
 		if organ.kind == kind: n += 1
 	return n
+
+func spend_ap(amount: int,action: String,progression) -> bool:
+	if amount<0 or (progression.enabled and ap<amount):return false
+	if progression.enabled:
+		ap-=amount
+		progression.spending.append({"time":progression.clock,"cell":id,"action":action,"points":amount})
+	return true
+
+func refund_ap(amount: int,action: String,progression) -> void:
+	if not progression.enabled or amount<=0:return
+	ap+=amount
+	progression.spending.append({"time":progression.clock,"cell":id,"action":action,"points":-amount})
 
 func construction_price() -> int:
 	# The inherent oral groove belongs to the body, not the purchased build.
@@ -639,15 +653,8 @@ static func clone_state(source):
 		copy.set(key,value)
 	return copy
 
-func move_organ(identity: int, a: float) -> bool:
-	var organ := organ_by_id(identity)
-	if organ.is_empty() or inherent(organ) or not is_finite(a): return false
-	organs.erase(organ)
-	if not internal_organ(organ.kind):_make_room(a,organ_width(organ),perimeter())
-	organ.a = fposmod(a,TAU)
-	organs.append(organ)
-	render_revision += 1
-	return true
+func move_organ(_identity: int,_a: float) -> bool:
+	return false # Position is chosen at construction; installed anatomy stays put.
 
 func resize_quote(identity: int, size: float) -> Dictionary:
 	var organ := organ_by_id(identity)

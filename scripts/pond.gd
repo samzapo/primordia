@@ -638,7 +638,7 @@ func _draw_preview() -> void:
 	var kind: String = organ.kind if not organ.is_empty() else Simulation.KINDS[selected]
 	var normal: Vector2 = cell.local_normal(a)
 	var point: Vector2 = cell.organ_local_position({"kind":kind,"a":a,"scale":size}).rotated(cell.angle)
-	var fits: bool = moving_id >= 0 or (cell.can_fit(kind,a,1,false) and world.evolution.points >= cell.construction_price())
+	var fits: bool = moving_id >= 0 or (cell.can_fit(kind,a,1,false) and world.player.ap >= cell.construction_price())
 	Visuals.icon(preview,point,kind,normal.angle()+cell.angle,size,ui_time)
 	preview.draw_arc(point,22*size,0,TAU,32,MINT if fits else Color("fc8c90"),2/zoom,true)
 	if selected >= 0:
@@ -1023,7 +1023,7 @@ func _finish_build() -> void:
 
 func placement_status() -> String:
 	if selected < 0: return ""
-	if world.evolution.points < world.player.construction_price(): return "Needs %d AP." % world.player.construction_price()
+	if world.player.ap < world.player.construction_price(): return "Needs %d AP." % world.player.construction_price()
 	if not world.player.can_fit(Simulation.KINDS[selected],0,1,false): return "Needs more membrane area."
 	var place: String="inside the cell" if world.player.internal_organ(Simulation.KINDS[selected]) else "the membrane"
 	return "Tap "+place+" · tap the held icon to cancel." if touch_zoom.enabled else "Click "+place+" · right-click cancels."

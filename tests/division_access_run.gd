@@ -33,16 +33,16 @@ func run() -> void:
 	var before=var_to_bytes(Codec.new().capture(sim));var rng: int=sim.rng.state
 	var readiness: Dictionary=sim.division_status()
 	check(readiness.ready and var_to_bytes(Codec.new().capture(sim))==before and sim.rng.state==rng,"Readiness examines the whole family and safe placement without changing ecology, AP or RNG")
-	var points: int=sim.evolution.points
+	var points: int=sim.player.ap
 	var mass:=total(sim)
 	check(sim.divide_lineage(false,false) and sim.lineage.active_family(sim).size()==5,"A funded family can divide past four living members")
-	check(sim.evolution.points==points+2 and absf(total(sim)-mass)<.00001 and sim.player==parent,"Only committed division awards two AP and conserves paid tissue without changing control")
+	check(sim.player.ap==points+1 and absf(total(sim)-mass)<.00001 and sim.player==parent,"Only committed division awards one AP to each body and conserves paid tissue without changing control")
 	funded(sim);before=var_to_bytes(Codec.new().capture(sim))
 	for i in range(sim.cells.size(),sim.MAX_LIVE_CELLS):
 		var extra=Sim.Cell.new(200+i,Vector2(1200,800));sim.cells.append(extra)
-	var full: Dictionary=sim.division_status();mass=total(sim);points=sim.evolution.points;rng=sim.rng.state
+	var full: Dictionary=sim.division_status();mass=total(sim);points=sim.player.ap;rng=sim.rng.state
 	check(not full.ready and full.reason.contains("pond is full") and not sim.divide_lineage(false,false),"Whole-pond capacity is explicit and still enforced")
-	check(total(sim)==mass and sim.rng.state==rng and sim.evolution.points==points,"Capacity rejection spends nothing and draws no strategy randomness")
+	check(total(sim)==mass and sim.rng.state==rng and sim.player.ap==points,"Capacity rejection spends nothing and draws no strategy randomness")
 	sim=fixture();parent=sim.player;funded(sim)
 	var blocker=Sim.Cell.new(999,parent.position);blocker.body=10000000;blocker.update_geometry();blocker.membrane=Sim.Cell.Membrane.new(blocker.radius);sim.cells.append(blocker)
 	check(not sim.division_status().ready and sim.division_status().reason.contains("clear water"),"A fully funded but physically blocked birth explains clear-water waiting")

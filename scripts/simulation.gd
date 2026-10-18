@@ -6,6 +6,7 @@ const Lineage = preload("res://scripts/lineage.gd")
 var lineage = Lineage.new()
 const Genes = preload("res://scripts/mutations.gd")
 var evolution
+var ap_model_version:=1
 var server_mode := false
 var remote_client := false
 var remote_division: Dictionary={} # Authority-derived readiness; never saved.
@@ -397,9 +398,9 @@ func _construction_input(amount: float) -> void:
 func _install_for(cell, progression, kind: String, local_angle: float, mode: String = "graze", size: float = 1.0) -> bool:
 	if kind == "feeding": return false # Inherent membrane anatomy is never purchased.
 	var cost: int = cell.construction_price()
-	if progression.terminal() or (progression.enabled and progression.points < cost): return false
+	if progression.terminal() or (progression.enabled and cell.ap < cost): return false
 	if not cell.add_organ(kind,local_angle,mode,false,size): return false
-	progression.spend(cost,"Install "+kind)
+	cell.spend_ap(cost,"Install "+kind,progression)
 	cell.organs[-1]["construction_ap"]=cost if progression.enabled else 0
 	_construction_input(cell.organs[-1].material)
 	return true
@@ -407,43 +408,45 @@ func _install_for(cell, progression, kind: String, local_angle: float, mode: Str
 func restore(identity: int) -> bool:
 	if remote_client: return edit("restore",{"id":identity})
 	var cost: int = player.construction_price()
-	if evolution.terminal() or (evolution.enabled and evolution.points < cost): return false
+	if evolution.terminal() or (evolution.enabled and player.ap < cost): return false
 	if not player.restore_organ(identity,false): return false
-	evolution.spend(cost,"Restore organ")
+	player.spend_ap(cost,"Restore organ",evolution)
 	player.organs[-1]["construction_ap"]=cost if evolution.enabled else 0
 	_construction_input(player.organs[-1].material)
 	return true
 
 func step_autonomous_builds() -> void:
-	if remote_client or time < autonomous_build_retry_at: return
-	autonomous_build_retry_at = time+2.0
+	if remote_client or time<autonomous_build_retry_at:return
+	autonomous_build_retry_at=time+2.0
 	Investment.npc_assignments(self)
-	var visited: Dictionary = {}
 	for cell in cells:
-		var root: int = cell.lineage_id()
-		if cell.dead or cell.health<=0 or visited.has(root):continue
-		visited[root]=true
-		var ledger=_family_ledger(cell)
-		var progression=ledger.progression
+		if cell.dead or cell.health<=0 or time<cell.investment_retry_at:continue
+		var choice: Dictionary=Investment.decision(self,cell)
+		if choice.is_empty():continue
+		var progression=_family_ledger(cell).progression
 		if progression==null:continue
-		for relative in ledger.active_family(self):
-			var choice: Dictionary=Investment.candidate(self,relative)
-			if choice.is_empty():continue
-			# One ordinary, AP-funded purchase per family per interval.
-			if _install_for(relative,progression,choice.kind,fposmod(relative.id*2.399963+relative.organs.size(),TAU)):
-				if choice.has("mutation"):relative.specialize(relative.organs[-1].id,choice.mutation)
-				break
+		var applied:=false
+		if choice.action=="remove":
+			for index in cell.organs.size():
+				if cell.organs[index].id==choice.id:applied=_recycle_for(cell,progression,index);break
+		else:
+			applied=_install_for(cell,progression,choice.kind,fposmod(cell.id*2.399963+cell.organs.size(),TAU))
+			if applied and choice.has("mutation"):cell.specialize(cell.organs[-1].id,choice.mutation)
+		if applied:cell.investment_retry_at=time+60.0
 
+func _recycle_for(cell,progression,index: int) -> bool:
+	if index<0 or index>=cell.organs.size():return false
+	var refund: int=cell.construction_refund(cell.organs[index])
+	var debris: float=cell.recycle(index)
+	if debris<0:return false
+	cell.refund_ap(refund,"Reabsorb organ",progression)
+	if cell==player:_build_debris(debris)
+	elif debris>0:spawn_particle(WASTE,cell.position,Vector2.ZERO,debris,cell.id)
+	return true
 
 func remove(index: int) -> bool:
-	if remote_client: return edit("remove",{"id":player.organs[index].id}) if index>=0 and index<player.organs.size() else false
-	if index<0 or index>=player.organs.size():return false
-	var refund: int=player.construction_refund(player.organs[index])
-	var debris: float = player.recycle(index)
-	if debris < 0: return false
-	evolution.refund(refund,"Recycle organ")
-	_build_debris(debris)
-	return true
+	if remote_client:return edit("remove",{"id":player.organs[index].id}) if index>=0 and index<player.organs.size() else false
+	return _recycle_for(player,evolution,index)
 
 func spawn_particle(kind: int, p: Vector2, v: Vector2 = Vector2.ZERO, amount: float = 1.0, owner: int = -1, source_radius: float = 0.0) -> void:
 	if amount <= 0: return
@@ -1926,7 +1929,7 @@ func begin_build() -> void:
 	if server_mode: return # Live edits commit through WorldHost, never clone/freeze biology.
 	if build_original != null or player.dead or evolution.terminal(): return
 	build_original = player
-	build_state = {"points":evolution.points,"offers":evolution.offers.duplicate(),"learned":evolution.learned.duplicate(),"chosen":evolution.chosen,"spending":evolution.spending.duplicate(true),"challenge":evolution.challenge,"challenge_mass":evolution.challenge_mass,"challenge_intake":evolution.challenge_intake,"challenge_fixed":evolution.challenge_fixed,"challenge_cell":evolution.challenge_cell,"stable_seconds":evolution.stable_seconds}
+	build_state = {"offers":evolution.offers.duplicate(),"learned":evolution.learned.duplicate(),"chosen":evolution.chosen,"spending":evolution.spending.duplicate(true),"challenge":evolution.challenge,"challenge_mass":evolution.challenge_mass,"challenge_intake":evolution.challenge_intake,"challenge_fixed":evolution.challenge_fixed,"challenge_cell":evolution.challenge_cell,"stable_seconds":evolution.stable_seconds}
 	var index := cells.find(player)
 	player = Cell.clone_state(player)
 	cells[index] = player
@@ -1958,10 +1961,10 @@ func undo_build() -> void:
 
 func resize_organ(identity: int, size: float) -> bool:
 	var quote: Dictionary = player.resize_quote(identity,size)
-	if quote.is_empty() or (evolution.enabled and evolution.points < quote.ap): return false
+	if quote.is_empty() or (evolution.enabled and player.ap < quote.ap): return false
 	var result: Dictionary = player.resize_organ(identity,size)
 	if result.is_empty(): return false
-	evolution.spend(result.ap,"Enlarge organ")
+	player.spend_ap(result.ap,"Enlarge organ",evolution)
 	_build_debris(result.debris)
 	return true
 
@@ -1970,9 +1973,9 @@ func mutate_organ(identity: int, gene: String) -> bool:
 	var organ: Dictionary = player.organ_by_id(identity)
 	if organ.is_empty() or gene not in Genes.available(organ,evolution.learned): return false
 	var cost := Genes.adaptation_price(organ)
-	if evolution.enabled and evolution.points < cost: return false
+	if evolution.enabled and player.ap < cost: return false
 	if not player.specialize(identity,gene): return false
-	evolution.spend(cost,"Apply "+gene)
+	player.spend_ap(cost,"Apply "+gene,evolution)
 	return true
 
 func offspring_quote(subject = null) -> Dictionary:
@@ -1990,6 +1993,7 @@ func safe_birth_position(at: Vector2, radius: float) -> bool:
 
 func make_offspring(parent, quote: Dictionary):
 	var child = Cell.new(next_id)
+	child.ap = 0 # A quote/preview must not mint starting AP.
 	child.role = "descendant"
 	child.generation = parent.generation+1
 	child.lineage = parent.lineage_id()
@@ -2062,6 +2066,7 @@ func _divide_paid(parent,ledger,dormant: bool=false,follow: bool=false,progress:
 	inherited_lineages[child.id] = child.lineage_id()
 	next_id += 1
 	ledger.births += 1
+	parent.ap+=1;child.ap+=1
 	var mutation_offer:=false
 	if ledger.progression!=null:mutation_offer=ledger.progression.divided(parent)
 	ledger.register(child,parent.id,child.generation,"active" if follow else "living",time)
@@ -2075,7 +2080,7 @@ func _divide_paid(parent,ledger,dormant: bool=false,follow: bool=false,progress:
 		evolution.observe_successor(child)
 	if progress:evolution.offspring_id = child.id
 	_record_sound("division",parent.position,parent.id)
-	ledger.notify("Cell divided."+(" +2 AP." if ledger.progression!=null else "")+(" Free mutation available in the nucleus." if mutation_offer else ""))
+	ledger.notify("Cell divided."+" +1 AP each for parent and daughter."+(" Free mutation available in the nucleus." if mutation_offer else ""))
 	events.append({"type":"division","id":child.id,"parent":parent.id,"time":time,"material":quote.total_material,"reserve_used":quote.material,"body_transferred":quote.body_transfer,"oxygen_transferred":child.oxygen,"atp_used":20})
 	return true
 

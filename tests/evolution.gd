@@ -20,7 +20,7 @@ func run(owner_suite) -> void:
 	sim.habitat_geometry.enabled = false
 	check(sim.cells.size() == 16 and sim.pending_replacements.size() == 3,"balanced opening reserves three later hunter arrivals")
 	check(sim.pending_replacements.map(func(item): return item.not_before) == [150.0,390.0,630.0],"one bounded arrival follows each crisis warning")
-	check(sim.evolution.points == 3 and sim.evolution.offers.size() == 3,"functional starter and initial three-option draft")
+	check(sim.player.ap == 3 and sim.evolution.offers.size() == 3,"functional starter and initial three-option draft")
 	sim.time = 150
 	sim.evolution.clock = 149.9
 	sim._replace_population()
@@ -34,7 +34,7 @@ func run(owner_suite) -> void:
 	check(sim.player != original and sim.player.membrane != original.membrane,"planning clones anatomy and membrane")
 	check(sim.player.membrane.skeleton != original.membrane.skeleton,"planning clones tension network")
 	check(sim.install("neutralizing",2.0),"affordable installation accepted")
-	check(sim.evolution.points == 3,"A cell’s first added organ is free")
+	check(sim.player.ap == 3,"A cell’s first added organ is free")
 	sim.player.membrane.skeleton.set_tension(0,0.9)
 	sim.evolution.choose(offers[0])
 	sim.evolution.accept_challenge("stability",sim.player)
@@ -43,7 +43,7 @@ func run(owner_suite) -> void:
 	sim.remove(sim.player.organs.size()-1)
 	check(sim.build_waste > 0 and absf(total(sim)-initial_mass) < 0.01,"preview recycling accounts for deferred debris")
 	sim.cancel_build()
-	check(sim.player == original and sim.evolution.points == 3,"cancel restores anatomy and AP")
+	check(sim.player == original and sim.player.ap == 3,"cancel restores anatomy and AP")
 	check(sim.evolution.learned.is_empty() and not sim.evolution.chosen and sim.evolution.challenge == "","cancel restores draft and challenge choices")
 	check(sim.build_waste == 0 and absf(total(sim)-initial_mass) < 0.01,"cancel emits no particles or mass")
 	check(sim.evolution.offers == offers,"opening and cancelling cannot reroll offers")
@@ -57,23 +57,23 @@ func run(owner_suite) -> void:
 	check(sim.player.brood_mass == 0 and sim.player.brood_energy == 0,"undo restores reserves")
 	sim.install("neutralizing",2.0)
 	sim.commit_build()
-	check(sim.player.count("neutralizing") == 1 and sim.evolution.points == 3,"apply keeps paid anatomy")
+	check(sim.player.count("neutralizing") == 1 and sim.player.ap == 3,"apply keeps paid anatomy")
 	var before: float = sim.player.biomass
-	sim.evolution.points = 0
+	sim.player.ap = 0
 	check(not sim.install("poreforming",1.0) and sim.player.biomass == before,"insufficient AP is atomic")
-	sim.evolution.points = 20
+	sim.player.ap = 20
 	sim.player.biomass = 600
 	sim.player.update_geometry()
 	sim.player.membrane = Cell.Membrane.new(sim.player.radius)
 	var twin = Cell.clone_state(sim.player)
 	var id: int = sim.player.organs[-1].id
-	var start_points: int = sim.evolution.points
+	var start_points: int = sim.player.ap
 	for size in [1.05,1.1,1.15,1.2]: check(sim.resize_organ(id,size),"small enlargement accepted")
 	var direct: Dictionary = twin.resize_organ(id,1.2)
-	check(start_points-sim.evolution.points == direct.ap,"tiny enlargements cost the same cumulative AP")
-	var spent: int = sim.evolution.points
+	check(start_points-sim.player.ap == direct.ap,"tiny enlargements cost the same cumulative AP")
+	var spent: int = sim.player.ap
 	check(sim.resize_organ(id,0.8) and sim.resize_organ(id,1.2),"shrink and regrow supported")
-	check(sim.evolution.points < spent,"shrink cannot refund or reset purchased capacity")
+	check(sim.player.ap < spent,"shrink cannot refund or reset purchased capacity")
 	for gene in Sim.Genes.DATA:
 		if Sim.Genes.DATA[gene].kind == "feeding": continue
 		var cell = Cell.new()
@@ -93,17 +93,18 @@ func run(owner_suite) -> void:
 		check(absf(cell.organic_mass()-mass) < 0.01,"restoration transfers actual replacement material "+gene)
 	var e = Sim.Evolution.new(713)
 	check(e.offers == offers,"same seed reproduces draft")
+	var earned_ap: int=sim.player.ap
 	e.clock = 119.9
 	e.advance(0.11,sim)
-	check(e.tide == 1 and e.points == 5,"tide grants exactly two baseline AP")
+	check(e.tide == 1 and sim.player.ap == earned_ap+2,"tide grants exactly two baseline AP")
 	e.advance(0.1,sim)
-	check(e.points == 5,"milestone reward cannot repeat")
+	check(sim.player.ap == earned_ap+2,"milestone reward cannot repeat")
 	check(e.choose(e.offers[0]) and not e.choose(e.offers[1]),"one blueprint per tide")
 	check(e.accept_challenge("stability",sim.player) and not e.accept_challenge("growth",sim.player),"one optional challenge")
 	e.stable_seconds = 31
 	e.clock = 239.9
 	e.advance(0.11,sim)
-	check(e.points == 9,"two earned AP plus the two-point tide allowance")
+	check(sim.player.ap == earned_ap+6,"two earned AP plus the two-point tide allowance")
 	sim.evolution.exposures.toxin = 100
 	sim.evolution.clock = 119.9
 	sim.evolution.advance(0.11,sim)
@@ -130,9 +131,10 @@ func run(owner_suite) -> void:
 	var challenge_run = Sim.Evolution.new(5)
 	check(challenge_run.accept_challenge("growth",sim.player),"growth challenge accepted")
 	sim.player.biomass += 20 # Fixture represents recovered previously secreted tissue.
+	var challenge_ap: int=sim.player.ap
 	challenge_run.clock = 119.9
 	challenge_run.advance(0.11,sim)
-	check(challenge_run.points == 5,"growth bonus also requires outside intake")
+	check(sim.player.ap == challenge_ap+2,"growth bonus also requires outside intake")
 	# Division fixture funds reserves explicitly to isolate the transfer, without
 	# representing a playthrough or claiming these resources were earned.
 	sim = Sim.new(29)
