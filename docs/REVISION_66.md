@@ -10,7 +10,7 @@ New founders and paid daughters start with one ordinary, reabsorbable leaf. The 
 
 Air exchange visits 20 seeded groups over five simulation seconds. CO2 relaxes toward 8 units per 64×64 area over 10 seconds. The owner's final correction adds a much smaller oxygen source: target 0.5, relaxation 60 seconds. Both rates use the multiplier 1 + 2|curl|/(|curl| + 0.05) from centered differences of the existing water velocity. This is an authored 2D mixing proxy. Photosynthesis remains the main renewable oxygen producer.
 
-Both gases enter real exterior ownership, with jittered source positions, bounded carrier admission, saved phase clocks and separate source/removal counters. No cell receives a stock grant or particle-pose mirror. CO2 and oxygen glyph ink is one-quarter size; physical contact and amounts are unchanged.
+Both gases enter real exterior ownership, with jittered source positions, bounded carrier admission, saved phase clocks and separate source/removal counters. No cell receives a stock grant or particle-pose mirror. CO2 and oxygen glyph ink is one-half size; physical contact and amounts are unchanged.
 
 Mild acid's optimum moves to 0.25. At that optimum, real nutrient joins double their allocation-bonus increment, still capped at 50% and funded by existing fuel. Spent food cannot regain fuel by joining. Enzyme/waste binding shares the optimum. Acid maintenance begins above 0.4; buffers respond above 0.4 or to actual cellular stress. These values are normalized game quantities, not pH.
 
@@ -37,3 +37,5 @@ Family scrolling has fixed repeatable arrow buttons. Sun/Shade selection resolve
 Preserve cells, anatomy, accounts, keys, feedback, old signal expiries and saved settings. Validate native/reference chemistry, resident hardware GPU ownership, conservation, authenticated receipts, pointer input, portrait layouts and checkpoint recovery. Broad rendering-speed benchmarks remain held.
 
 Gameplay and Mechanics use platform-specific, audience-friendly descriptions and scientific references. This revision's update notice is experimental-only.
+
+October 18 visibility correction: the owner found the quarter-size CO2 and oxygen glyphs too small. Both now render at twice that size in the shared full/detail textures, while inspection remains readable. Following the supplied earth.nullschool.net wave-animation reference, streamlines use soft, shallow wavelet crests on the existing advected strips. Each strip carries staggered bright marks and a faint continuous history. Width increases from 0.90 to 3.60 pixels, with ordinary/source peak opacity rising from 0.16/0.34 to 0.58/0.72. These are presentation tracers following the real flow, not simulated surface waves. Counts, full 8.4-second trail history, gold-source masks and all simulation parameters are unchanged.

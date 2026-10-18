@@ -298,8 +298,18 @@ const RELEASES=[
   ],
   "footer":"Your cells and their progress carry on between updates.",
   "button":"Back to the pond",
+ },
+ {
+  "id":"2026-10-18-clearer-gases-and-currents",
+  "audience":"experimental",
+  "title":"What’s new in the pond",
+  "items":[
+   "CO2 and oxygen particles are larger and easier to see.",
+   "Soft, bright ripples now trace the water's movement. Gold still marks only the water immediately around an induced-current source."
+  ],
+  "footer":"Your cells and their progress carry on between updates.",
+  "button":"Back to the pond"
  }
-
 ]
 const CURRENT=RELEASES[-1]
 static func seen_index(account: Dictionary) -> int:
