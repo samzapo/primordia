@@ -11,6 +11,11 @@ class Bridge:
 	var pending: Array=[]
 	var streaming
 	var gpu=Device.new()
+	var preparations:=0
+	var admitted: Array=[]
+	func prepare_publication() -> bool:
+		preparations+=1;admitted.append_array(pending);pending.clear()
+		return true
 class HostProbe:
 	extends "res://scripts/network/world_host.gd"
 	var delivered: Array=[]
@@ -59,7 +64,12 @@ func run() -> void:
 	var smaller: Vector4=host._delivery_coverage(host.peers[1])
 	check(smaller!=Vector4.ZERO and smaller.z<expanded.z and Delivery.covers(smaller,view),"Incomplete overscan falls back to a smaller genuinely prepared border")
 	stream.cold=preload("res://scripts/particle_regions.gd").new();stream.cold.dimensions=Vector2i(16,10);stream.cold.put(far,0)
+	# Reproduce post-tick air emissions on every publication. A ready camera
+	# must first admit the actual escrow, never ignore it or wait for a tick gap.
+	bridge.pending=[{"p":Vector2(1100,1000),"alive":true}]
+	check(not stream.region_ready(view),"Late emissions genuinely block complete coverage before admission")
 	host._publish()
+	check(bridge.preparations==1 and bridge.admitted.size()==1 and bridge.pending.is_empty(),"Publication admits late paid emissions before checking camera readiness")
 	check(bridge.gpu.calls.size()==1 and host.pending_frame.frames.has(1) and not host.pending_frame.frames.has(2),"The actual host publishes a ready observer while another observer is loading")
 	check(bridge.gpu.calls[0]==expanded,"The GPU gathers the captured padded region rather than only the current viewport")
 	host.peers[1].view=Vector4(1300,1000,200,150)

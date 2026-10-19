@@ -8,7 +8,7 @@ name: Primordia experimental instance
       operation:
         description: Deploy an update, or preserve and suspend the experimental pond
         type: choice
-        options: [deploy, standby]
+        options: [deploy, standby, network-check]
         default: deploy
       stable_revision:
         description: Optional exact deployed stable SHA for a standby-only repair
@@ -21,7 +21,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   deploy:
-    if: github.repository == 'samzapo/primordia' && github.actor == 'samzapo' && inputs.operation != 'standby'
+    if: github.repository == 'samzapo/primordia' && github.actor == 'samzapo' && inputs.operation != 'standby' && inputs.operation != 'network-check'
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 50
     steps:
@@ -110,3 +110,78 @@ jobs:
         run: |
           test "$RUNNER_NAME" = samzapo-desktop
           python3 "$HOME/.local/share/primordia-experimental/current/tools/verify_experimental.py" --restart
+
+  network-check:
+    if: github.repository == 'samzapo/primordia' && github.actor == 'samzapo' && inputs.operation == 'network-check'
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Name isolated network fixture checkout
+        id: network_source
+        shell: bash
+        run: |
+          test "$RUNNER_NAME" = samzapo-desktop
+          test "$(hostname)" = samzapo-desktop
+          python3 - <<'PYTHON'
+          import os,re
+          branch=re.sub(r'[^A-Za-z0-9._-]','-',os.environ['GITHUB_REF_NAME'].replace('/','--'))
+          with open(os.environ['GITHUB_OUTPUT'],'a') as output:
+              output.write('path='+branch+'--network-'+os.environ['GITHUB_RUN_ID']+'-'+os.environ['GITHUB_RUN_ATTEMPT']+'\n')
+          PYTHON
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: ${{ steps.network_source.outputs.path }}
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Exercise slow observer without changing either pond
+        shell: bash
+        env:
+          NETWORK_SOURCE: ${{ steps.network_source.outputs.path }}
+          PRIMORDIA_BUILD_JOBS: "2"
+          PRIMORDIA_INVITE: bounded-infrastructure-fixture
+          PRIMORDIA_PERFORMANCE_WARNINGS: "1"
+        run: |
+          cd "$GITHUB_WORKSPACE/$NETWORK_SOURCE"
+          python3 -u - <<'PYTHON'
+          import hashlib,json,os,pathlib,subprocess,sys
+          os.environ.setdefault("XDG_RUNTIME_DIR",f"/run/user/{os.getuid()}")
+          sys.path.insert(0,str(pathlib.Path.cwd()/"tools"))
+          from deploy import run
+          from check_capacity import inspect
+          from check_wired_route import verify
+          from experimental_instance import get_json
+          roots=[pathlib.Path.home()/".local/share"/name for name in ["primordia-deploy","primordia-experimental"]]
+          def identity():
+              result=[]
+              for root,port,unit in zip(roots,[8766,8768],["primordia.service","primordia-experimental.service"]):
+                  h=get_json(f"http://127.0.0.1:{port}/health")
+                  files=[root/"access-keys.json",*(root/"state/feedback").glob("*.json")]
+                  result.append({**{k:h[k] for k in ["build","world_id","epoch","tick","accounts"]},
+                      "pid":subprocess.check_output(["systemctl","--user","show",unit,"-p","MainPID","--value"],text=True).strip(),
+                      "retained":{str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in files if p.is_file()}})
+              return result
+          before=identity()
+          version=json.loads(pathlib.Path("tools/toolchain.json").read_text())["version"]
+          godot=roots[0]/"runtime"/f"Godot_v{version}-stable_linux.x86_64"
+          assert godot.is_file()
+          os.environ["GODOT_BIN"]=str(godot)
+          inspect();verify()
+          run("bash","tools/build_native.sh",env=os.environ.copy())
+          run(str(godot),"--headless","--path",".","--editor","--import","--quit",env=os.environ.copy())
+          status=0
+          try:
+              for attempt in range(3):
+                  print("SLOW_OBSERVER_ATTEMPT",attempt,flush=True)
+                  run("xvfb-run","-a","-s","-screen 0 1280x720x24 -nolisten tcp",str(godot),"--path",".",
+                      "--rendering-method","mobile","--rendering-driver","vulkan","--gpu-index","0","--resolution","64x64",
+                      "--disable-vsync","--max-fps","60","--script","tests/network_live.gd","--","--gpu","--slow-observer",env=os.environ.copy())
+          except subprocess.CalledProcessError as error:status=error.returncode
+          finally:
+              after=identity()
+              for a,b in zip(before,after):
+                  assert all(a[k]==b[k] for k in ["build","world_id","epoch","pid"])
+                  assert b["tick"]>a["tick"] and b["accounts"]>=a["accounts"]
+                  assert all(pathlib.Path(p).is_file() and hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()==digest for p,digest in a["retained"].items())
+              print("NETWORK_CHECK_PONDS_PRESERVED",json.dumps({"before":before,"after":after}),flush=True)
+          raise SystemExit(status)
+          PYTHON

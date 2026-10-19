@@ -171,6 +171,19 @@ func _queries(sim, cells: Array,dt: float) -> Array:
 				"target_id":-1,"incumbent":false,"organ_id":organ.id})
 	return queries
 
+func prepare_publication() -> bool:
+	# Gas exchange and death/reproduction can enqueue paid packets after the
+	# tick's final receipt. Admit them before claiming a complete camera view;
+	# waiting until the next tick can starve delivery under continuous emissions.
+	# This is an emission/census receipt only: no elapsed chemistry, motion,
+	# feeding, body projection or resource debit runs a second time.
+	if pending.is_empty(): return true
+	var receipt:=_receipt([],[],{"feeding":false,"projection":false})
+	if receipt.has("error"):
+		reason=receipt.error
+		return false
+	return true
+
 func _receipt(cells: Array=[],queries: Array=[],options: Dictionary={}) -> Dictionary:
 	var sim=world.get_ref()
 	# A backdated coarse pheromone can already have expired. It carries no

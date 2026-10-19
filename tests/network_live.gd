@@ -2,6 +2,20 @@ extends SceneTree
 const Sim=preload("res://scripts/simulation.gd")
 const Host=preload("res://scripts/network/world_host.gd")
 const Protocol=preload("res://scripts/network/protocol.gd")
+class EmittingHost:
+	extends "res://scripts/network/world_host.gd"
+	var late_emissions:=false
+	func _physics_process(dt: float) -> void:
+		super(dt)
+		if not late_emissions or not running or world.resident==null:return
+		# Reproduce gas packets arriving after the tick's last GPU receipt.
+		# Every observer sees new escrow every tick, so delivery cannot rely
+		# on a lucky emission-free interval between physics steps.
+		for peer in peers.values():
+			if peer.account=="" or peer.view==null:continue
+			for kind in [Sim.CARBON,Sim.OXYGEN]:
+				world.spawn_particle(kind,Vector2(peer.view.x,peer.view.y),Vector2.ZERO,.01)
+
 var failures:=0
 var assertions:=0
 var host
@@ -14,7 +28,18 @@ var withheld_acks: Dictionary={}
 var deferred_acks: Dictionary={}
 func check(value: bool,message: String) -> void:
 	assertions+=1
-	if not value: failures+=1;push_error("FAIL: "+message)
+	if not value:
+		failures+=1;push_error("FAIL: "+message)
+		print("NETWORK_FAILURE_STATE ",JSON.stringify({"publication":publication_state(),"message":message,"time":host.world.time,"tick":host.world.revision,"cameras":str(host.world.camera_views),"internal":str(host.world.interoceptive_cells),"peers":host.peers.values().map(func(p):return {"state":p.socket.get_ready_state(),"close":p.socket.get_close_code(),"reason":p.socket.get_close_reason(),"awaiting":p.get("awaiting_snapshot",-1),"serial":p.get("frame_serial",-1),"encoding":p.get("encoding_snapshot",-1),"view_tick":p.get("view_tick",-1),"coverage":str(host._delivery_coverage(p)),"budget":p.get("budget",-1),"view":str(p.view),"perception":p.get("perception",""),"selected":host.accounts[p.account].selected if host.accounts.has(p.account) else -1}),"clients":sockets.map(func(s):return {"state":s.get_ready_state(),"code":s.get_close_code(),"reason":s.get_close_reason()}),"deferred":deferred_acks,"withheld":withheld_acks}))
+func publication_state() -> Dictionary:
+	if host.world.resident==null:return {}
+	var r=host.world.resident;var g=r.gpu;var p=g._publication;var s=r.streaming
+	var kinds: Dictionary={}
+	for packet in r.pending:kinds[packet.kind]=int(kinds.get(packet.kind,0))+1
+	return {"frame":host.pending_frame.keys(),"busy":g.publication_busy,"initialized":g._initialized,"closing":g._closing,
+		"gather":{} if p==null else {"inflight":p.inflight,"requests":p.requests,"skipped":p.skipped,"bytes":p.bytes_read},
+		"pending":r.pending.size(),"pending_kinds":kinds,"pending_sample":r.pending.slice(0,5).map(func(q):return {"p":str(q.p),"kind":q.kind,"amount":q.amount,"alive":q.alive}),
+		"queue":s.queue_depth,"eviction":s.eviction_deferred}
 var performance_warnings:=0
 func check_performance(value: bool,message: String) -> void:
 	if not value and OS.get_environment("PRIMORDIA_PERFORMANCE_WARNINGS")=="1":
@@ -52,8 +77,8 @@ func find_message(index: int,kind: String,sequence: int=-1) -> Dictionary:
 		if message.get("kind","")==kind and (sequence<0 or message.get("sequence",-2)==sequence):return message
 	return {}
 func run() -> void:
-	host=Host.new();host.cpu=not ("--gpu" in OS.get_cmdline_user_args())
-	if "--slow-observer" in OS.get_cmdline_user_args():host.physics_hz=2
+	host=EmittingHost.new();host.cpu=not ("--gpu" in OS.get_cmdline_user_args())
+	if "--slow-observer" in OS.get_cmdline_user_args():host.physics_hz=2;host.late_emissions=true
 	# Match run_service.py: this window submits compute, while client camera
 	# rectangles below still request full widest-view simulation fidelity.
 	if not host.cpu:root.size=Vector2i(64,64)
@@ -124,10 +149,26 @@ func run() -> void:
 	check(await until(func():return messages[0].any(func(m):return m.get("kind","")=="snapshot" and m.get("particles",PackedByteArray()).size()>0 and not m.get("warming",true))),"bounded particle publication reaches client")
 	var census_frame: Dictionary=messages[0].filter(func(message):return message.get("kind","")=="snapshot" and not message.get("warming",true) and message.get("serial",0)>0)[-1]
 	check(census_frame.has("census") and census_frame.census.has("external") and census_frame.census.has("living_cells") and census_frame.census.camera_particles<=census_frame.particles.size()/32 and census_frame.census.buffered_particles==census_frame.particles.size()/32,"Snapshots deliver a distinct authoritative global census and camera-record count")
+	if not host.cpu:
+		var bridge=host.world.resident
+		var at:=Vector2(camera_reports[0].rect[0],camera_reports[0].rect[1])
+		host.world.spawn_particle(Sim.CARBON,at,Vector2.ZERO,.01)
+		host.world.spawn_particle(Sim.OXYGEN,at,Vector2.ZERO,.01)
+		var count_before: int=bridge.habitat_census().external
+		var clock_before_admission: float=host.world.time
+		var tick_before_admission: int=host.world.revision
+		var stocks_before: Array=host.world.cells.map(func(c):return Vector3(c.energy,c.biomass,c.health))
+		var random_before: int=host.world.rng.state
+		var exports_before: int=bridge.gpu.readbacks
+		check(not bridge.streaming.region_ready(Vector4(at.x,at.y,1,1)),"Real late gas packets block readiness while escrowed")
+		check(bridge.prepare_publication() and bridge.pending.is_empty(),"Real GPU accepts late emissions before complete publication")
+		check(bridge.habitat_census().external==count_before,"Admission transfers every packet exactly once into the resident census")
+		check(host.world.time==clock_before_admission and host.world.revision==tick_before_admission and host.world.rng.state==random_before and host.world.cells.map(func(c):return Vector3(c.energy,c.biomass,c.health))==stocks_before and bridge.gpu.readbacks==exports_before,"Publication preparation cannot advance biology, spend resources or export GPU poses")
 	withheld_acks[0]=true
 	check(await until(func():return deferred_acks.has(0)),"Slow browser leaves one complete snapshot awaiting acknowledgement")
 	var slow_peer: Dictionary=host.peers.values().filter(func(peer):return peer.account==welcome0.token.sha256_text())[0]
 	var pending_serial: int=slow_peer.awaiting_snapshot
+	print("ACK_HOLD ",JSON.stringify({"pending":pending_serial,"deferred":deferred_acks,"budget":slow_peer.budget,"tick":host.world.revision}))
 	var received_count: int=messages[0].filter(func(m):return m.get("serial",0)>0).size()
 	var flow_time: float=host.world.time
 	check(await until(func():return host.world.time>flow_time+.1),"Authority keeps simulating while a browser processes its snapshot")
@@ -135,6 +176,7 @@ func run() -> void:
 	sockets[0].send_text(JSON.stringify({"op":"snapshot_ack","serial":pending_serial+1,"epoch":host.epoch}))
 	await process_frame;poll();await process_frame
 	check(slow_peer.awaiting_snapshot==pending_serial,"A wrong acknowledgement cannot release the pending frame")
+	print("ACK_RELEASE ",JSON.stringify({"pending":pending_serial,"server":slow_peer.awaiting_snapshot,"deferred":deferred_acks,"budget":slow_peer.budget,"tick":host.world.revision}))
 	withheld_acks.erase(0)
 	check(await until(func():return messages[0].any(func(m):return m.get("serial",0)>pending_serial)),"Processing acknowledgement automatically resumes advancing world delivery")
 	check(await until(func():return camera_reports.has(0) and camera_reports.has(1)),"both fixture cameras are advertised before changing perception")

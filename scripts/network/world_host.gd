@@ -686,6 +686,10 @@ func _publish() -> void:
 			_send_snapshot(peer,PackedByteArray())
 	if world.camera_views.is_empty() or not pending_frame.is_empty(): return
 	if world.resident!=null:
+		var eligible:=peers.values().any(func(peer):return peer.account!="" and peer.view!=null and peer.view_tick<world.revision and peer.get("perception","exteroception")=="exteroception" and peer.get("awaiting_snapshot",0)==0 and peer.get("encoding_snapshot",0)==0)
+		if not eligible:return
+		if not world.resident.prepare_publication():
+			_fatal(world.resident.reason);return
 		pending_frame={"frames":{}}
 		var regions: Array=[]
 		for id in peers:
