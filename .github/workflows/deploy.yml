@@ -5,11 +5,6 @@ name: Primordia persistent server CD
     paths-ignore: [docs/**, README.md, AGENTS.md, .github/workflows/target-probe.yml, .github/workflows/host-telemetry.yml]
   workflow_dispatch:
     inputs:
-      incident_operation:
-        description: Explicit incident containment; does not deploy or reset
-        type: choice
-        options: [none, quarantine-stable, inspect-stable, prepare-recovery]
-        default: none
       allow_performance_warnings:
         description: Ship with known timing shortfalls; retain GPU, correctness and state checks
         type: boolean
@@ -21,7 +16,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   deploy:
-    if: github.repository == 'samzapo/primordia' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.incident_operation == 'none')
+    if: github.repository == 'samzapo/primordia' && github.ref == 'refs/heads/main'
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 50
     steps:
@@ -175,138 +170,3 @@ jobs:
                   from verify_experimental import main
                   main(restart=False)
           PYTHON
-
-  quarantine-stable:
-    if: github.repository == 'samzapo/primordia' && github.actor == 'samzapo' && inputs.incident_operation == 'quarantine-stable'
-    runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 4
-    steps:
-      - name: Stop corrupted authority and preserve incident generations
-        shell: bash
-        run: |
-          test "$RUNNER_NAME" = samzapo-desktop
-          test "$(hostname)" = samzapo-desktop
-          python3 - <<'PY'
-          import datetime,hashlib,json,os,pathlib,shutil,subprocess
-          from urllib.request import build_opener,ProxyHandler
-          from urllib.error import HTTPError
-          os.environ.setdefault("XDG_RUNTIME_DIR",f"/run/user/{os.getuid()}")
-          root=pathlib.Path.home()/".local/share/primordia-deploy"
-          assert root.is_dir() and root.stat().st_uid==os.getuid()
-          incident=root/"incidents"/("nonfinite-"+os.environ["GITHUB_RUN_ID"])
-          incident.mkdir(parents=True,mode=0o700)
-          def retained():
-              files=[root/"access-keys.json",*(root/"state/feedback").glob("*.json")]
-              return {str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in files if p.is_file()}
-          before=retained()
-          try:
-              with build_opener(ProxyHandler({})).open("http://127.0.0.1:8766/metrics",timeout=5) as r:live=json.load(r)
-          except HTTPError as r:live=json.load(r)
-          (incident/"metrics-before.json").write_text(json.dumps(live,indent=2))
-          journal=subprocess.run(["journalctl","--user","-u","primordia.service","--since","-30 minutes","--no-pager","-n","2200","-o","cat"],capture_output=True,text=True,timeout=15)
-          (incident/"journal.txt").write_text(journal.stdout[-900000:])
-          for phase in ["before-stop","stopped"]:
-              if phase=="stopped":subprocess.run(["systemctl","--user","stop","primordia.service"],check=True,timeout=90)
-              dest=incident/phase;dest.mkdir(mode=0o700)
-              for name in ["world-0.pworld","world-1.pworld","health.json"]:
-                  source=root/"state"/name
-                  if source.is_file():shutil.copy2(source,dest/name)
-          active=subprocess.check_output(["systemctl","--user","show","primordia.service","-p","ActiveState","--value"],text=True).strip()
-          assert active=="inactive" and before==retained()
-          manifest={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in (incident/"stopped").iterdir()}
-          backups=[{"path":str(p),"mtime":p.stat().st_mtime,"files":[{"name":f.name,"bytes":f.stat().st_size} for f in p.glob("*.pworld")]} for p in sorted(root.glob("before-update-*"),key=lambda p:p.stat().st_mtime)[-4:]]
-          report={"utc":datetime.datetime.now(datetime.timezone.utc).isoformat(),"active":active,"incident":str(incident),"current":str((root/"current").resolve()),"state_sha256":manifest,"retained_private_files":len(before),"backups":backups}
-          (incident/"manifest.json").write_text(json.dumps(report,indent=2))
-          print("QUARANTINED "+json.dumps(report))
-          PY
-
-  inspect-stable:
-    if: github.repository == 'samzapo/primordia' && github.actor == 'samzapo' && inputs.incident_operation == 'inspect-stable'
-    runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 4
-    steps:
-      - name: Inspect retained incident without starting a world
-        id: inspect
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          test "$RUNNER_NAME" = samzapo-desktop
-          test "$(hostname)" = samzapo-desktop
-          python3 - <<'PY'
-          import json,os,pathlib,subprocess,tempfile,urllib.request
-          root=pathlib.Path.home()/".local/share/primordia-deploy"
-          scratch=pathlib.Path(tempfile.mkdtemp(prefix="samzapo--live-nan-inspect--",dir=os.environ["RUNNER_TEMP"]))
-          (scratch/"scripts/network").mkdir(parents=True)
-          (scratch/"tools").mkdir()
-          (scratch/"tools/durable_world.py").write_text((root/"current/tools/durable_world.py").read_text())
-          (scratch/"project.godot").write_text('config_version=5\n[application]\nconfig/name="Read-only incident inspection"\n')
-          (scratch/"scripts/network/world_store.gd").write_text((root/"current/scripts/network/world_store.gd").read_text())
-          request=urllib.request.Request("https://api.github.com/repos/samzapo/primordia/contents/tools/inspect_nonfinite.gd?ref="+os.environ["GITHUB_SHA"],headers={"Authorization":"Bearer "+os.environ["GH_TOKEN"],"Accept":"application/vnd.github.raw+json"})
-          with urllib.request.urlopen(request,timeout=20) as response:source=response.read(65536)
-          (scratch/"inspect.gd").write_bytes(source)
-          incident=root/"incidents/nonfinite-39189988717"
-          paths=[incident/"before-stop",incident/"stopped",root/"before-update-l8dktxpr"]
-          godot=next((root/"runtime").glob("Godot_v*-stable_linux.x86_64"))
-          os.environ["PRIMORDIA_INCIDENT_FIXTURE"]=str(scratch/"fixture")
-          with open(os.environ["GITHUB_OUTPUT"],"a") as out:out.write("fixture="+str(scratch/"fixture")+"\n")
-          result=subprocess.run([str(godot),"--headless","--path",str(scratch),"--script",str(scratch/"inspect.gd"),"--",*["--state-dir="+str(p) for p in paths]],capture_output=True,text=True,timeout=90)
-          (incident/"inspection.txt").write_text(result.stdout+"\n"+result.stderr)
-          print(result.stdout);print(result.stderr)
-          os.environ.setdefault("XDG_RUNTIME_DIR",f"/run/user/{os.getuid()}")
-          journal=subprocess.run(["journalctl","--user","-u","primordia.service","--since","2026-10-19 02:14:00 UTC","--until","2026-10-19 02:22:00 UTC","--no-pager","-o","cat"],capture_output=True,text=True,timeout=20)
-          (incident/"early-journal.txt").write_text(journal.stdout)
-          print("EARLY_JOURNAL_BEGIN");print("\n".join(journal.stdout.splitlines()[:240]));print("EARLY_JOURNAL_END")
-          assert result.returncode==0 and "SCRIPT ERROR" not in result.stdout+result.stderr
-          PY
-
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: private-numerical-incident-fixture
-          path: ${{ steps.inspect.outputs.fixture }}/world-*.pworld
-          retention-days: 7
-          if-no-files-found: error
-
-  prepare-recovery:
-    if: github.repository == 'samzapo/primordia' && github.actor == 'samzapo' && inputs.incident_operation == 'prepare-recovery'
-    runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 3
-    steps:
-      - name: Restore intact pre-incident generations while authority is stopped
-        shell: bash
-        run: |
-          test "$RUNNER_NAME" = samzapo-desktop
-          test "$(hostname)" = samzapo-desktop
-          python3 - <<'PY'
-          import datetime,fcntl,hashlib,json,os,pathlib,shutil,subprocess
-          os.environ.setdefault("XDG_RUNTIME_DIR",f"/run/user/{os.getuid()}")
-          root=pathlib.Path.home()/".local/share/primordia-deploy"
-          lock=(root/"deploy.lock").open("a+");fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
-          assert subprocess.check_output(["systemctl","--user","show","primordia.service","-p","ActiveState","--value"],text=True).strip()=="inactive"
-          incident=root/"incidents/nonfinite-39189988717";state=root/"state";backup=root/"before-update-l8dktxpr"
-          assert not (incident/"recovery-prepared.json").exists(),"Recovery already prepared; do not repeat"
-          def retained():
-              files=[root/"access-keys.json",*(state/"feedback").glob("*.json")]
-              return {str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in files if p.is_file()}
-          private=retained()
-          manifest=json.loads((backup/"manifest.json").read_text())
-          assert set(manifest)=={"world-0.pworld","world-1.pworld"}
-          for name,digest in manifest.items():
-              raw=(backup/name).read_bytes()
-              assert hashlib.sha256(raw).hexdigest()==digest
-              checksum,payload=raw.split(b"\n",1)
-              assert hashlib.sha256(payload).hexdigest()==checksum.decode()
-          for name in manifest:
-              assert hashlib.sha256((state/name).read_bytes()).hexdigest()==hashlib.sha256((incident/"stopped"/name).read_bytes()).hexdigest(),"Stopped state changed"
-          for name in manifest:
-              temporary=state/(name+".incident-recovery")
-              shutil.copyfile(backup/name,temporary);temporary.chmod(0o600)
-              with temporary.open("rb") as file:os.fsync(file.fileno())
-              temporary.replace(state/name)
-          if (state/"health.json").exists():(state/"health.json").replace(incident/"corrupt-health-before-recovery.json")
-          descriptor=os.open(state,os.O_RDONLY);os.fsync(descriptor);os.close(descriptor)
-          assert retained()==private
-          report={"utc":datetime.datetime.now(datetime.timezone.utc).isoformat(),"restored_from":str(backup),"preserved_corrupt_generations":str(incident/"stopped"),"service":"stopped; awaiting repaired release","sha256":manifest,"private_files_preserved":len(private)}
-          (incident/"recovery-prepared.json").write_text(json.dumps(report,indent=2))
-          print("RECOVERY_PREPARED "+json.dumps(report))
-          PY

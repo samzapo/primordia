@@ -262,7 +262,7 @@
         {
           "id": "upkeep",
           "title": "ATP pays for work",
-          "text": "Maintenance, swimming, pumping, repair and secretion spend ATP. Ordinary light collection and sensing remain possible at zero ATP.",
+          "text": "Maintenance, swimming, pumping, repair and secretion spend ATP. Ordinary light collection and sensing remain possible at zero ATP. Free receptors need no biomass to repair; repair still uses ATP.",
           "sources": [
             {
               "title": "Catalysis and cellular energy",

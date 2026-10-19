@@ -3,6 +3,7 @@ extends Node
 const Sim = preload("res://scripts/simulation.gd")
 const Codec = preload("res://scripts/network/state_codec.gd")
 const Store = preload("res://scripts/network/world_store.gd")
+const Validity = preload("res://scripts/network/world_validity.gd")
 const Protocol = preload("res://scripts/network/protocol.gd")
 const GPU = preload("res://scripts/resident_ecology.gd")
 const Population = preload("res://scripts/network/pond_population.gd")
@@ -227,6 +228,12 @@ func _physics_process(dt: float) -> void:
 			world.managed_cells.append(accounts[peer.account].selected)
 	world.step_autonomous_builds()
 	world.step(dt)
+	# A persistent GPU authority must not keep applying biology on a fallback
+	# or an invalid tick. Leave the last valid published checkpoint untouched.
+	if not cpu and (world.resident==null or not startup_error.is_empty()):
+		_fatal(startup_error if not startup_error.is_empty() else "Resident GPU authority lost");return
+	var invalid:=Validity.error(world)
+	if not invalid.is_empty():_fatal(invalid);return
 	if world.resident!=null:
 		if not world.resident.gpu.cytoplasm_error.is_empty():_fatal(world.resident.gpu.cytoplasm_error);return
 		for cell in world.cells:
@@ -639,6 +646,8 @@ func _recover_families(dt: float) -> void:
 
 func checkpoint() -> bool:
 	if world==null: return false
+	var invalid:=Validity.error(world)
+	if not invalid.is_empty():store.last_error=invalid;return false
 	var checkpoint_start:=Time.get_ticks_usec()
 	var gpu_tick:=0
 	var stream_rng:=PackedInt64Array()
@@ -935,7 +944,7 @@ func _notification(what: int) -> void:
 	if what==NOTIFICATION_WM_CLOSE_REQUEST: stop()
 
 func _fatal(reason: String) -> void:
-	startup_error=reason;push_error(reason);get_tree().quit(1)
+	running=false;startup_error=reason;push_error(reason);get_tree().quit(1)
 
 func _safe_args(value,depth: int=0) -> bool:
 	if depth>6: return false
