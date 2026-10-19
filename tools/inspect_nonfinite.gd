@@ -7,6 +7,9 @@ func _initialize() -> void:
   var directory:=argument.trim_prefix("--state-dir=")
   var store:=Store.new();store.directory=directory
   var saved:=store.load_latest()
+  if directory.ends_with("before-update-l8dktxpr"):
+   var fixture:=saved.duplicate(true);fixture.graph.root.accounts={}
+   var output:=Store.new();output.directory=OS.get_environment("PRIMORDIA_INCIDENT_FIXTURE");assert(output.save(fixture))
   if saved.is_empty():print("FINITE_INSPECTION "+JSON.stringify({"path":directory,"error":store.last_error}));continue
   invalid.clear()
   var objects: Array=saved.get("graph",{}).get("objects",[])
@@ -40,5 +43,5 @@ func scan(value,path: String) -> void:
   if count:invalid.append({"path":path,"nonfinite":count,"first":first})
  elif value is Dictionary:
   for key in value:
-   if key=="oral_angle":continue
+   if str(key)=="oral_angle":continue
    scan(value[key],path+"."+str(key))

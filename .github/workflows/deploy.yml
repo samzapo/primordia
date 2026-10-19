@@ -226,6 +226,7 @@ jobs:
     timeout-minutes: 4
     steps:
       - name: Inspect retained incident without starting a world
+        id: inspect
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -245,6 +246,8 @@ jobs:
           incident=root/"incidents/nonfinite-39189988717"
           paths=[incident/"before-stop",incident/"stopped",root/"before-update-l8dktxpr"]
           godot=next((root/"runtime").glob("Godot_v*-stable_linux.x86_64"))
+          os.environ["PRIMORDIA_INCIDENT_FIXTURE"]=str(scratch/"fixture")
+          with open(os.environ["GITHUB_OUTPUT"],"a") as out:out.write("fixture="+str(scratch/"fixture")+"\n")
           result=subprocess.run([str(godot),"--headless","--path",str(scratch),"--script",str(scratch/"inspect.gd"),"--",*["--state-dir="+str(p) for p in paths]],capture_output=True,text=True,timeout=90)
           (incident/"inspection.txt").write_text(result.stdout+"\n"+result.stderr)
           print(result.stdout);print(result.stderr)
@@ -254,3 +257,10 @@ jobs:
           print("EARLY_JOURNAL_BEGIN");print("\n".join(journal.stdout.splitlines()[:240]));print("EARLY_JOURNAL_END")
           assert result.returncode==0 and "SCRIPT ERROR" not in result.stdout+result.stderr
           PY
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: private-numerical-incident-fixture
+          path: ${{ steps.inspect.outputs.fixture }}/world-*.pworld
+          retention-days: 7
+          if-no-files-found: error
