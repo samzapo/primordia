@@ -658,3 +658,13 @@ October18 mobile6FPS investigation: read Revision73. Keep current-curve admissio
 Revision73 touch-current budget: only touch UI adapts current-art density (24/12 initially,16/8 then8/4 after sustained costly rebuilds). Keep full length/32segments and fade retired curves; desktop remains64/32. Recovery takes8seconds of cheap rebuilds. No simulation/density/resource or new user-facing labels. Combined949 assertions include geometry and work-budget behavior; browser diagnostics are local only.
 
 October18 stable promotion: the owner authorizes Revision66–73 on main. Preserve the verified experimental gameplay and both living ponds. Add one stable-only consolidated gameplay notice for the final batch; keep all prior IDs/audiences and acknowledgement order, without replaying iterative experimental notices on main. Retain the documented phone-performance limitation: native/target checks do not establish physical-phone FPS. Use normal hooks, required hardware/state/delivery gates and existing authorized timing-warning policy; no broad rendering-speed campaign or new schedule.
+
+October18 finite-repair incident: read Revision74. Free receptors have zero
+represented material; never divide biomass by their zero per-health material
+cost, even when no repair is needed. Limit ordinary repairs by time/damage and
+positive material cost only. Preserve ATP debit and physical accounting. A
+persistent authority must stop before recovery/publication on invalid physical
+or resource state or loss of its required GPU, and must not rotate valid saves
+with NaN. Intentional infinity deadlines and NaN oral-angle sentinels are valid.
+Retain incident generations before same-pond checkpoint recovery; no reset,
+unrelated gameplay changes or new performance campaign follows from this fix.

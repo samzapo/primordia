@@ -444,6 +444,14 @@ const RELEASES=[
  ],
  "footer": "Your cells and their progress carry on between updates.",
  "button": "Back to the pond"
+},
+{
+ "id":"2026-10-18-stable-receptor-repair",
+ "audience":"stable",
+ "title":"What’s new in the pond",
+ "items":["Fixed a rare repair problem that could corrupt cell resources and interrupt the pond."],
+ "footer":"The pond has been recovered from its last healthy save.",
+ "button":"Back to the pond"
 }
 ]
 const CURRENT=RELEASES[-1]

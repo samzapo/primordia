@@ -639,7 +639,10 @@ func heal(dt: float) -> float:
 		for organ in organs:
 			if inherent(organ): continue
 			var unit: float = organ.get("max_material",organ_cost(organ.kind,organ.scale)) / organ.max_hp
-			var restore = minf(organ.max_hp-organ.hp,minf(dt*1.3*repair*capacity,biomass/unit))
+			# Free receptors have zero represented construction material. Limit
+			# their repair by time and ATP, never by the undefined ratio 0/0.
+			var restore = minf(organ.max_hp-organ.hp,dt*1.3*repair*capacity)
+			if unit>0: restore=minf(restore,biomass/unit)
 			organ.hp += restore
 			organ.material += restore*unit
 			biomass -= restore*unit
