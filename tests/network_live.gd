@@ -16,7 +16,16 @@ func check(value: bool,message: String) -> void:
 	assertions+=1
 	if not value:
 		failures+=1;push_error("FAIL: "+message)
-		print("NETWORK_FAILURE_STATE ",JSON.stringify({"message":message,"time":host.world.time,"tick":host.world.revision,"cameras":str(host.world.camera_views),"internal":str(host.world.interoceptive_cells),"peers":host.peers.values().map(func(p):return {"state":p.socket.get_ready_state(),"close":p.socket.get_close_code(),"reason":p.socket.get_close_reason(),"awaiting":p.get("awaiting_snapshot",-1),"serial":p.get("frame_serial",-1),"encoding":p.get("encoding_snapshot",-1),"budget":p.get("budget",-1),"view":str(p.view),"perception":p.get("perception",""),"selected":host.accounts[p.account].selected if host.accounts.has(p.account) else -1}),"clients":sockets.map(func(s):return {"state":s.get_ready_state(),"code":s.get_close_code(),"reason":s.get_close_reason()}),"deferred":deferred_acks,"withheld":withheld_acks}))
+		print("NETWORK_FAILURE_STATE ",JSON.stringify({"publication":publication_state(),"message":message,"time":host.world.time,"tick":host.world.revision,"cameras":str(host.world.camera_views),"internal":str(host.world.interoceptive_cells),"peers":host.peers.values().map(func(p):return {"state":p.socket.get_ready_state(),"close":p.socket.get_close_code(),"reason":p.socket.get_close_reason(),"awaiting":p.get("awaiting_snapshot",-1),"serial":p.get("frame_serial",-1),"encoding":p.get("encoding_snapshot",-1),"view_tick":p.get("view_tick",-1),"coverage":str(host._delivery_coverage(p)),"budget":p.get("budget",-1),"view":str(p.view),"perception":p.get("perception",""),"selected":host.accounts[p.account].selected if host.accounts.has(p.account) else -1}),"clients":sockets.map(func(s):return {"state":s.get_ready_state(),"code":s.get_close_code(),"reason":s.get_close_reason()}),"deferred":deferred_acks,"withheld":withheld_acks}))
+func publication_state() -> Dictionary:
+	if host.world.resident==null:return {}
+	var r=host.world.resident;var g=r.gpu;var p=g._publication;var s=r.streaming
+	var kinds: Dictionary={}
+	for packet in r.pending:kinds[packet.kind]=int(kinds.get(packet.kind,0))+1
+	return {"frame":host.pending_frame.keys(),"busy":g.publication_busy,"initialized":g._initialized,"closing":g._closing,
+		"gather":{} if p==null else {"inflight":p.inflight,"requests":p.requests,"skipped":p.skipped,"bytes":p.bytes_read},
+		"pending":r.pending.size(),"pending_kinds":kinds,"pending_sample":r.pending.slice(0,5).map(func(q):return {"p":str(q.p),"kind":q.kind,"amount":q.amount,"alive":q.alive}),
+		"queue":s.queue_depth,"eviction":s.eviction_deferred}
 var performance_warnings:=0
 func check_performance(value: bool,message: String) -> void:
 	if not value and OS.get_environment("PRIMORDIA_PERFORMANCE_WARNINGS")=="1":
