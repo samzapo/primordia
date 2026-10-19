@@ -158,5 +158,21 @@ func run() -> void:
 	check(chemistry.particles==current,"A historical density marker cannot repeat migration on the current food model")
 	var converted: Array=chemistry.particles.duplicate(true)
 	check(resolution.apply(coarse,resolution.VERSION).get("already_applied",false) and chemistry.particles==converted,"recorded migration cannot coalesce the saved world twice")
+	var authority=preload("res://scripts/network/world_host.gd").new()
+	authority.world=Sim.new(701,0,false)
+	var second=Sim.Cell.new(1,Vector2(1000,1000));second.lineage=1
+	authority.world.cells=[authority.world.player,second]
+	var originals: Dictionary={"retained-session-a":{"root":0,"selected":0},"retained-session-b":{"root":1,"selected":1}}
+	authority.accounts=originals.duplicate(true)
+	var retained_map: Dictionary=authority.accounts.duplicate(true)
+	var observer_fixture=preload("res://tests/realtime_checkpoint_gpu.gd")
+	var messages: Array=observer_fixture.observer_credentials(authority,"fixture-invite")
+	check(messages.size()==2 and messages.all(func(message):return message.get("token","").length()==64 and not message.has("invite")),"A fully player-owned saved pond resumes fixture observers without claiming more cells")
+	check(retained_map.keys().all(func(key):return authority.accounts.get(key)==retained_map[key]) and authority.world.cells.size()==2,"Observer aliases preserve every original saved account and cell")
+	check(messages.map(func(message):return authority.accounts[message.token.sha256_text()].selected)==[0,1],"Isolated observer bearers select the retained player bodies")
+	authority.accounts.clear()
+	messages=observer_fixture.observer_credentials(authority,"fixture-invite")
+	check(messages.all(func(message):return message.get("invite","")=="fixture-invite" and not message.has("token")),"An unclaimed fixture still uses its explicit invitation without reading production credentials")
+	authority.world=null;authority.free()
 	print("NETWORK CORRECTNESS: %d assertions, %d failures" % [assertions,failures])
 	quit(0 if failures==0 else 1)
