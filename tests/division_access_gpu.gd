@@ -98,8 +98,10 @@ func division_controls() -> void:
 	game.music.enabled=false;game.music.player.stop();game.world.cells=[game.world.player];game.world.habitat_geometry.enabled=false
 	game.world.evolution.sandbox=true;game.world.server_mode=true;game.build_open=true;game.notice_timer=0;game.manual_zoom=1.5
 	game.world.player.target=Vector2.RIGHT;game.world.player.state="SEEKING LIGHT"
+	check(game.world.player.automatic_division,"New sessions start with Auto divide enabled")
 	check(game.preferences.show_instinct and game.flow_view.use_crests,"New sessions start with intent and Wave crests enabled")
 	for mobile in [false,true]:
+		game.world.player.automatic_division=true;game.world.player.division_requested=false
 		root.size=Vector2i(412,915) if mobile else Vector2i(1280,800)
 		game.touch_zoom.enabled=mobile;game.touch_zoom.pixels=1;game._layout();game._update_world(1)
 		game.preferences.show_instinct=true;game.cell_ui.open_context({"kind":"nucleus"});await settle_ui()
@@ -127,8 +129,11 @@ func division_controls() -> void:
 		game.cell_ui.open_context({"kind":"bud"});await settle_ui()
 		await press_ui(game.cell_ui.choices[0])
 		check(game.cell_ui.context.kind=="division" and game.cell_ui.choices.map(func(choice):return choice.caption)==["Auto divide","Start division now","Back"],"Actual Divide pointer opens the same simple submenu on both platforms")
+		check(game.cell_ui.choices[0].selected,"The enabled Auto divide default is highlighted on both platforms")
 		await press_ui(game.cell_ui.choices[0])
-		check(game.world.player.automatic_division and game.cell_ui.choices[0].selected,"Auto divide is an active per-cell toggle")
+		check(not game.world.player.automatic_division and not game.cell_ui.choices[0].selected,"Actual pointer switches Auto divide off")
+		await press_ui(game.cell_ui.choices[0])
+		check(game.world.player.automatic_division and game.cell_ui.choices[0].selected,"Actual pointer switches Auto divide back on")
 		game.world.player.brood_mass=0;game.world.player.brood_energy=0
 		await press_ui(game.cell_ui.choices[1]);game._update_world(1);await settle_ui()
 		check(game.cell_ui.context.kind=="bud" and game.world.player.division_requested and not game.world.player.automatic_division and game.cell_ui.choices[0].selected,"An unfunded single request returns to a highlighted Divide entry and replaces continuous auto")
