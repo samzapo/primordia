@@ -53,7 +53,7 @@ grep -Eq 'FEEDBACK PASS THREE: [0-9]+ assertions, 0 failures' "$report_file"
 for script in receptor_finite_run baseline_survival anatomy_access_run recycling_run cell_ap_run feedback_latest_run shade_steering_run behavior_tree_run; do
   "$godot_bin" --headless --path "$project_dir" --script "tests/$script.gd" -- --particle-backend=cpu 2>&1 | tee "$report_file"
   if grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"; then exit 1; fi
-  grep -Eq '(BASELINE_SURVIVAL|ANATOMY ACCESS|RECYCLING|CELL AP|FEEDBACK LATEST|SHADE STEERING|BEHAVIOR TREE): [0-9]+ (checks|assertions), 0 failures' "$report_file"
+  grep -Eq '(RECEPTOR FINITE|BASELINE_SURVIVAL|ANATOMY ACCESS|RECYCLING|CELL AP|FEEDBACK LATEST|SHADE STEERING|BEHAVIOR TREE): [0-9]+ (checks|assertions), 0 failures' "$report_file"
 done
 for script in induced_currents_run lineage_start_network camera_motion_run feedback_pass_network; do
   "$godot_bin" --headless --path "$project_dir" --script "tests/$script.gd" -- --particle-backend=cpu 2>&1 | tee "$report_file"
