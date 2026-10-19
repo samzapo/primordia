@@ -41,9 +41,10 @@ func run() -> void:
 		if release.id.begins_with("2026-10-18-") and release.audience=="experimental":
 			check(release.id not in stable_ids,"Iterative playtest notices never leak into main")
 	var returning: Dictionary={"seen_release":"2026-10-18-smoother-current-drawing"}
-	check(Notes.pending_all(returning,"stable").size()==2 and Notes.acknowledge(returning,promoted[0].id,"stable") and Notes.pending_all(returning,"stable").size()==1,"A player with the latest experimental acknowledgement clears main’s summary once before the later repair notice")
-	check(Notes.pending(returning,"stable").id=="2026-10-18-stable-receptor-repair" and Notes.acknowledge(returning,"2026-10-18-stable-receptor-repair","stable") and Notes.pending_all(returning,"stable").is_empty(),"The separate repair notice clears in order")
+	check(Notes.pending_all(returning,"stable").size()==3 and Notes.acknowledge(returning,promoted[0].id,"stable") and Notes.pending_all(returning,"stable").size()==2,"A player with the latest experimental acknowledgement clears main’s summary once before the later repair notice")
+	check(Notes.pending(returning,"stable").id=="2026-10-18-stable-receptor-repair" and Notes.acknowledge(returning,"2026-10-18-stable-receptor-repair","stable") and Notes.pending(returning,"stable").id=="2026-10-19-stable-family-limit","The separate repair notice clears in order")
 	check("2026-10-18-stable-receptor-repair" not in experimental_ids,"Incident recovery copy stays in the affected main pond")
+	check("2026-10-19-stable-family-limit" not in experimental_ids and Notes.acknowledge(returning,"2026-10-19-stable-family-limit","stable") and Notes.pending_all(returning,"stable").is_empty(),"The family-cap notice follows earlier notices once and stays out of experimental")
 	var before_hidden: Dictionary={"seen_release":"2026-10-16-rippling-sunlight"}
 	check(Notes.pending(before_hidden,"stable").id=="2026-10-16-pond-feedback","Main skips the hidden announcement in order")
 	check(not Notes.acknowledge(before_hidden,experimental_id,"stable") and before_hidden.seen_release=="2026-10-16-rippling-sunlight","A hidden notice cannot mutate main acknowledgement progress")

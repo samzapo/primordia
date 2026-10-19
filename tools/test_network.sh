@@ -50,10 +50,10 @@ grep -Eq 'NUTRIENT BINDING: [0-9]+ assertions, 0 failures' "$report_file"
 "$godot_bin" --headless --path "$project_dir" --script tests/feedback_pass_three_run.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"
 if grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"; then exit 1; fi
 grep -Eq 'FEEDBACK PASS THREE: [0-9]+ assertions, 0 failures' "$report_file"
-for script in receptor_finite_run baseline_survival anatomy_access_run recycling_run cell_ap_run feedback_latest_run shade_steering_run behavior_tree_run; do
+for script in family_cap_run receptor_finite_run baseline_survival anatomy_access_run recycling_run cell_ap_run feedback_latest_run shade_steering_run behavior_tree_run; do
   "$godot_bin" --headless --path "$project_dir" --script "tests/$script.gd" -- --particle-backend=cpu 2>&1 | tee "$report_file"
   if grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"; then exit 1; fi
-  grep -Eq '(RECEPTOR FINITE|BASELINE_SURVIVAL|ANATOMY ACCESS|RECYCLING|CELL AP|FEEDBACK LATEST|SHADE STEERING|BEHAVIOR TREE): [0-9]+ (checks|assertions), 0 failures' "$report_file"
+  grep -Eq '(FAMILY CAP|RECEPTOR FINITE|BASELINE_SURVIVAL|ANATOMY ACCESS|RECYCLING|CELL AP|FEEDBACK LATEST|SHADE STEERING|BEHAVIOR TREE): [0-9]+ (checks|assertions), 0 failures' "$report_file"
 done
 for script in induced_currents_run lineage_start_network camera_motion_run feedback_pass_network; do
   "$godot_bin" --headless --path "$project_dir" --script "tests/$script.gd" -- --particle-backend=cpu 2>&1 | tee "$report_file"
@@ -94,6 +94,11 @@ if grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"; 
 grep -Eq 'POND RESTART NETWORK: [0-9]+ assertions, 0 failures' "$report_file"
 rm -rf -- "$recovery_state"
 if [[ "${1:-}" == gpu ]]; then
+  xvfb-run -a -s '-screen 0 1280x720x24 -nolisten tcp' "$godot_bin" --path "$project_dir" --rendering-method mobile --rendering-driver vulkan --gpu-index 0 --script tests/family_cap_run.gd -- --particle-backend=cpu --gpu 2>&1 | tee "$report_file"
+  if grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:|returned to CPU' "$report_file"; then exit 1; fi
+  grep -Eq 'FAMILY CAP: [0-9]+ assertions, 0 failures' "$report_file"
+  grep -Eq 'NVIDIA|AMD|Intel' "$report_file"
+  ! grep -Eiq 'llvmpipe|lavapipe|swiftshader' "$report_file"
   xvfb-run -a -s '-screen 0 1280x720x24 -nolisten tcp' "$godot_bin" --path "$project_dir" --rendering-method mobile --rendering-driver vulkan --gpu-index 0 --script tests/ambient_carbon_gpu.gd 2>&1 | tee "$report_file"
   if grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:|returned to CPU' "$report_file"; then exit 1; fi
   grep -Eq 'AMBIENT_CARBON_GPU: [0-9]+ checks, 0 failures' "$report_file"

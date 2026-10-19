@@ -1,5 +1,6 @@
 extends RefCounted
 ## Explicit selection commits immediately; autonomous fusion still needs contact.
+const MAX_FAMILY_CELLS:=12
 const MIN_AGE:=60.0
 const COOLDOWN:=120.0
 const RECENT_SECONDS:=5.0
@@ -74,10 +75,48 @@ static func direction(sim,cell) -> Vector2:
  if received.is_empty():return Vector2.ZERO
  return sim.Medium.offset(cell.position,received.report.at).normalized()
 
+static func living_families(sim) -> Dictionary:
+ var families: Dictionary={}
+ for cell in sim.cells:
+  if cell.dead or cell.health<=0:continue
+  var root: int=cell.lineage_id()
+  if not families.has(root):families[root]=[]
+  families[root].append(cell)
+ return families
+
+static func older(a,b) -> bool:
+ if a.generation!=b.generation:return a.generation<b.generation
+ if a.age!=b.age:return a.age>b.age
+ return a.id<b.id
+
+static func fold_newborn(sim,parent,child) -> bool:
+ # A paid birth is recorded first. Only its excess daughter folds into its parent.
+ return commit(sim,parent,child,false,true)
+
+static func enforce_limit(sim) -> void:
+ if sim.remote_client:return
+ for family in living_families(sim).values():
+  if family.size()<=MAX_FAMILY_CELLS:continue
+  family.sort_custom(older)
+  # Youngest generations donate first; prefer their surviving older parent.
+  var donors: Array=family.duplicate();donors.reverse()
+  for donor in donors:
+   if family.size()<=MAX_FAMILY_CELLS:break
+   if managed(sim,donor):continue
+   var receiver=null
+   var record: Dictionary=sim._family_ledger(donor).record_for(donor.id)
+   for relative in family:
+    if relative==donor or not older(relative,donor):continue
+    if receiver==null:receiver=relative
+    if relative.id==int(record.get("parent",-1)):
+     receiver=relative;break
+   if receiver!=null and commit(sim,receiver,donor,false,true):family.erase(donor)
+
 static func step(sim) -> void:
  if sim.remote_client or sim.time<sim.merge_step_at:return
  var elapsed: float=clampf(sim.time-sim.merge_step_at+.5,0,5)
  sim.merge_step_at=sim.time+.5
+ enforce_limit(sim)
  for cell in sim.cells.duplicate():
   if cell.dead or cell.health<=0:continue
   var cues: Dictionary=cell.behavior.get("family_cues",{})
@@ -104,9 +143,15 @@ static func step(sim) -> void:
    if touching(sim,cell,donor):commit(sim,cell,donor)
    break
 
-static func commit(sim,receiver,donor,from_selection: bool=false) -> bool:
- if not eligible(sim,receiver,donor) or not detected(sim,receiver,donor.id):return false
- if not from_selection and not touching(sim,receiver,donor):return false
+static func commit(sim,receiver,donor,from_selection: bool=false,for_capacity: bool=false) -> bool:
+ if sim.remote_client or not eligible(sim,receiver,donor):return false
+ if for_capacity:
+  # The owner-authorized cap alone bypasses contact, cues, age and cooldown.
+  # Ordinary manual/autonomous merges keep all their existing sensory gates.
+  if not older(receiver,donor) or living_families(sim).get(receiver.lineage_id(),[]).size()<=MAX_FAMILY_CELLS:return false
+ else:
+  if not detected(sim,receiver,donor.id):return false
+  if not from_selection and not touching(sim,receiver,donor):return false
  # Eligibility is checked before any transfer. Growth has no space/balance cap.
  # GPU ownership is
  # released once for this rare explicit transaction; normal simulation stays resident.

@@ -47,7 +47,7 @@
       {
         "id": "offspring",
         "title": "Cell division",
-        "text": "Surplus tissue and ATP prepare division automatically. Open the small bud, then Divide. Choose Auto divide to keep dividing, or Start division now for just one daughter. If resources or clear space are missing, Divide stays highlighted until that one birth succeeds. Open it again to cancel. The ring fills with preparation; green means ready and amber means waiting for space. Daughters start with a basic oral groove and one leaf. Each parent and daughter gains 1 AP. A starving cell pauses preparation while it recovers.",
+        "text": "Surplus tissue and ATP prepare division automatically. Open the small bud, then Divide. Auto divide starts on for new cells. Switch it off to stop continuous division, or choose Start division now for just one daughter. If resources or clear space are missing, Divide stays highlighted until that one birth succeeds. Open it again to cancel. The ring fills with preparation; green means ready and amber means waiting for space. Daughters start with a basic oral groove and one leaf. Each parent and daughter gains 1 AP. Families can have up to 12 living cells. A daughter born above that limit immediately merges back into its parent, combining AP and resources with normal merge losses. A starving cell pauses preparation while it recovers.",
         "sources": []
       },
       {
@@ -673,7 +673,7 @@
         {
           "id": "division",
           "title": "Reproduction and AP",
-          "text": "Cells prepare division using surplus biomass and ATP. Bud → Divide offers continuous Auto divide or one Start division now request. A one-shot waits for resources and safe space, clears after one birth and never arms the daughter. New daughters have an oral groove and one ordinary leaf, paid from the material budget. Continuous auto starts off. A committed division gives 1 AP to each parent and daughter. These costs and AP awards are game rules.",
+          "text": "Cells prepare division using surplus biomass and ATP. Bud → Divide offers continuous Auto divide or one Start division now request. A one-shot waits for resources and safe space, clears after one birth and never arms the daughter. New daughters have an oral groove and one ordinary leaf, paid from the material budget. Auto divide starts on for new cells. Daughters inherit their parent’s setting; saved choices stay as you left them. A committed division gives 1 AP to each parent and daughter. A family keeps at most 12 living cells: an excess newborn merges back into its parent after the paid division. Existing oversized families merge younger unattended relatives into older ones until 12 remain, preferring their parent. Your controlled cell is protected. These costs, limits and AP awards are game rules.",
           "sources": [
             {
               "title": "Cell division",
@@ -833,7 +833,7 @@
         {
           "id": "family_fusion",
           "title": "Merging relatives",
-          "text": "Merge a relative into this cell through Family. Only members of the same lineage can merge. Selecting an unattended relative whose pheromones were received in the past five seconds merges it immediately, even in crowded water. Biomass and AP have no storage limit. Its image slides into your cell. Autonomous relatives still need physical contact to merge. The donor's organs are reabsorbed first using normal AP refunds. All remaining AP and internal food/gases transfer; 90% of the remaining body material and ATP are retained. Some material becomes waste and some ATP becomes heat. The receiving cell keeps its organs. Unattended family cells can merge on their own, more often in a crowd. A player's selected cell cannot be an automatic donor. Fusion earns no division AP. These yields and restrictions are game rules inspired by cell fusion.",
+          "text": "Merge a relative into this cell through Family. Only members of the same lineage can merge. Selecting an unattended relative whose pheromones were received in the past five seconds merges it immediately, even in crowded water. Biomass and AP have no storage limit. Its image slides into your cell. Autonomous relatives still need physical contact to merge. The donor's organs are reabsorbed first using normal AP refunds. All remaining AP and internal food/gases transfer; 90% of the remaining body material and ATP are retained. Some material becomes waste and some ATP becomes heat. The receiving cell keeps its organs. Unattended family cells can merge on their own, more often in a crowd. A player's selected cell cannot be an automatic donor. Fusion earns no division AP. The 12-cell family limit uses the same transfer: excess newborns return to their parent, and oversized families merge younger unattended cells into older relatives. These cap merges need no pheromone cue or contact. These yields and restrictions are game rules inspired by cell fusion.",
           "sources": [
             {
               "title": "Cell fusion and membrane merger",

@@ -452,6 +452,18 @@ const RELEASES=[
  "items":["Fixed a rare repair problem that could corrupt cell resources and interrupt the pond."],
  "footer":"The pond has been recovered from its last healthy save.",
  "button":"Back to the pond"
+},
+{
+ "id":"2026-10-19-stable-family-limit",
+ "audience":"stable",
+ "title":"What’s new in the pond",
+ "items":[
+  "Families now keep up to 12 living cells. If a division goes over the limit, the daughter merges straight back into its parent.",
+  "Larger families bring younger unattended relatives back into older cells. AP and resources combine through the usual merge.",
+  "Auto divide starts on for new cells. You can switch it off in Divide; saved choices stay as you left them."
+ ],
+ "footer":"Your pond, family progress and remaining cells carry on.",
+ "button":"Back to the pond"
 }
 ]
 const CURRENT=RELEASES[-1]
