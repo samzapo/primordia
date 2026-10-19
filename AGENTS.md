@@ -668,3 +668,18 @@ or resource state or loss of its required GPU, and must not rotate valid saves
 with NaN. Intentional infinity deadlines and NaN oral-angle sentinels are valid.
 Retain incident generations before same-pond checkpoint recovery; no reset,
 unrelated gameplay changes or new performance campaign follows from this fix.
+
+October19 main family-cap hotfix: read Revision75. Limit each lineage to12
+living cells through ordinary finite merges, never a reset/cull. Permit paid
+division and1+1AP first, then fold only its excess newborn into the parent
+before follow selection. Reconcile oversized saved families during authority
+ticks, youngest generations first and preferably into their older parent.
+Same-generation fallback uses age then ID. Never consume connected selected
+donors; retry protected excess later. Only cap merges bypass cues/contact/age/
+cooldown. Preserve merge yields/refunds, finite guards, lifetime counts,
+same-pond startup all-cell retention, accounts, keys, feedback and experimental.
+Update guide and stable-only notice; no rendering-speed campaign.
+
+October19 continuation: Auto divide starts on for new cells. Preserve saved
+choices and parent-to-daughter inheritance; one-shot still disables continuous
+auto. Maintain the cap, paid resource accounting and1+1AP.

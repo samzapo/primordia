@@ -881,6 +881,10 @@ func _write_metrics() -> void:
 	metrics["tick_budget_ms"]=1000.0/Engine.physics_ticks_per_second
 	metrics["automatic_reproduction"]=world.automatic_reproduction
 	metrics["minimum_living_cells"]=Population.MIN_LIVING
+	var family_sizes: Array=Sim.FamilyMerging.living_families(world).values().map(func(family):return family.size())
+	metrics["family_cell_limit"]=Sim.FamilyMerging.MAX_FAMILY_CELLS
+	metrics["largest_family_cells"]=family_sizes.max() if not family_sizes.is_empty() else 0
+	metrics["over_limit_families"]=family_sizes.filter(func(size):return size>Sim.FamilyMerging.MAX_FAMILY_CELLS).size()
 	metrics["automatic_lineage_restart"]=true;metrics["automatic_pond_restart"]=true
 	metrics["pond_restarts"]=pond_restarts;metrics["previous_world_id"]=previous_world_id;metrics["pond_archive"]=pond_archive
 	metrics["introduced_cells"]=introduced_cells;metrics["lineage_restarts"]=lineage_restarts

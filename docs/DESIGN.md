@@ -762,3 +762,13 @@ October18 Revision69 receptor steering: free Flight/Hunting/Toward family/Away f
 [Revision72](REVISION_72.md) makes player-selected family merge commit immediately from recent pheromone eligibility, without seeking or waiting for contact. Preserve uncapped biomass/AP, finite transfer and pull-in art; autonomous fusion still requires contact.
 
 [Revision73](REVISION_73.md) reduces redundant current-curve admission work while retaining full geometry, spacing, sample counts and all game state. Performance observations must distinguish actual phone FPS from viewport-matched native CPU diagnostics and idle server telemetry.
+
+
+### Twelve-cell family limit (October19,2026)
+
+[Revision75](REVISION_75.md) limits living relatives to12 through the existing
+finite fusion transaction. Paid divisions still complete; an excess daughter
+merges back into its parent immediately. Existing oversized families merge
+younger unattended relatives into older ones, preferring their parent. Protect
+connected selected cells, retry when necessary, and preserve all ordinary
+merge yields, AP, lifetime counts, pond identity and startup retention checks.

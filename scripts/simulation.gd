@@ -2163,17 +2163,18 @@ func _divide_paid(parent,ledger,dormant: bool=false,follow: bool=false,progress:
 	if ledger.progression!=null:mutation_offer=ledger.progression.divided(parent)
 	ledger.register(child,parent.id,child.generation,"active" if follow else "living",time)
 	cells.append(child)
-	if follow:
+	_record_sound("division",parent.position,parent.id)
+	ledger.notify("Cell divided."+" +1 AP each for parent and daughter."+(" Free mutation available in the nucleus." if mutation_offer else ""))
+	events.append({"type":"division","id":child.id,"parent":parent.id,"time":time,"material":quote.total_material,"reserve_used":quote.material,"body_transferred":quote.body_transfer,"oxygen_transferred":child.oxygen,"atp_used":20})
+	var folded: bool=FamilyMerging.fold_newborn(self,parent,child)
+	if follow and not folded:
 		var record: Dictionary = ledger.record_for(parent.id)
 		if not record.is_empty(): record.state = "living"
 		parent.role = "ancestor"
 		child.role = "player"
 		player = child
 		evolution.observe_successor(child)
-	if progress:evolution.offspring_id = child.id
-	_record_sound("division",parent.position,parent.id)
-	ledger.notify("Cell divided."+" +1 AP each for parent and daughter."+(" Free mutation available in the nucleus." if mutation_offer else ""))
-	events.append({"type":"division","id":child.id,"parent":parent.id,"time":time,"material":quote.total_material,"reserve_used":quote.material,"body_transferred":quote.body_transfer,"oxygen_transferred":child.oxygen,"atp_used":20})
+	if progress:evolution.offspring_id = parent.id if folded else child.id
 	return true
 
 func follow_family(identity: int) -> bool:

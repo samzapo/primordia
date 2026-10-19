@@ -24,7 +24,7 @@ func run() -> void:
  friendly_contacts()
  merge_gates()
  var sim=fixture();var cell=sim.player
- check(not cell.automatic_division,"All cells default to manual division")
+ check(cell.automatic_division,"New cells default to automatic division")
  var child=sim.make_offspring(cell,sim.offspring_quote(cell))
  check(child.count("photosynthesis")==1 and child.ap==0,"A paid daughter preview has one leaf without minting AP")
  check(absf(child.organic_mass()-sim.offspring_quote(cell).total_material)<.00001,"The division quote includes every starter organ material")
@@ -93,6 +93,7 @@ func run() -> void:
  check(not sim.FamilyMerging.request(sim,donor.id) and cell.ap==8,"Duplicate merging cannot repeat AP or contents")
  check(sim.lineage.total_cells==2 and sim.lineage.records.size()==1,"Merging neither awards a birth nor retains a deceased family portrait")
  check(sim.death_bursts.is_empty(),"Living reabsorption does not burst a toxin sac or play death")
+ cell.automatic_division=false # Explicit player choice must survive the new default.
  var restored=Codec.new().restore(Codec.new().capture(sim))
  check(restored.player.ap==8 and restored.player.merge_after==cell.merge_after and not restored.player.automatic_division,"AP, division choice and merge cooldown survive a checkpoint")
  # Navigation and weapons consume the same immutable cues independently.
