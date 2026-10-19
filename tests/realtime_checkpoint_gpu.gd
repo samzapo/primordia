@@ -1,5 +1,23 @@
 extends "res://tests/network_live.gd"
 ## Read a committed world into isolated test storage. Never write the source save.
+static func observer_credentials(authority,invitation: String) -> Array:
+	# Add known bearer aliases only inside the isolated test authority. Preserve
+	# every original account/session entry and every cell; a mature pond may
+	# have no unclaimed lineage left for a new fixture invitation.
+	var retained: Array=[]
+	for account in authority.accounts.values():
+		if authority.world.cells.any(func(cell):return cell.id==account.selected and not cell.dead):retained.append(account)
+	var messages: Array=[]
+	for i in 2:
+		var message: Dictionary={"op":"hello","snapshot_ack":true,"compact_cytoplasm":true,"cytoplasm_version":2}
+		if retained.is_empty():message.invite=invitation
+		else:
+			var token:=("isolated-aged-observer-"+str(i)).sha256_text()
+			authority.accounts[token.sha256_text()]=retained[i%retained.size()]
+			message.token=token
+		messages.append(message)
+	return messages
+
 func _initialize() -> void:run.call_deferred()
 func run() -> void:
 	root.size=Vector2i(64,64)
@@ -29,9 +47,16 @@ func run() -> void:
 	for i in 2:
 		var socket:=WebSocketPeer.new();socket.inbound_buffer_size=Protocol.MAX_FRAME;socket.outbound_buffer_size=65536
 		sockets.append(socket);socket.connect_to_url("ws://127.0.0.1:"+str(host.port))
-	check(await until(func():return sockets.all(func(socket):return socket.get_ready_state()==WebSocketPeer.STATE_OPEN)),"Two isolated saved-world observers connect")
-	for socket in sockets:socket.send_text(JSON.stringify({"op":"hello","invite":"bounded-aged-checkpoint-fixture","snapshot_ack":true,"compact_cytoplasm":true,"cytoplasm_version":2}))
-	check(await until(func():return not find_message(0,"welcome").is_empty() and not find_message(1,"welcome").is_empty()),"Saved-world test observers authenticate with fixture credentials")
+	var connected: bool=await until(func():return sockets.all(func(socket):return socket.get_ready_state()==WebSocketPeer.STATE_OPEN))
+	check(connected,"Two isolated saved-world observers connect")
+	if not connected:await finish_fixture();return
+	var original_accounts: int=host.accounts.size()
+	var credentials:=observer_credentials(host,"bounded-aged-checkpoint-fixture")
+	print("AGED_OBSERVERS ",JSON.stringify({"original_accounts":original_accounts,"resumed":credentials.filter(func(message):return message.has("token")).size()}))
+	for i in sockets.size():sockets[i].send_text(JSON.stringify(credentials[i]))
+	var authenticated: bool=await until(func():return not find_message(0,"welcome").is_empty() and not find_message(1,"welcome").is_empty())
+	check(authenticated,"Saved-world test observers authenticate with fixture credentials")
+	if not authenticated:await finish_fixture();return
 	for i in 2:
 		var welcome:=find_message(i,"welcome")
 		var cell=host._selected(host.accounts[welcome.token.sha256_text()])
@@ -48,6 +73,9 @@ func run() -> void:
 	var phases=JSON.parse_string(FileAccess.get_file_as_string(host.store.directory.path_join("health.json")))
 	print("AGED_AUTHORITY ",JSON.stringify({"simulation_hz":Engine.physics_ticks_per_second,"tick_budget_ms":1000.0/host.physics_hz,"source_world":saved.world_id,"simulation_wall_ratio":ratio,"tick_p95_ms":p95,"cells":host.world.cells.filter(func(cell):return not cell.dead).size(),"phase_mean_ms":phases.get("tick_phase_mean_ms",{}),"gpu":RenderingServer.get_video_adapter_name()}))
 	if ratio<.98 or ratio>1.02 or p95>1000.0/host.physics_hz:await diagnostic_warm_window()
+	await finish_fixture()
+
+func finish_fixture() -> void:
 	for socket in sockets:socket.close(-1)
 	host.running=false;host.listener.stop()
 	var gpu=host.world.resident.gpu;gpu.close();await gpu.closed

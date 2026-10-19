@@ -6,9 +6,9 @@ name: Primordia experimental instance
   workflow_dispatch:
     inputs:
       operation:
-        description: Deploy an update, or preserve and suspend the experimental pond
+        description: Deploy, suspend, or run isolated connection checks
         type: choice
-        options: [deploy, standby, network-check]
+        options: [deploy, standby, network-check, saved-world-check]
         default: deploy
       stable_revision:
         description: Optional exact deployed stable SHA for a standby-only repair
@@ -21,7 +21,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   deploy:
-    if: github.repository == 'samzapo/primordia' && github.actor == 'samzapo' && inputs.operation != 'standby' && inputs.operation != 'network-check'
+    if: github.repository == 'samzapo/primordia' && github.actor == 'samzapo' && inputs.operation != 'standby' && inputs.operation != 'network-check' && inputs.operation != 'saved-world-check'
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 50
     steps:
@@ -112,7 +112,7 @@ jobs:
           python3 "$HOME/.local/share/primordia-experimental/current/tools/verify_experimental.py" --restart
 
   network-check:
-    if: github.repository == 'samzapo/primordia' && github.actor == 'samzapo' && inputs.operation == 'network-check'
+    if: github.repository == 'samzapo/primordia' && github.actor == 'samzapo' && (inputs.operation == 'network-check' || inputs.operation == 'saved-world-check')
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 15
     steps:
@@ -137,6 +137,7 @@ jobs:
         shell: bash
         env:
           NETWORK_SOURCE: ${{ steps.network_source.outputs.path }}
+          CHECK_MODE: ${{ inputs.operation }}
           PRIMORDIA_BUILD_JOBS: "2"
           PRIMORDIA_INVITE: bounded-infrastructure-fixture
           PRIMORDIA_PERFORMANCE_WARNINGS: "1"
@@ -170,11 +171,17 @@ jobs:
           run(str(godot),"--headless","--path",".","--editor","--import","--quit",env=os.environ.copy())
           status=0
           try:
-              for attempt in range(3):
-                  print("SLOW_OBSERVER_ATTEMPT",attempt,flush=True)
-                  run("xvfb-run","-a","-s","-screen 0 1280x720x24 -nolisten tcp",str(godot),"--path",".",
+              if os.environ["CHECK_MODE"]=="saved-world-check":
+                  os.environ["PRIMORDIA_VERIFY_CHECKPOINT_DIR"]=str(roots[0]/"state")
+                  run("timeout","--signal=TERM","180s","xvfb-run","-a","-s","-screen 0 1280x720x24 -nolisten tcp",str(godot),"--path",".",
                       "--rendering-method","mobile","--rendering-driver","vulkan","--gpu-index","0","--resolution","64x64",
-                      "--disable-vsync","--max-fps","60","--script","tests/network_live.gd","--","--gpu","--slow-observer",env=os.environ.copy())
+                      "--disable-vsync","--max-fps","60","--script","tests/realtime_checkpoint_gpu.gd",env=os.environ.copy())
+              else:
+                  for attempt in range(3):
+                      print("SLOW_OBSERVER_ATTEMPT",attempt,flush=True)
+                      run("xvfb-run","-a","-s","-screen 0 1280x720x24 -nolisten tcp",str(godot),"--path",".",
+                          "--rendering-method","mobile","--rendering-driver","vulkan","--gpu-index","0","--resolution","64x64",
+                          "--disable-vsync","--max-fps","60","--script","tests/network_live.gd","--","--gpu","--slow-observer",env=os.environ.copy())
           except subprocess.CalledProcessError as error:status=error.returncode
           finally:
               after=identity()
