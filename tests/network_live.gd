@@ -30,9 +30,10 @@ func check(value: bool,message: String) -> void:
 	assertions+=1
 	if not value:
 		failures+=1;push_error("FAIL: "+message)
+		if host==null or host.world==null:return
 		print("NETWORK_FAILURE_STATE ",JSON.stringify({"publication":publication_state(),"message":message,"time":host.world.time,"tick":host.world.revision,"cameras":str(host.world.camera_views),"internal":str(host.world.interoceptive_cells),"peers":host.peers.values().map(func(p):return {"state":p.socket.get_ready_state(),"close":p.socket.get_close_code(),"reason":p.socket.get_close_reason(),"awaiting":p.get("awaiting_snapshot",-1),"serial":p.get("frame_serial",-1),"encoding":p.get("encoding_snapshot",-1),"view_tick":p.get("view_tick",-1),"coverage":str(host._delivery_coverage(p)),"budget":p.get("budget",-1),"view":str(p.view),"perception":p.get("perception",""),"selected":host.accounts[p.account].selected if host.accounts.has(p.account) else -1}),"clients":sockets.map(func(s):return {"state":s.get_ready_state(),"code":s.get_close_code(),"reason":s.get_close_reason()}),"deferred":deferred_acks,"withheld":withheld_acks}))
 func publication_state() -> Dictionary:
-	if host.world.resident==null:return {}
+	if host==null or host.world==null or host.world.resident==null:return {}
 	var r=host.world.resident;var g=r.gpu;var p=g._publication;var s=r.streaming
 	var kinds: Dictionary={}
 	for packet in r.pending:kinds[packet.kind]=int(kinds.get(packet.kind,0))+1
