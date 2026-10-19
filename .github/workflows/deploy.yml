@@ -5,6 +5,11 @@ name: Primordia persistent server CD
     paths-ignore: [docs/**, README.md, AGENTS.md, .github/workflows/target-probe.yml, .github/workflows/host-telemetry.yml]
   workflow_dispatch:
     inputs:
+      incident_operation:
+        description: Explicit incident containment; does not deploy or reset
+        type: choice
+        options: [none, quarantine-stable]
+        default: none
       allow_performance_warnings:
         description: Ship with known timing shortfalls; retain GPU, correctness and state checks
         type: boolean
@@ -16,7 +21,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   deploy:
-    if: github.repository == 'samzapo/primordia' && github.ref == 'refs/heads/main'
+    if: github.repository == 'samzapo/primordia' && github.ref == 'refs/heads/main' && inputs.incident_operation != 'quarantine-stable'
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 50
     steps:
@@ -170,3 +175,47 @@ jobs:
                   from verify_experimental import main
                   main(restart=False)
           PYTHON
+
+  quarantine-stable:
+    if: github.repository == 'samzapo/primordia' && github.actor == 'samzapo' && inputs.incident_operation == 'quarantine-stable'
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 4
+    steps:
+      - name: Stop corrupted authority and preserve incident generations
+        shell: bash
+        run: |
+          test "$RUNNER_NAME" = samzapo-desktop
+          test "$(hostname)" = samzapo-desktop
+          python3 - <<'PY'
+          import datetime,hashlib,json,os,pathlib,shutil,subprocess
+          from urllib.request import build_opener,ProxyHandler
+          from urllib.error import HTTPError
+          os.environ.setdefault("XDG_RUNTIME_DIR",f"/run/user/{os.getuid()}")
+          root=pathlib.Path.home()/".local/share/primordia-deploy"
+          assert root.is_dir() and root.stat().st_uid==os.getuid()
+          incident=root/"incidents"/("nonfinite-"+os.environ["GITHUB_RUN_ID"])
+          incident.mkdir(parents=True,mode=0o700)
+          def retained():
+              files=[root/"access-keys.json",*(root/"state/feedback").glob("*.json")]
+              return {str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in files if p.is_file()}
+          before=retained()
+          try:
+              with build_opener(ProxyHandler({})).open("http://127.0.0.1:8766/metrics",timeout=5) as r:live=json.load(r)
+          except HTTPError as r:live=json.load(r)
+          (incident/"metrics-before.json").write_text(json.dumps(live,indent=2))
+          journal=subprocess.run(["journalctl","--user","-u","primordia.service","--since","-30 minutes","--no-pager","-n","2200","-o","cat"],capture_output=True,text=True,timeout=15)
+          (incident/"journal.txt").write_text(journal.stdout[-900000:])
+          for phase in ["before-stop","stopped"]:
+              if phase=="stopped":subprocess.run(["systemctl","--user","stop","primordia.service"],check=True,timeout=90)
+              dest=incident/phase;dest.mkdir(mode=0o700)
+              for name in ["world-0.pworld","world-1.pworld","health.json"]:
+                  source=root/"state"/name
+                  if source.is_file():shutil.copy2(source,dest/name)
+          active=subprocess.check_output(["systemctl","--user","show","primordia.service","-p","ActiveState","--value"],text=True).strip()
+          assert active=="inactive" and before==retained()
+          manifest={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in (incident/"stopped").iterdir()}
+          backups=[{"path":str(p),"mtime":p.stat().st_mtime,"files":[{"name":f.name,"bytes":f.stat().st_size} for f in p.glob("*.pworld")]} for p in sorted(root.glob("before-update-*"),key=lambda p:p.stat().st_mtime)[-4:]]
+          report={"utc":datetime.datetime.now(datetime.timezone.utc).isoformat(),"active":active,"incident":str(incident),"current":str((root/"current").resolve()),"state_sha256":manifest,"retained_private_files":len(before),"backups":backups}
+          (incident/"manifest.json").write_text(json.dumps(report,indent=2))
+          print("QUARANTINED "+json.dumps(report))
+          PY
