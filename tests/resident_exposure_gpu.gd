@@ -39,13 +39,13 @@ func run() -> void:
 	var found: Dictionary=gpu.exchange_sync([],[],[],[lens],{"projection":false})
 	check(found.senses[0].valid,"Lens hit area remains usable when zoomed out")
 	var receipt: Dictionary=gpu.exchange_sync([cell],[],[],[],{"feeding":false,"exposure":true,"projection":false})
-	check(receipt.exposure.hits[0].size()==1,"Toxins spare inherited family")
+	check(receipt.exposure.hits[0].size()==2,"Toxins contact both foreign and inherited-family cells")
 	check(is_equal_approx(receipt.exposure.hits[0][0].amount,.2),"Finite toxin transferred exactly once")
-	check(receipt.exposure.hits[0][0].owner==6,"Damage credit retains chemical owner")
+	check(receipt.exposure.hits[0].map(func(hit):return hit.owner).has(5) and receipt.exposure.hits[0].map(func(hit):return hit.owner).has(6),"Damage credit retains chemical owner")
 	check(receipt.exposure.decoys[0].count==1 and is_equal_approx(receipt.exposure.decoys[0].amount,.13),"Only correctly facing decoy occupies receptor")
 	var again: Dictionary=gpu.exchange_sync([cell],[],[],[query("toxin",cell.position)],{"feeding":false,"exposure":true,"projection":false})
 	check(again.exposure.hits[0].is_empty() and again.exposure.decoys[0].count==0,"Contact receipts cannot double consume")
-	check(not again.senses[0].valid,"Neutralizer ignores remaining family toxin")
+	check(not again.senses[0].valid,"All contacted toxins are consumed, including family toxin")
 	gpu.close();await gpu.closed
 	# More than one compact receipt is drained before exclusion, with no damage
 	# or material dropped and no packet consumed by overlapping bodies twice.
@@ -67,6 +67,7 @@ func run() -> void:
 	await coarse_exposure()
 	await surface_assemblies()
 	print("RESIDENT_EXPOSURE_VALIDATION ",checks," checks")
+	print("RESIDENT EXPOSURE: %d checks, 0 failures" % checks)
 	quit()
 
 func coarse_exposure() -> void:
@@ -81,7 +82,7 @@ func coarse_exposure() -> void:
 	var options: Dictionary={"feeding":false,"exposure":true,"projection":false,"coarse":rates}
 	var receipt: Dictionary=gpu.exchange_sync([cell],[],[],[],options)
 	var expected: int=receipt.exposure.hits[0].size()+receipt.exposure.deferred
-	check(expected>128 and absf(expected-1024*(1-exp(-.2)))<40,"Offscreen toxin hazard is time-scaled and family-safe")
+	check(expected>128 and absf(expected-2048*(1-exp(-.2)))<40,"Offscreen toxin hazard applies equally to family and foreign packets")
 	var total: int=receipt.exposure.hits[0].size()
 	while receipt.exposure.deferred>0:
 		receipt=gpu.exchange_sync([cell],[],[],[],options)
@@ -101,12 +102,12 @@ func surface_assemblies() -> void:
 	data.append_array(packet(11,at,PI,.03))
 	var gpu=await setup(data,[{"slot":0,"owner":21,"lineage":21},{"slot":1,"owner":21,"lineage":21},{"slot":2,"owner":20,"lineage":20}])
 	var result: Dictionary=gpu.exchange_sync([cell],[],[],[],{"feeding":false,"exposure":true,"projection":false})
-	check(result.exposure.hits[0].size()==2,"Only foreign, correctly facing surface packets bind")
+	check(result.exposure.hits[0].size()==3,"Correctly facing surface packets bind regardless of family")
 	check(result.exposure.hits[0][0].kind==11 and result.exposure.hits[0][1].kind==12,"Exposure receipt retains surface species and ordered finite subunits")
 	var Surface=preload("res://scripts/surface_chemistry.gd")
 	for hit in result.exposure.hits[0]:
 		check(Surface.bind(cell,hit.kind,hit.amount,hit.angle),"GPU-bound subunits form the same finite CPU membrane complex")
-	check(absf(cell.surface_material()-.0675)<.000001,"Bound GPU chemical material is retained exactly")
+	check(absf(cell.surface_material()-.0975)<.000001,"Bound GPU chemical material is retained exactly")
 	var again: Dictionary=gpu.exchange_sync([cell],[],[],[],{"feeding":false,"exposure":true,"projection":false})
 	check(again.exposure.hits[0].is_empty(),"Surface packets cannot be consumed twice")
 	gpu.close();await gpu.closed

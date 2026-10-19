@@ -78,13 +78,16 @@ func run() -> void:
 	check(sim.particle_count()==count,"Repeated death cannot release a second toxin cloud")
 	var victim=Sim.Cell.new(700,toxins[0].p);var family=Sim.Cell.new(701,toxins[0].p);family.lineage=parent.lineage_id()
 	sim.cells=[victim,family];sim.camera_views=[Vector4(parent.position.x,parent.position.y,1500,1000)];sim.grid.rebuild(sim.particles);sim._toxin_contacts()
-	check(victim.health<100 and family.health==100,"Released toxin uses ordinary contact and family immunity rather than remote damage")
+	check(victim.health<100 and family.health==100,"An overlapping toxin parcel is consumed by one contacted cell only")
+	sim.cells=[family];sim.spawn_particle(sim.TOXIN,family.position,Vector2.ZERO,.1,parent.id);sim.grid.rebuild(sim.particles);sim._toxin_contacts()
+	check(family.health<100,"A separate actual toxin contact harms the emitting lineage too")
 	var bound=Sim.Cell.new(800);bound.add_organ("feeding",0,"graze",false)
 	var surface=preload("res://scripts/surface_chemistry.gd")
 	check(surface.bind(bound,sim.TAG,.03,0) and surface.bind(bound,sim.PORE_SUBUNIT,.0375,0),"Free pore pieces still bind into existing membrane assembly")
 	var complexes: Array=bound.surface_complexes.duplicate(true)
 	check(Sim.Catalog.decay(sim.TAG)==.8 and Sim.Catalog.decay(sim.PORE_SUBUNIT)==.8,"Both free pore species share the new short lifetime")
 	check(bound.surface_complexes==complexes,"Free-particle lifetime does not rewrite bound complexes")
+	queued_division()
 	await ui()
 	print("DIVISION ACCESS: %d assertions, %d failures" % [assertions,failures]);quit(0 if failures==0 else 1)
 func ui() -> void:
@@ -103,7 +106,54 @@ func ui() -> void:
 	var sim=game.world;funded(sim);sim.remote_client=true
 	sim.remote_division={"cell":sim.player.id,"ready":false,"progress":1.0,"reason":"The pond is full."}
 	game.cell_ui.open_context({"kind":"bud"});game.cell_ui.sync(0)
-	check(not game.cell_ui.choices[0].affordable and game.cell_ui.choices[0].description=="The pond is full." and game.cell_ui.choices[0].radial_progress==1 and not game.cell_ui.choices[0].progress_ready,"A partial browser camera uses authoritative readiness, not its local cell count")
+	check(game.cell_ui.choices[0].affordable and game.cell_ui.choices[0].description=="The pond is full." and game.cell_ui.choices[0].radial_progress==1 and not game.cell_ui.choices[0].progress_ready,"A partial browser camera uses authoritative readiness, not its local cell count")
+	# Readiness may arrive before the interpolated body snapshot catches up.
+	sim.remote_division["queued"]=true;sim.remote_division["automatic"]=true
+	var commands: Array=[]
+	sim.command_sink=func(action,args):commands.append({"action":action,"args":args})
+	game.cell_ui.open_context({"kind":"division"})
+	game.cell_ui.choices[0].pressed.emit();game.cell_ui.choices[1].pressed.emit()
+	check(commands.size()==2 and commands[0].action=="division_policy" and not commands[0].args.automatic and commands[1].action=="division_request" and not commands[1].args.active,"Browser toggle/cancel commands use the same authoritative mode shown by the buttons, even before body playback catches up")
+	sim.command_sink=Callable()
 	sim.remote_division.cell+=100
 	check(not sim.division_status().ready and sim.division_status().reason.contains("Checking"),"A previous selected body's readiness cannot enable a new body's division")
 	sim.remote_client=false;game.queue_free();await process_frame
+
+
+func queued_division() -> void:
+	var sim=fixture();sim.automatic_reproduction=true;var parent=sim.player
+	parent.brood_mass=0;parent.brood_energy=0;parent.automatic_division=true
+	var ap: int=parent.ap;var mass: float=total(sim);var random: int=sim.rng.state
+	check(sim.edit("division_request",{"active":true}) and parent.division_requested and not parent.automatic_division,"An unfunded manual request queues exactly one birth and supersedes continuous auto")
+	check(sim.cells.size()==1 and parent.ap==ap and total(sim)==mass and sim.rng.state==random,"Queuing alone spends/grants no material, AP or randomness")
+	var restored=Codec.new().restore(Codec.new().capture(sim))
+	check(restored.player.division_requested and not restored.player.automatic_division,"A queued single birth survives checkpoint and account-visible state restore")
+	funded(restored);var owner=restored.player
+	restored._step_reproduction()
+	check(restored.cells.size()==2 and not owner.division_requested and not owner.automatic_division and restored.evolution.offspring_id==restored.cells[-1].id,"The next funded safe opportunity commits once and clears its request")
+	var daughter=restored.cells[-1]
+	check(not daughter.division_requested and not daughter.automatic_division and owner.ap==ap+1 and daughter.ap==1,"A one-shot request is not inherited and awards exactly1AP per body")
+	funded(restored);owner.reproduction_retry_at=0;restored._step_reproduction()
+	check(restored.cells.size()==2 and owner.ap==ap+1,"Fresh funding cannot cause another automatic birth after the one-shot")
+	check(restored.request_division() and restored.cells.size()==3 and not owner.division_requested,"An already-ready manual request divides immediately without arming another birth")
+	owner.brood_mass=0;owner.brood_energy=0
+	check(restored.request_division() and restored.request_division(false) and not owner.division_requested,"The player can cancel a waiting request without changing resources")
+	check(restored.request_division() and restored.edit("division_policy",{"automatic":true}) and owner.automatic_division and not owner.division_requested,"Choosing continuous Auto divide replaces a pending one-shot")
+	check(not restored.edit("division_request",{"active":"true"}),"Untrusted request types are rejected")
+	# Old checkpoints do not gain an unsolicited division request.
+	var graph=Codec.new().capture(sim)
+	for record in graph.objects:
+		if record.kind=="cell":record.fields.erase("division_requested")
+	var legacy=Codec.new().restore(graph)
+	check(not legacy.player.division_requested,"An older cell restores with no queued birth")
+
+	# A funded but crowded request waits rather than disappearing.
+	sim=fixture();sim.automatic_reproduction=true;parent=sim.player;funded(sim)
+	var blocker=Sim.Cell.new(999,parent.position);blocker.body=10000000;blocker.update_geometry();blocker.membrane=Sim.Cell.Membrane.new(blocker.radius);sim.cells.append(blocker)
+	check(sim.request_division() and parent.division_requested and sim.cells.size()==2,"A funded but physically blocked manual request remains queued")
+	sim._step_reproduction();sim.cells.erase(blocker);sim.time+=.6;sim._step_reproduction()
+	check(sim.cells.size()==2 and not parent.division_requested,"The queued birth commits once when the obstruction clears")
+
+	sim=fixture();sim.player.division_requested=true;sim.begin_build()
+	var editing=sim.player;var original=sim.build_original
+	check(sim.request_division(false) and sim.player==editing and sim.build_original==original and not editing.division_requested,"Cancellation preserves the current local edit transaction and body identity")

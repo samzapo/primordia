@@ -17,13 +17,13 @@
       {
         "id": "build",
         "title": "Build and restore",
-        "text": "Open the Assembly or Chemistry factory for membrane organs. The three teal chambers with a small + are the Chemistry factory: open it from either view for mitochondria. Choosing an internal organ switches smoothly to Interoception so you can place it inside. The first added organelle is free, the second costs 1 AP, the third 2 AP, and so on. The oral groove does not count. Reabsorbing any added organelle returns the current build tier: four added organs return 3 AP, three return 2, and one returns 0. The oral groove does not count. Selling lowers the next price; restoration uses that same next price. While building, the resource strip shows your AP and the cost. AP belongs to this cell; relatives cannot spend it.",
+        "text": "Open Assembly for movement, armor and glands, Chemistry for internal organs and photosynthesis, or the purple Receptor factory for Flight, Hunting, Toward family and Away from family. All receptors cost 0 AP and do not raise other prices. Other added organs cost 0 AP for the first, 1 for the second, 2 for the third, and so on; the oral groove does not count. Reabsorbing one of four non-receptor organs returns 3 AP; from three it returns 2. Free receptors return no AP. AP belongs to this cell. Choosing an internal organ switches smoothly to Internal for placement.",
         "sources": []
       },
       {
         "id": "cell_details",
         "title": "Read the cell’s resources",
-        "text": "Open the ATP store for energy details. Chemistry factory → Food vacuoles explains digestion and waste. The nucleus and family menu show lineage progress.",
+        "text": "The ATP sac blinks amber when energy is critically low. A critically damaged membrane blinks coral. Open the ATP store for energy details. Chemistry factory → Food vacuoles explains digestion and waste. The nucleus and family menu show lineage progress.",
         "sources": []
       },
       {
@@ -41,13 +41,13 @@
       {
         "id": "behavior",
         "title": "Understand your cell’s instincts",
-        "text": "Nucleus → Behavior explains its instincts. Low ATP favors food, useful light or resting while food digests. Low biomass favors feeding or hunting. Healthy cells can hunt or explore. Harmful acid and attacks take priority; family traces help attacked cells spread out. The same instincts apply to every cell, using its own organs and local signals.",
+        "text": "Intent view starts on. Nucleus → Instinct toggles the live intention readout and direction arrow. Low ATP favors food, useful light or resting while food digests. Low biomass favors feeding or hunting. Healthy cells can hunt or explore. Harmful acid and attacks take priority; family traces help attacked cells spread out. The same instincts apply to every cell, using its own organs and local signals.",
         "sources": []
       },
       {
         "id": "offspring",
         "title": "Cell division",
-        "text": "Surplus tissue and ATP prepare division automatically. Open the small bud: the ring around Divide fills as tissue and ATP accumulate. Green means ready; amber means fully funded but waiting for clear water or room in the pond. Divide makes a living daughter; Investment and Family are available here too. There is no four-cell family limit, but division still needs clear water and room in the pond. Daughters start with a basic oral groove and inherit the parent’s investment strategy; Manual stays Manual. A starving cell pauses reproductive investment while it recovers.",
+        "text": "Surplus tissue and ATP prepare division automatically. Open the small bud, then Divide. Choose Auto divide to keep dividing, or Start division now for just one daughter. If resources or clear space are missing, Divide stays highlighted until that one birth succeeds. Open it again to cancel. The ring fills with preparation; green means ready and amber means waiting for space. Daughters start with a basic oral groove and one leaf. Each parent and daughter gains 1 AP. A starving cell pauses preparation while it recovers.",
         "sources": []
       },
       {
@@ -59,7 +59,7 @@
       {
         "id": "settings",
         "title": "Pause and personalize",
-        "text": "Pause/settings contains Player name, private bug reports and feature requests, Gameplay, Mechanics, music volume, text size, visual options and fullscreen. Pausing holds exactly what you see while the shared pond continues. Resume returns you to the live pond.",
+        "text": "Pause/settings contains Player name, private bug reports and feature requests, Gameplay, Mechanics, music volume, text size, visual options and fullscreen. Current display switches between broad moving Wave crests and continuous Streamlines. Pale marks show the water's combined motion; fading gold marks use the other style to show a passing current source. Pausing holds exactly what you see while the shared pond continues. Resume returns you to the live pond.",
         "sources": []
       },
       {
@@ -97,7 +97,7 @@
       {
         "id": "follow",
         "title": "Follow and look inside",
-        "text": "Tap Follow to center on your cell. Tap Interoception to look inside, or Exteroception to return to the pond. Inside, gestures stay relative to your cell and you can zoom much closer. Returning outside keeps your zoom within the pond view limits.",
+        "text": "Tap Follow to center on your cell. Tap Internal to look inside, or External to return to the pond. Inside, gestures stay relative to your cell and you can zoom much closer. Returning outside keeps your zoom within the pond view limits.",
         "sources": []
       },
       {
@@ -135,6 +135,11 @@
         "title": "Pause, resume and music",
         "text": "Tap Pause for the menu and Resume to return to the live view. Tap Enable music when shown, then Music to mute or resume; the slider changes volume.",
         "sources": []
+      },
+      {
+        "id": "family_tools",
+        "title": "Family and growth",
+        "text": "Tap Family to switch relatives. Merge zooms to nearby water: tap a bright relative to merge it into your current cell immediately. You do not need to travel to it. Only unattended relatives whose pheromones your cell received within the past five seconds are selectable; other cells are dim. Tap Cancel merge to leave. Swipe through long families, or use the up/down arrows. Open the division bud, then Divide for continuous Auto divide or a single queued birth. Investment shows all three strategies and whether this cell uses Family or an individual setting."
       }
     ],
     "desktop": [
@@ -147,7 +152,7 @@
       {
         "id": "follow",
         "title": "Follow and look inside",
-        "text": "Space toggles Follow / Free view outside the cell and recenters the cell frame inside. I switches Interoception / Exteroception.",
+        "text": "Space toggles Follow / Free view outside the cell and recenters the cell frame inside. I switches Internal / External.",
         "sources": []
       },
       {
@@ -185,6 +190,11 @@
         "title": "Pause, settings and display",
         "text": "P pauses or resumes your view. M opens or closes settings. F11 toggles fullscreen. S toggles sensed signals; F3 toggles the information overlay. Music and resource controls are in the cell and Pause menu.",
         "sources": []
+      },
+      {
+        "id": "family_tools",
+        "title": "Family and growth",
+        "text": "Click Family to switch relatives. Merge zooms to nearby water: click a bright relative to merge it into your current cell immediately. You do not need to travel to it. Only unattended relatives whose pheromones your cell received within the past five seconds are selectable; other cells are dim. Right-click or use Cancel merge to leave. Use the up/down arrows to scroll long families. Open the division bud, then Divide for continuous Auto divide or a single queued birth. Investment shows all three strategies and whether this cell uses Family or an individual setting."
       }
     ]
   },
@@ -222,7 +232,7 @@
         {
           "id": "photosynthesis",
           "title": "Carbon + light → food, biomass and oxygen",
-          "text": "Leaves use dissolved carbon and light to make food, biomass, oxygen and ATP. Air slowly replenishes carbon throughout the pond, with excess carbon returning to the air near a low local saturation. One healthy leaf can sustain a basic cell even in dim water; larger active builds need more leaves and efficient respiration. Sun and Shade still favor different light conditions. Most new food stays inside, with a little released into the pond. Attacks and damaging acid can still kill a cell.",
+          "text": "Leaves use dissolved CO2 and light to make food, biomass, oxygen and ATP. Air slowly replenishes carbon throughout the pond, with excess carbon returning to the air near a low local saturation. One healthy leaf can sustain a basic cell even in dim water; larger active builds need more leaves and efficient respiration. Sun and Shade still favor different light conditions. Most new food stays inside, with a little released into the pond. Attacks and damaging acid can still kill a cell.",
           "sources": [
             {
               "title": "Oxygen production in photosynthesis",
@@ -374,8 +384,8 @@
         },
         {
           "id": "toxin_contact",
-          "title": "Toxin + foreign cell → damage",
-          "text": "Toxin packets hurt cells outside their own lineage. A neutralizer can intercept them. Defense and repair compete with the attacker’s finite supplies.",
+          "title": "Toxin + cell → damage",
+          "text": "Toxin packets can hurt any cell they reach, including relatives and their source. A neutralizer can intercept them. Defense and repair compete with the attacker’s finite supplies.",
           "sources": [
             {
               "title": "Toxin–antitoxin binding",
@@ -405,7 +415,7 @@
         {
           "id": "decoys",
           "title": "Decoy + receptor → weaker sensing",
-          "text": "Foreign decoys temporarily occupy receptors. They can release on their own; ATP and repair help clear them sooner. Light seeking is separate.",
+          "text": "Decoys temporarily occupy receptors, including those of relatives. They can release on their own; ATP and repair help clear them sooner. Light seeking is separate.",
           "sources": [
             {
               "title": "Receptor recovery",
@@ -416,7 +426,7 @@
         {
           "id": "signals",
           "title": "Pheromones carry old reports",
-          "text": "Hunting and flight receptors read drifting reports of nearby cells. Reports age and expire; they do not reveal another cell’s live location. Family signatures help relatives recognize one another.",
+          "text": "Hunting and flight receptors read drifting reports of nearby cells. Reports age and expire; they do not reveal another cell’s live location. Family signatures help relatives recognize one another. Hunters still choose non-family targets, but stray toxin, pores and decoys can affect relatives.",
           "sources": [
             {
               "title": "Chemical signals in flowing habitats",
@@ -487,7 +497,7 @@
         {
           "id": "organ_hunting",
           "title": "Hunting receptor",
-          "text": "Follows pheromone reports of smaller or undefended foreign cells. It senses; glands provide the attack.",
+          "text": "Free Hunting receptors follow any detected non-family pheromone report, regardless of size or defenses. Glands provide the attack.",
           "sources": [
             {
               "title": "Chemical signals in flowing habitats",
@@ -498,7 +508,7 @@
         {
           "id": "organ_sensing",
           "title": "Flight receptor",
-          "text": "Responds to reports of threatening foreign cells. Escape takes priority over other steering.",
+          "text": "Free Flight receptors steer away from nearby toxin particles and armed non-family cells detected through pheromones. An unarmed cell’s size alone does not trigger flight.",
           "sources": [
             {
               "title": "Chemical signals in flowing habitats",
@@ -539,7 +549,7 @@
         {
           "id": "organ_poreforming",
           "title": "Pore-forming gland",
-          "text": "Releases tags and pore parts toward a local target report. Damage requires assembly on a foreign membrane.",
+          "text": "Releases tags and pore parts toward a local target report. Damage requires assembly on an actual membrane, including a relative’s.",
           "sources": [
             {
               "title": "Structure of a membrane pore",
@@ -591,7 +601,7 @@
         {
           "id": "organ_mitochondrion",
           "title": "Mitochondrion",
-          "text": "Sits inside the cell and extracts more ATP from food when oxygen is nearby. It can redirect some food from growth into energy; it never adds fuel. Without oxygen, fermentation stays unchanged.",
+          "text": "Sits inside the cell and helps recover more ATP from food and nearby oxygen without reducing biomass growth. Each healthy mitochondrion adds 50% to ordinary oxygen-supported digestion: one gives 1.5x ATP, two give 2x, up to 5x. Damage reduces its benefit. It has a small upkeep cost. Direct leaf ATP and fermentation are unchanged; exhausted food cannot make extra energy.",
           "sources": [
             {
               "title": "The mitochondrion",
@@ -620,6 +630,28 @@
               "url": "https://www.nature.com/articles/s41598-020-61086-z"
             }
           ]
+        },
+        {
+          "id": "organ_family_toward",
+          "title": "Toward family receptor",
+          "text": "A free receptor from the purple Receptor factory. Steers toward locally detected family pheromone trails. Food, energy recovery and danger take priority. It needs movement organs to swim; it cannot locate relatives that it has not sensed.",
+          "sources": [
+            {
+              "title": "Chemical sensing under flow",
+              "url": "https://www.nature.com/articles/s41467-023-44267-y"
+            }
+          ]
+        },
+        {
+          "id": "organ_family_away",
+          "title": "Away from family receptor",
+          "text": "A free receptor from the purple Receptor factory. Steers away from locally detected family pheromone trails, helping relatives spread out. Survival needs take priority. Free receptors do not raise the next organelle’s AP price and return no AP when reabsorbed.",
+          "sources": [
+            {
+              "title": "Chemical sensing under flow",
+              "url": "https://www.nature.com/articles/s41467-023-44267-y"
+            }
+          ]
         }
       ]
     },
@@ -641,7 +673,7 @@
         {
           "id": "division",
           "title": "Reproduction and AP",
-          "text": "Surplus biomass and ATP automatically grow a daughter inside the cell. A funded cell divides when there is clear water and the pond is below its population limit; families are not limited to four cells. The bud explains what is missing. Each committed division gives the parent 1 AP and the daughter 1 AP; each cell’s first added organelle costs 0 AP, its second 1 AP, its third 2 AP, and so on. The oral groove does not count. Reabsorbing any added organelle returns the current build tier: four added organs return 3 AP, three return 2, and one returns 0. The oral groove does not count. Selling lowers the next price; restoring an absent organ uses the next price. AP is a game resource. Daughters start with a basic oral groove and rebuild their own organs. They inherit the parent’s investment choice; Manual stays Manual. AP is stored separately by each cell. Switching family members shows that cell’s own balance.",
+          "text": "Cells prepare division using surplus biomass and ATP. Bud → Divide offers continuous Auto divide or one Start division now request. A one-shot waits for resources and safe space, clears after one birth and never arms the daughter. New daughters have an oral groove and one ordinary leaf, paid from the material budget. Continuous auto starts off. A committed division gives 1 AP to each parent and daughter. These costs and AP awards are game rules.",
           "sources": [
             {
               "title": "Cell division",
@@ -706,7 +738,7 @@
         {
           "id": "npc_growth",
           "title": "Other cells develop too",
-          "text": "Every cell defaults to Manual. Opt into Hunter, Producer or Grazer through Investment. Unattended cells use their own AP to build complementary organs or reabsorb unsuitable and excess organs while retaining essential food and energy support. Automatic buying and reabsorption share a one-minute cooldown per cell. Daughters inherit the chosen strategy, including Manual. Your selected cell stays manual. These are game rules.",
+          "text": "Every cell defaults to Manual investment. Choose Hunter, Producer or Grazer for unattended cells; each uses its own AP and can make one purchase or Reabsorb action per minute. Family is the default, while individual cell settings stay separate. Use family returns a cell to that default. Daughters follow Family when their parent does, or keep a parent's individual exception. Your selected cell does not spend AP automatically.",
           "sources": []
         }
       ]
@@ -718,7 +750,7 @@
         {
           "id": "currents",
           "title": "Currents and plants",
-          "text": "Swimming and feeding disturb the water, which carries chemical parcels. Plants damp flow; cells meet plant branches while chemistry can pass through. This is a stylized fluid world, not a calibrated microscopic-water model.",
+          "text": "Broad currents carry chemical parcels through the pond. Swimming and feeding disturb the water locally. Plants damp flow; cells meet plant branches while chemistry can pass through. This is a stylized fluid world, not a calibrated microscopic-water model.",
           "sources": [
             {
               "title": "Life at low Reynolds number",
@@ -748,7 +780,7 @@
         {
           "id": "views",
           "title": "Inside and outside views",
-          "text": "Exteroception shows exterior chemistry. Interoception focuses on the followed cell’s contents and dims the exterior. The rest of the pond keeps evolving.",
+          "text": "External shows exterior chemistry. Internal focuses on the followed cell’s contents and dims the exterior. The rest of the pond keeps evolving.",
           "sources": []
         },
         {
@@ -771,7 +803,7 @@
         {
           "id": "cell_instincts",
           "title": "Shared instincts, different bodies",
-          "text": "Every cell uses the same priorities: escape harm, recover ATP, rebuild biomass, then hunt or explore. Food and prey must be sensed locally. Leaves seek useful light; a flight receptor can sense harmful acidity. A hit can trigger a short retreat. Received family traces help attacked cells spread out. Low reserves recover through a quiet range before the goal changes. Resting stops active swimming while real digestion continues. These priorities and thresholds are game choices, not a literal biological brain.",
+          "text": "Intent view starts on. Nucleus → Instinct toggles the current intention and direction arrow on or off. This only changes what you see. All cells escape harm, recover ATP, rebuild biomass, then hunt or explore using their actual organs and locally received chemical, light and acidity signals. Unattended relatives can follow family traces to merge; crowding makes this more likely.",
           "sources": [
             {
               "title": "Chemical sensing under flow",
@@ -784,6 +816,43 @@
             {
               "title": "Responses to acidity",
               "url": "https://www.nature.com/articles/s42003-024-06698-1"
+            }
+          ]
+        },
+        {
+          "id": "surface_gases",
+          "title": "Air, CO2 and oxygen",
+          "text": "CO2 enters the water gradually from the air. A much smaller amount of oxygen also dissolves from air; leaves produce oxygen through photosynthesis. Faster-moving water exchanges gases faster, with a small background exchange in still water. The gases remain real moving parcels that must reach the cell. Saturation levels, parcel sizes and the use of fluid speed as a surface-mixing cue are game choices.",
+          "sources": [
+            {
+              "title": "Air–water oxygen exchange",
+              "url": "https://www.usgs.gov/publications/dissolved-oxygen-chapter-6"
+            }
+          ]
+        },
+        {
+          "id": "family_fusion",
+          "title": "Merging relatives",
+          "text": "Merge a relative into this cell through Family. Only members of the same lineage can merge. Selecting an unattended relative whose pheromones were received in the past five seconds merges it immediately, even in crowded water. Biomass and AP have no storage limit. Its image slides into your cell. Autonomous relatives still need physical contact to merge. The donor's organs are reabsorbed first using normal AP refunds. All remaining AP and internal food/gases transfer; 90% of the remaining body material and ATP are retained. Some material becomes waste and some ATP becomes heat. The receiving cell keeps its organs. Unattended family cells can merge on their own, more often in a crowd. A player's selected cell cannot be an automatic donor. Fusion earns no division AP. These yields and restrictions are game rules inspired by cell fusion.",
+          "sources": [
+            {
+              "title": "Cell fusion and membrane merger",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3739301/"
+            }
+          ]
+        },
+        {
+          "id": "mild_acidity",
+          "title": "Acid can help—and harm",
+          "text": "Mild acidity helps nutrients join and digestive enzymes recycle waste. Joined food can deliver a larger share of its existing fuel as ATP; spent food cannot be refueled this way. Excess acid costs ATP and damages cells. Buffer/repair glands respond to harmful exposure, protecting the cell without immediately erasing useful mild acidity. Water tint and reaction flashes show the chemistry.",
+          "sources": [
+            {
+              "title": "Acid-dependent digestive enzyme activity",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC6027330/"
+            },
+            {
+              "title": "Cellular cost of acid stress",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3678083/"
             }
           ]
         }

@@ -66,7 +66,7 @@ static func _family(check: Callable) -> void:
 	sim.player.target_memory = 1
 	sim._sense(sim.player,DT)
 	check.call(sim.player.target_memory == 0,"A remembered family signal cannot survive a lineage handoff")
-	# Family recognition applies to physical chemical-contact events.
+	# Family recognition affects targeting, not actual chemical contacts.
 	for attacker in [parent,child]:
 		var other = child if attacker == parent else parent
 		sim.particles.clear()
@@ -74,6 +74,9 @@ static func _family(check: Callable) -> void:
 		var at: Vector2 = other.position+Vector2.RIGHT*other.radius
 		sim.spawn_particle(sim.TAG,at,Vector2.ZERO,0.03,attacker.id)
 		sim.particles[-1].direction=Vector2.LEFT
-		var hp: float=other.health
+		var hp: float=other.health+other.organs.reduce(func(total,o):return total+o.hp,0.0)
 		sim._surface_contacts()
-		check.call(other.health==hp and other.surface_complexes.is_empty(),"Parent/child chemical attacks are harmless in both directions")
+		check.call(other.surface_complexes.size()==1,"Family tags bind through actual membrane contact in both directions")
+		for i in 4:Sim.Cell.Surface.bind(other,sim.PORE_SUBUNIT,.0375,0,attacker.id)
+		Sim.Cell.Surface.advance(other,.1,sim)
+		check.call(other.health+other.organs.reduce(func(total,o):return total+o.hp,0.0)<hp,"Completed family pores damage the actual contacted membrane or covering organ")

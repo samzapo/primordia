@@ -57,7 +57,9 @@ func run() -> void:
  scene._update_world(1)
  check(scene.views[cell.id].art.colors[1].is_equal_approx(Color("#23dc7e")),"Every viewed member reads its lineage’s chosen body color")
  await investment_input(scene)
+ await leaf_selection(scene)
  await family_portraits(scene)
+ await receptor_factory_controls(scene)
  await family_grid(scene)
  vp.queue_free();scene.queue_free();await process_frame
  print("FEEDBACK LATEST GPU: %d assertions, %d failures" % [assertions,failures]);quit(0 if failures==0 else 1)
@@ -264,13 +266,67 @@ func family_grid(scene) -> void:
   check(ui.context.is_empty() and not picker.visible,"Actual pointer closes the family grid without a server response: %s context=%s viewport=%s close=%s hovered=%s" % [setting,ui.context,scene.get_viewport_rect(),picker.close_button.get_global_rect(),root.gui_get_hovered_control()])
  # A very large family keeps every entry while only its portrait area scrolls.
  family_fixture(scene,64)
- root.size=Vector2i(390,500);root.content_scale_size=Vector2i(390,500)
- scene.touch_zoom.enabled=true;scene.touch_zoom.pixels=1;scene.preferences.hud_scale=1
- scene._update_world(1);ui.open_context({"kind":"lineage"})
- for frame in 6:ui.sync(0);await process_frame
  var picker=ui.family_picker
+ for setting in [{"logical":Vector2i(574,1106),"pixels":1.0},{"logical":Vector2i(1170,2100),"pixels":3.0},{"logical":Vector2i(390,500),"pixels":1.0}]:
+  root.size=Vector2i(Vector2(setting.logical)/setting.pixels);root.content_scale_size=setting.logical
+  scene.touch_zoom.enabled=true;scene.touch_zoom.pixels=setting.pixels;scene.preferences.hud_scale=1
+  scene._update_world(1);ui.open_context({"kind":"lineage"})
+  for frame in 6:ui.sync(0);await process_frame
+  check(Rect2(Vector2.ZERO,Vector2(setting.logical)).encloses(picker.get_global_rect()),"All64 portraits stay in a bounded panel after viewport resizing: "+str(picker.get_global_rect()))
+  check(picker.get_global_rect().encloses(picker.down.get_global_rect()) and picker.get_global_rect().encloses(picker.close_button.get_global_rect()),"Close and lower arrow stay inside the visible panel")
  check(ui.choices.size()==64 and picker.scroll.get_v_scroll_bar().max_value>picker.scroll.size.y,"An overflowing family keeps all 64 entries in one scrollable menu: count=%d viewport=%s columns=%d panel=%s max=%f page=%f" % [ui.choices.size(),scene.get_viewport_rect(),picker.grid.columns,picker.get_global_rect(),picker.scroll.get_v_scroll_bar().max_value,picker.scroll.get_v_scroll_bar().page])
+ check(picker.down.visible and picker.up.visible and picker.up.disabled and not picker.down.disabled,"Overflow displays fixed vector arrow controls with correct end states")
  var close_at: Vector2=picker.close_button.global_position
+ var original_id: int=scene.world.player.id
+ var start: Vector2=picker.scroll.get_global_rect().get_center()
+ var touch:=InputEventScreenTouch.new();touch.index=0;touch.position=start;touch.pressed=true
+ root.push_input(touch,true)
+ for i in 8:
+  var drag:=InputEventScreenDrag.new();drag.index=0;drag.position=start-Vector2(0,(i+1)*18);drag.relative=Vector2(0,-18)
+  root.push_input(drag,true);await process_frame
+ var release_touch: InputEventScreenTouch=touch.duplicate();release_touch.pressed=false;release_touch.position=start-Vector2(0,144)
+ root.push_input(release_touch,true)
+ for frame in 3:ui.sync(0);await process_frame
+ check(picker.scroll.scroll_vertical>=130 and scene.world.player.id==original_id and not ui.context.is_empty(),"A real finger swipe scrolls portraits without selecting a relative or moving the world")
+ # Swipes may start on pictures, fixed header buttons or the panel margin.
+ for region in ["portrait","title","merge","close","margin"]:
+  picker.scroll.scroll_vertical=200
+  for frame in 3:await process_frame
+  var swipe_start: Vector2
+  match region:
+   "portrait":
+    var visible_choices: Array=ui.choices.filter(func(choice):return picker.scroll.get_global_rect().encloses(choice.get_global_rect()))
+    check(not visible_choices.is_empty(),"An actual visible portrait is available for swipe capture")
+    if visible_choices.is_empty():continue
+    swipe_start=visible_choices[0].get_global_rect().get_center()
+   "title":swipe_start=picker.title.get_global_rect().get_center()
+   "merge":swipe_start=picker.merge_button.get_global_rect().get_center()
+   "close":swipe_start=picker.close_button.get_global_rect().get_center()
+   "margin":swipe_start=picker.get_global_rect().position+Vector2(2,60)
+  var before_swipe: int=picker.scroll.scroll_vertical
+  var begin:=InputEventScreenTouch.new();begin.index=0;begin.position=swipe_start;begin.pressed=true
+  root.push_input(begin,true)
+  for i in 6:
+   var move:=InputEventScreenDrag.new();move.index=0;move.position=swipe_start+Vector2(0,(i+1)*12);move.relative=Vector2(0,12)
+   root.push_input(move,true);await process_frame
+  var finish: InputEventScreenTouch=begin.duplicate();finish.pressed=false;finish.position=swipe_start+Vector2(0,72)
+  root.push_input(finish,true)
+  for frame in 3:ui.sync(0);await process_frame
+  check(picker.scroll.scroll_vertical<=before_swipe-65 and not ui.context.is_empty() and scene.world.player.id==original_id and not scene.merge_selecting(),"A swipe starting on %s scrolls without activating its button or selecting a cell" % region)
+ picker.scroll.scroll_vertical=0
+ click(picker.down.get_global_rect().get_center())
+ for frame in 3:await process_frame
+ check(picker.scroll.scroll_vertical>0,"Actual pointer on the down arrow scrolls a family row")
+ click(picker.up.get_global_rect().get_center())
+ for frame in 3:await process_frame
+ check(picker.scroll.scroll_vertical==0,"Actual pointer on the up arrow returns to the first row")
+ for button in [picker.down,picker.up]:
+  var arrow_touch:=InputEventScreenTouch.new();arrow_touch.index=0;arrow_touch.position=button.get_global_rect().get_center();arrow_touch.pressed=true
+  root.push_input(arrow_touch,true)
+  var arrow_release: InputEventScreenTouch=arrow_touch.duplicate();arrow_release.pressed=false;root.push_input(arrow_release,true)
+  for frame in 3:await process_frame
+  check((picker.scroll.scroll_vertical>0 if button==picker.down else picker.scroll.scroll_vertical==0) and picker.repeat_direction==0,"Touch arrow taps still scroll one row and release their hold after panel capture")
+
  var at: Vector2=picker.scroll.get_global_rect().get_center()
  for i in 6:
   var wheel:=InputEventMouseButton.new();wheel.button_index=MOUSE_BUTTON_WHEEL_DOWN;wheel.pressed=true;wheel.position=at;wheel.global_position=at
@@ -293,4 +349,66 @@ func family_grid(scene) -> void:
  for frame in 3:await process_frame
 
  check(scene.world.player.id==relative_id,"The last scrolled portrait still switches through the validated family action")
- ui.close_context()
+ ui.open_context({"kind":"lineage"})
+ for frame in 6:ui.sync(0);await process_frame
+ picker.scroll.scroll_vertical=0
+ for frame in 3:await process_frame
+ var first=ui.choices[0];var first_id: int=first.get_meta("family_id")
+ var tap:=InputEventScreenTouch.new();tap.index=0;tap.position=first.get_global_rect().get_center();tap.pressed=true
+ root.push_input(tap,true)
+ var release_tap: InputEventScreenTouch=tap.duplicate();release_tap.pressed=false;root.push_input(release_tap,true)
+ for frame in 3:await process_frame
+ check(scene.world.player.id==first_id,"A real finger tap after scrolling still selects exactly the intended living relative")
+ ui.open_context({"kind":"lineage"})
+ for frame in 3:ui.sync(0);await process_frame
+ var close_touch:=InputEventScreenTouch.new();close_touch.index=0;close_touch.position=picker.close_button.get_global_rect().get_center();close_touch.pressed=true
+ root.push_input(close_touch,true)
+ var close_release: InputEventScreenTouch=close_touch.duplicate();close_release.pressed=false;root.push_input(close_release,true)
+ for frame in 3:await process_frame
+ check(ui.context.is_empty() and not picker.visible,"A real finger tap still activates Close after whole-panel swipe capture")
+
+func leaf_selection(scene) -> void:
+ var cell=scene.world.player
+ if cell.count("photosynthesis")==0:cell.add_organ("photosynthesis",1,"graze",false)
+ var leaf: Dictionary=cell.organs.filter(func(o):return o.kind=="photosynthesis")[0]
+ for mobile in [false,true]:
+  root.content_scale_size=Vector2i.ZERO;root.size=Vector2i(390,844) if mobile else Vector2i(1280,800)
+  scene.touch_zoom.enabled=mobile;scene.touch_zoom.pixels=1;scene.preferences.hud_scale=1
+  leaf.mutation="shade_leaf";scene.cell_ui.open_context({"kind":"organ","id":leaf.id})
+  for frame in 4:scene.cell_ui.sync(0);await process_frame
+  var options: Array=scene.cell_ui.choices.filter(func(choice):return choice.caption.begins_with("Sun"))
+  check(options.size()==1 and not options[0].disabled,"Sun is an available ordinary specialization on both platforms")
+  if options.is_empty():continue
+  click(options[0].get_global_rect().get_center())
+  for frame in 3:scene.cell_ui.sync(0);await process_frame
+  check(cell.organ_by_id(leaf.id).mutation=="sun_leaf","Actual pointer commits Sun specialization to the selected leaf")
+  scene.cell_ui.close_context()
+
+func receptor_factory_controls(_previous_scene) -> void:
+ _previous_scene.hide();_previous_scene.ui.hide()
+ var scene=load("res://scenes/pond.tscn").instantiate();scene.use_particle_pool=false;scene.preferences.persist=false
+ root.add_child(scene);scene.set_process(false);scene.set_physics_process(false);scene.music.enabled=false;scene.music.player.stop()
+ var ui=scene.cell_ui
+ family_fixture(scene,1)
+ var cell=scene.world.player;cell.ap=0
+ for mobile in [false,true]:
+  root.content_scale_size=Vector2i.ZERO;root.size=Vector2i(412,915) if mobile else Vector2i(1280,800)
+  scene.touch_zoom.enabled=mobile;scene.touch_zoom.pixels=1;scene.preferences.hud_scale=1
+  for mode in ["exteroception","interoception"]:
+   scene.perception=mode;scene.camera_locked=true;scene.camera_offset=Vector2.ZERO;scene.manual_zoom=4;scene.build_open=true;scene.camera_followed_id=-1;scene.camera_has_pose=false
+   scene.camera_motion.cancel()
+   for frame in 6:scene._layout();scene._update_world(1);ui.sync(0);await process_frame
+   var at: Vector2=ui.screen_at({"kind":"receptors"})
+   var pick: Dictionary=ui.pick(at)
+   check(pick.get("kind","")=="receptors" or pick.get("targets",[]).any(func(item):return item.kind=="receptors"),"The receptor factory is a real reachable click point in both views and platforms: %s at=%s visible=%s" % [pick,at,ui.interior.visible])
+   ui.open_context({"kind":"receptors"})
+   for frame in 5:ui.sync(0);await process_frame
+   check(ui.choices.map(func(choice):return choice.kind)==["sensing","hunting","family_toward","family_away"] and ui.choices.all(func(choice):return choice.ap_cost==0 and not choice.disabled),"All four receptor pictures show free available construction at zero AP")
+   if OS.has_environment("PRIMORDIA_RECEPTOR_CAPTURE"):root.get_texture().get_image().save_jpg(OS.get_environment("PRIMORDIA_RECEPTOR_CAPTURE")+("-mobile.jpg" if mobile else "-desktop.jpg"),.85)
+   var choice=ui.choices[2]
+   click(choice.get_global_rect().get_center())
+   for frame in 3:ui.sync(0);await process_frame
+   check(scene.selected==15 and not scene.placement_status().contains("Needs") and ui.mobile_stocks.text.contains("Cost 0 AP") if mobile else scene.selected==15 and not scene.placement_status().contains("Needs"),"Actual factory choice enters ordinary zero-AP placement without switching cell")
+   scene._cancel_placement()
+ ui.close_context();scene.queue_free();await process_frame
+ _previous_scene.show();_previous_scene.ui.show()

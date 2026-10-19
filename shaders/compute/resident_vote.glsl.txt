@@ -65,7 +65,7 @@ void main(){
    float acid=sample_acid(lp.xy);
    if(pc.mode!=3u||!eligible(pv.w,bv.w,pm,bm,acid))continue;
    bool enzyme=(pv.w==6.&&bv.w==2.)||(pv.w==2.&&bv.w==6.)||(pv.w==0.&&bv.w==0.);
-   float threshold=.5+(enzyme?.46*pow(clamp(abs(acid-.4)/.4,0.,1.),2.):0.);
+   float threshold=.5+(enzyme?.46*pow(clamp(abs(acid-.25)/.25,0.,1.),2.):0.);
    float alignment=min(dot(vec2(cos(lp.z),sin(lp.z)),n),dot(vec2(cos(hp.z),sin(hp.z)),-n));
    if(alignment<threshold)continue;
    // Quantized alignment preference; random ordering only within equal scores.

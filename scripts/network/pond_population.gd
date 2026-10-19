@@ -18,6 +18,7 @@ static func introduce(world,player: bool=false):
 	cell.update_geometry()
 	cell.membrane=Sim.Cell.Membrane.new(cell.radius,absi(world.seed_value*1000003+cell.id*9176))
 	cell.add_organ("feeding",0 if player else 1.4,"graze",false)
+	if player:cell.add_organ("photosynthesis",PI,"graze",false)
 	if not player:
 		cell.add_organ("propulsion",PI,"graze",false)
 		cell.add_organ("photosynthesis",0,"graze",false)

@@ -33,6 +33,14 @@ func run() -> void:
 	check("2026-10-17-stable-growing-families" in stable_ids and "2026-10-17-stable-growing-families" not in experimental_ids,"The main growing-family update does not replay in experimental")
 	for id in ["2026-10-17-family-grid","2026-10-17-family-pictures"]:
 		check(id not in stable_ids and id in experimental_ids,"Experimental playtest notices stay out of the stable queue")
+	var promoted:=Notes.pending_all({"seen_release":"2026-10-17-stable-renewable-carbon"},"stable")
+	check(promoted.size()==1 and promoted[0].id=="2026-10-18-stable-life-and-currents","The whole experimental batch becomes one consolidated main notice")
+	check(promoted[0].id not in experimental_ids,"The main summary never enters the experimental queue")
+	for release in Notes.RELEASES:
+		if release.id.begins_with("2026-10-18-") and release.id!=promoted[0].id:
+			check(release.id not in stable_ids,"Iterative playtest notices never leak into main")
+	var returning: Dictionary={"seen_release":"2026-10-18-smoother-current-drawing"}
+	check(Notes.pending_all(returning,"stable").size()==1 and Notes.acknowledge(returning,promoted[0].id,"stable") and Notes.pending_all(returning,"stable").is_empty(),"A player with the latest experimental acknowledgement clears main’s summary once")
 	var before_hidden: Dictionary={"seen_release":"2026-10-16-rippling-sunlight"}
 	check(Notes.pending(before_hidden,"stable").id=="2026-10-16-pond-feedback","Main skips the hidden announcement in order")
 	check(not Notes.acknowledge(before_hidden,experimental_id,"stable") and before_hidden.seen_release=="2026-10-16-rippling-sunlight","A hidden notice cannot mutate main acknowledgement progress")

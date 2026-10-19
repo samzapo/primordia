@@ -49,7 +49,7 @@ func run() -> void:
 	game._toggle_build();game.cell_ui.open_context({"kind":"assembly"})
 	await process_frame
 	game.cell_ui.sync(0)
-	check(game.cell_ui.choices.size()==8 and game.cell_ui.choices.all(func(choice):return choice.get_parent()==game.cell_ui.mobile_flow),"Mobile assembly exposes every available organ in the top tray")
+	check(game.cell_ui.choices.size()==6 and game.cell_ui.choices.all(func(choice):return choice.get_parent()==game.cell_ui.mobile_flow),"Mobile Assembly exposes its complete non-receptor set in the top tray")
 	check(game.touch_zoom.pause_button.get_global_rect().position.y>=game.cell_ui.mobile_menu_height,"Opening a top tray moves the utility controls below it immediately")
 	check(game.cell_ui.mobile_menu_height>0 and game.cell_ui.mobile_tray.position.y<30,"Mobile action menus are attached to the top of the screen")
 	check(game.cell_ui.mobile_resources.visible and game.cell_ui.mobile_stocks.text.contains("AP") and game.cell_ui.mobile_stocks.text.contains("ATP"),"Mobile stock display is visible without hovering")

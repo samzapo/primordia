@@ -12,6 +12,7 @@ uniform sampler2D light_map : filter_linear, repeat_enable;
 uniform vec2 camera;
 uniform float camera_rotation = 0.0;
 uniform bool interoception = false;
+uniform bool merge_selecting = false;
 uniform bool focus_valid = false;
 uniform sampler2D focus_mask : filter_linear, repeat_disable;
 uniform vec2 focus_center;
@@ -63,6 +64,11 @@ void fragment() {
 		vec2 mask_uv=local/(2.0*focus_extent)+vec2(.5);
 		float inside=0.0;
 		if(focus_valid && all(greaterThanEqual(mask_uv,vec2(0.0))) && all(lessThanEqual(mask_uv,vec2(1.0))))inside=texture(focus_mask,mask_uv).r;
+		float grey=dot(color,vec3(.2126,.7152,.0722));
+		color=mix(vec3(grey*.35),color,inside);
+	}
+	if(merge_selecting){
+		float inside=texture(focus_mask,sample_uv).r;
 		float grey=dot(color,vec3(.2126,.7152,.0722));
 		color=mix(vec3(grey*.35),color,inside);
 	}

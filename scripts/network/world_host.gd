@@ -488,7 +488,7 @@ func _hello(id: int,message: Dictionary) -> void:
 	peer.cytoplasm_version=2 if message.get("cytoplasm_version",1)==2 else 1
 	peer.frame_serial=0;peer.awaiting_snapshot=0;peer.death_events=message.get("death_events",false)==true
 	# A resumed session starts here; old checkpointed ruptures are never replayed.
-	peer.death_after=world.death_serial
+	peer.death_after=world.death_serial;peer.merge_after=world.merge_serial
 	var account: Dictionary=accounts[key]
 	var cell=_selected(account)
 	var focus=_focus(peer)
@@ -496,7 +496,7 @@ func _hello(id: int,message: Dictionary) -> void:
 	var center: Vector2=focus.position if focus!=null else cell.position
 	peer.view=Vector4(center.x,center.y,Sim.VIEW.x/.8/2,Sim.VIEW.y/.8/2)
 	peer.view_tick=world.revision
-	_send(peer,{"kind":"welcome","release_notes":ReleaseNotes.pending(account,release_instance),"release_updates":ReleaseNotes.pending_all(account,release_instance),"token":token,"world_id":world_id,"epoch":epoch,"sequence":account.sequence,"edit":account.edit,"seed":world.seed_value,"habitat":Codec.new().capture(world.habitat_geometry),"cell":cell.id,"player_name":str(account.get("display_name","")),"death_serial":world.death_serial})
+	_send(peer,{"kind":"welcome","release_notes":ReleaseNotes.pending(account,release_instance),"release_updates":ReleaseNotes.pending_all(account,release_instance),"token":token,"world_id":world_id,"epoch":epoch,"sequence":account.sequence,"edit":account.edit,"seed":world.seed_value,"habitat":Codec.new().capture(world.habitat_geometry),"cell":cell.id,"player_name":str(account.get("display_name","")),"death_serial":world.death_serial,"merge_serial":world.merge_serial})
 	var initial:=_frame(peer)
 	initial.warming=true
 	_send(peer,initial)
@@ -572,7 +572,11 @@ func _apply(id: int,message: Dictionary) -> void:
 	world.player=prior_player;world.lineage=prior_lineage;world.evolution=prior_evolution
 	var ok: bool=outcome=="" if outcome is String else outcome>=0 if outcome is int else outcome==true
 	result.ok=ok;result.message="Applied" if ok else str(outcome) if outcome is String else "Cannot apply: check tissue, AP, placement and template"
+	if message.get("action","")=="merge":result.message="Family cells merged." if ok else "Choose an unattended relative whose pheromones this cell received recently."
 	if message.get("action","")=="divide":result.message="Cell divided. Parent +1 AP, daughter +1 AP. Choose her from Family." if ok else division_reason
+	if ok and message.get("action","")=="division_request":
+		result.queued=cell.division_requested;result.automatic=cell.automatic_division
+		result.message="Queued division cancelled." if not message.args.active else "One division queued. It will happen when resources and clear water are ready." if cell.division_requested else "Cell divided. Parent +1 AP, daughter +1 AP. Choose her from Family."
 	if ok and message.get("action","")=="remove":
 		result.ap_refund=maxi(0,cell.ap-before_points)
 		result.message="Organelle reabsorbed · %d AP returned to this cell." % result.ap_refund
@@ -668,9 +672,11 @@ func _publish_deaths() -> void:
 	for peer in peers.values():
 		if peer.account=="" or not peer.get("death_events",false):continue
 		var events: Array=_death_events(peer)
-		if events.is_empty():continue
-		if _send(peer,{"kind":"death_events","world_id":world_id,"epoch":epoch,"time":world.time,"death_serial":world.death_serial,"deaths":events}):
+		var merges: Array=_merge_events(peer)
+		if events.is_empty() and merges.is_empty():continue
+		if _send(peer,{"kind":"death_events","world_id":world_id,"epoch":epoch,"time":world.time,"death_serial":world.death_serial,"deaths":events,"merge_serial":world.merge_serial,"merges":merges}):
 			peer.death_after=maxi(peer.get("death_after",0),world.death_serial)
+			peer.merge_after=world.merge_serial
 
 func _publish() -> void:
 	_publish_deaths()
@@ -735,11 +741,21 @@ func _frame(peer: Dictionary,coverage: Vector4=Vector4.ZERO) -> Dictionary:
 		if peer.get("perception","exteroception")!="interoception" or cell!=focus:internal_overrides[cell.chemistry.get_instance_id()]={"particles":[],"vacuoles":[],"presentation_totals":{"material":cell.chemistry.material(),"storage":cell.chemistry.storage_used(),"potential":cell.chemistry.potential(),"raw_fuel":cell.chemistry.raw_fuel(),"packets":cell.chemistry.particle_count()}}
 	return {"kind":"snapshot","world_id":world_id,"epoch":epoch,"tick":world.revision,"time":world.time,"presentation_usec":Time.get_ticks_usec(),"edit":account.edit,"sequence":account.sequence,
 		"division":world.division_status(_selected(account),account.lineage),
+		"merge_available":{"cell":_selected(account).id,"targets":Sim.FamilyMerging.candidates(world,_selected(account))},
 		"family_portraits":preload("res://scripts/cell_portrait.gd").family(world,account.lineage),
 		"family_recovery":_family_recovery(account),"lineage_names":_lineage_names(),"player_name":str(account.get("display_name","")),"graph":Codec.new().capture({"cells":cells,"player":_selected(account),"focus":_focus(peer),"lineage":account.lineage,"evolution":account.evolution,"investment":world.Investment.owned_settings(world,account.root)},internal_overrides,peer.get("compact_cytoplasm",false),peer.get("cytoplasm_version",1)),
 		"coverage":view,"camera":peer.view,"census":world.habitat_census(),"environment":world.environment.duplicate(true),"particles":PackedByteArray(),"flow":world.fluid.velocity.duplicate(),"acid":world.acidity.values.duplicate(),
 		"sounds":world.sound_events.duplicate(true),"sound_sequence":world.sound_sequence,"sparks":world.reaction_sparks.duplicate(true),"perception":peer.get("perception","exteroception"),"warming":false,
-		"death_serial":world.death_serial,"deaths":_death_events(peer),"selected_cell":_selected(account).id,"followed_cell":focus.id if focus!=null else -1}
+		"merge_serial":world.merge_serial,"merges":_merge_events(peer),"death_serial":world.death_serial,"deaths":_death_events(peer),"selected_cell":_selected(account).id,"followed_cell":focus.id if focus!=null else -1}
+
+func _merge_events(peer: Dictionary) -> Array:
+	var result: Array=[]
+	var view: Vector4=peer.view
+	for event in world.merge_bursts:
+		if event.serial<=peer.get("merge_after",world.merge_serial) or world.time-event.time>1.2:continue
+		if event.receiver!=peer.get("selected_cell",-1) and Sim.Medium.visibility(event.at,Vector2(view.x,view.y),Vector2(view.z,view.w)+Vector2.ONE*event.portrait.extent)<=0:continue
+		result.append(event.duplicate(true))
+	return result
 
 func _death_events(peer: Dictionary) -> Array:
 	var result: Array=[]
@@ -862,6 +878,7 @@ func _write_metrics() -> void:
 	metrics["internal_packet_limit_per_cell"]=world.Cell.Chemistry.MAX_PACKETS
 	metrics["environment"]=world.environment.duplicate(true)
 	metrics["ambient_carbon"]={"enabled":world.ambient_carbon_enabled,"added":world.ambient_carbon_added,"removed":world.ambient_carbon_removed,"next_at":world.ambient_carbon_due,"saturation":preload("res://scripts/ambient_carbon.gd").SATURATION}
+	metrics["ambient_oxygen"]={"enabled":world.ambient_carbon_enabled,"added":world.ambient_oxygen_added,"removed":world.ambient_oxygen_removed,"saturation":.5}
 	metrics["internal_packets"]=world.cells.reduce(func(total,cell):return total+cell.chemistry.particle_count(),0)
 	metrics["resident_internal_cells"]=world.cells.filter(func(cell):return cell.chemistry.accelerator!=null).size()
 	metrics["internal_parcel_scale"]=world.Catalog.data().ecology.get("internal_parcel_scale",1)

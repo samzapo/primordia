@@ -18,6 +18,7 @@ func adenylate_energy(sim) -> float:
 	return sim.cells.filter(func(cell):return not cell.dead).reduce(func(total,cell):return total+cell.energy+cell.brood_energy,0.0)
 func prepare(sim,cell) -> void:
 	var quote: Dictionary=sim.offspring_quote(cell)
+	cell.automatic_division=true
 	cell.biomass=quote.material+20;cell.energy=100
 	cell.reserve(maxf(60,quote.material),quote.material)
 func run() -> void:
@@ -52,7 +53,7 @@ func run() -> void:
 	sim.cells.append(other);sim.next_id=100;prepare(sim,other)
 	var original: PackedByteArray=var_to_bytes(Codec.new().capture(parent))
 	mass=material(sim);sim._step_reproduction()
-	check(sim.cells.size()==3 and sim.cells[-1].lineage_id()==other.lineage_id() and sim.cells[-1].count("photosynthesis")==0 and sim.cells[-1].count("feeding")==1,"Unowned paid reproduction keeps that parent's family without cloning its paid anatomy")
+	check(sim.cells.size()==3 and sim.cells[-1].lineage_id()==other.lineage_id() and sim.cells[-1].count("photosynthesis")==1 and sim.cells[-1].count("feeding")==1,"Unowned paid reproduction keeps that parent's family without cloning its paid anatomy")
 	check(sim.player==parent and var_to_bytes(Codec.new().capture(parent))==original and absf(material(sim)-mass)<.00001,"Another lineage cannot spend, mutate or replace the selected player")
 	var ledger=sim._family_ledger(other)
 	check(ledger.active_family(sim).size()==2 and sim._family_ledger(sim.cells[-1])==ledger,"An unclaimed family retains a shared ledger before enrollment")

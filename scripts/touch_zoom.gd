@@ -1,5 +1,7 @@
 extends RefCounted
 ## Raw multi-touch is used on the web; GUI controls retain native mouse emulation.
+var cancel_touch:=-1
+var cancel_start:=Vector2.ZERO
 var game
 var last_tap_family := -1
 var last_tap_time := -10000
@@ -78,7 +80,7 @@ func layout() -> void:
 	follow_button.set_pressed_no_signal(game.camera_locked and game.can_follow())
 	follow_button.disabled=not game.can_follow()
 	perception_button.visible=bar.visible and not game.settings_panel.visible
-	perception_button.text="Interoception" if game.perception=="exteroception" else "Exteroception"
+	perception_button.text="Internal" if game.perception=="exteroception" else "External"
 	perception_button.add_theme_font_size_override("font_size",roundi(18*pixels*.7))
 	perception_button.custom_minimum_size=Vector2(208,48)*pixels*.7;perception_button.size=perception_button.custom_minimum_size
 	perception_button.position=Vector2(size.x-220*pixels*.7,120*pixels*.7+tray_offset)
@@ -125,10 +127,14 @@ func _over_gui(node: Node,at: Vector2) -> bool:
 	return false
 
 func cancel() -> void:
+	cancel_touch=-1
 	fingers.clear();moved=false;last_tap_family=-1
 	if game!=null:game.tube_start.clear();game.camera_dragging=false
 
 func _tap(at: Vector2) -> void:
+	if game.merge_selecting():
+		if not game.user_paused:game._choose_merge_at(at)
+		return
 	game.inspector.inspect_touch(at)
 	if game.user_paused:return
 	var now := Time.get_ticks_msec()
@@ -149,13 +155,28 @@ func _tap(at: Vector2) -> void:
 func handle(event: InputEvent) -> bool:
 	if not event is InputEventScreenTouch and not event is InputEventScreenDrag:return false
 	if not enabled:enabled=true;layout()
+	if game.merge_selecting():
+		var cancel_button=game.cell_ui.merge_cancel_button
+		if event is InputEventScreenTouch and event.pressed and cancel_button.is_visible_in_tree() and cancel_button.get_global_rect().has_point(event.position):
+			cancel_touch=event.index;cancel_start=event.position
+			return true
+		if cancel_touch>=0 and event.index!=cancel_touch:return true
+		if cancel_touch>=0 and event.index==cancel_touch:
+			if event is InputEventScreenDrag:
+				if event.position.distance_to(cancel_start)>8*pixels:cancel_touch=-1
+				return true
+			if event is InputEventScreenTouch and not event.pressed:
+				cancel_touch=-1
+				if not event.canceled and cancel_button.get_global_rect().has_point(event.position):game._end_merge_selection()
+				return true
 	if event is InputEventScreenTouch:
 		if event.canceled:cancel();return true
 		if event.pressed:
 			if _over_gui(game.ui,event.position):return false
 			fingers[event.index]=event.position
 			if fingers.size()==1:
-				start=event.position;moved=false;game.inspector.inspect_touch(event.position)
+				start=event.position;moved=false
+				if not game.merge_selecting():game.inspector.inspect_touch(event.position)
 			elif fingers.size()==2:
 				last_tap_family = -1
 				game.inspector.touch_until=0

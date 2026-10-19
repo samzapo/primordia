@@ -42,7 +42,7 @@ static func run(check: Callable) -> void:
 	var motif: Array = Score.lineage_motif(sim.seed_value,parent.lineage_id())
 	check.call(sim.divide_lineage(false,false) and sim.player == parent,"Division creates a living daughter without taking control")
 	var child = sim.cells[-1]
-	check.call(child.generation == 1 and child.organs.size()==1 and child.count("feeding")==1 and absf(mass(sim)-initial) < 0.01,"A daughter starts with a basic oral groove and consumes only funded material")
+	check.call(child.generation == 1 and child.organs.size()==2 and child.count("feeding")==1 and child.count("photosynthesis")==1 and absf(mass(sim)-initial) < 0.01,"A daughter starts with a basic oral groove and consumes only funded material")
 	var child_position: Vector2 = child.position
 	var child_health: float = child.health
 	parent.death_hint="Fixture toxin exposure"

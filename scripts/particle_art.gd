@@ -32,6 +32,8 @@ const SIMPLE_PATHS := [
 	"M -27 0 H 27 M -14 0 V -21 M 2 0 V 19"
 ]
 
+static func display_scale(kind: int) -> float:return .5 if kind in [1,5] else 1.0
+
 static func texture(kind: int, simplified: bool = false) -> Texture2D:
 	var textures: Array[Texture2D] = _small_textures if simplified else _textures
 	if textures.is_empty():
@@ -41,6 +43,10 @@ static func texture(kind: int, simplified: bool = false) -> Texture2D:
 			var image := Image.new()
 			var error := image.load_svg_from_string(_svg(glyph,simplified))
 			assert(error == OK, "Particle vector artwork failed to load")
+			if i in [1,5]:
+				image.resize(48,48,Image.INTERPOLATE_LANCZOS)
+				var canvas:=Image.create(96,96,false,Image.FORMAT_RGBA8)
+				canvas.blit_rect(image,Rect2i(0,0,48,48),Vector2i(24,24));image=canvas
 			image.generate_mipmaps()
 			textures.append(ImageTexture.create_from_image(image))
 	if kind >= textures.size():
@@ -50,6 +56,10 @@ static func texture(kind: int, simplified: bool = false) -> Texture2D:
 			var image := Image.new()
 			var error := image.load_svg_from_string(_svg(glyph,simplified))
 			assert(error == OK, "Particle vector artwork failed to load")
+			if i in [1,5]:
+				image.resize(48,48,Image.INTERPOLATE_LANCZOS)
+				var canvas:=Image.create(96,96,false,Image.FORMAT_RGBA8)
+				canvas.blit_rect(image,Rect2i(0,0,48,48),Vector2i(24,24));image=canvas
 			image.generate_mipmaps()
 			textures.append(ImageTexture.create_from_image(image))
 	return textures[kind]

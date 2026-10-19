@@ -573,7 +573,9 @@ func _test_receptors() -> void:
 	expect(sim.player.count("sensing") == 0 and sim.player.target_mode == "graze" and sim.player.target.x > 0,"Grazing pore owns nutrient sensing without automatic flight")
 	expect(not sim.player.add_organ("sensing",1.2,"hunt",false),"Flight receptors cannot silently switch to pursuit")
 	sim.player.add_organ("sensing",1.2,"flee",false)
-	sim.particles[0].p = sim.player.organ_position(sim.player.organs[-1])+Vector2(20,0)
+	prey.add_organ("toxin",0,"graze",false);sim.time+=.1
+	var armed: Dictionary=preload("res://tests/pheromones.gd").deliver(sim,prey)
+	armed.p = sim.player.organ_position(sim.player.organs[-1])+Vector2(20,0)
 	sim.grid.rebuild(sim.particles)
 	for i in 60: sim._sense(sim.player,DT)
 	expect(sim.player.target_mode == "flee" and sim.player.target.x < 0 and sim.player.facing.x > 0,"Flight faces the threat and requests movement away")
@@ -593,7 +595,7 @@ func _test_receptors() -> void:
 	sim.time += 0.1
 	preload("res://tests/pheromones.gd").deliver(sim,prey)
 	for i in 100: sim._sense(sim.player,DT)
-	expect(sim.player.target_id == -1,"Hunting receptor ignores a larger defended report")
+	expect(sim.player.target_id == prey.id,"Hunting receptor continues pursuing a detected non-family cell regardless of size or defense")
 	expect(not sim.player.add_organ("feeding",0,"engulf",false) and not sim.player.add_organ("feeding",0,"parasite",false),"Removed feeding specializations cannot be installed")
 
 func _test_growth_and_anchors() -> void:
@@ -666,12 +668,19 @@ func _test_preferences() -> void:
 	preferences.fullscreen = true
 	preferences.bloom = false
 	preferences.water_ripples = false
+	preferences.current_style = "streamlines"
+	preferences.show_instinct = true
 	preferences.hud_scale = 1.5
 	preferences.save_settings()
 	var restored = preload("res://scripts/preferences.gd").new()
 	restored.path = preferences.path
 	restored.load_settings()
-	expect(restored.fullscreen and restored.hud_scale == 1.5 and not restored.bloom and not restored.water_ripples,"Water shimmer, fullscreen, bloom and HUD scale survive settings reload")
+	expect(restored.fullscreen and restored.hud_scale == 1.5 and not restored.bloom and not restored.water_ripples and restored.current_style=="streamlines" and restored.show_instinct,"Current style, instinct, water shimmer, fullscreen, bloom and HUD scale survive settings reload")
+	var legacy:=ConfigFile.new();legacy.set_value("display","current_style","streamlines");legacy.set_value("display","hud_scale",1.5);legacy.save(preferences.path)
+	restored.load_settings()
+	expect(restored.current_style=="crests" and restored.show_instinct and restored.hud_scale==1.5,"This update defaults older settings to crests without changing other choices")
+	restored.current_style="streamlines";restored.save_settings();preferences.load_settings()
+	expect(preferences.current_style=="streamlines","A deliberate subsequent style choice survives the one-time default update")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(preferences.path))
 
 func _test_packing_and_size() -> void:
@@ -900,6 +909,7 @@ func _test_autonomous_hunting() -> void:
 	# Area-linear growth makes this large hunter slower. Keep the same seeded
 	# anatomy and require a real kill and ingestion within sixty seconds.
 	for i in 3600: sim.step(DT)
-	print("HUNT: kills=%d eaten=%.2f processed=%.2f health=%.1f" % [sim.kills,cell.eaten,cell.processed,cell.health])
+	print("HUNT: kills=%d eaten=%.2f processed=%.2f health=%.1f cause=%s" % [sim.kills,cell.eaten,cell.processed,cell.health,cell.death_hint])
 	expect(sim.kills >= 1 and cell.eaten > 0,"Fueled autonomous chemical pursuit kills prey and the grazing pore consumes released food")
-	expect(cell.processed > 0 and cell.health > 0,"Hunting contributes to ordinary metabolism and survival")
+	expect(cell.processed>0 and cell.energy>=0 and cell.biomass>=0,"Successful hunting participates in ordinary finite digestion without negative resource stocks")
+	expect(cell.health>0 or cell.death_hint.contains("chemical pores") or cell.death_hint.contains("toxin"),"A funded hunter survives unless actual chemical contact kills it; no immunity is assumed")

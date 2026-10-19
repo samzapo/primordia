@@ -153,7 +153,7 @@ static func _starvation(check: Callable) -> void:
 	var cell = sim.player
 	cell.organs.clear()
 	cell.substrate = 0
-	cell.biomass = 8
+	cell.biomass = 0 # Isolate starvation grace; no biomass remains for stress-toxin secretion.
 	cell.carbon = 0
 	cell.energy = 0
 	cell.health = 1

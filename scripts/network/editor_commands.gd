@@ -6,7 +6,7 @@ static func execute(sim, action: String, args: Dictionary):
 		if args.has(key) and not is_finite(float(args[key])): return false
 	for key in ["kind","gene","module","species","scope"]:
 		if args.has(key) and not args[key] is String: return false
-	for key in ["dormant","active"]:
+	for key in ["dormant","active","automatic"]:
 		if args.has(key) and not args[key] is bool: return false
 	var cell = sim.player
 	if cell.dead: return false
@@ -14,6 +14,17 @@ static func execute(sim, action: String, args: Dictionary):
 	var value: float = float(args.get("value",0))
 	if not is_finite(value): return false
 	match action:
+		"merge": return sim.FamilyMerging.request(sim,identity)
+		"division_request":
+			if not args.get("active") is bool:return false
+			return sim.request_division(args.active)
+		"division_policy":
+			if not args.get("automatic") is bool or args.get("scope","cell") not in ["cell","lineage"]:return false
+			for member in sim.cells:
+				if member==cell or (args.get("scope","cell")=="lineage" and member.lineage_id()==cell.lineage_id()):
+					member.automatic_division=args.automatic
+					if args.automatic:member.division_requested=false
+			return true
 		"investment": return sim.Investment.set_strategy(sim,str(args.get("scope","")),str(args.get("kind","")))
 		"install": return sim.install(str(args.get("kind","")),float(args.get("angle",0)))
 		"remove":

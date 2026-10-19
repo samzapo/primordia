@@ -79,11 +79,32 @@ func run() -> void:
 		var at:=Vector2(i%Sim.Medium.COLS+.5,int(i/Sim.Medium.COLS)+.5)*Sim.Medium.SIZE
 		raster_error=maxf(raster_error,tide[i].distance_to(sim.fluid.current(at)+Currents.forcing(at,items)))
 	check(raster_error<.0001,"Sparse local rasterization matches the authoritative wrapped event field")
+	var before_input_rng: int=sim.rng.state
+	var before_input_velocity: PackedVector2Array=sim.fluid.velocity.duplicate()
+	var input:=Currents.raster_forcing(items)
+	var shared_error:=0.0
+	for i in input.size():
+		var at:=Vector2(i%Sim.Medium.COLS+.5,int(i/Sim.Medium.COLS)+.5)*Sim.Medium.SIZE
+		shared_error=maxf(shared_error,input[i].distance_to(Currents.forcing(at,items)))
+	check(shared_error<.0001,"The shared presentation/physics input raster equals independently sampled analytic forcing")
+	check(sim.rng.state==before_input_rng and sim.fluid.velocity==before_input_velocity,"Reading the input raster leaves ecology RNG and physical velocities unchanged")
+
 	print("CURRENT_EVENTS minimum_active_peak=%.4f minimum_active_count=%d sources=%d" % [minimum_peak,minimum_active,Currents.COUNT])
 	var cell=sim.player;var assembly={"a":.4,"units":3,"capped":false}
 	var state: Array=cell.surface_complexes.duplicate(true)
 	var pose:=preload("res://scripts/pore_art.gd").layout(cell,assembly)
 	check((pose.at-cell.local_point(.4)).dot(cell.local_normal(.4))>0 and pose.units==3,"Pore assemblies attach to the actual membrane with their retained part count")
 	check(cell.surface_complexes==state,"Pore presentation cannot add material or change chemistry")
+	# An existing saved weather sample upgrades its target without resetting water.
+	var weather=preload("res://scripts/environment_cycle.gd")
+	var saved_flow=Sim.new(17,0,false);saved_flow.time=123
+	var now:=1792324800.0
+	weather.update(saved_flow,now)
+	var stronger: PackedVector2Array=saved_flow.fluid.tide.duplicate()
+	check(saved_flow.environment.flow_strength>=1.3 and saved_flow.environment.flow_strength<=2.6,"Hourly broad forcing is twice the former range")
+	var retained_velocity: PackedVector2Array=saved_flow.fluid.velocity.duplicate()
+	saved_flow.environment.flow_version=3;saved_flow.fluid.induced_base_key="stale"
+	check(weather.update(saved_flow,now) and saved_flow.fluid.velocity==retained_velocity and saved_flow.fluid.tide==stronger,"Saved weather upgrades within the hour without resetting physical flow")
+	check(saved_flow.fluid.induced_base_key=="","A flow upgrade invalidates derived induced-current bases")
 	print("INDUCED CURRENTS: %d assertions, %d failures" % [assertions,failures])
 	quit(0 if failures==0 else 1)

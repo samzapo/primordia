@@ -613,3 +613,48 @@ Owner authorizes these corrections with the pending main promotion; preserve
 both ponds/accounts/keys/feedback and return experimental to standby afterward.
 
 October17 survival correction: read Revision65. One healthy leaf must sustain a basic cell throughout the pond, including dim water. Ambient carbon enters only real exterior packets through bounded local saturation and an explicit open-system ledger, independent of cameras/accounts; do not assign stocks to cells. Preserve native pool, dictionary and resident/cold ownership, elapsed time and finite accounting. Settling old carbon precedes mixing fresh material; never export the full GPU pool for supply. Larger anatomy pays shared maintenance, with extra leaves and mitochondrial food allocation providing support. Defer reproductive investment during starvation. Keep the behavior/investment guide, references and stable-only release notice current. Owner authorizes direct main rollout for these rebalances, preserving all live bodies/accounts/keys/feedback and experimental standby.
+
+October18 approved R23–R41: read Revision66. Experimental first; preserve both ponds and main standby separation. Final owner steering adds a small atmospheric O2 source and increases air exchange with absolute fluid curl. Photosynthesis remains the main renewable O2 producer. Manual division defaults off; new cells have one ordinary paid-quote leaf. Fusion reabsorbs all donor organs before same-family physical transfer, never consumes selected donors or awards division AP. Preserve explicit individual investment exceptions and clearly expose Use family. Do not revive live-source navigation, global culling, organ Move or broad rendering-speed benchmarks.
+
+
+October18 induced-current display correction: read the final water-presentation
+sections of Revision66. Denser local-current samples stay pale. A separate gold
+opposite-style layer shows only actual induced forcing (gold Streamlines over
+Wave crests; gold crests over Streamlines), never source migration or ambient
+velocity. Full-source visual footprint replaces the22%gold core; physical
+forcing parameters stay unchanged. Persistent masks/curves fade in/out, and
+conflicting retired curves retain safe geometry through their fade instead of
+vanishing. Preserve complete paths, shared noncrossing admission, remembered
+Pause choice, functional hardware checks and experimental-only notices.
+
+October18 division-control correction: read Revision67. Instinct toggles a saved local intent readout/arrow, on by default; never switch off AI. Start division now queues one paid birth when blocked/unfunded, highlights Divide and clears only on successful commit or cancellation. It switches that parent out of continuous auto and never arms the daughter. Preserve authenticated exactly-once receipts, saved request state, ordinary1+1AP, material/safe-position/population gates and all cells. Auto divide stays separate in the Divide submenu. Default older display preferences to crests once, then remember deliberate choices. Experimental first; no rendering-speed campaign.
+
+October18 mitochondrial upgrade: read Revision68. Preserve baseline biomass and digestion throughput. Each healthy organ adds50% baseline aerobic ATP, capped5x, funded solely by unallocated finite food energy. Fresh food18, tissue7.5, explicit solar input; no refueling saved parcels, structural lysis or depleted nutrients. Update both CPU/resident GPU, guide/status/science and experimental-only notice; preserve both ponds.
+
+October18 merge selection: read Revision69. Merge zooms smoothly to the recipient neighborhood; direct click/tap chooses only an unattended same-lineage body with a current received family cue. Export IDs/expiries, not new live positions. Revalidate at request/commit; keep no live-source navigation. Dim other cells with actual membrane masks, preserve Cancel/gestures and both ponds. Rename only player-facing modes Internal/External; retain wire/state identifiers. Experimental first; no rendering-speed campaign.
+
+October18 Revision69 follow-up: bound the Family panel to the visible viewport with measured header rows and actual touch dragging anywhere, including portraits, header buttons and margins; retain tap actions and arrow/wheel/focus controls. Disable kinship immunity for offensive particle contacts across CPU/coarse/resident GPU, including self exposure; keep hunter receptors targeting non-family cells. Preserve both ponds; experimental first.
+
+October18 Revision69 receptor steering: free Flight/Hunting/Toward family/Away from family at a dedicated receptor factory; exclude these from AP build tiers/refunds. Hunter selects any detected non-family cell without size/defense filters. Flight avoids real nearby toxins and armed non-family signals. Family receptors use actual local chemical snapshots and survival-first shared behavior; no live-ID navigation. Counterattack remains a productive gland. Experimental first, preserve ponds.
+
+October18 resource-warning correction: read Revision70. Replace the critical-resource text with independent amber ATP-sac and coral actual-membrane blinks at the existing10ATP/30health thresholds. Only the selected living cell signals; preserve empty-sac quantity, anatomy visibility, pause-aware presentation, input and all biology/RNG/saved state. Experimental first; frozen-view investigation remains open pending actual connected-device evidence.
+
+October18 experimental reset policy: on every experimental deploy, replace its
+pond with an independent copy of main's latest valid published checkpoint.
+Preserve the exact cell/account/lineage/chemistry graph and keys, but issue a new
+experimental world identity. Never stop or modify main, copy stable feedback,
+alias storage, or overwrite experimental feedback. Archive the experimental
+predecessor for rollback; ordinary restarts keep the current experimental pond.
+This supersedes earlier preserve-experimental/reset-input deployment rules.
+
+October18 steady merge selection: read Revision71. Retain actual family-pheromone receipts for five simulation seconds for merge selection/approach only, without live position lookup or refresh from queries. Revalidate donor ownership/contact/life. Provide actual-touch Cancel merge and eligible overlap picking. A committed merge gets a bounded1.2s frozen-art pull-in, no extra biology/death or replay on reconnect/pause. Experimental first, refreshed from main under current policy.
+
+October18 air-exchange correction: use local fluid speed rather than curl for enhanced CO2/O2 exchange. Keep the still-water baseline, saturation and finite accounting. Sample only the current staggered group once for both gases; preserve whole-pond coverage. Read Revision71; no claim that this alone diagnoses the reported phone slowdown.
+
+October18 immediate selected merge: read Revision72. Explicit player selection commits in the same authoritative transaction without seeking/contact delay. Preserve recent received pheromone, lineage/ownership/life gates, with no growth-clearance or biomass/AP ceiling; reject without queued navigation. Discard legacy manual approach orders; autonomous fusion remains contact-based. Keep the pull-in art, completion receipt, exactly-once transfer, guide and experimental-only release notice. Experimental first with current fresh-main-copy policy.
+
+October18 mobile6FPS investigation: read Revision73. Keep current-curve admission exact while removing replaced bucket entries, grouping by owner, caching conservative bounds and reusing visit stamps. Retain the935-case all-pairs differential oracle and rendered flow checks. Always record physical/logical viewport, final transform and stroke zoom; the64x64diagnostic window exaggerates curve clearance cost. Native CPU improvements and idle zero-peer server samples do not establish phone FPS. No biomass/AP caps, density/length reduction, world cull or broad rendering-speed campaign. Experimental first under fresh-main-copy policy.
+
+Revision73 touch-current budget: only touch UI adapts current-art density (24/12 initially,16/8 then8/4 after sustained costly rebuilds). Keep full length/32segments and fade retired curves; desktop remains64/32. Recovery takes8seconds of cheap rebuilds. No simulation/density/resource or new user-facing labels. Combined949 assertions include geometry and work-budget behavior; browser diagnostics are local only.
+
+October18 stable promotion: the owner authorizes Revision66–73 on main. Preserve the verified experimental gameplay and both living ponds. Add one stable-only consolidated gameplay notice for the final batch; keep all prior IDs/audiences and acknowledgement order, without replaying iterative experimental notices on main. Retain the documented phone-performance limitation: native/target checks do not establish physical-phone FPS. Use normal hooks, required hardware/state/delivery gates and existing authorized timing-warning policy; no broad rendering-speed campaign or new schedule.

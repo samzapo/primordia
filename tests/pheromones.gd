@@ -37,9 +37,9 @@ static func run(check: Callable) -> void:
 	listen(sim)
 	check.call(sim.player.target_id == prey.id,"A detached source's trail remains legible until decay, without a source lookup")
 	sim.time = 1
-	deliver(sim,prey)
+	var newer: Dictionary=deliver(sim,prey)
 	listen(sim,1.6)
-	check.call(sim.player.target_id == -1,"A newer local report supersedes older lower-biomass bait from the same source")
+	check.call(sim.player.target_id == prey.id and sim.player.target_position==newer.report.at,"Hunting follows the newest received location even when the source has grown or become armed")
 	# Expired reports and signals cannot revive a target, even while offscreen.
 	sim = isolated()
 	prey = sim._make_cell(sim.player.position+Vector2(600,0),"grazer")
@@ -102,7 +102,7 @@ static func run(check: Callable) -> void:
 	p = deliver(sim,prey)
 	check.call(not p.report.hostile,"Hostility is independent of body size and occupation label")
 	listen(sim)
-	check.call(sim.player.target_mode == "flee","An unarmed larger reported creature can also motivate explicit flight")
+	check.call(sim.player.target_memory == 0,"A newer unarmed report ends flight regardless of the source body size")
 	# Chemistry and collision must not alter signal paths or payloads.
 	sim = isolated()
 	p = deliver(sim,sim.player)
@@ -173,11 +173,11 @@ static func _distribution(check: Callable) -> void:
 	sim.grid.rebuild(sim.particles)
 	sim.time = 0
 	for i in 2000: sim.spawn_particle(Sim.PHEROMONE,Vector2(10,10))
-	sim.time = 5
+	sim.time = 15
 	sim._expire_pheromones()
 	var survivors: int = sim.particles.filter(func(packet):return packet.alive).size()
-	check.call(survivors > 640 and survivors < 830,"Exponential five-second mean lifetime decays independently of view and frame rate")
-	sim.time = 25
+	check.call(survivors > 640 and survivors < 830,"Exponential fifteen-second mean lifetime decays independently of view and frame rate")
+	sim.time = 75
 	sim._expire_pheromones()
 	check.call(sim.particles.filter(func(packet):return packet.alive).size() < 35,"Rapid stochastic decay bounds long-lived plume accumulation")
 

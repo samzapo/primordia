@@ -328,13 +328,15 @@ func thin_sync(probability: float,serial: int) -> Dictionary:
 	_sync_semaphore.wait()
 	return _export_data
 
-func carbon_supply_sync(cold: PackedFloat32Array,factor: float,target: float) -> Dictionary:
-	if cold.size()!=2560 or exchange_inflight>0 or not chemistry_enabled or not _initialized or _closing or not is_finite(factor) or factor<0 or factor>1 or not is_finite(target) or target<0:return {"error":"Invalid atmospheric carbon request"}
+func carbon_supply_sync(cold: PackedFloat32Array,factor: float,target: float,phase: int=-1,phase_seed: int=0,kind: int=5,factors: PackedFloat32Array=PackedFloat32Array()) -> Dictionary:
+	if kind not in [1,5] or phase < -1 or phase>=20 or (not factors.is_empty() and factors.size()!=2560) or cold.size()!=2560 or exchange_inflight>0 or not chemistry_enabled or not _initialized or _closing or not is_finite(factor) or factor<0 or factor>1 or not is_finite(target) or target<0:return {"error":"Invalid atmospheric carbon request"}
+	for value in factors:
+		if not is_finite(value) or value<0 or value>1:return {"error":"Invalid atmospheric exchange factor"}
 	for value in cold:
 		if not is_finite(value) or value<0:return {"error":"Invalid cold carbon inventory"}
 	RenderingServer.call_on_render_thread(func():
 		if not _grid_valid:_prepare_grid_rd()
-		_export_data=_chemistry.carbon_supply(cold,factor,target)
+		_export_data=_chemistry.carbon_supply(cold,factor,target,phase,phase_seed,kind,factors)
 		_grid_valid=false
 		_sync_semaphore.post())
 	_sync_semaphore.wait()

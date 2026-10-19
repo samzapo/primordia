@@ -5,9 +5,17 @@ source "$project_dir/tools/godot.sh"
 godot_bin="$(resolve_godot)"
 export PRIMORDIA_INVITE=bounded-infrastructure-fixture
 python3 "$project_dir/tests/test_experimental.py"
+GODOT_BIN="$godot_bin" python3 "$project_dir/tests/test_experimental_snapshot.py"
 python3 "$project_dir/tests/test_experimental_standby.py"
 report_file="$(mktemp "${TMPDIR:-/tmp}/primordia-network.XXXXXX")"
 trap 'rm -f -- "$report_file"; if [[ -n ${recovery_state:-} ]]; then rm -rf -- "$recovery_state"; fi' EXIT
+"$godot_bin" --headless --path "$project_dir" --script tests/curve_layout_run.gd 2>&1 | tee "$report_file"
+if grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"; then exit 1; fi
+grep -Eq 'CURVE LAYOUT: [0-9]+ assertions, 0 failures' "$report_file"
+
+"$godot_bin" --headless --path "$project_dir" --script tests/merge_memory_run.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"
+if grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"; then exit 1; fi
+grep -Eq 'MERGE MEMORY: [0-9]+ assertions, 0 failures' "$report_file"
 "$godot_bin" --headless --path "$project_dir" --script tests/player_help_run.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"
 if grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"; then exit 1; fi
 grep -Eq 'PLAYER HELP: [0-9]+ assertions, 0 failures' "$report_file"
@@ -39,6 +47,9 @@ grep -Eq 'NORMAL OUTPUT: [0-9]+ assertions, 0 failures' "$report_file"
 "$godot_bin" --headless --path "$project_dir" --script tests/nutrient_binding_run.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"
 if grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"; then exit 1; fi
 grep -Eq 'NUTRIENT BINDING: [0-9]+ assertions, 0 failures' "$report_file"
+"$godot_bin" --headless --path "$project_dir" --script tests/feedback_pass_three_run.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"
+if grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"; then exit 1; fi
+grep -Eq 'FEEDBACK PASS THREE: [0-9]+ assertions, 0 failures' "$report_file"
 for script in baseline_survival anatomy_access_run recycling_run cell_ap_run feedback_latest_run shade_steering_run behavior_tree_run; do
   "$godot_bin" --headless --path "$project_dir" --script "tests/$script.gd" -- --particle-backend=cpu 2>&1 | tee "$report_file"
   if grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"; then exit 1; fi
@@ -143,9 +154,13 @@ if [[ "${1:-}" == gpu ]]; then
     if grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"; then exit 1; fi
     grep -Eq 'ANATOMY RENDER GPU: [0-9]+ assertions, 0 failures' "$report_file"
   done
-  xvfb-run -a -s '-screen 0 640x400x24 -nolisten tcp' "$godot_bin" --path "$project_dir" --rendering-method mobile --rendering-driver vulkan --gpu-index 0 --script tests/division_access_gpu.gd 2>&1 | tee "$report_file"
+  xvfb-run -a -s '-screen 0 640x400x24 -nolisten tcp' "$godot_bin" --path "$project_dir" --rendering-method mobile --rendering-driver vulkan --gpu-index 0 --display-driver x11 --disable-vsync --max-fps 60 --script tests/division_access_gpu.gd 2>&1 | tee "$report_file"
   if grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"; then exit 1; fi
   grep -Eq 'DIVISION ACCESS GPU: [0-9]+ assertions, 0 failures' "$report_file"
+  # Browser-compatible controls require no RenderingDevice or chemistry fallback.
+  xvfb-run -a -s '-screen 0 1280x1000x24 -nolisten tcp' "$godot_bin" --path "$project_dir" --rendering-method gl_compatibility --rendering-driver opengl3 --display-driver x11 --disable-vsync --max-fps 60 --script tests/division_access_gpu.gd -- --controls-only --particle-backend=cpu 2>&1 | tee "$report_file"
+  if grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"; then exit 1; fi
+  grep -Eq 'DIVISION CONTROLS GPU: [0-9]+ assertions, 0 failures' "$report_file"
   # Match run_service.py presentation pacing; chemistry/physics remain at 30 Hz.
   for scope in fixture full-world slow-observer recovery; do
     extra=()

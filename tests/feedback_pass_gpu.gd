@@ -25,6 +25,23 @@ func run() -> void:
   check(absf(cell.energy-cpu.energy)<.000001 and absf(cell.biomass-cpu.biomass)<.000001 and absf(cell.raw_fuel-cpu.raw_fuel)<.000001 and absf(cell.chemistry.heat-cpu.chemistry.heat)<.000001,"Mitochondrial ATP, tissue, fuel, heat and inert legacy output match CPU reference")
   check(cell.chemistry.particles.is_empty() and cell.chemistry.accelerator.exports==0,"Mitochondria retain GPU authority without a CPU pose mirror")
   cell.chemistry.ensure_cpu()
+ # Real resident digestion must retain growth and finite energy at every efficiency.
+ for count in [0,1,2,8]:
+  for fuel in [0.0,7.5,18.0]:
+   for near_oxygen in [true,false]:
+    var cell=Sim.Cell.new(680+count);cell.body=10000;cell.biomass=10;cell.energy=0;cell.update_geometry()
+    for i in count:cell.add_organ("mitochondrion",i*.5,"graze",false)
+    cell.chemistry.emit("food",1,Vector2.ZERO,-1,-1,fuel)
+    cell.chemistry.emit("oxygen",1,Vector2.ZERO if near_oxygen else Vector2(1000,0),-1,-1,0)
+    var cpu=Sim.Cell.clone_state(cell)
+    check(Cytoplasm.new().attach(gpu,cell.chemistry,cell),"Efficiency fixture owns actual resident food and oxygen")
+    cell.chemistry.advance(cell,10);cpu.chemistry.advance(cpu,10)
+    check(absf(cell.energy-cpu.energy)<.000001 and absf(cell.biomass-cpu.biomass)<.000001 and absf(cell.oxygen-cpu.oxygen)<.000001 and absf(cell.chemistry.heat-cpu.chemistry.heat)<.000001,"Resident ATP/growth/oxygen/heat match CPU for counts, spent fuel and local oxygen")
+    check(absf(cell.energy+(cell.biomass-10)*7.5+cell.raw_fuel+cell.chemistry.heat-fuel)<.000001,"Resident efficiency conserves actual finite meal energy")
+    if fuel>=7.5:check(absf(cell.biomass-10-(.7 if near_oxygen else .3))<.000001,"Resident mitochondrial recovery never reduces biomass yield")
+    if fuel==18 and near_oxygen:check(absf(cell.energy-2.25*(1+minf(4,count*.5)))<.000001,"Resident ordinary-food ATP follows the authored mitochondrial multiplier")
+    check(cell.chemistry.particles.is_empty() and cell.chemistry.accelerator.exports==0,"Efficiency creates no CPU particle mirror or full export")
+    cell.chemistry.ensure_cpu()
  var plant=Sim.Cell.new(32);plant.add_organ("photosynthesis",0,"graze",false)
  plant.chemistry.emit("carbon",3,plant.local_point(0)*.72,-1,-1,0)
  var sim=Sim.new(59,0,false);sim.cells=[plant];sim.player=plant;sim.particles=[];sim.grid.rebuild([])
@@ -46,9 +63,27 @@ func run() -> void:
  var food: float=parent.substrate
  check(birth.divide_lineage(false,false),"Resident-parent paid division commits")
  var daughter=birth.cells[-1]
- check(daughter.organs.size()==1 and daughter.count("photosynthesis")==0 and birth.Investment.strategy(birth,daughter)=="producer","Resident-parent daughters inherit strategy and basic anatomy only")
+ check(daughter.organs.size()==2 and daughter.count("photosynthesis")==1 and birth.Investment.strategy(birth,daughter)=="producer","Resident-parent daughters inherit strategy and basic anatomy only")
  check(parent.substrate==food and daughter.substrate==0 and daughter.chemistry.particle_count()==0 and parent.chemistry.accelerator!=null,"Division neither clones resident vacuoles nor drops the parent's GPU owner")
  parent.chemistry.ensure_cpu()
+ # Same-family fusion releases only the two internal owners and can resume residency.
+ var fusion=Sim.new(612,0,false);fusion.server_mode=true;fusion.cells=[fusion.player]
+ fusion.habitat_geometry=Sim.Habitat.new(612,fusion.cells);fusion.habitat_geometry.enabled=false
+ var recipient=fusion.player;recipient.position=Vector2(500,500);recipient.add_organ("feeding",0,"graze",false)
+ var donor=Sim.Cell.new(713,Vector2(600,500));donor.lineage=recipient.lineage_id()
+ donor.add_organ("feeding",0,"graze",false);donor.add_organ("photosynthesis",1,"graze",false)
+ donor.chemistry.emit("food",2,Vector2.ZERO,-1,-1,15);donor.chemistry.particles[0].age=6
+ donor.chemistry.emit("waste",.5,Vector2.ZERO,-1,donor.chemistry.particles[0].compartment,0)
+ fusion.cells.append(donor);fusion.lineage.register(donor,recipient.id,1,"living",0)
+ donor.position=recipient.position+Vector2(recipient.extent()+donor.extent()-2,0)
+ var family_trace: Dictionary=fusion._emit_pheromone(donor)
+ family_trace.p=recipient.organ_position(recipient.organs.filter(func(o):return o.kind=="feeding")[0])
+ fusion.grid.rebuild(fusion.particles);recipient.behavior["family_cues"]=fusion._family_reports(recipient)
+ check(Cytoplasm.new().attach(gpu,recipient.chemistry,recipient) and Cytoplasm.new().attach(gpu,donor.chemistry,donor),"Both merging cells own hardware-resident internal chemistry")
+ check(fusion.FamilyMerging.request(fusion,donor.id) and recipient.substrate==2 and recipient.waste==.5,"A real resident fusion transfers the vacuole without duplicating either owner")
+ check(Cytoplasm.new().attach(gpu,recipient.chemistry,recipient),"The fused cell returns to resident internal chemistry")
+ check(recipient.chemistry.vacuoles.filter(func(v):return v.get("species","") not in ["oxygen","carbon"]).size()==1 and recipient.chemistry.vacuoles[0].age==6,"Resident reattachment retains food/waste grouping and digestion age")
+ recipient.chemistry.ensure_cpu()
  # Counterattack reception works through actual GPU queries, without a source body.
  var defender=Sim.Cell.new(90,Vector2(1000,900));defender.add_organ("counterattack",0,"graze",false)
  var receptor: Vector2=defender.organ_position(defender.organs[0])
@@ -63,6 +98,24 @@ func run() -> void:
  sim._sense(defender,.2,perception.for_cell(queries,signals.senses,defender));sim._emit_and_attack(defender,.1)
  check(sim.particles.any(func(p):return p.kind==Sim.TOXIN and sim.attack_sources.get(p.owner,{}).get("selective",false)),"A lone counterattack gland fires from a locally received immutable GPU report")
  check(not sim.cells.any(func(c):return c.id==91),"Counterattack does not need a live source body or remote anatomy lookup")
+
+ # Hunting permission must survive a different navigation winner on real GPU reception.
+ var hunter=Sim.Cell.new(290,Vector2(1000,900));hunter.energy=10;hunter.biomass=20
+ hunter.add_organ("hunting",0,"hunt",false);hunter.add_organ("toxin",1,"graze",false);hunter.add_organ("poreforming",2,"graze",false)
+ hunter.chemistry.emit("food",4,Vector2.ZERO)
+ var trace: Vector2=hunter.organ_position(hunter.organs[0])+Vector2(5,0)
+ var hunting_gpu=GPU.new();hunting_gpu.configure_interactions("chemistry");hunting_gpu.configure_exchange();hunting_gpu.configure_perception()
+ hunting_gpu.initialize(PackedFloat32Array([trace.x,trace.y,0,0,0,0,0,3,8,.2,.2,0]),Fixture.flow(),
+ [{"slot":0,"owner":291,"lineage":291,"expires_at":8.0,"report":{"id":291,"lineage":291,"at":hunter.position+Vector2(100,0),"mass":10.0,"radius":20.0,"hostile":false,"defended":false,"emitted_at":0.0}}])
+ var hunting_ready: Array=await hunting_gpu.ready;check(hunting_ready[0],str(hunting_ready[1]))
+ queries=perception.requests([hunter],.2,0)
+ var hunting_receipt: Dictionary=hunting_gpu.exchange_sync([hunter],[],[],queries,{"feeding":false,"exposure":false,"projection":false,"summaries":true})
+ sim.cells=[hunter];sim.player=hunter;sim.particles=[];sim.grid.rebuild([]);sim.time=0
+ sim._sense(hunter,.2,perception.for_cell(queries,hunting_receipt.senses,hunter))
+ check(hunter.behavior.has("weapon_cue") and sim.Behavior.priority(hunter,"hunt")==0,"A locally received GPU prey trace enables weapons while the hungry cell rests to digest")
+ sim._emit_and_attack(hunter,.01)
+ check(sim.particles.any(func(p):return p.kind==Sim.TOXIN) and sim.particles.any(func(p):return p.kind==Sim.PORE_SUBUNIT),"Both ordinary glands emit finite particles from real resident reception without a live prey body")
+ hunting_gpu.close();await hunting_gpu.closed
 
  # A family trace never becomes a threat, but can guide attack dispersal.
  defender.add_organ("sensing",PI,"flee",false);defender.add_organ("propulsion",1,"graze",false)
@@ -111,6 +164,8 @@ func run() -> void:
  low.player.energy=0;low.player.biomass=10;low.player.target_id=999
  low.player.target_memory=1;low.player.target_mode="hunt"
  low.player.target_position=low.player.position+Vector2(100,0)
+ low.player.add_organ("hunting",1,"hunt",false)
+ low.player.behavior["weapon_cue"]={"at":low.player.target_position,"id":999,"organ_id":low.player.organs[-1].id,"expires_at":10.0,"lineage":999}
  var owner=preload("res://scripts/resident_ecology.gd").new();owner.streaming_enabled=false
  owner.start(low,512)
  var owner_ready: Array=await owner.initialized;check(owner_ready[0],str(owner_ready[1]))

@@ -1,6 +1,6 @@
 extends RefCounted
 ## Immutable emission reports; no reference to live source cells.
-const MAX_QUERIES:=256
+const MAX_QUERIES:=1024 # All64 cells can own every free receptor plus demand queries.
 const MAX_SOURCES:=1024
 const SUMMARY_VECTORS:=385 # Header + 128 food bins or 64 complete reports.
 const Genes=preload("res://scripts/mutations.gd")
@@ -74,7 +74,7 @@ func prepare_batch(emissions: Array, queries: Array) -> Dictionary:
 		if not query is Dictionary: return {"error":"Invalid receptor query"}
 		for name in ["at","reach","id","lineage","mass","mode","target_id","incumbent"]:
 			if not query.has(name): return {"error":"Incomplete receptor query"}
-		if not query.at is Vector2 or not query.at.is_finite() or query.mode not in ["hunt","flee","graze","waste","toxin","inspect","family"] or not query.incumbent is bool:
+		if not query.at is Vector2 or not query.at.is_finite() or query.mode not in ["hunt","flee","graze","waste","toxin","inspect","family","danger"] or not query.incumbent is bool:
 			return {"error":"Invalid receptor query"}
 		if not integer(query.id,0) or not integer(query.lineage,0) or not integer(query.target_id):
 			return {"error":"Invalid receptor identity"}
@@ -89,7 +89,7 @@ func prepare_batch(emissions: Array, queries: Array) -> Dictionary:
 		requests.encode_float(at,fposmod(query.at.x,4096));requests.encode_float(at+4,fposmod(query.at.y,2560))
 		requests.encode_float(at+8,query.reach);requests.encode_float(at+12,query.mass)
 		requests.encode_s32(at+16,query.id);requests.encode_s32(at+20,query.lineage)
-		requests.encode_s32(at+24,query.target_id);requests.encode_u32(at+28,["hunt","flee","graze","waste","toxin","inspect","family"].find(query.mode))
+		requests.encode_s32(at+24,query.target_id);requests.encode_u32(at+28,["hunt","flee","graze","waste","toxin","inspect","family","danger"].find(query.mode))
 		requests.encode_u32(at+32,1 if query.incumbent else 0)
 		requests.encode_float(at+48,fposmod(center.x,4096));requests.encode_float(at+52,fposmod(center.y,2560))
 		requests.encode_float(at+56,inner)
@@ -102,21 +102,28 @@ static func requests(cells: Array, dt: float=0, now: float=0) -> Array:
 		var local_dt: float=dt*cell.activity
 		if cell.dead or cell.activity<=0 or cell.sense_clock>local_dt: continue
 		for organ in cell.organs:
-			if organ.hp<=0 or organ.kind not in ["hunting","sensing","feeding","counterattack"]: continue
-			var mode: String="hunt" if organ.kind=="hunting" else "flee" if organ.kind=="counterattack" else organ.mode
-			if mode not in ["hunt","flee","graze","waste","toxin","inspect","family"]: continue
-			var reach: float=(120 if mode=="hunt" else 90 if mode=="flee" else 310)*sqrt(organ.scale)*(1-organ.blocked*0.65)*Genes.factor(organ,"sense")*cell.sensory_output(organ)
+			if organ.hp<=0 or organ.kind not in ["hunting","sensing","feeding","counterattack","family_toward","family_away"]: continue
+			var mode: String="hunt" if organ.kind=="hunting" else "flee" if organ.kind=="counterattack" else "family" if organ.kind in ["family_toward","family_away"] else organ.mode
+			if mode not in ["hunt","flee","graze","waste","toxin","inspect","family","danger"]: continue
+			var reach: float=(120 if mode=="hunt" else 90 if mode in ["flee","family"] else 310)*sqrt(organ.scale)*(1-organ.blocked*0.65)*Genes.factor(organ,"sense")*cell.sensory_output(organ)
 			result.append({"at":cell.organ_position(organ),"reach":reach,"id":cell.id,"lineage":cell.lineage_id(),
 				"mass":cell.organic_mass(),"mode":mode,"target_id":cell.target_id,
 				"incumbent":cell.target_memory>local_dt and cell.target_expires_at>now and (mode=="graze" or cell.target_lineage!=cell.lineage_id()) and cell.target_organ_id==organ.id and cell.target_mode==mode,
 				"organ_id":organ.id,"output":cell.sensory_output(organ),"center":cell.position,"inner":maxf(70,cell.extent()+22)})
+	# Flight reads actual toxin positions, independently of non-family reports.
+	for cell in cells:
+		if cell.dead or cell.activity<=0 or cell.sense_clock>dt*cell.activity:continue
+		for organ in cell.organs:
+			if organ.kind!="sensing" or organ.hp<=0:continue
+			result.append({"at":cell.organ_position(organ),"reach":90*sqrt(organ.scale)*(1-organ.blocked*.65)*Genes.factor(organ,"sense"),"id":cell.id,"lineage":cell.lineage_id(),"mass":cell.organic_mass(),"mode":"danger","target_id":-1,"incumbent":false,"organ_id":organ.id,"center":cell.position})
 	# One bounded extra chemical query per cell, at its first working social receptor.
-	# A separate channel preserves foreign target choice and family safety.
+	# A separate channel keeps hunter targets and family recognition independent.
 	for cell in cells:
 		var local_dt: float=dt*cell.activity
 		if cell.dead or cell.activity<=0 or cell.sense_clock>local_dt:continue
+		if cell.organs.any(func(organ):return organ.hp>0 and organ.kind in ["family_toward","family_away"]):continue
 		for organ in cell.organs:
-			if organ.hp<=0 or organ.kind not in ["hunting","sensing","counterattack"]:continue
+			if organ.hp<=0 or organ.kind not in ["feeding","hunting","sensing","counterattack"]:continue
 			var reach: float=(120 if organ.kind=="hunting" else 90)*sqrt(organ.scale)*(1-organ.blocked*.65)*Genes.factor(organ,"sense")
 			result.append({"at":cell.organ_position(organ),"reach":reach,"id":cell.id,"lineage":cell.lineage_id(),"mass":cell.organic_mass(),"mode":"family","target_id":-1,"incumbent":false,"organ_id":organ.id,"center":cell.position,"inner":70.0})
 			break
@@ -128,6 +135,10 @@ static func for_cell(queries: Array, results: Array, cell) -> Dictionary:
 		if queries[i].id!=cell.id: continue
 		var reports: Dictionary={}
 		var organ_id: int=queries[i].organ_id
+		if queries[i].mode=="danger":
+			if not received.has(organ_id):received[organ_id]={"food":{},"reports":{},"patch":{}}
+			received[organ_id]["danger"]=results[i].get("danger",{})
+			continue
 		if queries[i].mode=="family":
 			if not received.has(organ_id):received[organ_id]={"food":{},"reports":{},"patch":{}}
 			if results[i].valid and results[i].has("report"):reports[results[i].report.id]=results[i]
@@ -236,6 +247,8 @@ static func decode(bytes: PackedByteArray, at: int, queries: int) -> Array:
 			item["state"]=bytes.slice(p,p+48).to_float32_array()
 			item["handle"]=Vector2i(bytes.decode_s32(p+48),bytes.decode_s32(p+52))
 			item["owner"]=bytes.decode_s32(p+56)
+		elif valid and bytes.decode_float(p+72)==6:
+			item["danger"]={"at":Vector2(bytes.decode_float(p),bytes.decode_float(p+4)),"distance":bytes.decode_float(p+64)}
 		elif valid and bytes.decode_float(p+72)!=5:
 			item["report"]={"at":Vector2(bytes.decode_float(p),bytes.decode_float(p+4)),"mass":bytes.decode_float(p+8),
 				"radius":bytes.decode_float(p+12),"id":bytes.decode_s32(p+16),"lineage":bytes.decode_s32(p+20),

@@ -28,6 +28,8 @@ static func attack_cue(sim) -> void:
  var cell=sim.player
  cell.target_id=999;cell.target_memory=1;cell.target_mode="hunt"
  cell.target_position=cell.position+Vector2(100,0)
+ cell.add_organ("hunting",1,"hunt",false)
+ cell.behavior["weapon_cue"]={"at":cell.target_position,"id":999,"organ_id":cell.organs[-1].id,"expires_at":sim.time+20,"score":2,"lineage":999}
  cell.organs[0]["counter_report"]={"expires_at":sim.time+20,"report":{"hostile":true,"at":cell.target_position}}
 
 static func run(check: Callable) -> void:

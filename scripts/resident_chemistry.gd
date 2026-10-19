@@ -69,11 +69,12 @@ func thin(probability: float,serial: int) -> Dictionary:
 	var values:=bytes.to_float32_array()
 	return {"readback_bytes":bytes.size(),"loss":values[0],"removed":int(values[1]),"alive":int(values[2]),"signals":int(values[3]),"high_water":int(values[4]),"fuel_loss":values[5]}
 
-func carbon_supply(cold: PackedFloat32Array,factor: float,target: float) -> Dictionary:
+func carbon_supply(cold: PackedFloat32Array,factor: float,target: float,phase: int=-1,phase_seed: int=0,kind: int=5,factors: PackedFloat32Array=PackedFloat32Array()) -> Dictionary:
 	var input:=PackedFloat32Array();input.resize(2560*4)
-	for i in 2560:input[i*4]=cold[i]
+	for i in 2560:
+		input[i*4]=cold[i];input[i*4+1]=factors[i] if not factors.is_empty() else factor
 	rd.buffer_update(carbon_stats,0,input.size()*4,input.to_byte_array())
-	dispatch(6,20,{"probability":factor,"count_scope":Vector4(target,0,0,0)})
+	dispatch(6,20,{"probability":factor,"count_scope":Vector4(target,phase,kind,phase_seed)})
 	var values:=rd.buffer_get_data(carbon_stats).to_float32_array()
 	var added:=0.0;var removed:=0.0;var pending:=PackedFloat32Array();pending.resize(2560)
 	var ratios:=PackedFloat32Array();ratios.resize(2560)

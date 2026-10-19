@@ -738,3 +738,27 @@ both ponds/accounts/keys/feedback and return experimental to standby afterward.
 
 ### Sustainable basic cells and renewable carbon (October17,2026)
 [Revision65](REVISION_65.md) adds bounded atmospheric carbon exchange into real exterior particles everywhere, including unseen water. A healthy one-leaf basic build has a small diffuse-light recovery baseline, while larger builds pay organ maintenance and benefit from extra leaves and mitochondria. Starving cells pause reproductive investment. Preserve the existing pond and actual cells; no login/restart grants or plant food source is introduced.
+
+### Family fusion and surface exchange (October18,2026)
+[Revision66](REVISION_66.md) introduces optional division, physically local same-family merging, clearer investment inheritance, independent weapon cues, small curl-enhanced atmospheric oxygen alongside CO2, gradual gas arrival and readable controls. Stage on experimental while preserving both ponds.
+
+### Instinct and queued division controls (October18,2026)
+
+[Revision67](REVISION_67.md) makes Instinct a saved presentation toggle and nests continuous or one-shot paid division under Divide. A pending one-shot waits for resources and safe space, clears on one committed birth and is never inherited. Wave crests become the initial view once for this update; later choices remain saved. Preserve both ponds and stage on experimental.
+
+[Revision68](REVISION_68.md) makes mitochondria recover additional finite food energy without reducing biomass. Healthy organs add50% of baseline aerobic ATP each, capped5x; no oxygen or fuel means no extra work. Keep fresh food/solar/tissue-debris energy explicit and all saved parcels unchanged.
+
+[Revision69](REVISION_69.md) replaces the merge portrait picker with smooth nearby world selection, limited by authoritative family pheromone reception. Dim unselectable cells; preserve physical fusion and saved cells. Player-facing view names are Internal/External.
+
+October18 Revision69 follow-up: bound the Family panel to the visible viewport with measured header rows and actual touch dragging; retain arrow/wheel/focus controls. Disable kinship immunity for offensive particle contacts across CPU/coarse/resident GPU, including self exposure; keep hunter receptors targeting non-family cells. Preserve both ponds; experimental first.
+
+October18 Revision69 receptor steering: free Flight/Hunting/Toward family/Away from family at a dedicated receptor factory; exclude these from AP build tiers/refunds. Hunter selects any detected non-family cell without size/defense filters. Flight avoids real nearby toxins and armed non-family signals. Family receptors use actual local chemical snapshots and survival-first shared behavior; no live-ID navigation. Counterattack remains a productive gland. Experimental first, preserve ponds.
+
+
+[Revision70](REVISION_70.md) replaces the critical-resource banner with a slow amber blink on the selected cell’s ATP sac below10ATP and a coral blink on its actual membrane below30%health. Conditions are independent and presentation-only; the pause-aware UI clock freezes the cues with the view.
+
+[Revision71](REVISION_71.md) keeps detected relatives selectable for five seconds after a real family signal, adds clear Cancel merge and a brief donor pull-in, and makes surface gas exchange depend on fluid speed. These are bounded local memories/presentation effects; resource transfer stays authoritative and once only.
+
+[Revision72](REVISION_72.md) makes player-selected family merge commit immediately from recent pheromone eligibility, without seeking or waiting for contact. Preserve uncapped biomass/AP, finite transfer and pull-in art; autonomous fusion still requires contact.
+
+[Revision73](REVISION_73.md) reduces redundant current-curve admission work while retaining full geometry, spacing, sample counts and all game state. Performance observations must distinguish actual phone FPS from viewport-matched native CPU diagnostics and idle server telemetry.

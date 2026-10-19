@@ -136,7 +136,7 @@ func thin(probability: float,serial: int,random: RandomNumberGenerator) -> Dicti
 		if not trace_emissions[key].alive:trace_emissions.erase(key)
 	return result
 
-func replenish_carbon(factor: float,target: float) -> Dictionary:
+func replenish_carbon(factor: float,target: float,phase: int=-1,kind: int=5,factors: PackedFloat32Array=PackedFloat32Array()) -> Dictionary:
 	var sim=world.get_ref()
 	var supply=preload("res://scripts/ambient_carbon.gd")
 	var cold: Array=[]
@@ -144,14 +144,14 @@ func replenish_carbon(factor: float,target: float) -> Dictionary:
 		assert(streaming.borrowed.is_empty())
 		for key in streaming.cold.chunks.keys():cold.append_array(streaming.cold.take(key))
 		streaming.advance(sim,cold,true)
-		streaming.settle(sim,cold,sim.CARBON)
-	var stock: Dictionary=supply.inventory(cold+pending+trace_emissions.values())
-	var result: Dictionary=gpu.carbon_supply_sync(stock.mass,factor,target)
+		streaming.settle(sim,cold,kind)
+	var stock: Dictionary=supply.inventory(cold+pending+trace_emissions.values(),kind)
+	var result: Dictionary=gpu.carbon_supply_sync(stock.mass,factor,target,phase,posmod(sim.seed_value,supply.GROUPS),kind,factors)
 	if result.has("error"):
 		if streaming!=null:streaming.cold.put_all(cold,sim.time)
 		fallback(result.error);return result
-	var removed: float=float(result.removed)+supply.degas(cold+pending+trace_emissions.values(),result.ratios)
-	var added: float=float(result.added)+supply.deposit(sim,result.pending,stock.first)
+	var removed: float=float(result.removed)+supply.degas(cold+pending+trace_emissions.values(),result.ratios,kind)
+	var added: float=float(result.added)+supply.deposit(sim,result.pending,stock.first,kind)
 	if streaming!=null:streaming.cold.put_all(cold,sim.time)
 	return {"added":added,"removed":removed}
 
@@ -379,6 +379,11 @@ func step(dt: float) -> void:
 				received[queries[i].organ_id]=combined[i]
 		if streaming!=null:
 			for i in queries.size():
+				if queries[i].id==cell.id and queries[i].mode=="danger":
+					var danger: Dictionary=receipt.senses[i].get("danger",{})
+					var local: Dictionary=local_senses[i].get("danger",{})
+					if not local.is_empty() and (danger.is_empty() or local.distance<danger.distance):danger=local
+					received[queries[i].organ_id]["danger"]=danger
 				if queries[i].id!=cell.id or queries[i].mode!="family":continue
 				var id: int=queries[i].organ_id
 				if not received.has(id):received[id]={"food":{},"reports":{},"patch":{}}
