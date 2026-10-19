@@ -8,7 +8,7 @@ name: Primordia persistent server CD
       incident_operation:
         description: Explicit incident containment; does not deploy or reset
         type: choice
-        options: [none, quarantine-stable]
+        options: [none, quarantine-stable, inspect-stable]
         default: none
       allow_performance_warnings:
         description: Ship with known timing shortfalls; retain GPU, correctness and state checks
@@ -21,7 +21,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   deploy:
-    if: github.repository == 'samzapo/primordia' && github.ref == 'refs/heads/main' && inputs.incident_operation != 'quarantine-stable'
+    if: github.repository == 'samzapo/primordia' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.incident_operation == 'none')
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 50
     steps:
@@ -218,4 +218,39 @@ jobs:
           report={"utc":datetime.datetime.now(datetime.timezone.utc).isoformat(),"active":active,"incident":str(incident),"current":str((root/"current").resolve()),"state_sha256":manifest,"retained_private_files":len(before),"backups":backups}
           (incident/"manifest.json").write_text(json.dumps(report,indent=2))
           print("QUARANTINED "+json.dumps(report))
+          PY
+
+  inspect-stable:
+    if: github.repository == 'samzapo/primordia' && github.actor == 'samzapo' && inputs.incident_operation == 'inspect-stable'
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 4
+    steps:
+      - name: Inspect retained incident without starting a world
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$RUNNER_NAME" = samzapo-desktop
+          test "$(hostname)" = samzapo-desktop
+          python3 - <<'PY'
+          import json,os,pathlib,subprocess,tempfile,urllib.request
+          root=pathlib.Path.home()/".local/share/primordia-deploy"
+          scratch=pathlib.Path(tempfile.mkdtemp(prefix="samzapo--live-nan-inspect--",dir=os.environ["RUNNER_TEMP"]))
+          (scratch/"scripts/network").mkdir(parents=True)
+          (scratch/"project.godot").write_text('config_version=5\n[application]\nconfig/name="Read-only incident inspection"\n')
+          (scratch/"scripts/network/world_store.gd").write_text((root/"current/scripts/network/world_store.gd").read_text())
+          request=urllib.request.Request("https://api.github.com/repos/samzapo/primordia/contents/tools/inspect_nonfinite.gd?ref="+os.environ["GITHUB_SHA"],headers={"Authorization":"Bearer "+os.environ["GH_TOKEN"],"Accept":"application/vnd.github.raw+json"})
+          with urllib.request.urlopen(request,timeout=20) as response:source=response.read(65536)
+          (scratch/"inspect.gd").write_bytes(source)
+          incident=root/"incidents/nonfinite-39189988717"
+          paths=[incident/"before-stop",incident/"stopped",root/"before-update-l8dktxpr"]
+          godot=next((root/"runtime").glob("Godot_v*-stable_linux.x86_64"))
+          result=subprocess.run([str(godot),"--headless","--path",str(scratch),"--script",str(scratch/"inspect.gd"),"--",*["--state-dir="+str(p) for p in paths]],capture_output=True,text=True,timeout=90)
+          (incident/"inspection.txt").write_text(result.stdout+"\n"+result.stderr)
+          print(result.stdout);print(result.stderr)
+          os.environ.setdefault("XDG_RUNTIME_DIR",f"/run/user/{os.getuid()}")
+          journal=subprocess.run(["journalctl","--user","-u","primordia.service","--since","2026-10-19 02:14:00 UTC","--until","2026-10-19 02:22:00 UTC","--no-pager","-o","cat"],capture_output=True,text=True,timeout=20)
+          (incident/"early-journal.txt").write_text(journal.stdout)
+          print("EARLY_JOURNAL_BEGIN");print("\n".join(journal.stdout.splitlines()[:240]));print("EARLY_JOURNAL_END")
+          assert result.returncode==0 and "SCRIPT ERROR" not in result.stdout+result.stderr
           PY
