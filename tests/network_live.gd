@@ -2,6 +2,20 @@ extends SceneTree
 const Sim=preload("res://scripts/simulation.gd")
 const Host=preload("res://scripts/network/world_host.gd")
 const Protocol=preload("res://scripts/network/protocol.gd")
+class EmittingHost:
+	extends "res://scripts/network/world_host.gd"
+	var late_emissions:=false
+	func _physics_process(dt: float) -> void:
+		super(dt)
+		if not late_emissions or not running or world.resident==null:return
+		# Reproduce gas packets arriving after the tick's last GPU receipt.
+		# Every observer sees new escrow every tick, so delivery cannot rely
+		# on a lucky emission-free interval between physics steps.
+		for peer in peers.values():
+			if peer.account=="" or peer.view==null:continue
+			for kind in [Sim.CARBON,Sim.OXYGEN]:
+				world.spawn_particle(kind,Vector2(peer.view.x,peer.view.y),Vector2.ZERO,.01)
+
 var failures:=0
 var assertions:=0
 var host
@@ -63,8 +77,8 @@ func find_message(index: int,kind: String,sequence: int=-1) -> Dictionary:
 		if message.get("kind","")==kind and (sequence<0 or message.get("sequence",-2)==sequence):return message
 	return {}
 func run() -> void:
-	host=Host.new();host.cpu=not ("--gpu" in OS.get_cmdline_user_args())
-	if "--slow-observer" in OS.get_cmdline_user_args():host.physics_hz=2
+	host=EmittingHost.new();host.cpu=not ("--gpu" in OS.get_cmdline_user_args())
+	if "--slow-observer" in OS.get_cmdline_user_args():host.physics_hz=2;host.late_emissions=true
 	# Match run_service.py: this window submits compute, while client camera
 	# rectangles below still request full widest-view simulation fidelity.
 	if not host.cpu:root.size=Vector2i(64,64)
@@ -135,6 +149,21 @@ func run() -> void:
 	check(await until(func():return messages[0].any(func(m):return m.get("kind","")=="snapshot" and m.get("particles",PackedByteArray()).size()>0 and not m.get("warming",true))),"bounded particle publication reaches client")
 	var census_frame: Dictionary=messages[0].filter(func(message):return message.get("kind","")=="snapshot" and not message.get("warming",true) and message.get("serial",0)>0)[-1]
 	check(census_frame.has("census") and census_frame.census.has("external") and census_frame.census.has("living_cells") and census_frame.census.camera_particles<=census_frame.particles.size()/32 and census_frame.census.buffered_particles==census_frame.particles.size()/32,"Snapshots deliver a distinct authoritative global census and camera-record count")
+	if not host.cpu:
+		var bridge=host.world.resident
+		var at:=Vector2(camera_reports[0].rect[0],camera_reports[0].rect[1])
+		host.world.spawn_particle(Sim.CARBON,at,Vector2.ZERO,.01)
+		host.world.spawn_particle(Sim.OXYGEN,at,Vector2.ZERO,.01)
+		var count_before: int=bridge.habitat_census().external
+		var clock_before_admission: float=host.world.time
+		var tick_before_admission: int=host.world.revision
+		var stocks_before: Array=host.world.cells.map(func(c):return Vector3(c.energy,c.biomass,c.health))
+		var random_before: int=host.world.rng.state
+		var exports_before: int=bridge.gpu.readbacks
+		check(not bridge.streaming.region_ready(Vector4(at.x,at.y,1,1)),"Real late gas packets block readiness while escrowed")
+		check(bridge.prepare_publication() and bridge.pending.is_empty(),"Real GPU accepts late emissions before complete publication")
+		check(bridge.habitat_census().external==count_before,"Admission transfers every packet exactly once into the resident census")
+		check(host.world.time==clock_before_admission and host.world.revision==tick_before_admission and host.world.rng.state==random_before and host.world.cells.map(func(c):return Vector3(c.energy,c.biomass,c.health))==stocks_before and bridge.gpu.readbacks==exports_before,"Publication preparation cannot advance biology, spend resources or export GPU poses")
 	withheld_acks[0]=true
 	check(await until(func():return deferred_acks.has(0)),"Slow browser leaves one complete snapshot awaiting acknowledgement")
 	var slow_peer: Dictionary=host.peers.values().filter(func(peer):return peer.account==welcome0.token.sha256_text())[0]
