@@ -7,12 +7,12 @@ static func run(check: Callable) -> void:
 	var mass: float=cell.organic_mass()
 	var energy: float=cell.energy
 	cell.chemistry.receive(0,3,2,cell.position+cell.local_point(0))
-	check.call(is_equal_approx(cell.organic_mass()-mass,3) and is_equal_approx(cell.raw_fuel,15),"Intake transfers actual nutrient material and its finite fuel")
+	check.call(is_equal_approx(cell.organic_mass()-mass,3) and is_equal_approx(cell.raw_fuel,36),"Intake transfers actual nutrient material and its finite fuel")
 	mass=cell.organic_mass();energy=cell.energy
 	cell.chemistry.advance(cell,1)
 	check.call(cell.energy>energy and cell.biomass>18 and cell.waste>0,"Digestion directly credits numeric ATP/biomass and retains waste")
 	check.call(absf(cell.organic_mass()-mass)<.000001,"Digestion conserves represented organic material")
-	check.call(absf(cell.chemistry.potential()+cell.chemistry.heat+(cell.biomass-18)*7.5+cell.energy-energy-15)<.000001,"Digestion cannot credit ATP beyond its finite fuel after retaining tissue")
+	check.call(absf(cell.chemistry.potential()+cell.chemistry.heat+(cell.biomass-18)*7.5+cell.energy-energy-36)<.000001,"Digestion cannot credit ATP beyond its finite fuel after retaining tissue")
 	check.call(cell.chemistry.particles.all(func(p):return p.species in cell.chemistry.ACTIVE_SPECIES),"Cytoplasm contains only bounded food, waste and gas particles")
 	var sim=preload("res://scripts/simulation.gd").new(41,0,false)
 	sim.cells=[cell];sim.player=cell;sim.particles=[]

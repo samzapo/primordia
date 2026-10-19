@@ -241,7 +241,7 @@ func finish(sim) -> void:
 
 func sense(sim,query: Dictionary) -> Dictionary:
 	var result: Dictionary={"food":{},"reports":{},"needed":false}
-	var kind: int=sim.NUTRIENT if query.mode=="graze" else sim.WASTE if query.mode=="waste" else sim.TOXIN if query.mode=="toxin" else sim.PHEROMONE
+	var kind: int=sim.NUTRIENT if query.mode=="graze" else sim.WASTE if query.mode=="waste" else sim.TOXIN if query.mode in ["toxin","danger"] else sim.PHEROMONE
 	var candidates: Array[int]=sim.grid.query_kind(sim.particles,query.at,query.reach,kind)
 	if query.mode in ["graze","hunt","flee","family"] and sim.kernels!=null and sim.kernels.has_method("packet_sense"):
 		result=sim.kernels.packet_sense(sim.particles,candidates,query.at,query.reach,query.center,query.id,query.lineage,sim.time,query.mode=="graze",query.mode=="family")
@@ -255,8 +255,11 @@ func sense(sim,query: Dictionary) -> Dictionary:
 		if not packet.alive: continue
 		var distance: float=Medium.offset(query.at,packet.p).length()
 		if distance>query.reach: continue
+		if query.mode=="danger":
+			if not result.has("danger") or distance<result.danger.distance:result["danger"]={"at":packet.p,"distance":distance}
+			continue
 		if query.mode in ["waste","toxin"]:
-			if packet.kind==(sim.WASTE if query.mode=="waste" else sim.TOXIN) and (query.mode=="waste" or sim.inherited_lineages.get(packet.owner,packet.owner)!=query.lineage): result.needed=true
+			if packet.kind==(sim.WASTE if query.mode=="waste" else sim.TOXIN) : result.needed=true
 			continue
 		if packet.owner==query.id: continue
 		if query.mode=="graze" and packet.kind==sim.NUTRIENT and packet.amount>0:

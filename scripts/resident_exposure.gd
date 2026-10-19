@@ -1,7 +1,7 @@
 extends RefCounted
 ## Ordered finite contact events for CPU membrane damage and receptor blockage.
 const HITS_PER_BODY:=128
-const MAX_DECOYS:=256
+const MAX_DECOYS:=1024 # Includes both new family receptors on every pond cell.
 const MAX_RECEIPT_VECTORS:=64*(HITS_PER_BODY+1)+MAX_DECOYS
 var camera_regions:=RID()
 var rd: RenderingDevice
@@ -19,7 +19,7 @@ static func prepare(cells: Array) -> Dictionary:
 		var cell=cells[b]
 		var start:=organ_ids.size()
 		for organ in cell.organs:
-			if organ.kind not in ["feeding","sensing","hunting"]: continue
+			if organ.kind not in ["feeding","sensing","hunting","family_toward","family_away"]: continue
 			var at: Vector2=cell.organ_position(organ)
 			var normal: Vector2=cell.organ_normal(organ).rotated(cell.angle)
 			decoys.append_array(PackedFloat32Array([at.x,at.y,normal.x,normal.y,12*organ.scale,b,0,0]))

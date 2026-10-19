@@ -10,7 +10,12 @@ const DIGESTION_RATE := 1.8
 const RESIDENCE_SECONDS := 10.0
 const BIOMASS_YIELD := 0.7
 const MAX_LEAF_FIXATION := 0.7
-const LEAF_ATP_YIELD := 2.0
+const LEAF_ATP_YIELD := 4.0
+# Fresh food retains respiratory energy that baseline digestion dissipates.
+# Saved parcels keep their exact finite fuel; construction tissue stays7.5.
+const FOOD_FUEL := 18.0
+const TISSUE_FUEL := 7.5
+const LEAF_SOLAR_WORK := .35*TISSUE_FUEL+.65*FOOD_FUEL+LEAF_ATP_YIELD
 const MIN_LEAF_LIGHT := 0.08 # Authored diffuse-light survival floor, with real carbon costs.
 var model_version := 2
 var batching:=false
@@ -59,7 +64,7 @@ func _quantum(_species: String) -> float: return 4.0
 
 func emit(species: String, quantity: float, at: Vector2, source: int=-1, compartment: int=-1, fuel: float=-1, _spread: float=0, nutrition: float=0) -> void:
 	if quantity<=0 or species not in ACTIVE_SPECIES:return
-	fuel=quantity*7.5 if fuel<0 and species=="food" else maxf(0,fuel)
+	fuel=quantity*FOOD_FUEL if fuel<0 and species=="food" else maxf(0,fuel)
 	if accelerator!=null:accelerator.command(1,quantity,at,0,-1,source,compartment,fuel,0,species,{19:nutrition});return
 	var chosen: Dictionary={}
 	var count:=0
@@ -111,7 +116,7 @@ func receive(kind: int, quantity: float, capacity: float, world_at: Vector2) -> 
 	local=local.normalized()*minf(local.length(),cell.support(local.angle()+cell.angle)*.78)
 	# External profile carries true fuel up to quantity, then ATP allocation credit.
 	var bonus := clampf(capacity/quantity-1,0,float(Catalog.data().ecology.nutrient_bonus_limit)) if kind==0 else 0.0
-	emit({0:"food",1:"oxygen",5:"carbon"}[kind],quantity,local,-1,-1,minf(quantity,capacity)*7.5 if kind==0 else 0,0,bonus)
+	emit({0:"food",1:"oxygen",5:"carbon"}[kind],quantity,local,-1,-1,minf(quantity,capacity)*FOOD_FUEL if kind==0 else 0,0,bonus)
 func refresh() -> void:
 	particles=particles.filter(func(packet):return packet.alive)
 	totals.clear();vacuoles.clear()
@@ -159,12 +164,15 @@ func advance(cell, dt: float, _external_osmolarity: float=.15) -> void:
 		var fueled:=minf(used,fuel/7.5)
 		var tissue: float=fueled*(.7*aerobic+.3*anaerobic)/maxf(.00000001,used)
 		var work: float=minf(maxf(0,fuel-tissue*7.5),fueled*(2.25*aerobic+1.0*anaerobic)/maxf(.00000001,used))
-		var allocation_gain: float=bonus+maxf(0,mitochondrial_gain-1)*aerobic/maxf(.00000001,used)
-		if allocation_gain>0:
-			var extra := minf(work*allocation_gain,maxf(0,fuel-work))
-			var recovered_heat := maxf(0,fuel-tissue*7.5-work)
-			tissue-=maxf(0,extra-recovered_heat)/7.5
+		# Nutrient quality retains its own allocation rule. Mitochondria recover
+		# only otherwise dissipated fuel, never debit the meal's biomass output.
+		var mitochondrial_extra: float=work*maxf(0,mitochondrial_gain-1)*aerobic/maxf(.00000001,used)
+		if bonus>0:
+			var extra := minf(work*bonus,maxf(0,fuel-work))
+			var recovered_heat := maxf(0,fuel-tissue*TISSUE_FUEL-work)
+			tissue-=maxf(0,extra-recovered_heat)/TISSUE_FUEL
 			work+=extra
+		work+=minf(mitochondrial_extra,maxf(0,fuel-tissue*TISSUE_FUEL-work))
 		cell.biomass+=tissue;cell.gain_energy(work);cell.processed+=used
 		cell.fermented+=anaerobic
 		if anaerobic>0:cell.fermentation_activity=2
@@ -291,9 +299,9 @@ func photosynthesize(sim,cell,organ: Dictionary,dt: float) -> void:
 		batching=true
 		used=_near_consume("carbon",budget,site,24)
 		if used>0:
-			emit("food",used*.65*.75,site,organ.id,-1,used*.65*.75*7.5)
+			emit("food",used*.65*.75,site,organ.id,-1,used*.65*.75*FOOD_FUEL)
 			emit("oxygen",used*2.5,site,organ.id,-1,0)
-			cell.biomass+=used*.35;solar_work+=used*11.5;heat+=used*(4-LEAF_ATP_YIELD)
+			cell.biomass+=used*.35;solar_work+=used*LEAF_SOLAR_WORK;heat+=used*(4-LEAF_ATP_YIELD)
 		batching=false;refresh()
 	if used>0:
 		var normal: Vector2=cell.organ_normal(organ).rotated(cell.angle)

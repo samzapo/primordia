@@ -81,7 +81,7 @@ func run() -> void:
 	check(plant.fixed_carbon>0 and plant.oxygen>0 and plant.substrate>0,"Light and local carbon make food and oxygen particles")
 	var shared_food: float=sim.particle_snapshots().reduce(func(total,p):return total+(p.amount if p.alive and p.kind==Sim.NUTRIENT and p.owner==plant.id else 0.0),0.0)-exterior_before
 	check(absf(plant.organic_mass()+shared_food-mass)<.000001,"Internal and shared exterior photosynthate conserve carbon material")
-	check(absf(plant.energy+plant.biomass*7.5+plant.raw_fuel+plant.chemistry.heat+shared_food*7.5-before-plant.chemistry.solar_work)<.000001,"Photosynthesis records the solar energy input explicitly")
+	check(absf(plant.energy+plant.biomass*7.5+plant.raw_fuel+plant.chemistry.heat+shared_food*Cell.Chemistry.FOOD_FUEL-before-plant.chemistry.solar_work)<.000001,"Photosynthesis records the solar energy input explicitly")
 	check(int(plant.organs[0].get("emission_serial",0))>0,"Photosynthetic production triggers gland bounce")
 	var starving=Cell.new(15);starving.energy=0
 	var stored: float=starving.organic_mass()
@@ -94,6 +94,9 @@ func run() -> void:
 	for kind in ["feeding","neutralizing","acidifying","regenerative","toxin","poreforming"]:
 		var gland=Cell.new(100);gland.biomass=100;gland.energy=2000;gland.acid_stress=1
 		gland.add_organ(kind,0,"graze",false)
+		if kind in ["toxin","poreforming"]:
+			gland.add_organ("hunting",1,"hunt",false)
+			gland.behavior["weapon_cue"]={"at":gland.position+Vector2(100,0),"id":999,"organ_id":gland.organs[-1].id,"expires_at":sim.time+10,"lineage":999}
 		gland.target_id=999;gland.target_memory=10;gland.target_position=gland.position+Vector2(100,0);gland.target_mode="hunt"
 		sim.cells=[gland];sim.player=gland;sim.particles=[]
 		sim.spawn_particle(Sim.WASTE,gland.organ_position(gland.organs[0])+Vector2(15,0),Vector2.ZERO,1,999)

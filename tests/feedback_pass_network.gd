@@ -14,7 +14,7 @@ func run() -> void:
  socket.inbound_buffer_size=Protocol.MAX_FRAME;socket.outbound_buffer_size=65536
  socket.connect_to_url("ws://127.0.0.1:"+str(host.port))
  check(await until(func():return socket.get_ready_state()==WebSocketPeer.STATE_OPEN),"Real investment socket connects")
- socket.send_text(JSON.stringify({"op":"hello","invite":OS.get_environment("PRIMORDIA_INVITE"),"snapshot_ack":true}))
+ socket.send_text(JSON.stringify({"op":"hello","invite":OS.get_environment("PRIMORDIA_INVITE"),"snapshot_ack":true,"death_events":true}))
  check(await until(func():return messages.any(func(m):return m.get("kind","")=="welcome")),"Fixture account signs in")
  var welcome: Dictionary=messages.filter(func(m):return m.get("kind","")=="welcome")[0]
  var account: Dictionary=host.accounts[welcome.token.sha256_text()]
@@ -135,6 +135,74 @@ func run() -> void:
  socket.send_text(JSON.stringify(command))
  check(await until(func():return not result(7).is_empty()),"An unfunded second division returns a clear rejection")
  check(not result(7).ok and result(7).message.contains("still needed"),"Rejected division explains actual missing funding")
+ # New family settings and fusion use the same authenticated, durable command path.
+ command={"op":"command","epoch":host.epoch,"cell":selected.id,"edit":account.edit,"sequence":8,"action":"division_policy","args":{"scope":"lineage","automatic":true}}
+ socket.send_text(JSON.stringify(command))
+ check(await until(func():return not result(8).is_empty()),"Family division setting receives a sequenced receipt")
+ check(result(8).ok and host.world.cells.filter(func(body):return body.lineage_id()==account.root).all(func(body):return body.automatic_division),"Family automatic division changes only its own current relatives")
+ var donor=host.world.cells.filter(func(body):return not body.dead and body.lineage_id()==account.root and body!=selected)[-1]
+ for body in host.world.cells:
+  if body!=selected and body!=donor:body.position=Vector2(2600+body.id*10,2200);body.previous_position=body.position
+ donor.position=selected.position+Vector2(selected.support(0)+donor.support(PI)-5,0);donor.previous_position=donor.position
+ var family_trace: Dictionary=host.world._emit_pheromone(donor)
+ family_trace.p=selected.organ_position(selected.organs.filter(func(o):return o.kind=="feeding")[0]);family_trace.previous=family_trace.p
+ family_trace.expires_at=host.world.time+8
+ host.world._commit_spawn_metadata()
+ if host.cpu:
+  host.world.grid.rebuild(host.world.particles);selected.behavior["family_cues"]=host.world._family_reports(selected)
+ check(await until(func():return Sim.FamilyMerging.detected(host.world,selected,donor.id)),"The receiver detects a real emitted family tracer through its active chemistry backend")
+ # Selection must commit while the sensed donor is still physically separated.
+ donor.position=selected.position+Vector2(450,200);donor.previous_position=donor.position
+ check(not Sim.FamilyMerging.touching(host.world,selected,donor),"The network merge starts without physical contact")
+ var eligibility: Dictionary=host._frame(peer).merge_available
+ check(eligibility.cell==selected.id and eligibility.targets.has(donor.id),"The real socket snapshot exposes only current detected merge target identities")
+ var donor_id: int=donor.id;var combined_ap: int=selected.ap+donor.ap
+ command={"op":"command","epoch":host.epoch,"cell":selected.id,"edit":account.edit,"sequence":9,"action":"merge","args":{"id":donor.id}}
+ socket.send_text(JSON.stringify(command))
+ check(await until(func():return not result(9).is_empty()),"Immediate selected fusion receives an authenticated receipt")
+ if not result(9).ok:print("FUSION_REJECT ",result(9)," distance=",Sim.Medium.offset(selected.position,donor.position).length()," supports=",selected.support(0)+donor.support(PI))
+ check(result(9).ok and not host.world.cells.any(func(body):return body.id==donor_id) and selected.ap==combined_ap and not selected.behavior.has("merge_order"),"Fusion is complete at the receipt with no approach order or extra AP")
+ check(result(9).message=="Family cells merged.","The authoritative receipt confirms completion rather than promising navigation")
+ saved=Codec.new().restore(host.store.load_latest().graph)
+ check(not saved.world.cells.any(func(body):return body.id==donor_id) and saved.accounts[welcome.token.sha256_text()].current.id==selected.id,"Fusion is durable before success and retains the receiver identity")
+ socket.send_text(JSON.stringify(command))
+ check(await until(func():return messages.filter(func(m):return m.get("kind","")=="result" and m.get("sequence",-1)==9).size()==2),"Retried fusion receives its original receipt")
+ check(selected.ap==combined_ap and account.lineage.births==births+1,"Retried fusion cannot duplicate AP or births")
+ check(await until(func():return messages.any(func(frame):return frame.get("merges",[]).any(func(event):return event.donor==donor_id and event.receiver==selected.id))),"The real socket delivers the consumed donor's pull-in artwork")
+ check(host.world.merge_bursts.size()==1 and host.world.merge_bursts[0].donor==donor_id,"Retried authenticated merge produces one presentation fact and no revived donor")
+ # Single-division requests use the same authenticated, durable receipt path.
+ selected.brood_mass=0;selected.brood_energy=0
+ command={"op":"command","epoch":host.epoch,"cell":selected.id,"edit":account.edit,"sequence":10,"action":"division_request","args":{"active":true}}
+ births=account.lineage.births;points=selected.ap
+ socket.send_text(JSON.stringify(command))
+ check(await until(func():return not result(10).is_empty()),"Queued division has a real authenticated receipt")
+ check(result(10).ok and result(10).queued and selected.division_requested and not selected.automatic_division and account.lineage.births==births,"Unfunded manual division queues instead of being rejected or enabling continuous auto")
+ saved=Codec.new().restore(host.store.load_latest().graph)
+ check(saved.accounts[welcome.token.sha256_text()].current.division_requested,"The one-shot request is durable before the success receipt")
+ frame=host._frame(peer)
+ check(frame.division.queued and not frame.division.automatic,"Browser readiness includes the authoritative queued/automatic state")
+ for body in host.world.cells:
+  if body!=selected:body.automatic_division=false;body.position=Vector2(2600+body.id*10,2200)
+ host.world.automatic_reproduction=true
+ selected.brood_mass=host.world.offspring_quote(selected).material;selected.brood_energy=60;selected.reproduction_retry_at=0
+ host.world._step_reproduction();host.world.automatic_reproduction=false
+ check(account.lineage.births==births+1 and not selected.division_requested and selected.ap==points+1,"Authority consumes the queued birth once, preserving per-cell AP")
+ check(not host.world.cells[-1].division_requested and not host.world.cells[-1].automatic_division,"The queued birth does not arm its daughter")
+ socket.send_text(JSON.stringify(command))
+ check(await until(func():return messages.filter(func(m):return m.get("kind","")=="result" and m.get("sequence",-1)==10).size()==2),"A replay receives its retained queue receipt")
+ check(not selected.division_requested and account.lineage.births==births+1,"Replaying the completed request cannot re-arm or duplicate its birth")
+ command.sequence=11;command.edit=account.edit;command.cell=selected.id+10000
+ socket.send_text(JSON.stringify(command))
+ check(await until(func():return not result(11).is_empty()),"Forged division target receives a rejection")
+ check(not result(11).ok and not selected.division_requested,"A queued division cannot target another body")
+ var unseen=Sim.Cell.new(host.world.next_id,Sim.Medium.wrap_position(selected.position+Vector2(1600,900)));host.world.next_id+=1
+ unseen.lineage=account.root;host.world.cells.append(unseen);account.lineage.register(unseen,selected.id,1,"living",host.world.time)
+ points=selected.ap
+ command={"op":"command","epoch":host.epoch,"cell":selected.id,"edit":account.edit,"sequence":12,"action":"merge","args":{"id":unseen.id,"detected":true}}
+ socket.send_text(JSON.stringify(command))
+ check(await until(func():return not result(12).is_empty()),"An undetected family target receives an authenticated rejection")
+ check(not result(12).ok and result(12).message.contains("pheromones") and selected.ap==points and host.world.cells.has(unseen),"A forged client detection claim cannot authorize merging or spend resources")
+ check(not host._frame(peer).merge_available.targets.has(unseen.id),"Off-camera family portraits do not become merge selection permission")
  socket.close();host.running=false;host.listener.stop();host._finish_snapshots()
  if host.world.resident!=null:
   host.world.resident.gpu.close();await host.world.resident.gpu.closed

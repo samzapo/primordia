@@ -81,7 +81,7 @@ static func run(check: Callable) -> void:
 	check.call(requests.is_empty(),"Resident scheduling requests no chemical information from a destroyed receptor")
 	cell.organs[0].hp=cell.organs[0].max_hp;cell.sense_clock=0
 	requests=Perception.requests([cell],.2,sim.time)
-	check.call(requests.size()==2 and requests[1].mode=="family","Resident policy obtains family facts through a separate bounded local chemical query")
+	check.call(requests.size()==3 and requests.map(func(q):return q.mode)==["flee","danger","family"],"Resident policy obtains family facts through a separate bounded local chemical query")
 	# All decisions remain read-only with respect to chemistry and ecology RNG.
 	var material: int=hash(sim.particles)
 	var states: Array=[sim.rng.state,sim.background_rng.state,sim.ecology_rng.state]

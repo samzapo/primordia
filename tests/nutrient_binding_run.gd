@@ -38,12 +38,12 @@ func run() -> void:
 		for mutual in [false,true]:
 			for background in [false,true]:
 				var plain: Array=pair(0,pool,mutual,background)
-				var mild: Array=pair(.4,pool,mutual,background)
+				var mild: Array=pair(.25,pool,mutual,background)
 				var harsh: Array=pair(.95,pool,mutual,background)
 				check(plain.filter(func(p):return p.alive).size()==2 and harsh.filter(func(p):return p.alive).size()==2,"Neutral/excess acid retain narrow nutrient binding faces")
 				var living:=mild.filter(func(p):return p.alive)
 				check(living.size()==1 and living[0].amount==120,"Mild acid helps real production-sized nutrient parcels combine")
-				check(absf(living[0].capacity-144)<.00001,"First equal-size join carries20% ATP allocation benefit")
+				check(absf(living[0].capacity-168)<.00001,"Mild-acid equal-size join carries40% ATP allocation benefit")
 				check(absf(living[0].amount-120)<.000001,"Binding preserves combined material")
 	for coarse in [false,true]:uptake(coarse)
 	var cap:=1.0;var mass:=1.0
@@ -59,8 +59,8 @@ func run() -> void:
 		plain.chemistry.advance(plain,1);rich.chemistry.advance(rich,1)
 		check(absf(rich.energy/plain.energy-1.2)<.000001,"Bound nutrients yield20% more ATP per consumed unit")
 		check(absf(rich.organic_mass()-before)<.000001,"Extra ATP does not delete or create material")
-		check(absf(rich.energy+rich.biomass*7.5+rich.chemistry.raw_fuel()+rich.chemistry.heat-60)<.000001,"Existing fuel pays for ATP, biomass and heat")
-		if oxygen:check(rich.biomass<plain.biomass,"Aerobic ATP gain is funded by reduced tissue allocation")
+		check(absf(rich.energy+rich.biomass*7.5+rich.chemistry.raw_fuel()+rich.chemistry.heat-8*Cell.Chemistry.FOOD_FUEL)<.000001,"Existing fuel pays for ATP, biomass and heat")
+		if oxygen:check(absf(rich.biomass-plain.biomass)<.000001 and rich.chemistry.heat<plain.chemistry.heat,"Fresh food quality recovers finite heat without reducing tissue")
 		else:check(absf(rich.biomass-plain.biomass)<.000001 and rich.chemistry.heat<plain.chemistry.heat,"Fermentation recovers otherwise dissipated heat first")
 		var codec=preload("res://scripts/network/state_codec.gd").new()
 		var copy=codec.restore(codec.capture(rich))
@@ -89,7 +89,7 @@ func run() -> void:
 	quit(0 if failures==0 else 1)
 func gpu_pairs() -> void:
 	var fixture=preload("res://scripts/resident_fixture.gd")
-	for acid in [0.0,.4,.95]:
+	for acid in [0.0,.25,.95]:
 		var data: PackedFloat32Array=fixture.make(2)
 		for i in 2:
 			var k:=i*12
@@ -100,8 +100,8 @@ func gpu_pairs() -> void:
 		var status: Array=await gpu.ready;check(status[0],str(status[1]))
 		gpu.interact_only();gpu.snapshot()
 		var output: PackedFloat32Array=await gpu.snapshot_ready
-		check((output[19]<0)==(acid==.4),"Actual GPU nutrient joining uses the acid optimum")
-		if acid==.4:check(absf(output[9]-120)<.00001 and absf(output[10]-144)<.00001,"Actual GPU binding preserves amount and creates only allocation benefit")
+		check((output[19]<0)==(acid==.25),"Actual GPU nutrient joining uses the acid optimum")
+		if acid==.25:check(absf(output[9]-120)<.00001 and absf(output[10]-168)<.00001,"Actual GPU binding preserves amount and creates only allocation benefit")
 		gpu.close();await gpu.closed
 
 

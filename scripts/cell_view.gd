@@ -29,6 +29,7 @@ var depth_style := false
 var sound_waves := Node2D.new()
 var nucleus_center := Vector2.ZERO
 var nucleus_size := 0.0
+var membrane_warning:=false
 
 func _ready() -> void:
 	# Keep each shaded body immediately behind its own contents, so another
@@ -51,7 +52,7 @@ func _ready() -> void:
 	label.add_theme_color_override("font_outline_color",Color("21375d"))
 	label.add_theme_constant_override("outline_size",4)
 	add_child(label)
-	appendages.z_index = 1
+	appendages.z_index = 0 # Keep each body and all its organs in one cell-local drawing order.
 	add_child(appendages)
 	appendages.draw.connect(_draw_organs)
 	add_child(sound_waves)
@@ -77,6 +78,9 @@ func sync(render_position: Vector2, render_angle: float, zoom: float, alpha: flo
 		seen_revision = -1
 		surface_revision = -1
 		surface.visible = depth_style
+	var critical_membrane: bool=cell==game.world.player and not cell.dead and cell.health<Visuals.CRITICAL_HEALTH
+	if critical_membrane or membrane_warning!=critical_membrane:
+		membrane_warning=critical_membrane;queue_redraw()
 	var internal: bool=game.internal_visible(cell)
 	interior_backing.visible=internal
 	interior_backing.mesh=surface.mesh if surface.mesh!=null else Surface.mesh(cell.membrane.outline(),game.native_geometry)
@@ -166,6 +170,11 @@ func _draw() -> void:
 				if highlight.size() > 1: draw_polyline(highlight,palette[4],cell.radius*0.068,true)
 				highlight.clear()
 		if highlight.size() > 1: draw_polyline(highlight,palette[4],cell.radius*0.068,true)
+	if membrane_warning:
+		var warning_rim:=PackedVector2Array()
+		for point in outline:warning_rim.append(point*.955)
+		warning_rim.append(warning_rim[0])
+		draw_polyline(warning_rim,Color(1,.40,.24,Visuals.warning_pulse(game.ui_time)*.85),maxf(cell.radius*.06,1.5/maxf(.001,game.zoom)),true)
 	for link in ([] if simple_view else cell.membrane.skeleton.links):
 		var a: Vector2 = cell.membrane.skeleton.point(link.a,cell.membrane)
 		var b: Vector2 = cell.membrane.skeleton.point(link.b,cell.membrane)
@@ -193,6 +202,12 @@ func _draw() -> void:
 		draw_arc(at,4+hole.size*6,0,TAU,16,Color("fc8c90"),1.5,true)
 	if game.show_senses:
 		draw_line(Vector2.ZERO,cell.target.rotated(-cell.angle)*(cell.radius+80),Color("b5a3f4"),2,true)
+	if cell==game.world.player and game.preferences.show_instinct and cell.target.length_squared()>.001 and not cell.state.contains("RESTING"):
+		var direction: Vector2=cell.target.rotated(-cell.angle).normalized()
+		var end: Vector2=direction*(cell.extent()+28)
+		draw_line(direction*cell.extent(),end,Color("fff0ac"),2,true)
+		draw_line(end,end-direction.rotated(.55)*9,Color("fff0ac"),2,true)
+		draw_line(end,end-direction.rotated(-.55)*9,Color("fff0ac"),2,true)
 
 	if game.frame_trace != null: game.frame_trace.work("cell_draw_commands",Time.get_ticks_usec()-mark)
 

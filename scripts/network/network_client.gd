@@ -4,6 +4,8 @@ var server_census: Dictionary={}
 var update_popup=preload("res://scripts/update_popup.gd").new()
 var pending_release_updates: Array=[]
 var defer_release_updates:=false
+var merge_tombstones: Dictionary={}
+var received_merge_serial:=0
 var received_death_serial:=0
 var death_tombstones: Dictionary={}
 const Codec = preload("res://scripts/network/state_codec.gd")
@@ -276,7 +278,7 @@ func _connect(manual: bool=true) -> void:
 		return
 	if socket.get_ready_state()!=WebSocketPeer.STATE_CLOSED: socket.close(-1)
 	socket=WebSocketPeer.new();socket.inbound_buffer_size=Protocol.MAX_FRAME;socket.outbound_buffer_size=65536;socket.max_queued_packets=8
-	hello_sent=false;connected=false;connecting=true;attempted=true;retry_enabled=true;reconnect_due=3;inflight.clear();commands.clear()
+	hello_sent=false;connected=false;connecting=true;attempted=true;retry_enabled=true;reconnect_due=3;inflight.clear();commands.clear();cell_ui.pending_mutation.clear()
 	view_announced=false;view_clock=0;keepalive_clock=0;received_usec=0
 	update_popup.close();pending_release_updates=[]
 	playback.reset();playback_domain="";playback_after_tick=-1;user_paused=false;paused_snapshot={};touch_zoom.cancel();camera_initialized=false
@@ -294,7 +296,7 @@ func _connect(manual: bool=true) -> void:
 func _connection_closed(code: int,reason: String) -> void:
 	update_popup.close();pending_release_updates=[];player_help.close()
 	playback.reset();playback_domain="";playback_after_tick=-1
-	connecting=false;connected=false;loading_world=false;commands.clear();inflight.clear();connection_stage="disconnected"
+	connecting=false;connected=false;loading_world=false;commands.clear();inflight.clear();cell_ui.pending_mutation.clear();connection_stage="disconnected"
 	if code==1008:
 		retry_enabled=false
 		var explanation:="The server refused this connection. Check your access key and try again."
@@ -344,6 +346,7 @@ func _poll_network() -> void:
 					if int(message.sequence)==int(inflight.get("sequence",-2)):
 						edit_revision=message.get("edit",edit_revision)
 						command_sequence=message.get("server_sequence",message.sequence)
+						cell_ui.command_result(inflight,message)
 						inflight.clear()
 						_message(message.message)
 						if cell_ui.pathways.visible: cell_ui.pathways._rebuild()
@@ -361,6 +364,7 @@ func _welcome(message: Dictionary) -> void:
 	death_world=world;death_seen=world.death_serial;death_focus_age=2.0
 	received_death_serial=world.death_serial;death_tombstones.clear()
 	death_view.reset(world,world.death_serial)
+	received_merge_serial=int(message.get("merge_serial",0));world.merge_serial=received_merge_serial;world.merge_bursts.clear();merge_tombstones.clear();merge_view.reset(world,received_merge_serial)
 	player_name=str(message.get("player_name",""))
 	token=message.token;epoch=message.epoch;command_sequence=message.sequence;edit_revision=message.edit
 	world.seed_value=message.seed;world.habitat_geometry=Codec.new().restore(message.habitat)
@@ -377,6 +381,19 @@ func _ack_snapshot(message: Dictionary) -> void:
 
 func _receive_deaths(message: Dictionary) -> void:
 	if int(message.get("epoch",-1))!=epoch:return
+	for event in message.get("merges",[]):
+		if int(event.serial)<=received_merge_serial:continue
+		received_merge_serial=int(event.serial);world.merge_serial=received_merge_serial
+		merge_tombstones[int(event.donor)]=true
+		if merge_tombstones.size()>64:merge_tombstones.erase(merge_tombstones.keys()[0])
+		if not user_paused:
+			if cells_by_id.has(int(event.donor)):cells_by_id[int(event.donor)].dead=true
+			world.lineage.records=world.lineage.records.filter(func(record):return record.id!=int(event.donor))
+			family_portraits.erase(int(event.donor))
+		if user_paused or float(message.get("time",world.time))-float(event.time)>merge_view.LIFETIME:continue
+		world.merge_bursts.append(event.duplicate(true))
+		if world.merge_bursts.size()>32:world.merge_bursts.pop_front()
+
 	world.death_serial=maxi(world.death_serial,int(message.get("death_serial",world.death_serial)))
 	if user_paused:
 		received_death_serial=maxi(received_death_serial,world.death_serial);return
@@ -455,10 +472,14 @@ func _snapshot(message: Dictionary) -> void:
 		if not retained_ids.has(identity):cells_by_id.erase(identity)
 	world.lineage=data.lineage;world.evolution=data.evolution
 	world.remote_division=message.get("division",{}).duplicate(true)
+	merge_available=message.get("merge_available",{}).duplicate(true)
 	world.investment=data.get("investment",{"npc":{},"lineages":{},"cells":{}})
-	family_portraits=message.get("family_portraits",{})
+	family_portraits=message.get("family_portraits",{}).duplicate()
+	world.lineage.records=world.lineage.records.filter(func(record):return not merge_tombstones.has(int(record.id)))
+	for retired in merge_tombstones:family_portraits.erase(retired)
 	family_recovery=message.get("family_recovery",{})
 	if not camera_initialized or previous_player!=world.player.id:
+		merge_selection.clear();merge_candidates.clear()
 		cell_ui.close_context();build_open=false;moving_id=-1;selected=-1
 		touch_zoom.cancel()
 		camera_offset=Vector2.ZERO;free_camera=_follow_cell().position;camera_locked=can_follow();camera_rotation=0
@@ -496,7 +517,7 @@ func _snapshot(message: Dictionary) -> void:
 	world.active_particles=packets.size()
 	if network_particles!=null: network_particles.prepare(packets,world.cells)
 	if OS.has_feature("web"):
-		JavaScriptBridge.eval("window.primordiaDiagnostics="+JSON.stringify({"playback":playback.diagnostics(),"connected":connected,"tick":world.revision,"world_id":message.world_id,"packets":packets.size(),"camera_packets":server_census.get("camera_particles",packets.size()),"buffered_packets":server_census.get("buffered_particles",packets.size()),"coverage":str(message.get("coverage",Vector4.ZERO)),"cells":world.cells.size(),"time":world.time,"player_name":player_name,"nameplates":nameplates.items.map(func(item):return {"cell":item.cell,"name":item.name,"online":item.online})}))
+		JavaScriptBridge.eval("window.primordiaDiagnostics="+JSON.stringify({"fps":Engine.get_frames_per_second(),"frame_ms":last_frame_ms,"view_sync_ms":render_ms,"current_art":flow_view.curve_budget.diagnostics(),"playback":playback.diagnostics(),"connected":connected,"tick":world.revision,"world_id":message.world_id,"packets":packets.size(),"camera_packets":server_census.get("camera_particles",packets.size()),"buffered_packets":server_census.get("buffered_particles",packets.size()),"coverage":str(message.get("coverage",Vector4.ZERO)),"cells":world.cells.size(),"time":world.time,"player_name":player_name,"nameplates":nameplates.items.map(func(item):return {"cell":item.cell,"name":item.name,"online":item.online})}))
 
 	_show_next_update()
 
@@ -518,7 +539,7 @@ func _debug_population_lines() -> String:
 
 static func population_text(server_census: Dictionary,local_count: int) -> String:
 	if server_census.is_empty():return "\nCamera region: %d particles\nHabitat total: waiting for server" % local_count
-	return "\nCamera region: %d particles\nHabitat total: %d living cells / %d particles\nExterior: %d · Inside cells: %d\nGPU nearby: %d · Offscreen: %d · Queued: %d" % [server_census.get("camera_particles",local_count),server_census.get("living_cells",0),server_census.get("total",server_census.get("external",0)),server_census.get("external",0),server_census.get("internal",0),server_census.get("gpu",0),server_census.get("cold",0),server_census.get("pending",0)]
+	return "\nCamera region: %d particles\nHabitat total: %d living cells / %d particles\nExterior: %d · Inside cells: %d\nGPU resident: %d · Offscreen: %d · Queued: %d" % [server_census.get("camera_particles",local_count),server_census.get("living_cells",0),server_census.get("total",server_census.get("external",0)),server_census.get("external",0),server_census.get("internal",0),server_census.get("gpu",0),server_census.get("cold",0),server_census.get("pending",0)]
 
 func _copy_cell(incoming):
 	var cell=cells_by_id.get(incoming.id)
@@ -534,7 +555,7 @@ func _copy_cell(incoming):
 		cell.previous_position=previous;cell.previous_angle=heading
 		cell.chemistry.owner=weakref(cell)
 		cell.chemistry.render_origins=origins
-	if death_tombstones.has(cell.id):cell.dead=true
+	if death_tombstones.has(cell.id) or merge_tombstones.has(cell.id):cell.dead=true
 	return cell
 
 func _submit_lineage_color(value: String) -> String:

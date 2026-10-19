@@ -1,6 +1,7 @@
 extends RefCounted
 ## One calendar-derived weather sample per UTC hour, shared by every camera.
-const FLOW_VERSION := 3 # Restore original ambient strength; keep plant drag and saved velocity.
+const FLOW_VERSION := 4 # Owner: stronger ambient forcing, preserving water and local plant damping.
+const AMBIENT_STRENGTH := 2.0
 static func update(sim, unix_seconds: float) -> bool:
 	var hour_key:=floori(unix_seconds/3600.0)
 	if int(sim.environment.get("hour",-1))==hour_key and int(sim.environment.get("flow_version",0))>=FLOW_VERSION:return false
@@ -14,9 +15,9 @@ static func update(sim, unix_seconds: float) -> bool:
 	sim.environment={"hour":hour_key,"utc":"%04d-%02d-%02d %02d:00 UTC" % [date.year,date.month,date.day,date.hour],"weather":weather[0],"light":light,"flow_version":FLOW_VERSION}
 	# Refresh the target at an hourly boundary or an explicit flow-version upgrade.
 	# Velocity responds through the existing finite-mass medium, without resets.
-	var angle:=random.randf_range(-.7,.7);var strength:=random.randf_range(.65,1.3)
+	var angle:=random.randf_range(-.7,.7);var strength:=random.randf_range(.65,1.3)*AMBIENT_STRENGTH
 	sim.environment.flow_angle=angle;sim.environment.flow_strength=strength
-	sim.fluid.induced_key=""
+	sim.fluid.induced_key="";sim.fluid.induced_base_key=""
 	for i in sim.fluid.tide.size():
 		var at: Vector2=Vector2(i%sim.Medium.COLS+.5,int(i/sim.Medium.COLS)+.5)*sim.Medium.SIZE
 		sim.fluid.tide[i]=sim.fluid.current(at).rotated(angle)*strength

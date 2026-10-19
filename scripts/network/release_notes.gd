@@ -285,6 +285,166 @@ const RELEASES=[
  "footer":"Your cells and their progress carry on between updates.",
  "button":"Back to the pond",
 },
+ {
+  "id":"2026-10-18-family-fusion",
+  "audience":"experimental",
+  "title":"What’s new in the pond",
+  "items":[
+  "Stronger currents carry life through the pond, while plants still soften the water around them.",
+   "New cells start with a leaf. Leaves provide more ATP, and swirling water exchanges gases with the air.",
+   "Choose when to divide, or turn on automatic division. Relatives can merge after reabsorbing the donor’s organs, combining AP and resources.",
+   "Family investment is clearer, with individual exceptions preserved and easier family scrolling.",
+   "Glands keep their attack cues while the cell seeks food or light. Specialization, mouth layering and particle information are clearer."
+  ],
+  "footer":"Your cells and their progress carry on between updates.",
+  "button":"Back to the pond",
+ },
+ {
+  "id":"2026-10-18-clearer-gases-and-currents",
+  "audience":"experimental",
+  "title":"What’s new in the pond",
+  "items":[
+   "CO2 and oxygen particles are larger and easier to see.",
+   "Soft, bright ripples now trace the water's movement. Gold still marks only the water immediately around an induced-current source."
+  ],
+  "footer":"Your cells and their progress carry on between updates.",
+  "button":"Back to the pond"
+ },
+ {
+  "id":"2026-10-18-cross-current-crests",
+  "audience":"experimental",
+  "title":"What’s new in the pond",
+  "items":[
+   "Water ripples now stretch across the current as they travel, with clearer crests at every zoom."
+  ],
+  "footer":"Your cells and their progress carry on between updates.",
+  "button":"Back to the pond"
+ },
+ {
+  "id":"2026-10-18-current-display-choice",
+  "audience":"experimental",
+  "title":"What’s new in the pond",
+  "items":[
+   "Wave crests are now broad, continuous arcs drifting with the water.",
+   "In Pause, choose Wave crests or the familiar continuous Streamlines. Your choice is remembered.",
+   "Current markers no longer crisscross around moving eddies."
+  ],
+  "footer":"Your cells and their progress carry on between updates.",
+  "button":"Back to the pond"
+ },
+ {
+  "id":"2026-10-18-induced-input-overlay",
+  "audience":"experimental",
+  "title":"What’s new in the pond",
+  "items":[
+   "Passing currents now fade gently in and out over a wider area.",
+   "Pale marks show the water’s overall motion. Gold marks show where a passing current is pushing.",
+   "Gold uses the other current style, so you can see both the push and the resulting flow."
+  ],
+  "footer":"Your cells and their progress carry on between updates.",
+  "button":"Back to the pond"
+ },
+ {
+  "id":"2026-10-18-division-and-instinct-controls",
+  "audience":"experimental",
+  "title":"What’s new in the pond",
+  "items":[
+   "Intent view starts on. Use Instinct to show or hide your cell’s intention and direction arrow.",
+   "Divide opens a choice: keep Auto divide on, or request just one division. If resources are short, your request stays lit until the cell can divide.",
+   "Wave crests are the starting view for this update. You can still choose Streamlines in Pause."
+  ],
+  "footer":"Your cells and their progress carry on between updates.",
+  "button":"Back to the pond"
+ },
+ {
+  "id":"2026-10-18-mitochondrial-efficiency",
+  "audience":"experimental",
+  "title":"What’s new in the pond",
+  "items":[
+   "Mitochondria now recover more ATP from food and oxygen without taking away biomass growth.",
+   "Each healthy mitochondrion adds 50% to ordinary oxygen-supported digestion. Two give double the ATP; damaged mitochondria help less."
+  ],
+  "footer":"Your cells and their progress carry on between updates.",
+  "button":"Back to the pond"
+ },
+ {
+  "id":"2026-10-18-local-merge-selection",
+  "audience":"experimental",
+  "title":"What’s new in the pond",
+  "items":[
+   "Merge now zooms smoothly to nearby water. Choose a bright relative directly; only relatives your cell detects through pheromones can be selected.",
+   "Other cells dim while you choose. Cancel returns to your previous view.",
+   "The view controls now say Internal and External.",
+   "The Family window fits your screen, and you can swipe through larger families or use the arrow buttons.",
+   "Stray offensive particles can now affect relatives. Hunters still choose targets outside the family.",
+   "The new Receptor factory offers free Flight, Hunting, Toward family and Away from family receptors.",
+   "Hunters can pursue any detected non-family cell. Flight avoids nearby toxins and armed non-family cells."
+  ],
+  "footer":"Your cells and their progress carry on between updates.",
+  "button":"Back to the pond"
+ },
+ {
+  "id":"2026-10-18-critical-resource-signals",
+  "audience":"experimental",
+  "title":"What’s new in the pond",
+  "items":[
+   "Low ATP now makes the ATP sac blink amber. Critical membrane damage makes the membrane blink coral, replacing the warning message."
+  ],
+  "footer":"Your cells and their progress carry on between updates.",
+  "button":"Back to the pond"
+ },
+ {
+  "id":"2026-10-18-steady-family-merge",
+  "audience":"experimental",
+  "title":"What’s new in the pond",
+  "items":[
+   "Nearby relatives stay available to merge for five seconds after you receive their family signal.",
+   "Cancel merge takes you back, and overlapping relatives are easier to choose.",
+   "A merging relative now slides into your cell and fades away.",
+   "Air now enters faster-moving water more quickly."
+  ],
+  "footer":"Experimental updates start with a fresh copy of the main pond.",
+  "button":"Back to the pond"
+ },
+ {
+  "id":"2026-10-18-immediate-family-merge",
+  "audience":"experimental",
+  "title":"What’s new in the pond",
+  "items":[
+   "Choose a bright relative to merge it straight into your cell, without waiting for an approach.",
+   "The relative slides into your cell as its resources are absorbed.",
+   "Crowded water never blocks a merge. Your biomass and AP have no storage limit."
+  ],
+  "footer":"Experimental updates start with a fresh copy of the main pond.",
+  "button":"Back to the pond"
+ },
+ {
+  "id":"2026-10-18-smoother-current-drawing",
+  "audience":"experimental",
+  "title":"What’s new in the pond",
+  "items":[
+   "Reduced stutters while updating the water-current animation.",
+   "Phones can show fewer full-length current curves to keep the view responsive."
+  ],
+  "footer":"Experimental updates start with a fresh copy of the main pond.",
+  "button":"Back to the pond"
+ },
+{
+ "id": "2026-10-18-stable-life-and-currents",
+ "audience": "stable",
+ "title": "What’s new in the pond",
+ "items": [
+  "Leaves produce more ATP, and new cells start with one leaf. Each healthy mitochondrion adds 50% to ATP recovered from food and oxygen.",
+  "Open Divide to request one division or enable Auto divide. A single request stays lit until your cell is ready. Instinct shows or hides your cell’s intention.",
+  "Merge a bright relative your cell has sensed recently. It slides straight into your cell as its resources are absorbed. Biomass and AP have no storage limit.",
+  "The Receptor factory offers free Hunting, Flight, Toward family and Away from family receptors. Hunters pursue other lineages; Flight avoids toxins and armed outsiders. Stray attacks can also hurt relatives.",
+  "Family menus fit your screen and support swiping over portraits. View controls now say Internal and External. Low ATP and serious membrane damage make the affected part blink.",
+  "Stronger currents move through the pond. Choose broad Wave crests or continuous Streamlines in Pause; gold shows passing current sources. Larger gas particles are easier to see, and moving water takes in more air.",
+  "Reduced stutters in the current animation, with fewer water markings on phones when needed."
+ ],
+ "footer": "Your cells and their progress carry on between updates.",
+ "button": "Back to the pond"
+}
 ]
 const CURRENT=RELEASES[-1]
 static func seen_index(account: Dictionary) -> int:

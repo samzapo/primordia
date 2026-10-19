@@ -91,7 +91,7 @@ static func _hunting(check: Callable) -> void:
 	sim.time += 0.1
 	test.deliver(sim,prey)
 	test.listen(sim,1.6)
-	check.call(sim.player.target_id == -1,"A new defended larger report cancels eligibility")
+	check.call(sim.player.target_id == prey.id and sim.player.target_position==prey.position,"A new defended larger report remains a valid non-family target at its latest received location")
 	prey.body = 10
 	sim.time += 0.1
 	test.deliver(sim,prey)

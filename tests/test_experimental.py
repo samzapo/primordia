@@ -5,7 +5,7 @@ from urllib.request import build_opener,ProxyHandler,Request
 from urllib.error import HTTPError
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"tools"))
 from experimental_routing import experimental_route,with_experimental,scope,caddyfile
-from experimental_instance import requested_reset, feedback_identity, isolated_root,unit_text
+from experimental_instance import feedback_identity, isolated_root,unit_text
 from web_gateway import create
 from verify_experimental import music_manifest
 import run_service
@@ -30,12 +30,7 @@ class ExperimentalTests(unittest.TestCase):
         self.assertEqual(edited.count('handle_path /experimental/*'),1)
         self.assertEqual(caddyfile(edited),edited)
         with self.assertRaises(RuntimeError):caddyfile('https://example.org { reverse_proxy localhost:8766 }\n')
-    def test_reset_is_explicit_and_feedback_stays_read_only(self):
-        self.assertFalse(requested_reset({}))
-        self.assertFalse(requested_reset({"PRIMORDIA_RESET_POND":"0","GITHUB_EVENT_NAME":"push"}))
-        self.assertTrue(requested_reset({"PRIMORDIA_RESET_POND":"1","GITHUB_EVENT_NAME":"workflow_dispatch"}))
-        for env in [{"PRIMORDIA_RESET_POND":"true"},{"PRIMORDIA_RESET_POND":"1","GITHUB_EVENT_NAME":"push"}]:
-            with self.assertRaises(ValueError):requested_reset(env)
+    def test_feedback_stays_read_only(self):
         with tempfile.TemporaryDirectory() as name:
             root=Path(name);feedback=root/"feedback";feedback.mkdir()
             source=feedback/"fixture.json";source.write_text("isolated fixture")

@@ -54,6 +54,19 @@ static func assembly_factory(c,at: Vector2,r: float) -> void:
 		c.draw_polyline(points,Color("ffa96a"),r*.040,true)
 	c.draw_circle(at+Vector2(.18,.06)*r,r*.047,Color("ffd267"))
 
+const CRITICAL_ATP:=10.0
+const CRITICAL_HEALTH:=30.0
+static func warning_pulse(clock: float) -> float:
+	# Slow, smooth emphasis on the structure; never hide anatomy or change stocks.
+	return pow(.5-.5*cos(TAU*clock/1.6),2)
+
+static func atp_warning(c,at: Vector2,extent: float,zoom: float,clock: float) -> void:
+	var strength:=warning_pulse(clock)
+	var ring:=PackedVector2Array()
+	for i in 33:ring.append(at+Vector2(cos(TAU*i/32),sin(TAU*i/32))*Vector2(.86,1.16)*maxf(extent,5/maxf(.001,zoom))*1.2)
+	c.draw_polyline(ring,Color(1,.64,.16,strength*.25),maxf(extent*.16,3/maxf(.001,zoom)),true)
+	c.draw_polyline(ring,Color(1,.91,.53,strength*.90),maxf(extent*.07,1.2/maxf(.001,zoom)),true)
+
 static func atp_store(c,at: Vector2,extent: float) -> void:
 	var sac:=Vector2(.86,1.16)*extent
 	structure_ellipse(c,at+Vector2(0,1),sac*1.10,Color("745344"))
@@ -72,6 +85,16 @@ static func nucleus_art(c,at: Vector2,extent: float,core: PackedVector2Array,pal
 	c.draw_colored_polygon(Transform2D(0,Vector2.ONE*extent,0,at)*core,palette[5].darkened(.2))
 	c.draw_colored_polygon(Transform2D(0,Vector2.ONE*extent*.74,0,at-Vector2.ONE*extent*.08)*core,palette[5])
 	if detail:c.draw_colored_polygon(Transform2D(-.3,Vector2(.30,.38)*extent,0,at-Vector2.ONE*extent*.22)*core,palette[6])
+
+static func receptor_factory(c,at: Vector2,r: float) -> void:
+	c.draw_circle(at,r,Color("332349"));c.draw_arc(at,r,0,TAU,28,Color("c997ef"),r*.10,true)
+	for side in [-1,1]:
+		c.draw_line(at+Vector2(-.55,side*.3)*r,at+Vector2(.20,side*.3)*r,Color("c997ef"),r*.12,true)
+		for direction in [-1,1]:
+			c.draw_line(at+Vector2(.15,side*.3)*r,at+Vector2(.55,side*.3+direction*.23)*r,Color("edbfff"),r*.10,true)
+	c.draw_circle(at+Vector2(.72,.72)*r,r*.30,Color("204954"))
+	c.draw_line(at+Vector2(.55,.72)*r,at+Vector2(.89,.72)*r,Color("ccffe8"),r*.08,true)
+	c.draw_line(at+Vector2(.72,.55)*r,at+Vector2(.72,.89)*r,Color("ccffe8"),r*.08,true)
 
 static func internal_factory(c,at: Vector2,radius: float,active: bool=false) -> void:
 	# Shared factory/overlap-menu artwork. This is a build affordance, not an organ.
@@ -116,6 +139,8 @@ static func icon(c, p: Vector2, kind: String, rotation: float, scale: float, ani
 			offspring_store(c,Vector2.ZERO,115)
 		"atp_store":
 			atp_store(c,Vector2.ZERO,19)
+		"receptor_factory":
+			receptor_factory(c,Vector2.ZERO,23)
 		"internal_factory":
 			internal_factory(c,Vector2.ZERO,23)
 		"propulsion":
@@ -209,6 +234,15 @@ static func icon(c, p: Vector2, kind: String, rotation: float, scale: float, ani
 					var tip := hair+Vector2(7+2*sin(animation_time*7+i),-hair.y*0.18)
 					c.draw_line(hair,tip,Color("caf7be"),1.5,true)
 			c.draw_circle(Vector2(-14,0),4*(1+0.3*pulse),Color("e1f5ac"))
+		"family_toward","family_away":
+			var color:=Color("8ee9c7") if kind=="family_toward" else Color("b9b3ff")
+			c.draw_line(Vector2(-7,0),Vector2(16,0),color,5,true)
+			for side in [-1,1]:
+				var x:=12.0 if kind=="family_toward" else 23.0
+				var tip:=23.0 if kind=="family_toward" else 12.0
+				c.draw_line(Vector2(x,side*9),Vector2(tip,0),color,4,true)
+			c.draw_circle(Vector2(-5,0),6,color)
+			c.draw_circle(Vector2(-5,0),2.8,Color("285876"))
 		"sensing":
 			c.draw_line(Vector2(-6,0),Vector2(11,0),Color("7634b2"),8,true)
 			c.draw_line(Vector2(-3,0),Vector2(12,0),PURPLE,5,true)

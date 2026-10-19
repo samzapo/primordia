@@ -6,7 +6,7 @@ const DETAILS := [
 	"Supports efficient respiration.",
 	"Enzymes can convert it into food.",
 	"A drifting cell report. Hunting and flight receptors read its last-known location, size and hostility.",
-	"Damages foreign cells; antitoxin can neutralize it.",
+	"Damages any cell it contacts, including relatives; antitoxin can neutralize it.",
 	"Photosynthesis uses it in bright water.",
 	"Reuses waste as food when its binding face aligns.",
 	"Binds toxins into harmless waste.",
@@ -252,7 +252,7 @@ func update_lens(dt: float, screen: Vector2, alpha: float, allowed: bool) -> voi
 		glyph.texture = Art.texture(hovered.kind)
 		glyph.position = lens_center+(hovered.screen-lens_center)*magnification
 		glyph.rotation = hovered.angle+game.render_rotation
-		glyph.scale = Vector2.ONE*hovered.radius*2*magnification/96
+		glyph.scale = Vector2.ONE*hovered.radius*2*magnification/(96*Art.display_scale(hovered.kind))
 		glyph.modulate.a = lens_amount
 		glyph.material.set_shader_parameter("lens_center",lens_center/get_viewport_rect().size)
 		glyph.material.set_shader_parameter("lens_radius",RADIUS*game.cell_ui.ui_scale()/get_viewport_rect().size.x)
@@ -265,7 +265,7 @@ func update_lens(dt: float, screen: Vector2, alpha: float, allowed: bool) -> voi
 			var bonus:=clampf(float(food.get("capacity",food.amount))/maxf(.00000001,food.amount)-1,0,float(Art.Catalog.data().ecology.nutrient_bonus_limit))
 			value+="\nBinding: +%d%% ATP yield" % roundi(bonus*100)
 		if hovered.get("internal",false) and not hovered.get("gas",false):
-			value=("Food vacuole\nLocal oxygen supports respiration; otherwise food ferments. Both produce ATP, biomass, carbon and waste." if hovered.kind==0 else "Waste vacuole\nTravels to the cytoproct, then releases waste into the water.")+"\nFood %.2f · Waste %.2f\nResidence %.1f s" % [hovered.food,hovered.waste,hovered.age]
+			value=("Food vacuole\nLocal oxygen supports respiration; otherwise food ferments. Both produce ATP, biomass, CO2 and waste." if hovered.kind==0 else "Waste vacuole\nTravels to the cytoproct, then releases waste into the water.")+"\nFood %.2f · Waste %.2f\nResidence %.1f s" % [hovered.food,hovered.waste,hovered.age]
 		if hovered.kind == game.world.PHEROMONE:
 			var packet: Dictionary = hovered.packet
 			var report: Dictionary = packet.get("report",{})

@@ -515,8 +515,8 @@ protected:
     ClassDB::bind_method(D_METHOD("pool_snapshot"), &PrimordiaKernels::pool_snapshot);
     ClassDB::bind_method(D_METHOD("pool_resolve"), &PrimordiaKernels::pool_resolve);
     ClassDB::bind_method(D_METHOD("pool_snapshots"), &PrimordiaKernels::pool_snapshots);
-    ClassDB::bind_method(D_METHOD("pool_carbon_ids"), &PrimordiaKernels::pool_carbon_ids);
-    ClassDB::bind_method(D_METHOD("pool_carbon_supply"), &PrimordiaKernels::pool_carbon_supply);
+    ClassDB::bind_method(D_METHOD("pool_carbon_ids"), &PrimordiaKernels::pool_carbon_ids,DEFVAL(5));
+    ClassDB::bind_method(D_METHOD("pool_carbon_supply"), &PrimordiaKernels::pool_carbon_supply,DEFVAL(-1),DEFVAL(0),DEFVAL(5),DEFVAL(PackedFloat32Array()));
     ClassDB::bind_method(D_METHOD("pool_stop"), &PrimordiaKernels::pool_stop);
     ClassDB::bind_method(D_METHOD("pool_metrics"), &PrimordiaKernels::pool_metrics);
     ClassDB::bind_method(D_METHOD("pool_expire"), &PrimordiaKernels::pool_expire);
@@ -663,27 +663,30 @@ public:
   Array pool_snapshots() {
     Array out; for (int i=0;i<pool_size();++i) out.push_back(snapshot(i)); return out;
   }
-  Array pool_carbon_ids() {
-    Array ids; for (int i=0;i<pool_size();++i) if(packet_slots[i].value.alive && packet_slots[i].value.kind==5) ids.push_back(i);
+  Array pool_carbon_ids(int64_t kind=5) {
+    Array ids; for (int i=0;i<pool_size();++i) if(packet_slots[i].value.alive && packet_slots[i].value.kind==kind) ids.push_back(i);
     return ids;
   }
-  Dictionary pool_carbon_supply(double factor,double target) {
+  Dictionary pool_carbon_supply(double factor,double target,int64_t phase=-1,int64_t phase_seed=0,int64_t kind=5,PackedFloat32Array factors=PackedFloat32Array()) {
     Dictionary out;PackedFloat64Array pending;pending.resize(2560);pending.fill(0.);
-    if(!std::isfinite(factor)||factor<0||factor>1||!std::isfinite(target)||target<0){out["error"]="Invalid carbon supply";return out;}
+    if((kind!=1&&kind!=5)||phase < -1||phase>=20||(factors.size()!=0&&factors.size()!=2560)||!std::isfinite(factor)||factor<0||factor>1||!std::isfinite(target)||target<0){out["error"]="Invalid carbon supply";return out;}
+    for(int i=0;i<factors.size();++i)if(!std::isfinite(factors[i])||factors[i]<0||factors[i]>1){out["error"]="Invalid gas exchange factor";return out;}
     std::array<double,2560> mass{};std::array<int,2560> first;first.fill(-1);
     for(int i=0;i<pool_size();++i){
-      auto &v=packet_slots[i].value;if(!v.alive||v.kind!=5)continue;
+      auto &v=packet_slots[i].value;if(!v.alive||v.kind!=kind)continue;
       int k=node(int(std::floor(wrap(v.p.x,4096)/64)),int(std::floor(wrap(v.p.y,2560)/64)));
       mass[k]+=v.amount;if(first[k]<0)first[k]=i;
     }
     double added=0,removed=0;
     for(int i=0;i<pool_size();++i){
-      auto &v=packet_slots[i].value;if(!v.alive||v.kind!=5)continue;
+      auto &v=packet_slots[i].value;if(!v.alive||v.kind!=kind)continue;
       int k=node(int(std::floor(wrap(v.p.x,4096)/64)),int(std::floor(wrap(v.p.y,2560)/64)));
-      if(mass[k]>target){double ratio=1-factor*(1-target/mass[k]),before=v.amount;v.amount*=ratio;v.capacity*=ratio;removed+=before-v.amount;}
+      if(phase>=0&&(k*17+phase_seed)%20!=phase)continue;
+      if(mass[k]>target){double ratio=1-(factors.size()?factors[k]:factor)*(1-target/mass[k]),before=v.amount;v.amount*=ratio;v.capacity*=ratio;removed+=before-v.amount;}
     }
     for(int k=0;k<2560;++k){
-      double q=std::max(0.,target-mass[k])*factor;
+      if(phase>=0&&(k*17+phase_seed)%20!=phase)continue;
+      double q=std::max(0.,target-mass[k])*(factors.size()?factors[k]:factor);
       if(first[k]<0)pending.set(k,q);
       else{auto &v=packet_slots[first[k]].value;v.amount+=q;v.capacity+=q;added+=q;}
     }
@@ -869,7 +872,6 @@ public:
       const auto &s=packet_slots[int64_t(ids[k])]; const auto &p=s.value;
       if (!p.alive || (wanted==4 ? p.kind!=4 && p.kind!=11 && p.kind!=12 : p.kind!=wanted) || (!coarse && activity(p.p,camera,half)<=0)) continue;
       int owner=s.d.get("owner",-1);
-      if (wanted==4 && (p.kind!=7 && int(inherited.get(owner,owner))==lineage)) continue;
       if (perception_delta(at,p.p).length_squared()<=reach*reach) return true;
     }
     return false;
@@ -881,7 +883,7 @@ public:
     double radius=12*double(organ["scale"]); int lineage=cell->call("lineage_id");
     for (int k=0;k<ids.size();++k) {
       auto &s=packet_slots[int64_t(ids[k])]; auto &p=s.value; int owner=s.d.get("owner",-1);
-      if (!p.alive || p.kind!=10 || int(inherited.get(owner,owner))==lineage || activity(p.p,camera,half)<=0) continue;
+      if (!p.alive || p.kind!=10 || activity(p.p,camera,half)<=0) continue;
       Vector2 d=perception_delta(at,p.p); if (d.length()>radius+3.5*std::clamp(std::sqrt(p.amount/.3),.8,1.7)) continue;
       Vector2 n=d.normalized(); if (forward.dot(n)<.25 || p.dir.dot(-n)<.5) continue;
       organ["blocked"]=std::min(1.,double(organ["blocked"])+.65);
@@ -898,7 +900,6 @@ public:
       for (int i=0;i<cells.size();++i) {
         Object *cell=cells[i];
         if (bool(cell->get("dead")) || double(cell->get("activity"))<=0) continue;
-        if (p.kind!=7 && int(cell->call("lineage_id"))==int(inherited.get(owner,owner))) continue;
         Vector2 d=perception_delta(cell->get("position"),p.p);
         if (d.length()>double(cell->call("extent"))+5 || d.length()>double(cell->call("support",d.angle()))+5 || p.dir.dot(-d.normalized())<.5) continue;
         if (bool(cell->call("accept_surface",p.kind,p.amount,d.angle(),owner))) {p.alive=false;break;}
@@ -917,8 +918,7 @@ public:
       int owner=s.d.get("owner",-1);
       for (int i=0;i<candidates.size();++i) {
         Object *cell=cells[int(candidates[i])];
-        if (bool(cell->get("dead")) || double(cell->get("activity"))<=0 ||
-            int(cell->call("lineage_id"))==int(inherited.get(owner,owner))) continue;
+        if (bool(cell->get("dead")) || double(cell->get("activity"))<=0) continue;
         Vector2 d=perception_delta(cell->get("position"),p.p);
         if (d.length()>double(cell->call("support",d.angle()))+5) continue;
         double debris=cell->call("damage",p.amount*primordia_chemistry::toxin_damage_per_unit,d.angle(),owner);
@@ -935,7 +935,7 @@ public:
     int lineage=cell->call("lineage_id"); Array organs=cell->get("organs");
     for (int k=0;k<ids.size();++k) {
       auto &s=packet_slots[int64_t(ids[k])]; auto &p=s.value; int owner=s.d.get("owner",-1);
-      if (!p.alive || (p.kind!=4 && p.kind!=10 && p.kind!=7 && p.kind!=11 && p.kind!=12) || activity(p.p,camera,half)>0 || (p.kind!=7 && int(inherited.get(owner,owner))==lineage)) continue;
+      if (!p.alive || (p.kind!=4 && p.kind!=10 && p.kind!=7 && p.kind!=11 && p.kind!=12) || activity(p.p,camera,half)>0) continue;
       Vector2 d=perception_delta(at,p.p);
       if (d.length()>radius || rng->randf()>=1-std::exp(-2*std::max(0.,dt))) continue;
       if (p.kind==7 || p.kind==11 || p.kind==12) {
@@ -946,7 +946,7 @@ public:
         bool bound=false;
         for (int i=0;i<organs.size();++i) {
           Dictionary organ=organs[i]; String kind=organ["kind"];
-          if (kind!="feeding" && kind!="sensing" && kind!="hunting") continue;
+          if (kind!="feeding" && kind!="sensing" && kind!="hunting" && kind!="family_toward" && kind!="family_away") continue;
           Vector2 contact=perception_delta(cell->call("organ_position",organ),p.p);
           if (contact.length()>12*double(organ["scale"])+3.5*std::clamp(std::sqrt(p.amount/.3),.8,1.7)) continue;
           Vector2 forward=Vector2(cell->call("organ_normal",organ)).rotated(cell->get("angle")), n=contact.normalized();
@@ -2055,7 +2055,7 @@ public:
         double threshold = .5;
         if (enzyme_pair)
           threshold +=
-              .46 * std::pow(std::clamp(std::abs(a - .4) / .4, 0., 1.), 2);
+              .46 * std::pow(std::clamp(std::abs(a - .25) / .25, 0., 1.), 2);
         bool reacted = false;
         if (dist2 <= c*c && p.dir.dot(n) >= threshold && b.dir.dot(-n) >= threshold) {
           if (lazy_acid && ((p.kind == 2 && b.kind == 1) || (p.kind == 1 && b.kind == 2)))
@@ -2119,7 +2119,7 @@ public:
             if (total <= 0)
               return false;
             u->v = u->v.lerp(v->v, v->amount / total);
-            u->capacity = u->kind==0?primordia_chemistry::nutrient_capacity(u->amount,u->capacity,v->amount,v->capacity):u->capacity+v->capacity;
+            u->capacity = u->kind==0?primordia_chemistry::nutrient_capacity(u->amount,u->capacity,v->amount,v->capacity,a):u->capacity+v->capacity;
             u->amount = total;
             v->alive = false;
             ++events[1];

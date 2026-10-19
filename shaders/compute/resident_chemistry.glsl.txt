@@ -23,25 +23,26 @@ void main(){
  uint i=gl_GlobalInvocationID.x,lane=gl_LocalInvocationID.x;
  if(pc.stage==6u){
   if(i>=2560u)return;
-  uint x=i%64u,y=i/64u,first=0xffffffffu;float total=carbon_supply[i].x;
+  if(pc.scope.y>=0.&&int((i*17u+uint(pc.scope.w))%20u)!=int(pc.scope.y)){carbon_supply[i]=vec4(0,0,1,0);return;}
+  uint x=i%64u,y=i/64u,first=0xffffffffu;float total=carbon_supply[i].x,factor=carbon_supply[i].y,kind=pc.scope.z;
   for(uint dx=0u;dx<4u;dx++)for(uint dy=0u;dy<4u;dy++){
    uvec2 range=ranges[(y*4u+dy)*256u+x*4u+dx];
    for(uint k=range.x;k<range.y;k++){
     uint slot=order[k].y;
-    if(imageLoad(state,pixel(slot)+ivec2(1,0)).w!=5.)continue;
+    if(imageLoad(state,pixel(slot)+ivec2(1,0)).w!=kind)continue;
     total+=imageLoad(state,pixel(slot)+ivec2(2,0)).y;first=min(first,slot);
    }
   }
-  float q=max(0.,pc.scope.x-total)*pc.dt,added=0.,pending=q;
-  float ratio=total>pc.scope.x?1.-pc.dt*(1.-pc.scope.x/total):1.;
+  float q=max(0.,pc.scope.x-total)*factor,added=0.,pending=q;
+  float ratio=total>pc.scope.x?1.-factor*(1.-pc.scope.x/total):1.;
   if(ratio<1.){
    for(uint dx=0u;dx<4u;dx++)for(uint dy=0u;dy<4u;dy++){
     uvec2 range=ranges[(y*4u+dy)*256u+x*4u+dx];
     for(uint k=range.x;k<range.y;k++){
      uint slot=order[k].y;
-     if(imageLoad(state,pixel(slot)+ivec2(1,0)).w!=5.)continue;
+     if(imageLoad(state,pixel(slot)+ivec2(1,0)).w!=kind)continue;
      vec4 m=imageLoad(state,pixel(slot)+ivec2(2,0));float before=m.y;
-     m.y*=ratio;m.z*=ratio;added+=m.y-before;m.x=2.*radii[5]*clamp(sqrt(m.y/.3),.8,1.7);
+     m.y*=ratio;m.z*=ratio;added+=m.y-before;m.x=2.*radii[int(kind)]*clamp(sqrt(m.y/.3),.8,1.7);
      imageStore(state,pixel(slot)+ivec2(2,0),m);
     }
    }
@@ -49,7 +50,7 @@ void main(){
   }
   if(first!=0xffffffffu){
    vec4 m=imageLoad(state,pixel(first)+ivec2(2,0));float next=m.y+q;added=next-m.y;
-   m.y=next;m.z+=added;m.x=2.*radii[5]*clamp(sqrt(m.y/.3),.8,1.7);
+   m.y=next;m.z+=added;m.x=2.*radii[int(kind)]*clamp(sqrt(m.y/.3),.8,1.7);
    imageStore(state,pixel(first)+ivec2(2,0),m);pending=0.;
   }
   carbon_supply[i]=vec4(added,pending,1,0);return;

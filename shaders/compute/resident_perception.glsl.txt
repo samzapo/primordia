@@ -143,7 +143,8 @@ void main(){
     uint slot=order[k].y;float kind=imageLoad(state,pixel(slot)+ivec2(1,0)).w;
     if(kind<0.)continue;
     if(self.w==3u&&kind!=2.)continue;
-    if(self.w==4u&&((kind!=4.&&kind!=11.&&kind!=12.)||floatBitsToUint(reports[slot*4u+3u].y)==self.y))continue;
+    if(self.w==4u&&(kind!=4.&&kind!=11.&&kind!=12.))continue;
+    if(self.w==7u&&kind!=4.)continue;
     float distance=length(offset(query.xy,imageLoad(state,pixel(slot)).xy));
     if(distance>best)continue;
     float zoom=queries[i*4u+3u].z;
@@ -161,7 +162,10 @@ void main(){
     receipts[output_at+4u]=vec4(best,0,4,0);
    }else{
     receipts[output_at+2u].z=uintBitsToFloat(1u);
-    receipts[output_at+4u].z=5.;
+    if(self.w==7u){
+     receipts[output_at].xy=imageLoad(state,pixel(selected)).xy;
+     receipts[output_at+4u]=vec4(best,0,6,0);
+    }else receipts[output_at+4u].z=5.;
    }
   }
   return;
@@ -220,8 +224,7 @@ void main(){
   uvec4 who=floatBitsToUint(reports[slot*4u+1u]);
   bool family=self.w==6u;
   bool flee=self.w==1u;
-  if(!family&&!flee&&report.z>=query.w&&who.w!=0u)continue;
-  if(flee&&who.z==0u&&report.z<=query.w)continue;
+  if(flee&&who.z==0u)continue;
   float distance=uintBitsToFloat(found.z);
   float score=family?1./(1.+distance):(flee?100.:2.)+1./(1.+max(0.,pc.now-life.x))+.1/(1.+distance);
   if(flee&&who.z!=0u)score+=1.;

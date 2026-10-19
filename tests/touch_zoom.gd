@@ -24,13 +24,13 @@ func run(suite) -> void:
 	suite.expect(not game.touch_zoom.perception_button.visible,"Desktop keeps the perception overlay hidden without touch input")
 	game.preferences.fullscreen=true
 	var menu_key:=InputEventKey.new();menu_key.keycode=KEY_M;menu_key.pressed=true;game._input(menu_key)
-	suite.expect(game.settings_panel.visible and game.perception_menu_button.is_visible_in_tree() and game.perception_menu_button.text=="Interoception [I]","M menu exposes the perception action and keyboard shortcut")
+	suite.expect(game.settings_panel.visible and game.perception_menu_button.is_visible_in_tree() and game.perception_menu_button.text=="Internal [I]","M menu exposes the perception action and keyboard shortcut")
 	game.manual_zoom=2.75;game.camera_zoom=2.75
 	var desktop_time: float=game.world.time;var desktop_rng: int=game.world.rng.state
 	var shortcut:=InputEventKey.new();shortcut.keycode=KEY_I;shortcut.pressed=true;game._input(shortcut)
-	suite.expect(game.perception=="interoception" and game.perception_menu_button.text=="Exteroception [I]" and game.perception_mask.enabled,"I switches perception from the M menu and updates its return action")
+	suite.expect(game.perception=="interoception" and game.perception_menu_button.text=="External [I]" and game.perception_mask.enabled,"I switches perception from the M menu and updates its return action")
 	game.perception_menu_button.pressed.emit()
-	suite.expect(game.perception=="exteroception" and game.perception_menu_button.text=="Interoception [I]" and not game.perception_mask.enabled and game.world.time==desktop_time and game.world.rng.state==desktop_rng,"The menu action returns outside without changing simulation time or randomness")
+	suite.expect(game.perception=="exteroception" and game.perception_menu_button.text=="Internal [I]" and not game.perception_mask.enabled and game.world.time==desktop_time and game.world.rng.state==desktop_rng,"The menu action returns outside without changing simulation time or randomness")
 	suite.expect(is_equal_approx(game.manual_zoom,2.75),"Leaving the cell retains an exterior-compatible zoom")
 	game._toggle_perception();game.manual_zoom=game.MAX_ZOOM*8;game._toggle_perception()
 	suite.expect(game.manual_zoom==game.MAX_ZOOM,"Leaving very close interoception clamps only to the exterior maximum")
