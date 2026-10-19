@@ -238,6 +238,8 @@ jobs:
           root=pathlib.Path.home()/".local/share/primordia-deploy"
           scratch=pathlib.Path(tempfile.mkdtemp(prefix="samzapo--live-nan-inspect--",dir=os.environ["RUNNER_TEMP"]))
           (scratch/"scripts/network").mkdir(parents=True)
+          (scratch/"tools").mkdir()
+          (scratch/"tools/durable_world.py").write_text((root/"current/tools/durable_world.py").read_text())
           (scratch/"project.godot").write_text('config_version=5\n[application]\nconfig/name="Read-only incident inspection"\n')
           (scratch/"scripts/network/world_store.gd").write_text((root/"current/scripts/network/world_store.gd").read_text())
           request=urllib.request.Request("https://api.github.com/repos/samzapo/primordia/contents/tools/inspect_nonfinite.gd?ref="+os.environ["GITHUB_SHA"],headers={"Authorization":"Bearer "+os.environ["GH_TOKEN"],"Accept":"application/vnd.github.raw+json"})
