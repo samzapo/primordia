@@ -14,7 +14,9 @@ var withheld_acks: Dictionary={}
 var deferred_acks: Dictionary={}
 func check(value: bool,message: String) -> void:
 	assertions+=1
-	if not value: failures+=1;push_error("FAIL: "+message)
+	if not value:
+		failures+=1;push_error("FAIL: "+message)
+		print("NETWORK_FAILURE_STATE ",JSON.stringify({"message":message,"time":host.world.time,"tick":host.world.revision,"cameras":str(host.world.camera_views),"internal":str(host.world.interoceptive_cells),"peers":host.peers.values().map(func(p):return {"state":p.socket.get_ready_state(),"close":p.socket.get_close_code(),"reason":p.socket.get_close_reason(),"awaiting":p.get("awaiting_snapshot",-1),"serial":p.get("frame_serial",-1),"encoding":p.get("encoding_snapshot",-1),"budget":p.get("budget",-1),"view":str(p.view),"perception":p.get("perception",""),"selected":host.accounts[p.account].selected if host.accounts.has(p.account) else -1}),"clients":sockets.map(func(s):return {"state":s.get_ready_state(),"code":s.get_close_code(),"reason":s.get_close_reason()}),"deferred":deferred_acks,"withheld":withheld_acks}))
 var performance_warnings:=0
 func check_performance(value: bool,message: String) -> void:
 	if not value and OS.get_environment("PRIMORDIA_PERFORMANCE_WARNINGS")=="1":
@@ -128,6 +130,7 @@ func run() -> void:
 	check(await until(func():return deferred_acks.has(0)),"Slow browser leaves one complete snapshot awaiting acknowledgement")
 	var slow_peer: Dictionary=host.peers.values().filter(func(peer):return peer.account==welcome0.token.sha256_text())[0]
 	var pending_serial: int=slow_peer.awaiting_snapshot
+	print("ACK_HOLD ",JSON.stringify({"pending":pending_serial,"deferred":deferred_acks,"budget":slow_peer.budget,"tick":host.world.revision}))
 	var received_count: int=messages[0].filter(func(m):return m.get("serial",0)>0).size()
 	var flow_time: float=host.world.time
 	check(await until(func():return host.world.time>flow_time+.1),"Authority keeps simulating while a browser processes its snapshot")
@@ -135,6 +138,7 @@ func run() -> void:
 	sockets[0].send_text(JSON.stringify({"op":"snapshot_ack","serial":pending_serial+1,"epoch":host.epoch}))
 	await process_frame;poll();await process_frame
 	check(slow_peer.awaiting_snapshot==pending_serial,"A wrong acknowledgement cannot release the pending frame")
+	print("ACK_RELEASE ",JSON.stringify({"pending":pending_serial,"server":slow_peer.awaiting_snapshot,"deferred":deferred_acks,"budget":slow_peer.budget,"tick":host.world.revision}))
 	withheld_acks.erase(0)
 	check(await until(func():return messages[0].any(func(m):return m.get("serial",0)>pending_serial)),"Processing acknowledgement automatically resumes advancing world delivery")
 	check(await until(func():return camera_reports.has(0) and camera_reports.has(1)),"both fixture cameras are advertised before changing perception")
