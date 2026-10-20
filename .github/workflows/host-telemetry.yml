@@ -18,55 +18,63 @@ jobs:
     - name: Measure disk usage without changing services or files
       id: measure
       shell: bash
-      run: "python3 - <<'PY'\nimport datetime,glob,json,os,pathlib,platform,shutil,stat,subprocess\nassert os.environ.get(\"GITHUB_REPOSITORY\"\
-        )==\"samzapo/primordia\"\nassert os.environ.get(\"RUNNER_NAME\")==\"samzapo-desktop\"\nassert platform.node()==\"samzapo-desktop\"\
-        \ndef command(args,timeout=20,limit=18000):\n    try:\n        p=subprocess.run(args,text=True,capture_output=True,timeout=timeout)\n\
+      run: "python3 - <<'PY'\nimport datetime,glob,json,os,pathlib,platform,shutil,stat,subprocess\nassert os.environ.get(\"\
+        GITHUB_REPOSITORY\")==\"samzapo/primordia\"\nassert os.environ.get(\"RUNNER_NAME\")==\"samzapo-desktop\"\nassert platform.node()==\"\
+        samzapo-desktop\"\ndef command(args,timeout=20,limit=18000):\n    try:\n        p=subprocess.run(args,text=True,capture_output=True,timeout=timeout)\n\
         \        return {\"command\":args,\"status\":p.returncode,\"stdout\":p.stdout[:limit],\"stdout_truncated\":len(p.stdout)>limit,\"\
         stdout_tail\":p.stdout[-3000:] if len(p.stdout)>limit else \"\",\"stderr\":p.stderr[:2000]}\n    except subprocess.TimeoutExpired\
-        \ as e:\n        output=e.stdout or b\"\"\n        if isinstance(output,bytes):output=output.decode(errors=\"replace\")\n  \
-        \      return {\"command\":args,\"status\":\"timeout\",\"partial_stdout\":output[:limit]}\n    except OSError as e:return {\"\
-        command\":args,\"status\":\"unavailable\",\"error\":str(e)[:500]}\ndef disk(path):\n    u=shutil.disk_usage(path)\n    return\
-        \ {\"path\":str(path),\"total\":u.total,\"used\":u.used,\"free\":u.free}\nhome=pathlib.Path.home()\nroots=[home/\".local/share/primordia-deploy\"\
-        ,home/\".local/share/primordia-experimental\"]\nrunner_root=pathlib.Path(os.environ[\"RUNNER_TEMP\"]).resolve().parent.parent\n\
-        runner_work=runner_root/\"_work\"\nreport={\"version\":1,\"started_utc\":datetime.datetime.now(datetime.timezone.utc).isoformat(),\n\
-        \        \"host\":platform.node(),\"uid\":os.getuid(),\"read_only\":True,\n        \"filesystem_before\":disk(home),\"filesystems\"\
-        :command([\"df\",\"-B1\",\"-T\"]),\n        \"inodes\":command([\"df\",\"-i\"]), \"primordia_roots\":{},\n        \"journal_usage\"\
-        :command([\"journalctl\",\"--disk-usage\"]),\n        \"journal_user_usage\":command([\"journalctl\",\"--user\",\"--disk-usage\"\
-        ])}\nfor root in roots:\n    info={\"exists\":root.is_dir(),\"path\":str(root)}\n    if root.is_dir():\n        info[\"du\"\
-        ]=command([\"du\",\"-x\",\"-B1\",\"--max-depth=2\",str(root)],timeout=60,limit=16000)\n        current=root/\"current\"\n  \
-        \      info[\"current_release\"]=str(current.resolve()) if current.is_symlink() else None\n        info[\"release_directories\"\
-        ]=len(list((root/\"releases\").glob(\"*\"))) if (root/\"releases\").is_dir() else 0\n        files=[];visited=0\n        for\
-        \ parent,dirs,names in os.walk(root,followlinks=False):\n            dirs[:]=[d for d in dirs if d not in [\".git\",\"feedback\"\
-        ,\"godot-cpp\",\"node_modules\"] and not (pathlib.Path(parent)/d).is_symlink()]\n            for name in names:\n          \
-        \      path=pathlib.Path(parent)/name\n                try:\n                    st=path.lstat()\n                    if stat.S_ISREG(st.st_mode):\n\
-        \                        visited+=1\n                        if st.st_size>=1024*1024:\n                            files.append({\"\
-        path\":str(path.relative_to(root)),\"bytes\":st.st_size,\"allocated_bytes\":st.st_blocks*512,\"modified_unix\":st.st_mtime})\n\
-        \                except OSError:pass\n            if visited>60000:break\n        info[\"scanned_files\"]=visited;info[\"file_scan_bounded\"\
-        ]=visited>60000\n        info[\"largest_files\"]=sorted(files,key=lambda x:x[\"allocated_bytes\"],reverse=True)[:15]\n     \
-        \   info[\"largest_logs\"]=sorted([x for x in files if \".log\" in pathlib.Path(x[\"path\"]).name],key=lambda x:x[\"allocated_bytes\"\
-        ],reverse=True)[:12]\n        health=root/\"state/health.json\"\n        if health.is_file():\n            try:\n          \
-        \      v=json.loads(health.read_text())\n                info[\"health\"]={k:v.get(k) for k in [\"build\",\"backend\",\"checkpoint_error\"\
-        ,\"backend_error\",\"tick\",\"updated_unix\"]}\n            except (ValueError,OSError) as e:info[\"health_error\"]=type(e).__name__\n\
-        \    report[\"primordia_roots\"][root.name]=info\nreport[\"runner\"]={\"root\":str(runner_root),\"work\":command([\"du\",\"\
-        -x\",\"-B1\",\"--max-depth=2\",str(runner_work)],timeout=60,limit=10000),\n                  \"diagnostics\":command([\"du\"\
-        ,\"-x\",\"-B1\",\"--max-depth=1\",str(runner_root/\"_diag\")],timeout=20,limit=2500)}\nreport[\"other_size_totals\"]={}\nfor\
-        \ path in [pathlib.Path(\"/var/log\"),home/\".cache\",home/\".local/share/godot\"]:\n    if path.exists():report[\"other_size_totals\"\
-        ][str(path)]=command([\"du\",\"-x\",\"-B1\",\"--max-depth=1\",str(path)],timeout=30,limit=5000)\nreport[\"rotated_system_logs\"\
-        ]=[]\nfor pattern in [\"/var/log/syslog*\",\"/var/log/kern.log*\",\"/var/log/daemon.log*\"]:\n    for name in glob.glob(pattern):\n\
-        \        try:\n            p=pathlib.Path(name);st=p.lstat()\n            if stat.S_ISREG(st.st_mode):report[\"rotated_system_logs\"\
-        ].append({\"path\":name,\"bytes\":st.st_size,\"allocated_bytes\":st.st_blocks*512})\n        except OSError:pass\nos.environ.setdefault(\"\
-        XDG_RUNTIME_DIR\",f\"/run/user/{os.getuid()}\")\nreport[\"services\"]={unit:command([\"systemctl\",\"--user\",\"show\",unit,\"\
-        -p\",\"ActiveState\",\"-p\",\"MainPID\",\"-p\",\"StandardOutput\",\"-p\",\"StandardError\"]) for unit in [\"primordia.service\"\
-        ,\"primordia-experimental.service\"]}\nsettings=[]\nfor path in [pathlib.Path(\"/etc/systemd/journald.conf\"),*pathlib.Path(\"\
-        /etc/systemd/journald.conf.d\").glob(\"*.conf\")]:\n    try:\n        lines=[l.strip() for l in path.read_text().splitlines()\
-        \ if l.strip().split(\"=\",1)[0] in [\"Storage\",\"SystemMaxUse\",\"RuntimeMaxUse\",\"SystemKeepFree\",\"RuntimeKeepFree\",\"\
-        MaxRetentionSec\",\"RateLimitIntervalSec\",\"RateLimitBurst\"]]\n        if lines:settings.append({\"path\":str(path),\"explicit_settings\"\
-        :lines})\n    except OSError:pass\nreport[\"explicit_journal_settings\"]=settings\nreport[\"filesystem_after\"]=disk(home)\n\
-        report[\"finished_utc\"]=datetime.datetime.now(datetime.timezone.utc).isoformat()\noutput=pathlib.Path(os.environ[\"RUNNER_TEMP\"\
-        ])/(\"samzapo--primordia-disk-audit--\"+os.environ[\"GITHUB_RUN_ID\"]+\"-\"+os.environ[\"GITHUB_RUN_ATTEMPT\"]+\".json\")\n\
-        raw=(json.dumps(report,indent=2)+\"\\n\").encode()\nassert len(raw)<180000\noutput.write_bytes(raw);output.chmod(0o600)\nwith\
-        \ open(os.environ[\"GITHUB_OUTPUT\"],\"a\") as stream:stream.write(\"report=\"+str(output)+\"\\n\")\nprint(\"PRIMORDIA_DISK_AUDIT\
-        \ \"+json.dumps(report))\nPY\n"
+        \ as e:\n        output=e.stdout or b\"\"\n        if isinstance(output,bytes):output=output.decode(errors=\"replace\"\
+        )\n        return {\"command\":args,\"status\":\"timeout\",\"partial_stdout\":output[:limit]}\n    except OSError\
+        \ as e:return {\"command\":args,\"status\":\"unavailable\",\"error\":str(e)[:500]}\ndef disk(path):\n    u=shutil.disk_usage(path)\n\
+        \    return {\"path\":str(path),\"total\":u.total,\"used\":u.used,\"free\":u.free}\nhome=pathlib.Path.home()\nroots=[home/\"\
+        .local/share/primordia-deploy\",home/\".local/share/primordia-experimental\"]\nrunner_root=pathlib.Path(os.environ[\"\
+        RUNNER_TEMP\"]).resolve().parent.parent\nrunner_work=runner_root/\"_work\"\nreport={\"version\":1,\"started_utc\"\
+        :datetime.datetime.now(datetime.timezone.utc).isoformat(),\n        \"host\":platform.node(),\"uid\":os.getuid(),\"\
+        read_only\":True,\n        \"filesystem_before\":disk(home),\"filesystems\":command([\"df\",\"-B1\",\"-T\"]),\n  \
+        \      \"inodes\":command([\"df\",\"-i\"]), \"primordia_roots\":{},\n        \"journal_usage\":command([\"journalctl\"\
+        ,\"--disk-usage\"]),\n        \"journal_user_usage\":command([\"journalctl\",\"--user\",\"--disk-usage\"])}\nfor root\
+        \ in roots:\n    info={\"exists\":root.is_dir(),\"path\":str(root)}\n    if root.is_dir():\n        info[\"du\"]=command([\"\
+        du\",\"-x\",\"-B1\",\"--max-depth=2\",str(root)],timeout=60,limit=16000)\n        current=root/\"current\"\n     \
+        \   info[\"current_release\"]=str(current.resolve()) if current.is_symlink() else None\n        info[\"release_directories\"\
+        ]=len(list((root/\"releases\").glob(\"*\"))) if (root/\"releases\").is_dir() else 0\n        files=[];visited=0\n\
+        \        for parent,dirs,names in os.walk(root,followlinks=False):\n            dirs[:]=[d for d in dirs if d not\
+        \ in [\".git\",\"feedback\",\"godot-cpp\",\"node_modules\"] and not (pathlib.Path(parent)/d).is_symlink()]\n     \
+        \       for name in names:\n                path=pathlib.Path(parent)/name\n                try:\n               \
+        \     st=path.lstat()\n                    if stat.S_ISREG(st.st_mode):\n                        visited+=1\n    \
+        \                    if st.st_size>=1024*1024:\n                            files.append({\"path\":str(path.relative_to(root)),\"\
+        bytes\":st.st_size,\"allocated_bytes\":st.st_blocks*512,\"modified_unix\":st.st_mtime})\n                except OSError:pass\n\
+        \            if visited>60000:break\n        info[\"scanned_files\"]=visited;info[\"file_scan_bounded\"]=visited>60000\n\
+        \        info[\"largest_files\"]=sorted(files,key=lambda x:x[\"allocated_bytes\"],reverse=True)[:15]\n        info[\"\
+        largest_logs\"]=sorted([x for x in files if \".log\" in pathlib.Path(x[\"path\"]).name],key=lambda x:x[\"allocated_bytes\"\
+        ],reverse=True)[:12]\n        health=root/\"state/health.json\"\n        if health.is_file():\n            try:\n\
+        \                v=json.loads(health.read_text())\n                info[\"health\"]={k:v.get(k) for k in [\"build\"\
+        ,\"backend\",\"checkpoint_error\",\"backend_error\",\"tick\",\"updated_unix\"]}\n            except (ValueError,OSError)\
+        \ as e:info[\"health_error\"]=type(e).__name__\n    report[\"primordia_roots\"][root.name]=info\nreport[\"runner\"\
+        ]={\"root\":str(runner_root),\"work\":command([\"du\",\"-x\",\"-B1\",\"--max-depth=2\",str(runner_work)],timeout=60,limit=10000),\n\
+        \                  \"diagnostics\":command([\"du\",\"-x\",\"-B1\",\"--max-depth=1\",str(runner_root/\"_diag\")],timeout=20,limit=2500)}\n\
+        report[\"other_size_totals\"]={}\nfor path in [pathlib.Path(\"/var/log\"),home/\".cache\",home/\".local/share/godot\"\
+        ]:\n    if path.exists():report[\"other_size_totals\"][str(path)]=command([\"du\",\"-x\",\"-B1\",\"--max-depth=1\"\
+        ,str(path)],timeout=30,limit=5000)\nreport[\"rotated_system_logs\"]=[]\nfor pattern in [\"/var/log/syslog*\",\"/var/log/kern.log*\"\
+        ,\"/var/log/daemon.log*\"]:\n    for name in glob.glob(pattern):\n        try:\n            p=pathlib.Path(name);st=p.lstat()\n\
+        \            if stat.S_ISREG(st.st_mode):report[\"rotated_system_logs\"].append({\"path\":name,\"bytes\":st.st_size,\"\
+        allocated_bytes\":st.st_blocks*512})\n        except OSError:pass\nos.environ.setdefault(\"XDG_RUNTIME_DIR\",f\"/run/user/{os.getuid()}\"\
+        )\nreport[\"services\"]={unit:command([\"systemctl\",\"--user\",\"show\",unit,\"-p\",\"ActiveState\",\"-p\",\"MainPID\"\
+        ,\"-p\",\"StandardOutput\",\"-p\",\"StandardError\"]) for unit in [\"primordia.service\",\"primordia-experimental.service\"\
+        ]}\nsettings=[]\nfor path in [pathlib.Path(\"/etc/systemd/journald.conf\"),*pathlib.Path(\"/etc/systemd/journald.conf.d\"\
+        ).glob(\"*.conf\")]:\n    try:\n        lines=[l.strip() for l in path.read_text().splitlines() if l.strip().split(\"\
+        =\",1)[0] in [\"Storage\",\"SystemMaxUse\",\"RuntimeMaxUse\",\"SystemKeepFree\",\"RuntimeKeepFree\",\"MaxRetentionSec\"\
+        ,\"RateLimitIntervalSec\",\"RateLimitBurst\"]]\n        if lines:settings.append({\"path\":str(path),\"explicit_settings\"\
+        :lines})\n    except OSError:pass\nreport[\"explicit_journal_settings\"]=settings\nreport[\"experimental_copy_log\"\
+        ]={}\ncopy_path=home/\".local/share/primordia-experimental/stable-pond-copy.log\"\ntry:\n    info=copy_path.lstat()\n\
+        \    if not stat.S_ISREG(info.st_mode) or copy_path.is_symlink():\n        raise ValueError(\"Unexpected copy log\
+        \ type\")\n    with copy_path.open(\"rb\") as stream:\n        stream.seek(max(0,info.st_size-32768))\n        tail=stream.read(32768).decode(errors=\"\
+        replace\")\n    report[\"experimental_copy_log\"]={\"bytes\":info.st_size,\"modified_unix\":info.st_mtime,\"tail\"\
+        :tail}\nexcept (OSError,ValueError) as error:\n    report[\"experimental_copy_log\"]={\"error\":type(error).__name__}\n\
+        report[\"filesystem_after\"]=disk(home)\nreport[\"finished_utc\"]=datetime.datetime.now(datetime.timezone.utc).isoformat()\n\
+        output=pathlib.Path(os.environ[\"RUNNER_TEMP\"])/(\"samzapo--primordia-disk-audit--\"+os.environ[\"GITHUB_RUN_ID\"\
+        ]+\"-\"+os.environ[\"GITHUB_RUN_ATTEMPT\"]+\".json\")\nraw=(json.dumps(report,indent=2)+\"\\n\").encode()\nassert\
+        \ len(raw)<180000\noutput.write_bytes(raw);output.chmod(0o600)\nwith open(os.environ[\"GITHUB_OUTPUT\"],\"a\") as\
+        \ stream:stream.write(\"report=\"+str(output)+\"\\n\")\nprint(\"PRIMORDIA_DISK_AUDIT \"+json.dumps(report))\nPY\n"
     - name: Retain small private audit
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
