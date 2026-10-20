@@ -93,8 +93,8 @@ static func step(sim) -> void:
 		var hostile=not cell.behavior.get("weapon_cue",{}).is_empty() or cell.threat.length_squared()>.01
 		var mode="budding" if hostile and cell.automatic_budding else "mitosis" if cell.automatic_division else "budding"
 		if (mode=="budding" and not cell.automatic_budding) or (mode=="mitosis" and not cell.automatic_division):continue
-		if not hostile and (cell.biomass<168 or cell.energy<100):continue
-		if sim.ecology_rng.randf()<(.1 if hostile else .01):reproduce(sim,cell,sim._family_ledger(cell),mode)
+		if not quote(sim,cell,mode).ready:continue
+		if sim.ecology_rng.randf()<(.1 if hostile else .05):reproduce(sim,cell,sim._family_ledger(cell),mode)
 
 static func crowding(sim,cell) -> void:
 	if cell.unattended_protected or sim.FamilyMerging.managed(sim,cell) or cell.behavior.has("autolysis_at"):return

@@ -44,7 +44,7 @@ func initialize(owner_game) -> void:
   sync())
  back.text="Back";back.pressed.connect(func():game.cell_ui.open_context({"kind":"nucleus"}))
  status.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;box.add_child(status)
- note.text="Unattended: biomass, one action/min. First two organelles free."
+ note.text="Producer by default. Unattended: one action/min; save for reproduction."
  note.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;box.add_child(note)
  box.add_child(exemplar);exemplar.text="Copy a relative’s build"
  exemplar.pressed.connect(func():
@@ -64,7 +64,7 @@ func open() -> void:
 func _scope(value: String) -> void:scope=value;sync()
 func current() -> String:
  var cell=game.world.player
- return game.world.investment.lineages.get(cell.lineage_id(),"manual") if scope=="lineage" else game.world.investment.cells.get(cell.id,"inherit")
+ return game.world.investment.lineages.get(cell.lineage_id(),game.world.Investment.DEFAULT) if scope=="lineage" else game.world.investment.cells.get(cell.id,"inherit")
 func choose(kind: String) -> void:
  if kind=="inherit" and scope!="cell":return
  if game.world.edit("investment",{"scope":scope,"kind":kind}):
@@ -81,7 +81,7 @@ func sync() -> void:
  auto_mitosis.text="Auto mitosis";auto_bud.text="Auto budding"
  auto_mitosis.set_pressed_no_signal(game.world.player.automatic_division);auto_bud.set_pressed_no_signal(game.world.player.automatic_budding)
  var value:=current()
- var inherited: String=game.world.investment.lineages.get(game.world.player.lineage_id(),"manual")
+ var inherited: String=game.world.investment.lineages.get(game.world.player.lineage_id(),game.world.Investment.DEFAULT)
  var effective: String=inherited if value=="inherit" else value
  for card in cards:
   if card.active!=(card.strategy==effective):

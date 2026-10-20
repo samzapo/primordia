@@ -526,6 +526,18 @@ const RELEASES=[
  ],
  "footer":"Experimental starts from a fresh copy of the main pond. Main is unchanged.",
  "button":"Back to the pond"
+},
+{
+ "id":"2026-10-20-experimental-growing-strategies",
+ "audience":"experimental",
+ "title":"What’s new in the pond",
+ "items":[
+  "Unchosen investment now starts on Producer. Your saved strategy choices, including Manual, stay as you left them.",
+  "Producers build leaves and a mitochondrion before extra support. Optional purchases leave resources for reproduction, and underpowered cells can reabsorb excess support.",
+  "Automatic reproduction uses the same resource requirements as manual reproduction and takes opportunities more often. The one-minute rest and 12-cell family limit remain."
+ ],
+ "footer":"Experimental starts from a fresh copy of the main pond. Main is unchanged.",
+ "button":"Back to the pond"
 }
 ]
 const CURRENT=RELEASES[-1]

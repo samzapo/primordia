@@ -5,6 +5,10 @@ const Host=preload("res://scripts/network/world_host.gd")
 const Codec=preload("res://scripts/network/state_codec.gd")
 var checks:=0
 var failures:=0
+class GrowthWorld:
+	extends "res://scripts/simulation.gd"
+	var illumination:=1.0
+	func light_at(_at: Vector2) -> float:return illumination
 func check(ok: bool,text: String) -> void:
 	checks+=1
 	if not ok:failures+=1;push_error(text)
@@ -16,6 +20,7 @@ func fixture():
 	sim.Lifecycle.migrate(sim);sim.player.reproduction_retry_at=0
 	return sim
 func run() -> void:
+	investment_growth()
 	var sim=fixture();var cell=sim.player;cell.biomass=100
 	check(sim.install("feeding",0) and cell.biomass==100,"First place is free and allows an oral groove")
 	check(sim.install("photosynthesis",PI) and cell.biomass==100,"Second place is free")
@@ -126,6 +131,69 @@ func roles_and_presence() -> void:
 	child.chemistry.partition(cell.chemistry,.5)
 	check(is_equal_approx(child.substrate,4) and is_equal_approx(cell.substrate,4) and is_equal_approx(child.oxygen+cell.oxygen,3),"Birth partitions finite contents without duplication")
 	check(is_equal_approx(child.raw_fuel+cell.raw_fuel,144),"Birth preserves food fuel")
+
+# Run the actual paid policies, chemistry and birth transactions against finite
+# local inputs. This isolates investment balance from wandering/contact/combat.
+func investment_growth() -> void:
+	for scenario in [{"role":"producer","light":1.0,"food":0.0},{"role":"producer","light":.02,"food":0.0},{"role":"producer","light":.02,"food":0.0,"bloated":true},{"role":"hunter","light":1.0,"food":.15},{"role":"grazer","light":1.0,"food":.15}]:
+		var role: String=scenario.role
+		var sim=GrowthWorld.new(29,0,false);sim.server_mode=true;sim.cells=[sim.player];sim.player.organs.clear();sim.particles.clear()
+		sim.illumination=scenario.light;sim.habitat_geometry=sim.Habitat.new(29,sim.cells);sim.habitat_geometry.enabled=false
+		var parent=sim.player
+		parent.body=30;parent.biomass=18;parent.energy=60;parent.update_geometry()
+		parent.add_organ("feeding",0,"graze",false);parent.add_organ("photosynthesis",PI,"graze",false)
+		if scenario.get("bloated",false):
+			parent.body=120;parent.biomass=.4;parent.energy=4.5;parent.update_geometry()
+			for kind in ["protection","protection","regenerative","neutralizing","toxin_sac"]:parent.add_organ(kind,1,"graze",false)
+		sim.investment.cells[parent.id]=role
+		var first_birth:=-1.0;var purchases:=0
+		var previous: int=parent.next_organ_id
+		for tick in 2400:
+			sim.time+=.5;sim.revision+=1
+			for cell in sim.cells.duplicate():
+				cell.age+=.5
+				# Each parcel is consumed through the existing finite chemistry. Record its
+				# material source; no ATP or biomass balance is assigned during the run.
+				for organ in cell.organs:
+					if organ.kind=="photosynthesis":
+						cell.chemistry.emit("carbon",.35,cell.local_point(organ.a)*.72)
+						sim.external_input+=.35
+				if scenario.food>0:
+					cell.chemistry.emit("food",scenario.food,Vector2.ZERO,-1,-1,scenario.food*18.0)
+					cell.chemistry.emit("oxygen",.5,Vector2.ZERO);sim.external_input+=scenario.food
+				sim._photosynthesize(cell,.5);sim._metabolize(cell,.5)
+				for organ in cell.organs:cell.spend_energy(.5*cell.organ_upkeep(organ),organ,"fixture_operation")
+				cell.heal(.5);cell.chemistry.excrete(sim,cell,.5)
+			sim.step_autonomous_builds();sim.Lifecycle.step(sim)
+			if parent.next_organ_id>previous:
+				purchases+=parent.next_organ_id-previous;previous=parent.next_organ_id
+			if sim.lineage.births>0 and first_birth<0:first_birth=sim.time
+			if sim.cells.size()>=4:break
+			if tick%20==0:sim._compact_particles();sim.grid.rebuild(sim.particles)
+		print("INVESTMENT_GROWTH ",{"role":role,"light":scenario.light,"food":scenario.food,"bloated":scenario.get("bloated",false),"seconds":sim.time,"first_birth":first_birth,"births":sim.lineage.births,"living":sim.cells.size(),"purchases":purchases,"biomass":parent.biomass,"ATP":parent.energy,"organs":parent.organs.map(func(o):return o.kind)})
+		check(first_birth>0 and first_birth<900 and sim.cells.size()>=2,"Unattended "+role+" grows and reproduces through paid chemistry and investment")
+		check(sim.cells.all(func(c):return c.health>0 and is_finite(c.biomass) and is_finite(c.energy) and sim.Investment.strategy(sim,c)==role),"Growing "+role+" family retains finite living cells")
+		check(sim.cells.size()<=12 and sim.cells.all(func(c):return c.reproduction_retry_at<=sim.time+60),"Growth preserves family cap and bounded birth cooldown")
+	var defaults=fixture()
+	check(defaults.Investment.strategy(defaults,defaults.player)=="producer","An unchosen player family defaults to Producer")
+	defaults.Investment.set_strategy(defaults,"lineage","manual")
+	var saved=Codec.new().restore(Codec.new().capture(defaults))
+	check(saved.Investment.strategy(saved,saved.player)=="manual" and saved.Investment.owned_settings(saved,saved.player.lineage_id()).lineages.values()==["manual"],"Explicit Manual survives checkpoint and owner settings")
+	var cell=saved.player;cell.biomass=90;cell.energy=100
+	cell.add_organ("feeding",0,"graze",false);cell.add_organ("photosynthesis",PI,"graze",false)
+	cell.add_organ("photosynthesis",1,"graze",false);cell.add_organ("mitochondrion",0,"graze",false)
+	saved.investment.cells[cell.id]="producer"
+	check(not saved.Investment.can_purchase(saved,cell,"protection") and cell.biomass==90,"Optional purchases cannot consume the next birth's biomass")
+	cell.biomass=200;cell.energy=60
+	check(not saved.Investment.can_purchase(saved,cell,"protection"),"Optional support needs ATP headroom for its own upkeep")
+	cell.energy=120
+	check(saved.Investment.can_purchase(saved,cell,"protection"),"Surplus resources still allow optional investment")
+	cell.recycle(0);cell.add_organ("toxin_sac",0,"graze",false)
+	var excess: int=cell.organs[-1].id;cell.energy=4;cell.biomass=.4
+	var recovery: Dictionary=saved.Investment.decision(saved,cell)
+	check(recovery.get("action","")=="remove" and recovery.id==excess,"Underpowered Producer sheds excess support instead of expanding")
+	cell.unattended_protected=true
+	check(saved.Investment.shed_support(cell,"producer").is_empty(),"Unattended favorite keeps its anatomy during energy shortage")
 
 func controls() -> void:
 	var game=load("res://scenes/pond.tscn").instantiate();game.use_particle_pool=false;root.add_child(game)

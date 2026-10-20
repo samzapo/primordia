@@ -15,12 +15,12 @@ static func run(check: Callable) -> void:
  sim.Investment.npc_assignments(sim)
  check.call(sim.investment.npc.is_empty(),"No NPC is automatically assigned an investment policy")
  for cell in bodies:
-  check.call(sim.Investment.strategy(sim,cell)=="manual" and sim.Investment.candidate(sim,cell).is_empty(),"Every unchosen NPC defaults to Manual")
+  check.call(sim.Investment.strategy(sim,cell)=="producer" and sim.Investment.candidate(sim,cell).kind=="photosynthesis","Unchosen NPCs follow Producer without a saved quota assignment")
  sim.investment.cells[bodies[0].id]="grazer"
  for body in bodies:body.ap=0
  var ledger=sim._family_ledger(bodies[0]);bodies[0].ap=1
  var input: float=sim.external_input;var mass: float=bodies[0].organic_mass()
- sim.managed_cells=bodies.slice(1).map(func(cell):return cell.id)
+ sim.managed_cells=bodies.slice(1).map(func(cell):return cell.id)+[sim.player.id]
  sim.step_autonomous_builds()
  sim.managed_cells=[]
  check.call(bodies[0].ap==1 and is_equal_approx(bodies[0].organic_mass()-mass,sim.external_input-input),"Strategy buys one ordinary first-free organ with conserved construction input")

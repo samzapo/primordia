@@ -77,7 +77,7 @@
       {
         "id": "investment",
         "title": "Choose unattended investments",
-        "text": "Open the nucleus or Divide, then Invest. Manual is the default. Choose Hunter, Producer or Grazer, or save a relative’s current build as an example. Unattended cells use their own biomass and make at most one build or reabsorption per minute. Family settings and individual exceptions are separate. The family controls also switch automatic mitosis and budding.",
+        "text": "Open the nucleus or Divide, then Invest. Producer is the default; choose Manual to stop automatic building. Choose Hunter, Producer or Grazer, or save a relative’s current build as an example. Unattended cells use their own biomass and make at most one build or reabsorption per minute. Producers build their energy supply first; optional upgrades leave resources for reproduction. Family settings and individual exceptions are separate. The family controls also switch automatic mitosis and budding.",
         "sources": []
       },
       {
@@ -745,7 +745,7 @@
         {
           "id": "npc_growth",
           "title": "Other cells develop too",
-          "text": "Manual investment is the default. Opt into Hunter, Producer, Grazer or a saved relative’s build for unattended development. A cell can spend biomass or reabsorb an unsuitable organelle once per minute. Family defaults and individual choices are both available.",
+          "text": "Unchosen cells use Producer investment. Choose Hunter, Grazer, Manual or a saved relative’s build instead. A cell can build or reabsorb once per minute. Producers establish two leaves and a mitochondrion first. Optional purchases wait for biomass and ATP to support reproduction; underpowered cells can reabsorb excess support. Family defaults and individual choices are both available.",
           "sources": []
         }
       ]
