@@ -166,9 +166,16 @@ const RECEPTORS:=["sensing","hunting","family_toward","family_away"]
 static func receptor(kind: String) -> bool:return kind in RECEPTORS
 
 func construction_price(kind: String="") -> int:
-	# Free sensing receptors never advance the paid-organ tier.
+	# Count equipped ordinary organs, not past purchases or free receptors.
 	if kind=="" or receptor(kind):return 0
-	return 0 if receptor(kind) or organs.filter(func(organ):return not receptor(organ.kind)).size()<2 else int(ceil(organ_cost(kind)))
+	var count:=organs.filter(func(organ):return not receptor(organ.kind)).size()
+	if count<2:return 0
+	var a:=1;var b:=1
+	for i in range(count-2):
+		# Saturating integer arithmetic prevents astronomical quotes wrapping free.
+		var next:=a+mini(b,922337203685477580-a)
+		a=b;b=next
+	return a*10
 
 func construction_refund(organ: Dictionary) -> float:
 	var current=organ_by_id(int(organ.get("id",-1)))
@@ -385,9 +392,9 @@ func occupied() -> float:
 func can_fit(kind: String, a: float, size: float = 1.0, paid: bool = true) -> bool:
 	var k := KINDS.find(kind)
 	if k < 0 or not is_finite(a) or not is_finite(size) or size < 0.5: return false
-	if internal_organ(kind):return count(kind)<maxi(1,floori(growth_scale()*3))
-	var cost := organ_cost(kind,size) if paid else 0.0
+	var cost: float=construction_price(kind) if paid else 0.0
 	var length := perimeter()*pow(maxf(8,body+biomass+brood_mass-cost)/maxf(8,body+biomass+brood_mass),0.5)
+	if internal_organ(kind):return count(kind)<maxi(1,floori(growth_scale()*3)) and occupied()<=length
 	return occupied()+WIDTH[k]*size+4 <= length
 
 func parameter_at_arc(distance: float) -> float:
@@ -436,13 +443,14 @@ func add_organ(kind: String, a: float, mode: String = "graze", paid: bool = true
 		if mode != required: return false
 	elif not MODES.has(mode): return false
 	if kind == "feeding" and count("feeding") > 0: return false
-	var cost := organ_cost(kind,size)
+	var cost: float=construction_price(kind) if paid else 0.0
+	var tissue: float=maxf(organ_cost(kind,size),cost)
 	if paid and biomass < cost: return false
 	var length := perimeter()*pow(maxf(8,body+biomass+brood_mass-(cost if paid else 0.0))/maxf(8,body+biomass+brood_mass),0.5)
 	if not internal_organ(kind):_make_room(a,WIDTH[k]*size+4,length)
 	if paid: biomass -= cost
 	var max_health := (70.0 if kind == "protection" else 25.0)*size*size
-	organs.append({"id":next_organ_id,"kind":kind,"a":fposmod(a,TAU),"scale":size,"mode":mode,"hp":max_health,"max_hp":max_health,"material":cost,"max_material":cost,"mutation":"","steering":1.0,"growth_spent":size*size,"ap_spent":maxi(1,ceili(size*size-0.000001)),"target_id":-1,"progress":0.0,"coverage":0.0,"feeding":false,"link":Vector2.ZERO,"feedback":"","consume_flash":0.0,"consume_clock":0.0,"charge_flash":0.0,"consumed_total":0.0,"blocked":0.0})
+	organs.append({"id":next_organ_id,"kind":kind,"a":fposmod(a,TAU),"scale":size,"mode":mode,"hp":max_health,"max_hp":max_health,"material":tissue,"max_material":tissue,"mutation":"","steering":1.0,"growth_spent":size*size,"ap_spent":maxi(1,ceili(size*size-0.000001)),"target_id":-1,"progress":0.0,"coverage":0.0,"feeding":false,"link":Vector2.ZERO,"feedback":"","consume_flash":0.0,"consume_clock":0.0,"charge_flash":0.0,"consumed_total":0.0,"blocked":0.0})
 	if kind=="toxin_sac":organs[-1]["stored_toxin"]=0.0
 	organs[-1]["paid_material"]=cost if paid else 0.0
 	if kind == "photosynthesis" and count("photosynthesis") == 1: chemistry.anchor_photosynthesis(self,organs[-1])
@@ -743,13 +751,15 @@ func specialize(identity: int, gene: String) -> bool:
 func restore_organ(identity: int, paid: bool = true) -> bool:
 	for record in lost_organs:
 		if record.id != identity: continue
-		var cost: float = record.max_material
+		var cost: float=construction_price(record.kind) if paid else 0.0
 		var available := perimeter()*pow(maxf(8,body+biomass+brood_mass-(cost if paid else 0.0))/maxf(8,body+biomass+brood_mass),0.5)
 		if (paid and biomass < cost) or occupied()+organ_width(record) > available: return false
 		var organ: Dictionary = record.duplicate(true)
 		_make_room(organ.a,organ_width(organ),available)
 		if paid: biomass -= cost
-		organ.material = cost
+		organ.material = maxf(record.max_material,cost)
+		organ.max_material=organ.material
+		organ["paid_material"]=cost
 		if organ.has("stored_toxin"):organ.stored_toxin=0.0
 		organ.hp = organ.max_hp
 		organ.id = next_organ_id

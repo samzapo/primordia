@@ -20,11 +20,11 @@ func run() -> void:
 	check(sim.install("feeding",0) and cell.biomass==100,"First place is free and allows an oral groove")
 	check(sim.install("photosynthesis",PI) and cell.biomass==100,"Second place is free")
 	check(cell.membrane.skeleton.links.any(func(link):return link.get("oral",false) and link.tension==1 and link.b.kind=="center"),"Optional oral groove has a full-tension tether fixed at the cell center")
-	check(sim.install("propulsion",1) and cell.biomass==92,"Third organ uses biomass, without AP")
+	check(sim.install("propulsion",1) and cell.biomass==90,"Third organ uses biomass, without AP")
 	var amount=cell.biomass
 	check(sim.remove(0) and cell.biomass==amount,"Free oral groove returns no biomass")
 	check(not is_finite(cell.membrane.oral_angle) and not cell.membrane.skeleton.links.any(func(link):return link.get("oral",false)),"Removing a groove removes the mouth and tether")
-	check(sim.remove(1) and cell.biomass==amount+4,"Paid flagellum returns half its actual biomass")
+	check(sim.remove(1) and cell.biomass==amount+5,"Paid flagellum returns half its actual biomass")
 	amount=cell.biomass
 	check(sim.install("feeding",0) and cell.biomass==amount,"Reabsorption reopens a free place")
 	cell.biomass=200;cell.energy=100;cell.reproduction_retry_at=0
@@ -67,6 +67,7 @@ func run() -> void:
 	await controls()
 	roles_and_presence()
 	producer_wall()
+	build_prices()
 	print("LIFECYCLE: %d assertions, %d failures" % [checks,failures]);quit(0 if failures==0 else 1)
 
 
@@ -137,7 +138,7 @@ func controls() -> void:
 		game.cell_ui.open_context({"kind":"organ","id":organ.id})
 		var button=game.cell_ui.choices.filter(func(choice):return choice.caption=="Reabsorb")[0]
 		cell.organs=cell.organs.duplicate(true);button.pressed.emit();button.pressed.emit()
-		check(cell.organ_by_id(organ.id).is_empty() and cell.biomass==before+4,"Desktop/mobile reabsorption resolves the stable ID once after a snapshot")
+		check(cell.organ_by_id(organ.id).is_empty() and cell.biomass==before+5,"Desktop/mobile reabsorption resolves the stable ID once after a snapshot")
 	game.queue_free();await process_frame
 
 
@@ -170,3 +171,22 @@ func producer_wall() -> void:
 	check(decision.get("action","")=="remove" and decision.id==mouth.id,"Opted-in Producer investment reabsorbs its mouth after establishing photosynthesis")
 	cell.recycle(cell.organs.find(mouth))
 	check(cell.membrane.cell_wall and not cell.membrane.skeleton.links.any(func(link):return link.get("oral",false)),"Reabsorbing the mouth removes its center tether and restores the wall")
+
+
+func build_prices() -> void:
+	var sim=fixture();var cell=sim.player;cell.body=100000;cell.biomass=10000;cell.update_geometry()
+	for expected in [0,0,10,10,20,30,50,80]:
+		var before=cell.biomass;var material=cell.organic_mass();var external=sim.external_input
+		check(cell.construction_price("mitochondrion")==expected and sim.install("mitochondrion",0),"Build price follows two free places then Fibonacci times10")
+		check(cell.biomass==before-expected and is_equal_approx(cell.organic_mass()-material,sim.external_input-external),"Tier price is paid once and construction material is accounted for")
+	var next=cell.construction_price("propulsion")
+	check(sim.install("hunting",1) and cell.construction_price("propulsion")==next,"Free receptors do not advance the price sequence")
+	var saved=Codec.new().restore(Codec.new().capture(sim))
+	check(saved.player.construction_price("propulsion")==next,"A saved cell retains its next quote without a separate purchase counter")
+	var organ=cell.organs[6]
+	var paid=organ.paid_material
+	check(sim.remove(cell.organs.find(organ)) and cell.construction_price("propulsion")==80 and cell.biomass==saved.player.biomass+paid*.5,"Reabsorption lowers the next tier and returns half the actual paid biomass")
+
+	cell.lost_organs.append(organ.duplicate(true))
+	var quote=cell.construction_price(organ.kind);var before=cell.biomass
+	check(sim.restore(organ.id) and cell.biomass==before-quote and cell.organs[-1].paid_material==quote and cell.construction_refund(cell.organs[-1])==quote*.5,"Restoring lost anatomy uses the same current tier and records its real payment")

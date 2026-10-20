@@ -17,7 +17,7 @@
       {
         "id": "build",
         "title": "Build and restore",
-        "text": "Open Assembly for movement, oral grooves, armor and glands, Chemistry for internal organs and leaves, or Receptors for free chemical senses. The first two non-receptor organelles on each cell are free. With two already equipped, building another spends its biomass price. Reabsorbing one reopens a free place. Both starter organelles can be replaced.",
+        "text": "Open Assembly for movement, oral grooves, armor and glands, Chemistry for internal organs and leaves, or Receptors for free chemical senses. The first two non-receptor organelles on each cell are free. After those, prices follow Fibonacci ×10: 10, 10, 20, 30, 50, 80… biomass. Reabsorbing one moves the next build back one step. Free receptors do not advance the sequence. Both starter organelles can be replaced.",
         "sources": []
       },
       {

@@ -35,7 +35,7 @@ static func run(check: Callable) -> void:
 	var external: float=sim.external_input
 	var build_energy: float=sim.player.energy
 	check.call(sim.install("cilia",PI/2) and sim.install("propulsion",PI),"Cilia and flagellum are separate buildable purchases")
-	check.call(sim.player.biomass == tissue-16 and sim.player.energy==build_energy and sim.player.ap == ap and is_equal_approx(material,sim.player.organic_mass()) and sim.external_input==external,"With two starter organs, cilia and flagellum spend ordinary biomass without free material input")
+	check.call(sim.player.biomass == tissue-20 and sim.player.energy==build_energy and sim.player.ap == ap and is_equal_approx(material,sim.player.organic_mass()) and sim.external_input==external,"With two starter organs, cilia and flagellum spend ordinary biomass without free material input")
 	sim.begin_build()
 	check.call(sim.player.count("cilia") == 1 and sim.player.count("propulsion") == 1,"Both purchases survive entering the cell editor")
 	sim.commit_build()

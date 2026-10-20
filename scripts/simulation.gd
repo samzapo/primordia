@@ -405,15 +405,14 @@ func install(kind: String, local_angle: float, mode: String = "graze", size: flo
 	return _install_for(player,evolution,kind,local_angle,mode,size)
 
 func _construction_input(amount: float) -> void:
-	# Explicitly account for the reusable free-place material grant.
+	# Explicitly account for construction tissue not paid from biomass.
 	external_input += amount
 	if build_original != null: build_input += amount
 
 func _install_for(cell, _progression, kind: String, local_angle: float, mode: String = "graze", size: float = 1.0) -> bool:
 	if size!=1.0:return false
 	var cost: float=cell.construction_price(kind)
-	if cell.biomass<cost or not cell.add_organ(kind,local_angle,mode,false,size):return false
-	cell.biomass-=cost;cell.organs[-1]["paid_material"]=cost
+	if cell.biomass<cost or not cell.add_organ(kind,local_angle,mode,true,size):return false
 	_construction_input(maxf(0,cell.organs[-1].material-cost))
 	cell.update_geometry()
 	return true
@@ -425,8 +424,7 @@ func restore(identity: int) -> bool:
 		if lost.id==identity:scar=lost;break
 	if scar.is_empty():return false
 	var cost: float=player.construction_price(scar.kind)
-	if player.biomass<cost or not player.restore_organ(identity,false):return false
-	player.biomass-=cost;player.organs[-1]["paid_material"]=cost
+	if player.biomass<cost or not player.restore_organ(identity,true):return false
 	_construction_input(maxf(0,player.organs[-1].material-cost))
 	player.update_geometry()
 	return true

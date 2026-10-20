@@ -492,6 +492,17 @@ const RELEASES=[
  ],
  "footer":"Experimental starts from a fresh copy of the main pond. Main is unchanged.",
  "button":"Back to the pond"
+},
+{
+ "id":"2026-10-19-experimental-growing-build-prices",
+ "audience":"experimental",
+ "title":"What’s new in the pond",
+ "items":[
+  "Your first two organelles are free. Later build prices grow: 10, 10, 20, 30, 50, 80… biomass.",
+  "Reabsorbing an organelle moves the next build back one price step. Receptors remain free and do not raise prices."
+ ],
+ "footer":"Experimental starts from a fresh copy of the main pond. Main is unchanged.",
+ "button":"Back to the pond"
 }
 ]
 const CURRENT=RELEASES[-1]

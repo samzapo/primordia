@@ -691,10 +691,8 @@ func _test_packing_and_size() -> void:
 	cell.add_organ("sensing",0.25,"flee",false)
 	var before_left: float = wrapf(cell.organs[0].a,-PI,PI)
 	var before_right: float = wrapf(cell.organs[1].a,-PI,PI)
-	var reserve: float = cell.biomass
 	expect(cell.add_organ("protection",0,"graze",true,1.7),"A large organ can be inserted between neighbors")
 	expect(wrapf(cell.organs[0].a,-PI,PI) < before_left and wrapf(cell.organs[1].a,-PI,PI) > before_right,"Insertion pushes neighbors to both sides")
-	expect(is_equal_approx(reserve-cell.biomass,10*1.7*1.7),"Organelle biomass cost scales with its area")
 	for i in cell.organs.size():
 		for j in range(i+1,cell.organs.size()):
 			expect(absf(cell.arc_gap(cell.organs[i].a,cell.organs[j].a)) >= (Cell.organ_width(cell.organs[i])+Cell.organ_width(cell.organs[j]))*0.5-0.01,"Packing leaves room for scaled footprints")
