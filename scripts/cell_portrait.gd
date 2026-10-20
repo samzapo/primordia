@@ -4,6 +4,7 @@ const Art=preload("res://scripts/cell_art.gd")
 const Visuals=preload("res://scripts/visuals.gd")
 static func capture(cell) -> Dictionary:
  var organs: Array=[]
+ var synergy: Dictionary=preload("res://scripts/synergy_art.gd").capture(cell)
  var extent: float=cell.extent()
  for organ in cell.organs:
   var at: Vector2=cell.organ_local_position(organ)
@@ -15,7 +16,8 @@ static func capture(cell) -> Dictionary:
   if not inherent:
    var reach:=52.0 if organ.kind=="propulsion" else 32.0 if organ.kind=="cilia" else 30.0 if organ.kind=="hunting" else 26.0
    extent=maxf(extent,at.length()+reach*organ.scale)
- return {"id":cell.id,"lineage":cell.lineage_id(),"outline":cell.membrane.outline(),
+ for i in synergy.roots.size():extent=maxf(extent,preload("res://scripts/synergy_art.gd").hair(synergy,i,cell.radius,cell.age)[-1].length()+cell.radius*.05)
+ return {"synergy":synergy,"id":cell.id,"lineage":cell.lineage_id(),"outline":cell.membrane.outline(),
   "radius":cell.radius,"extent":maxf(1,extent),"age":cell.age,"angle":cell.angle,
   "health":cell.health,"hurt":cell.hurt_flash,"organs":organs,"holes":cell.holes.map(func(hole):return {"at":cell.local_point(hole.a),"size":hole.size})}
 
@@ -50,6 +52,7 @@ static func draw(canvas: Node2D,model: Dictionary,art: Dictionary,mesh: ArrayMes
  var rotation: float=model.angle
  canvas.draw_set_transform(Vector2.ZERO,rotation,Vector2.ONE*scale)
  canvas.draw_mesh(mesh,null)
+ preload("res://scripts/synergy_art.gd").draw(canvas,model.get("synergy",{}),model.outline,model.radius,art.colors[1],model.age)
  var safe: float=model.radius
  for point in model.outline:safe=minf(safe,point.length())
  Visuals.nucleus_art(canvas,Vector2(-.12,-.10)*safe,safe*.28,art.core,art.colors,false)

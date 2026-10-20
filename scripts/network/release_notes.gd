@@ -503,6 +503,18 @@ const RELEASES=[
  ],
  "footer":"Experimental starts from a fresh copy of the main pond. Main is unchanged.",
  "button":"Back to the pond"
+},
+{
+ "id":"2026-10-19-experimental-distinct-cell-shapes",
+ "audience":"experimental",
+ "title":"What’s new in the pond",
+ "items":[
+  "Hunters grow long, pointed bodies with a visible strand supporting the front.",
+  "Grazers grow ten fine hairs from rounded bumps along their membrane.",
+  "Family portraits show the same distinctive shapes as your cells."
+ ],
+ "footer":"Experimental starts from a fresh copy of the main pond. Main is unchanged.",
+ "button":"Back to the pond"
 }
 ]
 const CURRENT=RELEASES[-1]

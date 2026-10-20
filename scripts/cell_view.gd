@@ -173,21 +173,7 @@ func _draw() -> void:
 	if cell.favorite:
 		var gold=outline.duplicate();gold.append(gold[0])
 		draw_polyline(gold,Color("f8d977"),maxf(1.2/game.zoom,cell.radius*.015),true)
-	var role: String=cell.synergy()
-	if role=="hunter":
-		for i in 3:draw_line(Vector2(-.5,.12+i*.13)*cell.radius,Vector2(-.34,.04+i*.13)*cell.radius,Color(1,.75,.35,.45),maxf(.8,cell.radius*.015),true)
-	elif role=="producer":
-		# Wall follows the physical outline and stays inside it, below appendages.
-		var wall:=PackedVector2Array()
-		for point in outline:wall.append(point*.975)
-		wall.append(wall[0])
-		draw_polyline(wall,hue.lightened(.55)*Color(1,1,1,.8),maxf(1,cell.radius*.045),true)
-		var inner:=PackedVector2Array()
-		for point in outline:inner.append(point*.92)
-		inner.append(inner[0])
-		draw_polyline(inner,hue.darkened(.45)*Color(1,1,1,.65),maxf(.7,cell.radius*.018),true)
-	elif role=="grazer":
-		draw_arc(Vector2.ZERO,cell.radius*.7,.6,2.5,18,Color(.55,1,.9,.4),maxf(.8,cell.radius*.015),true)
+	preload("res://scripts/synergy_art.gd").draw(self,preload("res://scripts/synergy_art.gd").capture(cell),outline,cell.radius,hue,cell.age)
 	if cell.behavior.has("autolysis_at"):
 		draw_arc(Vector2.ZERO,cell.radius*.8,0,TAU,24,Color(1,.8,.45,.45),cell.radius*.025,true)
 	if membrane_warning:

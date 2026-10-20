@@ -28,20 +28,36 @@ func _picture() -> void:
  picture.draw_set_transform(Vector2.ZERO,0,Vector2.ONE*scale)
  var color: Color={"hunter":Color("e64491"),"producer":Color("487dd9"),"grazer":Color("a77ce2")}[strategy]
  var outline:=PackedVector2Array()
- for i in 48:
-  var angle:=i*TAU/48
-  outline.append(Vector2.from_angle(angle)*Vector2(32,29)*(1+.08*sin(angle*3+.4)))
+ var axis:=-.35;var mouth:=axis-PI/2 if strategy=="hunter" else 0.0
+ var model: Dictionary={"role":strategy,"spine":PackedVector2Array(),"roots":PackedVector2Array(),"normals":PackedVector2Array()}
+ for i in 80:
+  var angle:=i*TAU/80
+  var reach:=32.0*(1+.06*sin(angle*3+.4))
+  if strategy=="hunter":reach=26*preload("res://scripts/membrane.gd").hunter_profile(angle-axis)
+  elif strategy=="producer":
+   var normal:=Vector2.from_angle(angle).abs()
+   reach=28/pow(pow(normal.x,8)+pow(normal.y,8),1.0/8)
+  outline.append(Vector2.from_angle(angle)*reach)
+ if strategy=="hunter":model.spine=PackedVector2Array([-Vector2.from_angle(axis)*12,Vector2.ZERO,Vector2.from_angle(axis)*44])
+ elif strategy=="grazer":
+  for i in 10:
+   var a:=.62+(TAU-1.24)*(i+.5)/10
+   model.roots.append(Vector2.from_angle(a)*32*(1+.06*sin(a*3+.4)));model.normals.append(Vector2.from_angle(a))
  picture.draw_colored_polygon(outline,Color("2cdac0"))
  picture.draw_colored_polygon(Transform2D(0,Vector2.ONE*.91,0,Vector2.ZERO)*outline,color)
+ preload("res://scripts/synergy_art.gd").draw(picture,model,outline,32,color,0)
  picture.draw_circle(Vector2(-6,-4),9,Color("803f65"));picture.draw_circle(Vector2(-7,-5),6,Color("ffc452"))
- # Small complete cells show each policy's characteristic working anatomy.
- var organs: Array={"hunter":[["hunting",-.8],["toxin",.15],["poreforming",.9],["propulsion",PI]],
- "producer":[["photosynthesis",-.8],["photosynthesis",.7],["protection",2.6]],
+ var organs: Array={"hunter":[["hunting",axis],["toxin",.9],["poreforming",2.0],["propulsion",axis+PI]],
+ "producer":[["photosynthesis",-.8],["photosynthesis",.7],["mitochondrion",2.6]],
  "grazer":[["cilia",PI],["protection",-.8],["cilia",1.7]]}[strategy]
  for organ in organs:
   var angle: float=organ[1]
-  Art.icon(picture,Vector2.from_angle(angle)*31*scale,organ[0],angle,.43*scale)
- # Every illustration includes the inherent grazing mouth.
+  var point: Vector2=outline[posmod(roundi(angle/TAU*outline.size()),outline.size())]
+  if organ[0]=="mitochondrion":point=Vector2(8,9)
+  Art.icon(picture,point*scale,organ[0],angle,.43*scale)
  picture.draw_set_transform(Vector2.ZERO,0,Vector2.ONE*scale)
- picture.draw_arc(Vector2.ZERO,31,-.3,.35,12,Color("b8ffcf"),3,true)
+ if strategy!="producer":
+  var phase:=fposmod(mouth-.3,TAU)/TAU*outline.size();var oral:=PackedVector2Array()
+  for i in 9:oral.append(outline[posmod(roundi(phase+i*.65/TAU*outline.size()/8),outline.size())]*.96)
+  picture.draw_polyline(oral,Color("b8ffcf"),3,true)
  picture.draw_set_transform(Vector2.ZERO)

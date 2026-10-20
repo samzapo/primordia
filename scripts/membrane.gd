@@ -11,6 +11,7 @@ var skeleton = Network.new()
 var maximum_radius := 47.0
 var oral_angle := NAN
 var cell_wall := false # Derived from working, mouthless Producer anatomy.
+var hunter_angle := NAN # Derived anatomical axis; no new durable save field.
 var points := PackedVector2Array()
 var previous := PackedVector2Array()
 var edge_lambda := PackedFloat32Array()
@@ -37,6 +38,12 @@ func _init(radius: float = 47.0, anatomy_seed: int = -1) -> void:
 	arcs.resize(COUNT+1)
 	if anatomy_seed >= 0: skeleton.seed_layout(anatomy_seed,self,radius)
 
+static func hunter_profile(angle: float) -> float:
+	var direction:=Vector2.from_angle(angle)
+	var power:=1.25 if direction.x>=0 else 2.0
+	var reach:=1.8 if direction.x>=0 else 1.15
+	return 1.0/pow(pow(absf(direction.x)/reach,power)+pow(absf(direction.y)/.72,power),1.0/power)
+
 func step(dt: float, radius: float, acceleration: Vector2, time: float, _aspect: float = 1.0, traction: PackedVector2Array = PackedVector2Array()) -> void:
 	if dt < 0.000001: return
 	invalidate()
@@ -46,11 +53,15 @@ func step(dt: float, radius: float, acceleration: Vector2, time: float, _aspect:
 		var a := TAU*i/COUNT
 		var contraction := (1.0+0.14*sin(a*3+time*0.48)+0.075*sin(a*5-time*0.71))/1.006
 		rest_points[i] = normals[i]*radius*contraction
+		if is_finite(hunter_angle):
+			# A tapered front and rounder rear, both centered on an anatomical
+			# axis. Positive polar radii preserve ordered, noncrossing outlines.
+			rest_points[i]=normals[i]*radius*hunter_profile(a-hunter_angle)
 		if cell_wall:
 			# Rounded square, normalized below to the same represented tissue area.
 			var axis:=normals[i].abs()
 			rest_points[i]=normals[i]*radius/pow(pow(axis.x,8)+pow(axis.y,8),1.0/8)
-	if cell_wall:
+	if cell_wall or is_finite(hunter_angle):
 		var area:=0.0
 		for i in COUNT:area+=rest_points[i].cross(rest_points[(i+1)%COUNT])*.5
 		var scale:=sqrt(COUNT*radius*radius*sin(TAU/COUNT)*.5/area)
@@ -110,7 +121,7 @@ func step(dt: float, radius: float, acceleration: Vector2, time: float, _aspect:
 		var point := points[i]
 		if not point.is_finite(): point = rest_points[i]
 		var angle := nominal+clampf(wrapf(point.angle()-nominal,-PI,PI),-TAU/COUNT*0.38,TAU/COUNT*0.38)
-		var safe := Vector2.from_angle(angle)*clampf(point.length(),radius*0.58,radius*1.48)
+		var safe := Vector2.from_angle(angle)*clampf(point.length(),radius*0.58,radius*(2.1 if is_finite(hunter_angle) else 1.48))
 		previous[i] += safe-points[i] if points[i].is_finite() else Vector2.ZERO
 		if not previous[i].is_finite(): previous[i] = safe
 		points[i] = safe
@@ -126,6 +137,12 @@ func step(dt: float, radius: float, acceleration: Vector2, time: float, _aspect:
 	if cell_wall:
 		for i in COUNT:
 			var corrected:=normals[i]*clampf(points[i].length(),rest_points[i].length()*.98,rest_points[i].length()*1.02)
+			previous[i]+=corrected-points[i];points[i]=corrected
+	if is_finite(hunter_angle):
+		# The longitudinal scaffold supports this actual membrane shape; random
+		# tensile chords may deform it, but cannot pinch away the pointed front.
+		for i in COUNT:
+			var corrected:=points[i].normalized()*clampf(points[i].length(),rest_points[i].length()*.92,rest_points[i].length()*1.08)
 			previous[i]+=corrected-points[i];points[i]=corrected
 	# A permanent shallow vestibule. Apply before area normalization so the
 	# displaced volume remains elsewhere in the gel. Same curve drives physics.

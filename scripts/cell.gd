@@ -221,7 +221,7 @@ func update_geometry() -> void:
 	for organ in organs:
 		if organ.kind=="feeding": membrane.oral_angle = organ.a
 	_sync_oral_link()
-	membrane.cell_wall=synergy()=="producer"
+	sync_membrane_anatomy()
 	mass = maxf(4, organic_mass()*0.45)
 	inertia = (body + biomass + substrate + waste + carbon + brood_mass) * radius * radius * 0.5
 	for organ in organs:
@@ -229,6 +229,22 @@ func update_geometry() -> void:
 		inertia += organ.material * arm.length_squared()+float(organ.get("stored_toxin",0))*organ_local_position(organ).length_squared()
 	inertia = maxf(inertia*0.22, 50)
 	aspect = 1.6 # Broad-phase bound; shape is no longer an ellipse.
+
+func sync_membrane_anatomy() -> void:
+	# Derived only: decoding a checkpoint must not rewrite its saved shape/links.
+	var role:=synergy()
+	membrane.cell_wall=role=="producer"
+	membrane.hunter_angle=NAN
+	if role!="hunter":return
+	for organ in organs:
+		if organ.kind=="feeding":
+			membrane.hunter_angle=wrapf(float(organ.a)+PI/2,-PI,PI)
+			return
+	# Mouthless Hunters use their hunting receptor as the stable front.
+	for organ in organs:
+		if organ.kind=="hunting" and organ.hp>0:
+			membrane.hunter_angle=float(organ.a)
+			return
 
 func local_point(a: float) -> Vector2:
 	var phase = fposmod(a, TAU) / TAU * membrane.COUNT

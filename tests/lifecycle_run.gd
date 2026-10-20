@@ -67,6 +67,7 @@ func run() -> void:
 	await controls()
 	roles_and_presence()
 	producer_wall()
+	synergy_shapes()
 	build_prices()
 	print("LIFECYCLE: %d assertions, %d failures" % [checks,failures]);quit(0 if failures==0 else 1)
 
@@ -190,3 +191,52 @@ func build_prices() -> void:
 	cell.lost_organs.append(organ.duplicate(true))
 	var quote=cell.construction_price(organ.kind);var before=cell.biomass
 	check(sim.restore(organ.id) and cell.biomass==before-quote and cell.organs[-1].paid_material==quote and cell.construction_refund(cell.organs[-1])==quote*.5,"Restoring lost anatomy uses the same current tier and records its real payment")
+
+func synergy_shapes() -> void:
+	var ShapeArt=preload("res://scripts/synergy_art.gd")
+	var Portrait=preload("res://scripts/cell_portrait.gd")
+	var Retention=preload("res://scripts/network/cell_retention.gd")
+	for mouth_angle in [0.0,.7,-2.1]:
+		var sim=fixture();var hunter=sim.player;hunter.body=120
+		for kind in ["feeding","hunting","propulsion","toxin"]:hunter.add_organ(kind,0,"graze",false)
+		var mouth=hunter.organs.filter(func(organ):return organ.kind=="feeding")[0]
+		mouth.a=mouth_angle;hunter.update_geometry()
+		var axis: float=hunter.membrane.hunter_angle
+		check(absf(wrapf(axis-mouth.a,-PI,PI)-PI/2)<.00001,"Hunter front is perpendicular to its oral groove")
+		var ref=Sim.Cell.clone_state(hunter);ref.membrane.native_constraints=false;ref.membrane.native_outline=false
+		for tick in 120:
+			for body in [hunter,ref]:body.membrane.step(1.0/60,body.radius,Vector2(90,-60),tick/60.0)
+		var width=hunter.visible_support(axis+PI/2)+hunter.visible_support(axis-PI/2)
+		var length=hunter.visible_support(axis)+hunter.visible_support(axis+PI)
+		check(length/width>1.75 and hunter.visible_support(axis)>hunter.visible_support(axis+PI)*1.2,"Hunter is elongated with a longer pointed front")
+		var area=preload("res://tests/paramecium.gd").area(hunter)
+		check(absf(area-hunter.membrane.COUNT*hunter.radius*hunter.radius*sin(TAU/hunter.membrane.COUNT)*.5)<.05,"Hunter silhouette preserves tissue area")
+		var error:=0.0
+		for i in hunter.membrane.COUNT:error=maxf(error,hunter.membrane.points[i].distance_to(ref.membrane.points[i]))
+		check(error<.02,"Native/reference Hunter shape constraints agree")
+		var original={"world_id":"shape","tick":sim.revision,"graph":Codec.new().capture(sim)}
+		var restored=Codec.new().restore(original.graph)
+		var recovered={"world_id":"shape","tick":sim.revision,"graph":Codec.new().capture(restored)}
+		check(Retention.compare(Retention.manifest(original),Retention.manifest(recovered)).ok and is_equal_approx(restored.player.membrane.hunter_angle,axis),"Checkpoint derives Hunter axis without changing saved points or anatomy")
+		var model=Portrait.capture(hunter)
+		check(model.synergy.role=="hunter" and model.synergy.spine[-1].length()>hunter.radius,"Portrait includes the live membrane's supported pointed front")
+		hunter.recycle(hunter.organs.find(mouth))
+		var receptor=hunter.organs.filter(func(organ):return organ.kind=="hunting")[0]
+		check(hunter.synergy()=="hunter" and hunter.membrane.hunter_angle==receptor.a,"Mouthless Hunter uses its receptor as the anatomical front")
+		hunter.organs.filter(func(organ):return organ.kind=="toxin")[0].hp=0;hunter.update_geometry()
+		check(not is_finite(hunter.membrane.hunter_angle),"Losing Hunter eligibility removes the shape scaffold")
+	var sim=fixture();var grazer=sim.player
+	grazer.add_organ("feeding",0,"graze",false);grazer.add_organ("cilia",PI,"graze",false);grazer.update_geometry()
+	for i in 60:grazer.membrane.step(1.0/60,grazer.radius,Vector2.ZERO,i/60.0)
+	var snapshot=Codec.new().capture(sim)
+	var art=ShapeArt.capture(grazer);var portrait=Portrait.capture(grazer)
+	check(art.roots.size()==10 and art.normals.size()==10 and portrait.synergy.roots==art.roots,"Grazers and their portraits have exactly ten shared follicle roots")
+	var clear:=true;var within:=true
+	for i in 10:
+		clear=clear and absf(wrapf(art.roots[i].angle()-grazer.membrane.oral_angle,-PI,PI))>.5
+		within=within and ShapeArt.hair(art,i,grazer.radius,grazer.age)[-1].length()<portrait.extent
+	check(clear and within,"Follicles leave the mouth clear and portrait bounds include every hair")
+	var after=Codec.new().capture(sim)
+	check(Retention.digest(Retention.canonical(snapshot.root,snapshot.objects))==Retention.digest(Retention.canonical(after.root,after.objects)),"Synergy illustrations only warm geometry caches, without changing biology or random state")
+	grazer.organs[-1].hp=0;grazer.update_geometry()
+	check(ShapeArt.capture(grazer).roots.is_empty(),"Losing Grazer eligibility removes the decorative hairs")
