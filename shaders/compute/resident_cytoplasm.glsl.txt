@@ -84,7 +84,7 @@ void advance(){
    double bonus=clamp(meal.clock.y/max(EPS,meal.q.x),0.0,NUTRIENT_BONUS_LIMIT);
    double mitochondrial_extra=work*max(0.0,op[20]-1.0)*aerobic/max(0.00000001,used);
    if(bonus>0.0){double extra=min(work*bonus,max(0.0,fuel-work));double recovered_heat=max(0.0,fuel-tissue*TISSUE_FUEL-work);tissue-=max(0.0,extra-recovered_heat)/TISSUE_FUEL;work+=extra;}
-   work+=min(mitochondrial_extra,max(0.0,fuel-tissue*TISSUE_FUEL-work));
+   work+=min(mitochondrial_extra+work*op[21],max(0.0,fuel-tissue*TISSUE_FUEL-work));
    budget-=used;consume(i,used);c[80]+=tissue;c[82]+=work;c[83]+=used;c[84]+=anaerobic;
    c[20]+=max(0.0,fuel-tissue*7.5-work);
    emit_packet(CARBON,used*.1,meal.pose.xy,-1,0xffffffffu,-1,0xffffffffu,0.0,0.0);

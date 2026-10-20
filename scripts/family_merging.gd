@@ -9,7 +9,7 @@ static func managed(sim,cell) -> bool:
  return cell.id in sim.managed_cells or (not sim.server_mode and cell==sim.player)
 
 static func eligible(sim,receiver,donor) -> bool:
- return receiver!=donor and not receiver.dead and receiver.health>0 and not donor.dead and donor.health>0 and receiver.lineage_id()==donor.lineage_id() and not managed(sim,donor)
+ return receiver!=donor and not receiver.dead and receiver.health>0 and not donor.dead and donor.health>0 and receiver.lineage_id()==donor.lineage_id() and not managed(sim,donor) and not donor.unattended_protected
 
 static func remember(sim,receiver,received: Dictionary) -> void:
  var memory: Dictionary=receiver.behavior.get("merge_cues",{})
@@ -113,35 +113,9 @@ static func enforce_limit(sim) -> void:
    if receiver!=null and commit(sim,receiver,donor,false,true):family.erase(donor)
 
 static func step(sim) -> void:
- if sim.remote_client or sim.time<sim.merge_step_at:return
- var elapsed: float=clampf(sim.time-sim.merge_step_at+.5,0,5)
- sim.merge_step_at=sim.time+.5
+ if sim.remote_client:return
  enforce_limit(sim)
- for cell in sim.cells.duplicate():
-  if cell.dead or cell.health<=0:continue
-  var cues: Dictionary=cell.behavior.get("family_cues",{})
-  for id in cues.keys():
-   if float(cues[id].expires_at)<=sim.time:cues.erase(id)
-  var order: Dictionary=cell.behavior.get("merge_order",{})
-  # Discard saved player approach orders from earlier builds. They never resume.
-  if not order.is_empty() and (not order.get("automatic",false) or float(order.expires_at)<=sim.time or managed(sim,cell)):
-   cell.behavior.erase("merge_order");order={}
-  if order.is_empty() and not managed(sim,cell) and cell.age>=MIN_AGE and sim.time>=cell.merge_after:
-   var chance: float=1-exp(-(.2 if cues.size()>=4 else .02)*elapsed)
-   if sim.ecology_rng.randf()<chance:
-    for id in cues.keys():
-     # A canonical recipient prevents two relatives choosing each other.
-     if int(id)>cell.id:
-      cell.behavior["merge_order"]={"id":int(id),"expires_at":sim.time+60,"automatic":true}
-      order=cell.behavior.merge_order;break
-  if order.is_empty() or not detected(sim,cell,int(order.id)):continue
-  for donor in sim.cells.duplicate():
-   if donor.id!=int(order.id) or not eligible(sim,cell,donor):continue
-   if order.get("automatic",false) and (donor.age<MIN_AGE or sim.time<donor.merge_after):continue
-   # Looking up a live body here validates actual contact only. Navigation uses
-   # the immutable received chemical cue above, never this body's live position.
-   if touching(sim,cell,donor):commit(sim,cell,donor)
-   break
+ for cell in sim.cells:cell.behavior.erase("merge_order")
 
 static func commit(sim,receiver,donor,from_selection: bool=false,for_capacity: bool=false) -> bool:
  if sim.remote_client or not eligible(sim,receiver,donor):return false
@@ -167,7 +141,7 @@ static func commit(sim,receiver,donor,from_selection: bool=false,for_capacity: b
  if solids>0:sim.spawn_particle(sim.WASTE,receiver.excretion_position(),Vector2.ZERO,solids*.1,receiver.id)
  var available: float=donor.energy+donor.brood_energy
  receiver.energy+=available*.9;receiver.chemistry.heat+=available*.1
- receiver.ap+=donor.ap
+ receiver.ap=0
  var compartments: Dictionary={}
  receiver.chemistry.batching=true
  for packet in donor.chemistry.particles:
@@ -191,14 +165,14 @@ static func commit(sim,receiver,donor,from_selection: bool=false,for_capacity: b
  receiver.update_geometry();receiver.render_revision+=1
  sim.merge_serial+=1
  sim.merge_bursts.append({"serial":sim.merge_serial,"time":sim.time,"donor":donor.id,"receiver":receiver.id,
-  "at":donor.position,"to":receiver.position,"portrait":picture})
+  "at":donor.position,"to":receiver.position,"portrait":picture,"reason":"capacity" if for_capacity else "manual"})
  if sim.merge_bursts.size()>32:sim.merge_bursts.pop_front()
  donor.dead=true;donor.ap=0;donor.energy=0;donor.brood_energy=0
  donor.chemistry.particles.clear();donor.chemistry.refresh()
  sim.cells.erase(donor)
  ledger.records.erase(ledger.record_for(donor.id))
- sim.investment.cells.erase(donor.id);sim.investment.npc.erase(donor.id)
+ sim.Investment.retire(sim,donor)
  # Preserve emitted owner-to-lineage snapshots for particles already in the pond.
- ledger.notify("Family cells merged. Organelles reabsorbed; AP and resources combined.")
+ ledger.notify("Family cells merged. Organelles reabsorbed; resources combined.")
  # Bounded family notices carry fusion feedback; do not append unbounded history.
  return true

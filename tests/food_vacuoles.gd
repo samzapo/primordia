@@ -27,8 +27,6 @@ static func run(check: Callable) -> void:
 	energy=cell.energy;mass=cell.organic_mass()
 	cell.chemistry.receive(0,1,0,cell.position+cell.local_point(0));cell.chemistry.advance(cell,5)
 	check.call(cell.energy==energy and absf(cell.organic_mass()-mass-1)<.000001,"Spent nutrients cannot regain ATP or create tissue")
-	cell.energy=17;cell.brood_energy=3;cell.reserve(2);cell.reserve(-2)
-	check.call(cell.energy==17 and cell.brood_energy==3,"Numeric reserve transfers neither duplicate nor destroy ATP")
 	for i in 1000:cell.chemistry.emit("food",.01,Vector2.from_angle(i)*25)
 	check.call(cell.chemistry.particle_count()<=cell.chemistry.MAX_PACKETS,"Weighted carriers bound parcel count without losing material")
 	var copy=Codec.new().restore(Codec.new().capture(cell))

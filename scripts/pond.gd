@@ -89,6 +89,7 @@ var palette_menu_button: Button
 var nameplates:=preload("res://scripts/player_nameplates.gd").new()
 var profile_menu_button: Button
 var player_name:=""
+var favorite_name:=""
 var lineage_names: Array=[]
 var settings_help: Label
 var debug_label := Label.new()
@@ -152,7 +153,7 @@ var simulation_ms := 0.0
 var render_ms := 0.0
 var screenshot_path := ""
 var capture_frame := 0
-var notice := "Establish a lineage through three crises.\nFirst: choose cilia or a flagellum at the assembly factory.\nFeed, grow and fund a successor at the offspring bud.\nTab enters your cell · the nucleus explains your goal."
+var notice := "Build, feed and grow your family. Your first two organelles are free."
 var notice_timer := 12.0
 
 func _ready() -> void:
@@ -327,7 +328,7 @@ func _process(dt: float) -> void:
 		if action is Dictionary:
 			lineage_confirming=false
 			if action.get("confirmed",false):_start_new_lineage()
-	death_frame_dt = dt if not user_paused and not settings_panel.visible and not build_open else 0.0
+	death_frame_dt = 0.0 if is_paused() else dt
 	death_focus_age += death_frame_dt
 	if focus_animating and not user_paused:
 		camera_zoom = lerpf(camera_zoom,manual_zoom,1-exp(-dt*10))
@@ -764,7 +765,7 @@ func lineage_color(root_id: int) -> String:
 func _submit_lineage_color(_color: String) -> String:
 	return "Connect to the shared pond to save a lineage color."
 
-func _submit_profile(_name: String) -> String:
+func _submit_profile(_name: String,_favorite: String="") -> String:
 	return "Connect to the shared pond to save a player name."
 
 func _submit_feedback(_report: Dictionary) -> String:
@@ -1059,7 +1060,7 @@ func _finish_build() -> void:
 
 func placement_status() -> String:
 	if selected < 0: return ""
-	if world.player.ap < world.player.construction_price(Simulation.KINDS[selected]): return "Needs %d AP." % world.player.construction_price(Simulation.KINDS[selected])
+	if world.player.biomass < world.player.construction_price(Simulation.KINDS[selected]): return "Needs %d biomass." % world.player.construction_price(Simulation.KINDS[selected])
 	if not world.player.can_fit(Simulation.KINDS[selected],0,1,false): return "Needs more membrane area."
 	var place: String="inside the cell" if world.player.internal_organ(Simulation.KINDS[selected]) else "the membrane"
 	return "Tap "+place+" · tap the held icon to cancel." if touch_zoom.enabled else "Click "+place+" · right-click cancels."
@@ -1161,7 +1162,7 @@ func _restart(profile: int = -1) -> void:
 	tube_group = -1
 	shape_preview_ticks = 0
 	_layout()
-	_message("New expedition · family history and known blueprints retained.\nEstablish a lineage through three crises. First: establish feeding.")
+	_message("New expedition · family history and known blueprints retained.\nBuild, feed and grow your family.")
 
 func _message(value: String) -> void:
 	notice = value

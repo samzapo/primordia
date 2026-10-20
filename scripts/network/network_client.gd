@@ -5,6 +5,9 @@ var update_popup=preload("res://scripts/update_popup.gd").new()
 var pending_release_updates: Array=[]
 var defer_release_updates:=false
 var merge_tombstones: Dictionary={}
+var presentation_hidden:=false
+var last_presence:=""
+var visibility_callback: JavaScriptObject
 var received_merge_serial:=0
 var received_death_serial:=0
 var death_tombstones: Dictionary={}
@@ -91,6 +94,13 @@ var loading_world := false
 var connection_stage := "sign_in"
 
 func _ready() -> void:
+	tree_exiting.connect(func():
+		if visibility_callback!=null:
+			JavaScriptBridge.get_interface("document").removeEventListener("visibilitychange",visibility_callback)
+			visibility_callback=null)
+	if OS.has_feature("web"):
+		visibility_callback=JavaScriptBridge.create_callback(_visibility_changed)
+		JavaScriptBridge.get_interface("document").addEventListener("visibilitychange",visibility_callback)
 	world = Simulation.new(0,0,false)
 	world.server_mode=true;world.remote_client=true;world.evolution.sandbox=true
 	world.command_sink=_queue_command
@@ -146,6 +156,7 @@ func _publish_login_geometry() -> void:
 func _toggle_user_pause() -> void:
 	if user_paused:_ease_camera()
 	if not connected or world.revision==0:return
+	if settings_panel.visible and not user_paused:user_paused=true
 	if not user_paused:_freeze_network_pose()
 	user_paused=not user_paused
 	touch_zoom.cancel()
@@ -153,11 +164,12 @@ func _toggle_user_pause() -> void:
 		build_open=false;selected=-1;moving_id=-1;tube_start.clear();cell_ui.close_context()
 	else:
 		settings_panel.hide()
+		merge_view.reset(world,received_merge_serial);world.merge_bursts.clear()
 		playback.reset();playback_domain="";playback_after_tick=-1
 		var latest:=paused_snapshot;paused_snapshot={}
 		if not latest.is_empty():
 			# Resume at the live world; do not replay deaths that happened while paused.
-			latest.deaths=[]
+			latest.deaths=[];latest.merges=[]
 			_snapshot(latest)
 		for cell in world.cells:cell.previous_position=cell.position;cell.previous_angle=cell.angle
 		for packet in world.particles:packet.previous=packet.p;packet.previous_angle=packet.angle
@@ -232,9 +244,24 @@ func _update_world(_alpha: float) -> void:
 			world.time=lerpf(float(before.time),float(after.time),alpha)
 	network_alpha=alpha
 	super(alpha)
+func _visibility_changed(_args: Array) -> void:
+	# Browser events still run when rendering is throttled in a background tab.
+	var hidden: bool=bool(JavaScriptBridge.eval("document.hidden"))
+	_publish_presence(hidden)
+
+func _publish_presence(hidden: bool) -> void:
+	var presence: String="hidden" if hidden else "paused" if user_paused or settings_panel.visible else "active"
+	if connected and presence!=last_presence:
+		_send({"op":"presence","state":presence});last_presence=presence
+
 func _process(dt: float) -> void:
 	_poll_network()
 	super(dt)
+	var hidden: bool=bool(JavaScriptBridge.eval("document.hidden")) if OS.has_feature("web") else DisplayServer.window_get_mode()==DisplayServer.WINDOW_MODE_MINIMIZED
+	if presentation_hidden and not hidden:
+		merge_view.reset(world,received_merge_serial);world.merge_bursts.clear()
+	presentation_hidden=hidden
+	_publish_presence(hidden)
 	view_clock+=dt;keepalive_clock+=dt
 	if connected and view_clock>=.2:
 		view_clock=0
@@ -356,6 +383,7 @@ func _poll_network() -> void:
 
 func _welcome(message: Dictionary) -> void:
 	defer_release_updates=false;update_popup.close()
+	if settings_panel.visible:user_paused=true
 	playback.reset();playback_domain="";playback_after_tick=-1
 	pending_release_updates=message.get("release_updates",[]).duplicate(true)
 	if pending_release_updates.is_empty() and not message.get("release_notes",{}).is_empty():pending_release_updates=[message.release_notes.duplicate(true)]
@@ -365,7 +393,7 @@ func _welcome(message: Dictionary) -> void:
 	received_death_serial=world.death_serial;death_tombstones.clear()
 	death_view.reset(world,world.death_serial)
 	received_merge_serial=int(message.get("merge_serial",0));world.merge_serial=received_merge_serial;world.merge_bursts.clear();merge_tombstones.clear();merge_view.reset(world,received_merge_serial)
-	player_name=str(message.get("player_name",""))
+	player_name=str(message.get("player_name",""));favorite_name=str(message.get("favorite_name",""));last_presence=""
 	token=message.token;epoch=message.epoch;command_sequence=message.sequence;edit_revision=message.edit
 	world.seed_value=message.seed;world.habitat_geometry=Codec.new().restore(message.habitat)
 	habitat_view.configure(world.habitat_geometry)
@@ -382,15 +410,15 @@ func _ack_snapshot(message: Dictionary) -> void:
 func _receive_deaths(message: Dictionary) -> void:
 	if int(message.get("epoch",-1))!=epoch:return
 	for event in message.get("merges",[]):
-		if int(event.serial)<=received_merge_serial:continue
-		received_merge_serial=int(event.serial);world.merge_serial=received_merge_serial
+		var repeated: bool=merge_tombstones.has(int(event.donor))
 		merge_tombstones[int(event.donor)]=true
+		received_merge_serial=maxi(received_merge_serial,int(event.serial));world.merge_serial=received_merge_serial
 		if merge_tombstones.size()>64:merge_tombstones.erase(merge_tombstones.keys()[0])
 		if not user_paused:
 			if cells_by_id.has(int(event.donor)):cells_by_id[int(event.donor)].dead=true
 			world.lineage.records=world.lineage.records.filter(func(record):return record.id!=int(event.donor))
 			family_portraits.erase(int(event.donor))
-		if user_paused or float(message.get("time",world.time))-float(event.time)>merge_view.LIFETIME:continue
+		if repeated or user_paused or presentation_hidden or float(message.get("time",world.time))-float(event.time)>merge_view.LIFETIME:continue
 		world.merge_bursts.append(event.duplicate(true))
 		if world.merge_bursts.size()>32:world.merge_bursts.pop_front()
 
@@ -432,7 +460,7 @@ func _receive_snapshot(message: Dictionary) -> void:
 func _snapshot(message: Dictionary) -> void:
 	if int(message.epoch)!=epoch: return
 	_receive_deaths(message)
-	lineage_names=message.get("lineage_names",[]);player_name=str(message.get("player_name",player_name))
+	lineage_names=message.get("lineage_names",[]);player_name=str(message.get("player_name",player_name));favorite_name=str(message.get("favorite_name",favorite_name))
 	if user_paused:
 		if not message.get("warming",false):paused_snapshot=message
 		_ack_snapshot(message)
@@ -562,9 +590,9 @@ func _submit_lineage_color(value: String) -> String:
 	if not connected:return "Reconnect before saving your color."
 	_send({"op":"lineage_color","color":value});return ""
 
-func _submit_profile(value: String) -> String:
+func _submit_profile(value: String,favorite: String="") -> String:
 	if not connected:return "Reconnect before saving your name. Your text is kept."
-	_send({"op":"profile","name":value});return ""
+	_send({"op":"profile","name":value,"favorite_name":favorite});return ""
 
 func _submit_feedback(report: Dictionary) -> String:
 	if not connected:return "Reconnect before submitting. Your draft is kept."

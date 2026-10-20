@@ -35,7 +35,7 @@ static func run(check: Callable) -> void:
 	var external: float=sim.external_input
 	var build_energy: float=sim.player.energy
 	check.call(sim.install("cilia",PI/2) and sim.install("propulsion",PI),"Cilia and flagellum are separate buildable purchases")
-	check.call(sim.player.biomass == tissue and sim.player.energy==build_energy and sim.player.ap == ap-3 and is_equal_approx(material+sim.external_input-external,sim.player.organic_mass()),"With the starter leaf, two further propulsion purchases cost one and two AP with tissue accounted as external input")
+	check.call(sim.player.biomass == tissue-16 and sim.player.energy==build_energy and sim.player.ap == ap and is_equal_approx(material,sim.player.organic_mass()) and sim.external_input==external,"With two starter organs, cilia and flagellum spend ordinary biomass without free material input")
 	sim.begin_build()
 	check.call(sim.player.count("cilia") == 1 and sim.player.count("propulsion") == 1,"Both purchases survive entering the cell editor")
 	sim.commit_build()
@@ -83,7 +83,7 @@ static func run(check: Callable) -> void:
 	for i in sim.fluid.velocity.size():
 		var node := Vector2(i%Medium.COLS+0.5,int(i/Medium.COLS)+0.5)*Medium.SIZE
 		steering_momentum += Medium.offset(Vector2(2048,1280),node).cross(sim.fluid.velocity[i]*Medium.NODE_MASS)
-	check.call(absf(steering_momentum) < 0.1,"Ciliary steering applies opposite angular momentum to the water")
+	check.call(absf(steering_momentum) < .1,"Ciliary steering applies opposite angular momentum to the water")
 	sim = fixture()
 	cell = sim.player
 	cell.energy = 0

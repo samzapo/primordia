@@ -128,21 +128,19 @@ func division_controls() -> void:
 		check(saved.show_instinct,"Intent toggle is remembered by saved preferences")
 		game.cell_ui.open_context({"kind":"bud"});await settle_ui()
 		await press_ui(game.cell_ui.choices[0])
-		check(game.cell_ui.context.kind=="division" and game.cell_ui.choices.map(func(choice):return choice.caption)==["Auto divide","Start division now","Back"],"Actual Divide pointer opens the same simple submenu on both platforms")
-		check(game.cell_ui.choices[0].selected,"The enabled Auto divide default is highlighted on both platforms")
-		await press_ui(game.cell_ui.choices[0])
-		check(not game.world.player.automatic_division and not game.cell_ui.choices[0].selected,"Actual pointer switches Auto divide off")
-		await press_ui(game.cell_ui.choices[0])
-		check(game.world.player.automatic_division and game.cell_ui.choices[0].selected,"Actual pointer switches Auto divide back on")
-		game.world.player.brood_mass=0;game.world.player.brood_energy=0
-		await press_ui(game.cell_ui.choices[1]);game._update_world(1);await settle_ui()
-		check(game.cell_ui.context.kind=="bud" and game.world.player.division_requested and not game.world.player.automatic_division and game.cell_ui.choices[0].selected,"An unfunded single request returns to a highlighted Divide entry and replaces continuous auto")
-		if OS.has_environment("PRIMORDIA_DIVISION_CAPTURE"):
-			root.get_texture().get_image().save_jpg(OS.get_environment("PRIMORDIA_DIVISION_CAPTURE")+("-mobile.jpg" if mobile else "-desktop.jpg"),.87)
-		game.cell_ui.open_context({"kind":"division"});await settle_ui()
-		check(game.cell_ui.choices[1].caption=="Cancel queued division" and game.cell_ui.choices[1].selected,"The waiting request has a clear cancellation action")
+		check(game.cell_ui.context.kind=="division" and game.cell_ui.choices.map(func(choice):return choice.caption)==["Mitosis","Auto mitosis","Budding","Auto budding","Back"],"Divide exposes two direct modes and their independent automatic toggles")
+		check(game.cell_ui.choices[1].selected and game.cell_ui.choices[3].selected,"Both automatic reproduction modes start enabled")
 		await press_ui(game.cell_ui.choices[1])
-		check(not game.world.player.division_requested and not game.cell_ui.choices[0].selected,"Cancellation clears the persistent Divide highlight")
+		check(not game.world.player.automatic_division and not game.cell_ui.choices[1].selected,"Pointer switches automatic mitosis off")
+		await press_ui(game.cell_ui.choices[1])
+		check(game.world.player.automatic_division and game.cell_ui.choices[1].selected,"Pointer switches automatic mitosis on")
+		game.world.player.biomass=200;game.world.player.energy=100;game.world.player.reproduction_retry_at=0
+		var parent=game.world.player
+		var before: int=game.world.cells.size()
+		await press_ui(game.cell_ui.choices[2]);game._update_world(1);await settle_ui()
+		check(game.world.cells.size()==before+1 and parent.biomass==158 and not parent.division_requested,"Actual Budding pointer commits one minimal daughter without a reserve queue")
+		game.cell_ui.open_context({"kind":"division"});await settle_ui()
+		check(not game.cell_ui.choices[0].affordable and not game.cell_ui.choices[2].affordable,"Both manual modes show the same saved one-minute cooldown")
 	game.queue_free();await process_frame
 	if FileAccess.file_exists(path):DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 

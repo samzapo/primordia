@@ -5,7 +5,6 @@ static func run(check: Callable) -> void:
  mitochondrial_upgrade(check)
  preload("res://tests/shade_steering.gd").run(check)
  preload("res://tests/behavior_tree.gd").run(check)
- preload("res://tests/division_investment.gd").run(check)
  preload("res://tests/low_power.gd").run(check)
  var sim=Sim.new(591,0,false);sim.server_mode=true;sim.cells=[sim.player]
  sim.player.add_organ("feeding",0,"graze",false)

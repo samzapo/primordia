@@ -35,8 +35,9 @@ static func advance(cell, dt: float, sim = null) -> void:
 	var remaining: Array = []
 	for complex in cell.surface_complexes:
 		complex.age += dt
-		var cleared: bool = complex.capped or complex.age >= 20
-		if complex.units >= REQUIRED and not complex.capped:
+		var immune: bool=int(complex.get("source",-1))==cell.id and cell.synergy()=="hunter"
+		var cleared: bool = immune or complex.capped or complex.age >= 20
+		if complex.units >= REQUIRED and not complex.capped and not immune:
 			var angle: float = cell.angle+complex.a
 			var debris: float = cell.damage(float(preload("res://scripts/chemistry_catalog.gd").data().combat.pore_damage_per_second)*dt,angle,int(complex.get("source",-1)))
 			cell.waste += debris

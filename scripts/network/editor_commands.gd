@@ -4,7 +4,7 @@ static func execute(sim, action: String, args: Dictionary):
 	for key in ["id","to","value","angle"]:
 		if args.has(key) and not (args[key] is int or args[key] is float): return false
 		if args.has(key) and not is_finite(float(args[key])): return false
-	for key in ["kind","gene","module","species","scope"]:
+	for key in ["kind","gene","module","species","scope","mode"]:
 		if args.has(key) and not args[key] is String: return false
 	for key in ["dormant","active","automatic"]:
 		if args.has(key) and not args[key] is bool: return false
@@ -15,16 +15,16 @@ static func execute(sim, action: String, args: Dictionary):
 	if not is_finite(value): return false
 	match action:
 		"merge": return sim.FamilyMerging.request(sim,identity)
-		"division_request":
-			if not args.get("active") is bool:return false
-			return sim.request_division(args.active)
+		"division_request":return false
+		"reproduce":return sim.divide_lineage(false,false,str(args.get("mode","mitosis")))
 		"division_policy":
-			if not args.get("automatic") is bool or args.get("scope","cell") not in ["cell","lineage"]:return false
+			if not args.get("automatic") is bool or args.get("scope","cell") not in ["cell","lineage"] or args.get("mode","mitosis") not in ["mitosis","budding"]:return false
 			for member in sim.cells:
 				if member==cell or (args.get("scope","cell")=="lineage" and member.lineage_id()==cell.lineage_id()):
-					member.automatic_division=args.automatic
-					if args.automatic:member.division_requested=false
+					if args.get("mode","mitosis")=="budding":member.automatic_budding=args.automatic
+					else:member.automatic_division=args.automatic
 			return true
+		"investment_template":return sim.Investment.save_template(sim,str(args.get("scope","lineage")),identity)
 		"investment": return sim.Investment.set_strategy(sim,str(args.get("scope","")),str(args.get("kind","")))
 		"install": return sim.install(str(args.get("kind","")),float(args.get("angle",0)))
 		"remove":

@@ -80,8 +80,8 @@ func _lineage_and_events() -> void:
 	check(world.chemistry_events.neutralize == 1 and world.sound_events[-1].kind == "neutralize","Actual oriented toxin neutralization emits an answering accent")
 	parent.biomass = 300
 	parent.energy = 90
-	parent.reserve(200)
-	parent.brood_energy = 60
+	parent.biomass=300;parent.energy=100;parent.reproduction_retry_at=0
+	parent.brood_energy = 0
 	parent.oxygen = 20
 	check(world.divide_lineage(),"Music inheritance fixture completes a real funded division")
 	var snapshot: Array = world.sound_events.duplicate(true)

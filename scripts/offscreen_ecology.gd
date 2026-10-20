@@ -121,7 +121,6 @@ func advance_body(sim, cell, h: float) -> void:
 	var mark := Time.get_ticks_usec() if sim.profiling else 0
 	sim._motion_cell(cell,h)
 	if sim.profiling: sim.profile_usec["coarse_motion"] = sim.profile_usec.get("coarse_motion",0)+Time.get_ticks_usec()-mark
-	sim._fund_reproduction(cell,h)
 
 static func _resize(cell) -> void:
 	var old_radius: float = cell.radius

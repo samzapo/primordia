@@ -143,7 +143,7 @@ def main():
         raise RuntimeError("Native Dictionary lifetime fixture failed")
 
     call(str(godot),"--headless","--path",str(candidate),"--editor","--import","--quit",env=environment)
-    for script,marker in [("curve_layout_run","CURVE LAYOUT"),("merge_memory_run","MERGE MEMORY"),("feedback_pass_run","FEEDBACK PASS"),("feedback_latest_run","FEEDBACK LATEST"),("feedback_pass_three_run","FEEDBACK PASS THREE"),("normal_output_run","NORMAL OUTPUT"),("division_access_run","DIVISION ACCESS")]:
+    for script,marker in [("curve_layout_run","CURVE LAYOUT"),("merge_memory_run","MERGE MEMORY"),("lifecycle_run","LIFECYCLE"),("family_cap_run","FAMILY CAP"),("normal_output_run","NORMAL OUTPUT"),("toxin_storage_run","TOXIN STORAGE")]:
         path=root/(script+"-fixture.log")
         with path.open("w") as output:
             call("timeout","90s",str(godot),"--headless","--path",str(candidate),"--script","tests/"+script+".gd","--","--particle-backend=cpu",env=environment,stdout=output,stderr=subprocess.STDOUT)
@@ -170,10 +170,10 @@ def main():
         ("resident_perception_gpu",[],"RESIDENT PERCEPTION"),
         ("ambient_carbon_gpu",[],"AMBIENT_CARBON_GPU"),
         ("lineage_start_network",["--gpu"],"LINEAGE START NETWORK"),
-        ("feedback_pass_gpu",[],"FEEDBACK PASS GPU"),
+        ("cell_chemistry_gpu",[],"CELL CHEMISTRY GPU"),
         ("division_access_gpu",[],"DIVISION ACCESS GPU"),
         ("normal_output_run",["--particle-backend=cpu","--gpu"],"NORMAL OUTPUT"),
-        ("feedback_pass_network",["--gpu"],"FEEDBACK PASS NETWORK"),
+        ("lifecycle_network",["--gpu"],"LIFECYCLE NETWORK"),
         ("feedback_latest_gpu",["--particle-backend=cpu"],"FEEDBACK LATEST GPU"),
         ("feedback_visual_gpu",["--particle-backend=cpu"],"FEEDBACK VISUAL GPU"),
         ("resident_plant_flow_gpu",[],"RESIDENT PLANT FLOW"),

@@ -172,7 +172,7 @@ func advance(cell, dt: float, _external_osmolarity: float=.15) -> void:
 			var recovered_heat := maxf(0,fuel-tissue*TISSUE_FUEL-work)
 			tissue-=maxf(0,extra-recovered_heat)/TISSUE_FUEL
 			work+=extra
-		work+=minf(mitochondrial_extra,maxf(0,fuel-tissue*TISSUE_FUEL-work))
+		work+=minf(mitochondrial_extra+work*(.15 if cell.synergy()=="grazer" else 0.0),maxf(0,fuel-tissue*TISSUE_FUEL-work))
 		cell.biomass+=tissue;cell.gain_energy(work);cell.processed+=used
 		cell.fermented+=anaerobic
 		if anaerobic>0:cell.fermentation_activity=2
@@ -276,9 +276,31 @@ func clone_for(cell):
 	return copy
 # Archived pathway configuration is deliberately inactive in this revision.
 func inherit_configuration(_parent) -> void:pass
-func partition(_parent,_fraction: float) -> float:return 0.0
+func partition(parent,fraction: float) -> float:
+	# Rare birth transfer: detach resident ownership once, never copy inventory.
+	parent.ensure_cpu();ensure_cpu();fraction=clampf(fraction,0,1)
+	var moved:=0.0
+	var compartments: Dictionary={}
+	var child=owner.get_ref()
+	batching=true
+	for packet in parent.particles:
+		if not packet.alive:continue
+		var amount: float=packet.amount*fraction
+		var nutrition: float=float(packet.get("nutrition",0))/maxf(.000000001,packet.amount)
+		var fuel: float=parent._consume(packet,amount)
+		if not compartments.has(packet.compartment):
+			compartments[packet.compartment]=next_packet;next_packet+=1
+		var first:=next_packet
+		emit(packet.species,amount,constrain(child,packet.p*(1-fraction),1.4 if packet.species in ["oxygen","carbon"] else 7),packet.source,compartments[packet.compartment],fuel,0,nutrition)
+		for transfer in particles:
+			if transfer.id>=first:
+				transfer.age=float(packet.get("age",0));transfer.v=packet.v;transfer.angle=packet.angle
+		moved+=amount
+	batching=false;parent.refresh();refresh()
+	return moved
 func anchor_photosynthesis(_cell,_organ: Dictionary) -> void:pass
 func photosynthesize(sim,cell,organ: Dictionary,dt: float) -> void:
+	if cell.synergy()=="producer":dt*=1.15
 	# Bound newly released parcels and render-thread work without losing time.
 	organ["photo_elapsed"]=float(organ.get("photo_elapsed",0))+dt
 	if organ.photo_elapsed<.25:return
@@ -314,7 +336,3 @@ func photosynthesize(sim,cell,organ: Dictionary,dt: float) -> void:
 		if cell==sim.player:sim.evolution.record("photo",used)
 func configuration() -> Dictionary:return {"version":2,"model":"food-vacuoles"}
 func load_configuration(_value: Dictionary) -> String:return "Pathway editing is retired; digestion is automatic."
-func reserve_atp(quantity: float, storing: bool) -> void:
-	var cell=owner.get_ref()
-	quantity=minf(quantity,cell.energy if storing else cell.brood_energy)
-	cell.energy+=-quantity if storing else quantity;cell.brood_energy+=quantity if storing else -quantity

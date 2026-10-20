@@ -616,7 +616,7 @@ func _test_growth_and_anchors() -> void:
 		cell.energy = 1
 		if preload("res://tests/test_policy.gd").GAMEPLAY_BALANCE_ENABLED: sim._metabolize(cell,1)
 		if preload("res://tests/test_policy.gd").GAMEPLAY_BALANCE_ENABLED:
-			expect(cell.biomass > reserve and cell.energy > 1,"A fed large cell can still gain biomass and ATP")
+			expect((cell.biomass > reserve if reserve<3000 else cell.biomass<reserve) and cell.energy > 1,"Fed cells grow below support capacity; oversized cells release excess while producing ATP")
 	for i in 120: cell.membrane.step(DT,cell.radius,Vector2(80,-40),i*DT,1.2)
 	cell.angle = 1.4
 	cell.position += Vector2(50,25)

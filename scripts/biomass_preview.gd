@@ -35,16 +35,16 @@ func sync() -> void:
 	var amount: float = maxf(0,game.world.player.biomass)
 	var price: Dictionary = game.cell_ui.hovered_price
 	var showing_cost: bool = not price.is_empty() or game.selected >= 0
-	var cost: float = float(price.tissue) if not price.is_empty() else 0.0
-	var ap_needed: int = int(price.ap) if not price.is_empty() else game.world.player.construction_price(game.Simulation.KINDS[game.selected]) if game.selected >= 0 else 0
+	var cost: float = float(price.tissue) if not price.is_empty() else game.world.player.construction_price(game.Simulation.KINDS[game.selected]) if game.selected>=0 else 0.0
+	var ap_needed: int = 0
 	var s: float = game.preferences.hud_scale
 	var view := get_viewport_rect().size
 	var maximum := minf(68*s,minf(view.x*0.095,view.y*0.14))
 	var factor := minf(sqrt(game.Simulation.Cell.TISSUE_AREA/PI)*game.zoom,maximum/sqrt(maxf(1,maxf(amount,cost))))
 	quote = {"available":amount,"cost":cost,"stock_radius":sqrt(amount)*factor,
 		"cost_radius":sqrt(cost)*factor,"maximum":maximum,
-		"ap_count":maxi(0,game.world.player.ap),"ap_needed":ap_needed,"show_cost":showing_cost,
-		"enough":amount+0.000001 >= cost,"ap_ready":not game.world.evolution.enabled or game.world.player.ap >= ap_needed}
+		"ap_count":0,"ap_needed":ap_needed,"show_cost":showing_cost,
+		"enough":amount+0.000001 >= cost,"ap_ready":true}
 	var cell = game.world.player
 	var rates: Dictionary = cell.energy_budget.rates(cell.age)
 	var model: Dictionary = price.get("rate_model",{})
@@ -98,34 +98,13 @@ func _draw() -> void:
 		draw_arc(stock,12*s,0,TAU,32,Color("a3f5dc"),1.5*s,true)
 		_caption("Empty",stock+Vector2(0,5*s),Color("d3fff1"))
 	_caption("Available tissue",stock+Vector2(0,maximum+24*s),Color("d3fff1"))
-	# Available AP lives inside the cell, one gold vacuole per point.
 	if quote.show_cost:
 		var tint := Color("ffd68a") if quote.enough else Color("ff829e")
 		_blob(needed,quote.cost_radius,tint)
-		_caption("AP only" if quote.cost == 0 and quote.ap_needed > 0 else "Free" if quote.cost == 0 else "Needed tissue",needed+Vector2(0,maximum+24*s),tint)
+		_caption("Free" if quote.cost == 0 else "Needed tissue",needed+Vector2(0,maximum+24*s),tint)
 		if not quote.enough: _caption("Need more tissue",needed+Vector2(0,maximum+44*s),tint)
-		elif not quote.ap_ready: _caption("Needs AP",needed+Vector2(0,maximum+44*s),Color("ff829e"))
-		_draw_ap(needed+Vector2(0,maximum+60*s),s,quote.ap_needed,"Needed AP",quote.ap_ready)
 	_draw_rates(stock,needed,s)
 
-
-func _draw_ap(at: Vector2, scale: float, count: int, label: String, enough: bool = true) -> void:
-	var tint := Color("ffe6a1") if enough else Color("ff829e")
-	_caption(label,at-Vector2(0,8*scale),tint)
-	if count == 0:
-		if label == "Needed AP":
-			_caption("Free",at+Vector2(0,16*scale),tint)
-			return
-		draw_arc(at+Vector2(0,10*scale),6*scale,0,TAU,24,Color("aa8b52"),1.3*scale,true)
-		return
-	# The expedition's finite grants bound this cluster; each blob is exactly 1 AP.
-	var columns := mini(8,count)
-	for i in count:
-		var p := at+Vector2((i%columns-(columns-1)*0.5)*18,(floori(float(i)/columns))*18+10)*scale
-		var radius := (6.5+0.3*sin(i*2.4))*scale
-		draw_mesh(blob,null,Transform2D(0,Vector2.ONE*radius,0,p),(Color("f4bb46") if enough else Color("ff829e")))
-		draw_polyline(Transform2D(0,Vector2.ONE*radius,0,p)*outline,tint,1.2*scale,true)
-		draw_circle(p+Vector2(-2,-2.5)*scale,1.8*scale,Color("fff4c3"))
 
 func _draw_rates(stock: Vector2, needed: Vector2, scale: float) -> void:
 	var rows := maxi(1,ceili(float(mini(24,quote.ap_count))/8))

@@ -464,6 +464,22 @@ const RELEASES=[
  ],
  "footer":"Your pond, family progress and remaining cells carry on.",
  "button":"Back to the pond"
+},
+{
+ "id": "2026-10-19-experimental-cell-lifecycle",
+ "supersedes_experimental": true,
+ "audience": "experimental",
+ "title": "What’s new in the pond",
+ "items": [
+  "Build with biomass instead of AP. Your first two organelles are free, and the oral groove can now be replaced.",
+  "Choose Mitosis or Budding directly. Instincts can choose either automatically, with one birth per cell each minute. Families still keep up to 12 cells.",
+  "Your favorite cell is protected while you are away, paused or in a hidden tab. Give it a first name in Pause.",
+  "Hunter, Producer and Grazer builds gain distinct benefits. Investment can also remember a relative’s build.",
+  "Cells swim more responsively. Crowding and oversized cells have visible, gradual consequences; stored biomass can provide emergency ATP.",
+  "Fixed lingering merge images and reconnecting from Pause. Removed the old three-crisis objectives."
+ ],
+ "footer": "Experimental starts from a fresh copy of the main pond. Main is unchanged.",
+ "button": "Back to the pond"
 }
 ]
 const CURRENT=RELEASES[-1]
@@ -476,7 +492,10 @@ static func applies(update: Dictionary,instance: String) -> bool:
 	return audience=="shared" or audience==instance
 static func pending_all(account: Dictionary,instance: String="stable") -> Array:
 	var updates: Array=[]
-	for update in RELEASES.slice(seen_index(account)+1):
+	var releases=RELEASES.slice(seen_index(account)+1)
+	var consolidated=instance=="experimental" and releases.any(func(update):return update.get("supersedes_experimental",false))
+	for update in releases:
+		if consolidated and update.get("audience","")=="experimental" and not update.get("supersedes_experimental",false):continue
 		if applies(update,instance):
 			var visible: Dictionary=update.duplicate(true)
 			var items: Array=[]

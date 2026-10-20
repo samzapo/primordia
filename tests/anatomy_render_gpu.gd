@@ -12,7 +12,7 @@ func run() -> void:
 	game.music.enabled = false; game.music.player.stop()
 	game.touch_zoom.enabled = true; game.touch_zoom.pixels = 2
 	var cell = game.world.player
-	var mouth: Dictionary = cell.organs.filter(func(o):return cell.inherent(o))[0].duplicate(true)
+	var mouth: Dictionary = cell.organs.filter(func(o):return o.kind=="feeding")[0].duplicate(true)
 	cell.organs = [mouth]; mouth.a = 0.0
 	cell.biomass = 5; cell.body = 16; cell.brood_mass = 0; cell.brood_energy = 0
 	cell.update_geometry()

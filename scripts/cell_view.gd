@@ -170,6 +170,18 @@ func _draw() -> void:
 				if highlight.size() > 1: draw_polyline(highlight,palette[4],cell.radius*0.068,true)
 				highlight.clear()
 		if highlight.size() > 1: draw_polyline(highlight,palette[4],cell.radius*0.068,true)
+	if cell.favorite:
+		var gold=outline.duplicate();gold.append(gold[0])
+		draw_polyline(gold,Color("f8d977"),maxf(1.2/game.zoom,cell.radius*.015),true)
+	var role: String=cell.synergy()
+	if role=="hunter":
+		for i in 3:draw_line(Vector2(-.5,.12+i*.13)*cell.radius,Vector2(-.34,.04+i*.13)*cell.radius,Color(1,.75,.35,.45),maxf(.8,cell.radius*.015),true)
+	elif role=="producer":
+		for i in 6:draw_circle(Vector2.from_angle(i*TAU/6)*cell.radius*.62,cell.radius*.025,Color(.65,1,.45,.4))
+	elif role=="grazer":
+		draw_arc(Vector2.ZERO,cell.radius*.7,.6,2.5,18,Color(.55,1,.9,.4),maxf(.8,cell.radius*.015),true)
+	if cell.behavior.has("autolysis_at"):
+		draw_arc(Vector2.ZERO,cell.radius*.8,0,TAU,24,Color(1,.8,.45,.45),cell.radius*.025,true)
 	if membrane_warning:
 		var warning_rim:=PackedVector2Array()
 		for point in outline:warning_rim.append(point*.955)
@@ -235,7 +247,7 @@ func _draw_organs() -> void:
 		var charge: float = organ.charge_flash
 		if organ.kind == "toxin" and cell.target_id >= 0 and cell.threat.length_squared() > 0.01 and cell.biomass >= 0.18*organ.scale*organ.scale*cell.Genes.factor(organ,"burst"):
 			charge = maxf(charge,clampf(1-float(organ.get("burst_clock",0))/(0.75*cell.Genes.factor(organ,"cooldown")),0,1))
-		if cell.inherent(organ):
+		if organ.kind=="feeding":
 			Visuals.oral_groove(appendages,cell,organ,cell.age,not simple_view)
 		else:
 			Visuals.icon(appendages,at,organ.kind,heading,drawn_scale,cell.age,organ.mode,organ.consume_flash,not simple_view,charge,readiness.depleted,preload("res://scripts/toxin_sac.gd").fraction(organ) if organ.kind=="toxin_sac" else 0)

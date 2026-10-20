@@ -142,6 +142,9 @@ var reaction_serial := 0
 var death_bursts: Array[Dictionary] = []
 var merge_bursts: Array[Dictionary] = []
 var merge_serial:=0
+const Lifecycle=preload("res://scripts/cell_lifecycle.gd")
+var lifecycle_due:=0.0
+var autolysis_after: Dictionary={}
 var death_serial := 0
 var sound_sequence := 0
 var sound_recent: Dictionary = {}
@@ -297,7 +300,6 @@ func _init(seed_number: int = 20261004, profile: int = 0, populate: bool = true)
 	# Whole habitats are stored. Only organisms inside the microscope advance.
 	for i in 18:
 		if habitat == 0 and i%5 == 3:
-			pending_replacements.append({"role":"hunter","id":-1,"not_before":150.0+240.0*(i/5)})
 			continue
 		var p = player.position + Vector2.from_angle(i*2.4)* (1050+i*45 if i%5 == 3 else 220 if i == 0 else 340+i*94)
 		_make_cell(Medium.wrap_position(p), "hunter" if i%5 == 3 else "grazer")
@@ -404,37 +406,35 @@ func install(kind: String, local_angle: float, mode: String = "graze", size: flo
 	return _install_for(player,evolution,kind,local_angle,mode,size)
 
 func _construction_input(amount: float) -> void:
-	# AP authorizes new construction material; do not debit existing cell stocks.
+	# Explicitly account for the reusable free-place material grant.
 	external_input += amount
 	if build_original != null: build_input += amount
 
-func _install_for(cell, progression, kind: String, local_angle: float, mode: String = "graze", size: float = 1.0) -> bool:
-	if kind == "feeding": return false # Inherent membrane anatomy is never purchased.
-	var cost: int = cell.construction_price(kind)
-	if progression.terminal() or (progression.enabled and cell.ap < cost): return false
-	if not cell.add_organ(kind,local_angle,mode,false,size): return false
-	cell.spend_ap(cost,"Install "+kind,progression)
-	cell.organs[-1]["construction_ap"]=cost if progression.enabled else 0
-	_construction_input(cell.organs[-1].material)
+func _install_for(cell, _progression, kind: String, local_angle: float, mode: String = "graze", size: float = 1.0) -> bool:
+	if size!=1.0:return false
+	var cost: float=cell.construction_price(kind)
+	if cell.biomass<cost or not cell.add_organ(kind,local_angle,mode,false,size):return false
+	cell.biomass-=cost;cell.organs[-1]["paid_material"]=cost
+	_construction_input(maxf(0,cell.organs[-1].material-cost))
+	cell.update_geometry()
 	return true
 
 func restore(identity: int) -> bool:
-	if remote_client: return edit("restore",{"id":identity})
+	if remote_client:return edit("restore",{"id":identity})
 	var scar: Dictionary={}
 	for lost in player.lost_organs:
 		if lost.id==identity:scar=lost;break
 	if scar.is_empty():return false
-	var cost: int = player.construction_price(scar.kind)
-	if evolution.terminal() or (evolution.enabled and player.ap < cost): return false
-	if not player.restore_organ(identity,false): return false
-	player.spend_ap(cost,"Restore organ",evolution)
-	player.organs[-1]["construction_ap"]=cost if evolution.enabled else 0
-	_construction_input(player.organs[-1].material)
+	var cost: float=player.construction_price(scar.kind)
+	if player.biomass<cost or not player.restore_organ(identity,false):return false
+	player.biomass-=cost;player.organs[-1]["paid_material"]=cost
+	_construction_input(maxf(0,player.organs[-1].material-cost))
+	player.update_geometry()
 	return true
 
 func step_autonomous_builds() -> void:
 	if remote_client or time<autonomous_build_retry_at:return
-	autonomous_build_retry_at=time+2.0
+	autonomous_build_retry_at+=floor((time-autonomous_build_retry_at)/2.0+1)*2.0
 	Investment.npc_assignments(self)
 	for cell in cells:
 		if cell.dead or cell.health<=0 or time<cell.investment_retry_at:continue
@@ -443,7 +443,9 @@ func step_autonomous_builds() -> void:
 		var progression=_family_ledger(cell).progression
 		if progression==null:continue
 		var applied:=false
-		if choice.action=="remove":
+		if choice.action=="adapt":
+			applied=cell.specialize(choice.id,choice.gene)
+		elif choice.action=="remove":
 			for index in cell.organs.size():
 				if cell.organs[index].id==choice.id:applied=_recycle_for(cell,progression,index);break
 		else:
@@ -451,12 +453,10 @@ func step_autonomous_builds() -> void:
 			if applied and choice.has("mutation"):cell.specialize(cell.organs[-1].id,choice.mutation)
 		if applied:cell.investment_retry_at=time+60.0
 
-func _recycle_for(cell,progression,index: int) -> bool:
+func _recycle_for(cell,_progression,index: int) -> bool:
 	if index<0 or index>=cell.organs.size():return false
-	var refund: int=cell.construction_refund(cell.organs[index])
 	var debris: float=cell.recycle(index)
 	if debris<0:return false
-	cell.refund_ap(refund,"Reabsorb organ",progression)
 	if cell==player:_build_debris(debris)
 	elif debris>0:spawn_particle(WASTE,cell.position,Vector2.ZERO,debris,cell.id)
 	return true
@@ -803,7 +803,7 @@ func _biology_after_feed(cell, local_dt: float) -> void:
 	var organ_mark := Time.get_ticks_usec() if profiling else 0
 	cell.update_geometry()
 	# Shrinkage can shed crowded organs, releasing their remaining material.
-	while cell.occupied() > cell.perimeter() and not cell.organs.is_empty():
+	while not cell.unattended_protected and cell.occupied() > cell.perimeter() and not cell.organs.is_empty():
 		var index: int = cell.organs.size()-1
 		while index >= 0 and cell.inherent(cell.organs[index]): index -= 1
 		if index < 0: break
@@ -830,7 +830,6 @@ func _biology_after_feed(cell, local_dt: float) -> void:
 		profile_counts["membrane_updates"] = profile_counts.get("membrane_updates",0)+1
 	cell.render_revision += 1
 	_emit_and_attack(cell,local_dt)
-	_fund_reproduction(cell,local_dt)
 
 func _step_cell_motion(dt: float) -> void:
 	# Short motion substeps plus swept contacts avoid crossing from one side to the other.
@@ -1088,6 +1087,7 @@ static func binding_threshold(a: int, b: int, acid: float) -> float:
 	return 0.5
 
 func _acid_stress(cell, dt: float) -> void:
+	if cell.unattended_protected:return
 	var exposure := acidity.sample(cell.position)
 	var demand: float = maxf(0,exposure-0.4)*dt*5*cell.growth_scale()
 	var spent: float = cell.spend_energy(demand,{},"acid stress")
@@ -1599,18 +1599,25 @@ func _step_internal_chemistry(dt: float) -> void:
 			chemistry.coarse_updates+=1;chemistry.coarse_due=period-fposmod(-chemistry.coarse_due,period)
 
 func _metabolize(cell, dt: float) -> void:
+	Lifecycle.physiology(self,cell,dt)
 	cell.reserve_activity = maxf(0,cell.reserve_activity-dt)
-	# Uncommitted daughter reserves belong to this body until division commits.
-	if cell.energy<10 and cell.brood_energy>0:
-		cell.chemistry.reserve_atp(minf(10-cell.energy,cell.brood_energy),false)
-	if cell.energy<10 and cell.substrate<1 and cell.biomass<12 and cell.brood_mass>0:
-		var reclaimed: float=minf(12-cell.biomass,cell.brood_mass)
-		cell.brood_mass-=reclaimed;cell.biomass+=reclaimed
-	if cell.energy<10 and cell.substrate<1:
-		var mobilized: float=minf(maxf(0,cell.biomass-8),dt*.3*cell.growth_scale())
-		if mobilized>0:
-			cell.biomass-=mobilized;cell.reserve_used+=mobilized;cell.reserve_activity=2
-			cell.chemistry.emit("food",mobilized,cell.chemistry.constrain(cell,Vector2(.15,.15)*cell.radius),-1,-1,mobilized*7.5)
+	if cell.energy<12:cell.behavior["burn_reserves"]=true
+	elif cell.energy>=18:cell.behavior.erase("burn_reserves")
+	if cell.behavior.get("burn_reserves",false):
+		# Fund actual maintenance while crossing a food gap; do not regenerate food.
+		var maintenance: float=Cell.BASAL_UPKEEP*cell.growth_scale()
+		for organ in cell.organs:maintenance+=Cell.metabolic_upkeep(organ)
+		var rate: float=maxf(.5*cell.growth_scale(),maintenance+.25*cell.growth_scale())
+		cell.behavior["reserve_elapsed"]=float(cell.behavior.get("reserve_elapsed",0))+dt
+		if cell.behavior.reserve_elapsed>=.5:
+			var elapsed: float=cell.behavior.reserve_elapsed;cell.behavior.reserve_elapsed=0.0
+			var used: float=minf(cell.biomass,minf(maxf(0,18-cell.energy),elapsed*rate))
+			if used>0:
+				cell.biomass-=used;cell.gain_energy(used);cell.reserve_used+=used;cell.reserve_activity=2
+				cell.chemistry.heat+=used*6.5
+				spawn_particle(CARBON,cell.excretion_position(),Vector2.ZERO,used*.1,cell.id)
+				spawn_particle(WASTE,cell.excretion_position(),Vector2.ZERO,used*.9,cell.id)
+	else:cell.behavior.erase("reserve_elapsed")
 	if not perception_modes_enabled:cell.chemistry.advance(cell,dt,0.15+acidity.sample(cell.position)*0.1)
 	cell.Surface.advance(cell,dt,self)
 	cell.decay_energy(dt)
@@ -1620,7 +1627,7 @@ func _metabolize(cell, dt: float) -> void:
 		var before: float=cell.starvation_seconds
 		cell.starvation_seconds+=dt
 		var starving_dt: float=maxf(0,cell.starvation_seconds-Cell.STARVATION_GRACE)-maxf(0,before-Cell.STARVATION_GRACE)
-		cell.health = maxf(0,cell.health-starving_dt*Cell.STARVATION_DAMAGE)
+		if not cell.unattended_protected:cell.health = maxf(0,cell.health-starving_dt*Cell.STARVATION_DAMAGE)
 		cell.death_hint = "Prolonged starvation; no usable food or ATP reserves remained"
 	else:
 		cell.starvation_seconds=maxf(0,cell.starvation_seconds-dt*4)
@@ -1714,35 +1721,39 @@ func _motion_cell(cell, local_dt: float) -> void:
 	cell.update_power_state()
 	var previous: Vector2 = cell.position
 	var steering_power := 0.0
+	var desired_drift:=Vector2.ZERO
 	for organ in cell.organs:
 		if organ.hp<=0 or cell.target.length_squared()<.0001: continue
 		var pursuing: bool = organ.kind in ["hunting","photosynthesis"] and organ.id == cell.target_organ_id and cell.drive_active and cell.target_memory > 0 and cell.target_mode in ["hunt","light"]
 		if organ.kind not in ["propulsion","cilia"] and not pursuing: continue
 		var arm: Vector2 = cell.organ_position(organ)-cell.position
-		var power: float = (2600.0 if organ.kind == "propulsion" else Cell.CILIA_THRUST if organ.kind == "cilia" else 1100.0)*organ.scale*organ.scale*(organ.hp/organ.max_hp)*Genes.factor(organ,"thrust")
+		var power: float = (13000.0 if organ.kind == "propulsion" else Cell.CILIA_THRUST if organ.kind == "cilia" else 1100.0)*organ.scale*organ.scale*(organ.hp/organ.max_hp)*Genes.factor(organ,"thrust")
 		var energy_cost: float = local_dt*(Cell.CILIA_MOTION if organ.kind == "cilia" else Cell.MOTION_UPKEEP)*organ.scale*organ.scale*Genes.factor(organ,"motion_cost")
 		var capacity: float=cell.work_capacity(energy_cost)
-		power *= capacity
+		power *= capacity*(1.15 if cell.synergy()=="hunter" else 1.0)
+		energy_cost *= .75 if cell.synergy()=="hunter" else 1.0
 		var thrust: Vector2 = cell.organ_normal(organ).rotated(cell.angle)
 		# Flagella can reverse their stroke, but force follows their mounted axis.
 		if organ.kind in ["propulsion","cilia"] and thrust.dot(cell.target) < 0: thrust = -thrust
-		var impulse: Vector2 = thrust*power*local_dt
-		if fluid.deposit(cell.position+arm,-impulse):
-			cell.velocity += impulse/cell.mass
-			cell.angular_velocity += arm.cross(impulse)/cell.inertia
-			steering_power += power
-			cell.spend_energy(energy_cost*capacity,organ,"movement")
-	# Flagella can reverse their stroke to retreat while the receptor remains
-	# facing the threat. A paired steering impulse also acts on the medium.
-	if steering_power > 0:
-		var error := wrapf(cell.facing.angle()-cell.target_mouth-cell.angle,-PI,PI)
-		var torque := clampf(cell.inertia*(error*12-cell.angular_velocity*7),-steering_power*cell.radius,steering_power*cell.radius)
-		var arm: Vector2 = Vector2.from_angle(cell.angle)*cell.radius*0.8
-		if fluid.can_couple(cell.position+arm) and fluid.can_couple(cell.position-arm):
-			var impulse: Vector2 = Vector2(-arm.y,arm.x).normalized()*torque*local_dt/(2*arm.length())
-			fluid.deposit(cell.position+arm,-impulse)
-			fluid.deposit(cell.position-arm,impulse)
-			cell.angular_velocity += torque*local_dt/cell.inertia
+		desired_drift+=thrust*power/cell.fluid_drag()
+		steering_power+=power
+		cell.spend_energy(energy_cost*capacity,organ,"movement")
+	# Only bodies use overdamped motility. The medium and packet integrators are unchanged.
+	var response: float=1-exp(-local_dt/.03)
+	var flow: Vector2=fluid.sample(cell.position)
+	var next_velocity: Vector2=cell.velocity.lerp(flow+desired_drift,response)
+	var impulse: Vector2=(next_velocity-cell.velocity)*cell.mass
+	if fluid.deposit(cell.position,-impulse):cell.velocity=next_velocity
+	var desired_turn:=0.0
+	if steering_power>0:
+		var error: float=wrapf(cell.facing.angle()-cell.target_mouth-cell.angle,-PI,PI)
+		desired_turn=clampf(error*4,-3,3)
+	var next_turn: float=lerpf(cell.angular_velocity,desired_turn,response)
+	var turn_arm: Vector2=Vector2.from_angle(cell.angle)*cell.radius*.8
+	if fluid.can_couple(cell.position+turn_arm) and fluid.can_couple(cell.position-turn_arm):
+		var turn_impulse: Vector2=Vector2(-turn_arm.y,turn_arm.x)*(next_turn-cell.angular_velocity)*cell.inertia/(2*turn_arm.length_squared())
+		fluid.deposit(cell.position+turn_arm,-turn_impulse);fluid.deposit(cell.position-turn_arm,turn_impulse)
+		cell.angular_velocity=next_turn
 	if native_body_fluid:
 		fluid.velocity = kernels.fluid_body_exchange(fluid.velocity,fluid.activity,cell,local_dt,fluid.global_coupling)
 	else:
@@ -1914,8 +1925,7 @@ func _die(cell, transferred: float = 0.0) -> void:
 	if death_bursts.size() > 32: death_bursts.pop_front()
 	cell.chemistry.ensure_cpu()
 	cell.dead = true
-	investment.cells.erase(cell.id)
-	investment.npc.erase(cell.id)
+	Investment.retire(self,cell)
 	cell.health = 0
 	var total: float = maxf(0,cell.organic_mass()-transferred)
 	var oxygen: float = cell.oxygen
@@ -2005,7 +2015,7 @@ func begin_build() -> void:
 	if server_mode: return # Live edits commit through WorldHost, never clone/freeze biology.
 	if build_original != null or player.dead or evolution.terminal(): return
 	build_original = player
-	build_state = {"offers":evolution.offers.duplicate(),"learned":evolution.learned.duplicate(),"chosen":evolution.chosen,"spending":evolution.spending.duplicate(true),"challenge":evolution.challenge,"challenge_mass":evolution.challenge_mass,"challenge_intake":evolution.challenge_intake,"challenge_fixed":evolution.challenge_fixed,"challenge_cell":evolution.challenge_cell,"stable_seconds":evolution.stable_seconds}
+	build_state = {"offers":evolution.offers.duplicate(),"learned":evolution.learned.duplicate(),"chosen":evolution.chosen,"spending":evolution.spending.duplicate(true)}
 	var index := cells.find(player)
 	player = Cell.clone_state(player)
 	cells[index] = player
@@ -2037,10 +2047,9 @@ func undo_build() -> void:
 
 func resize_organ(identity: int, size: float) -> bool:
 	var quote: Dictionary = player.resize_quote(identity,size)
-	if quote.is_empty() or (evolution.enabled and player.ap < quote.ap): return false
+	if quote.is_empty(): return false
 	var result: Dictionary = player.resize_organ(identity,size)
 	if result.is_empty(): return false
-	player.spend_ap(result.ap,"Enlarge organ",evolution)
 	_build_debris(result.debris)
 	return true
 
@@ -2049,18 +2058,12 @@ func mutate_organ(identity: int, gene: String) -> bool:
 	var organ: Dictionary = player.organ_by_id(identity)
 	if organ.is_empty() or gene not in Genes.available(organ,evolution.learned): return false
 	var cost := Genes.adaptation_price(organ)
-	if evolution.enabled and player.ap < cost: return false
+
 	if not player.specialize(identity,gene): return false
-	player.spend_ap(cost,"Apply "+gene,evolution)
 	return true
 
-func offspring_quote(subject = null) -> Dictionary:
-	var parent=player if subject==null else subject
-	# A new body has only its inherent oral groove, not the parent's paid build.
-	var body := 30.0
-	var leaf_material: float=Cell.COST[Cell.KINDS.find("photosynthesis")]
-	var inherited_body := minf(body,maxf(0,parent.body-30))
-	return {"body":body,"body_transfer":inherited_body,"biomass":12.0,"material":body+12+leaf_material-inherited_body,"total_material":body+12+leaf_material,"energy":60.0,"oxygen":0.0}
+func offspring_quote(_subject=null) -> Dictionary:
+	return {"body":30.0,"body_transfer":0.0,"biomass":12.0,"material":42.0,"total_material":62.0,"energy":60.0,"oxygen":0.0}
 
 func safe_birth_position(at: Vector2, radius: float) -> bool:
 	if not habitat_geometry.clear_at(at,radius): return false
@@ -2088,94 +2091,34 @@ func make_offspring(parent, quote: Dictionary):
 	child.update_geometry()
 	return child
 
-func division_status(subject=null, ledger=null) -> Dictionary:
+func division_status(subject=null, _ledger=null, mode: String="mitosis") -> Dictionary:
 	var parent=player if subject==null else subject
 	if remote_client:
-		if remote_division.get("cell",-1)==parent.id:return remote_division.duplicate(true)
-		return {"cell":parent.id,"ready":false,"progress":0.0,"queued":parent.division_requested,"automatic":parent.automatic_division,"reason":"Checking division with the pond…"}
-	var family=lineage if ledger==null else ledger
-	var result: Dictionary={"cell":parent.id,"ready":false,"queued":parent.division_requested,"automatic":parent.automatic_division,"reason":"","material":offspring_quote(parent).material,"energy":60.0}
-	result.progress=minf(clampf(parent.brood_mass/maxf(.000001,result.material),0,1),clampf(parent.brood_energy/result.energy,0,1))
-	if parent.dead or parent.health<=0 or parent.lineage_id()!=family.root_id:
-		result.reason="Only a living member of your family can divide."
-	elif cells.filter(func(cell):return not cell.dead).size()>=MAX_LIVE_CELLS:
-		result.reason="The pond is full. Division waits for space in the population."
-	elif parent.brood_mass+.000001<result.material or parent.brood_energy<result.energy:
-		result.reason="Growing: %.2f tissue and %.2f ATP still needed." % [maxf(0,result.material-parent.brood_mass),maxf(0,result.energy-parent.brood_energy)]
-	elif parent.count("feeding")+parent.count("photosynthesis")==0:
-		result.reason="A working feeding or photosynthesis organ is needed."
-	else:
-		var child=make_offspring(parent,offspring_quote(parent))
-		var at=_birth_position(parent,child)
-		if at==null:result.reason="Ready, but nearby cells or plants block division. Waiting for clear water."
-		else:
-			result.ready=true;result.reason="Ready to divide.";result.position=at
-	return result
+		var result=remote_division.get(mode,remote_division)
+		return result if result is Dictionary and result.get("cell",-1)==parent.id else {"cell":parent.id,"ready":false,"progress":0.0,"queued":false,"automatic":parent.automatic_division,"reason":"Checking reproduction with the pond…"}
+	return Lifecycle.quote(self,parent,mode)
 
-func _birth_position(parent,child):
+func _birth_position(parent,child) -> Vector2:
+	var best: Vector2=Medium.wrap_position(parent.position+Vector2.from_angle(parent.angle)*(parent.extent()+child.extent()+4))
+	var score: float=INF
 	for i in 32:
-		var at: Vector2=Medium.wrap_position(parent.position+Vector2.from_angle(parent.angle+TAU*i/32)*(parent.extent()+child.extent()+45))
-		if safe_birth_position(at,child.extent()):return at
-	return null
+		var at: Vector2=Medium.wrap_position(parent.position+Vector2.from_angle(parent.angle+TAU*i/32)*(parent.extent()+child.extent()+4))
+		var overlap: float=0.0 if habitat_geometry==null or habitat_geometry.clear_at(at,child.extent()) else child.extent()*2
+		for other in cells:
+			if not other.dead:overlap+=maxf(0,other.extent()+child.extent()-Medium.offset(other.position,at).length())
+		if overlap<score:score=overlap;best=at
+	return best
 
-func divide_lineage(dormant: bool = false, follow: bool = true) -> bool:
-	if dormant:return false # Retired command: never fund a stored body.
-	if remote_client: return edit("divide",{})
-	if player.dead or evolution.terminal() or build_original != null: return false
-	return _divide_paid(player,lineage,dormant,follow,true)
-
-func request_division(active: bool=true) -> bool:
-	if remote_client:return edit("division_request",{"active":active})
-	if player.dead or player.health<=0 or evolution.terminal():return false
-	if not active:
-		player.division_requested=false;return true
-	if build_original!=null:return false
-	player.division_requested=true
-	# Manual intent supersedes continuous division for this body.
-	player.automatic_division=false;player.reproduction_retry_at=time
-	_divide_paid(player,lineage,false,false,true)
-	return true # A valid unpaid/blocked request is retained, not rejected.
-
-func _divide_paid(parent,ledger,dormant: bool=false,follow: bool=false,progress: bool=false) -> bool:
+func divide_lineage(dormant: bool=false, follow: bool=true, mode: String="mitosis") -> bool:
 	if dormant:return false
-	var status:=division_status(parent,ledger)
-	if not status.ready:return false
-	var quote := offspring_quote(parent)
-	var child = make_offspring(parent,quote)
-	child.position=status.position
-	Investment.inherit_strategy(self,parent,child)
-	child.chemistry.partition(parent.chemistry,0.25)
-	parent.division_requested=false
-	parent.brood_mass -= quote.material
-	parent.body -= quote.body_transfer
-	parent.brood_energy -= quote.energy
-	parent.oxygen -= child.oxygen
-	parent.update_geometry()
-	parent.render_revision+=1
-	child.previous_position = child.position
-	child.angle = parent.angle
-	child.previous_angle = child.angle
-	inherited_lineages[child.id] = child.lineage_id()
-	next_id += 1
-	ledger.births += 1
-	parent.ap+=1;child.ap+=1
-	var mutation_offer:=false
-	if ledger.progression!=null:mutation_offer=ledger.progression.divided(parent)
-	ledger.register(child,parent.id,child.generation,"active" if follow else "living",time)
-	cells.append(child)
-	_record_sound("division",parent.position,parent.id)
-	ledger.notify("Cell divided."+" +1 AP each for parent and daughter."+(" Free mutation available in the nucleus." if mutation_offer else ""))
-	events.append({"type":"division","id":child.id,"parent":parent.id,"time":time,"material":quote.total_material,"reserve_used":quote.material,"body_transferred":quote.body_transfer,"oxygen_transferred":child.oxygen,"atp_used":20})
-	var folded: bool=FamilyMerging.fold_newborn(self,parent,child)
-	if follow and not folded:
-		var record: Dictionary = ledger.record_for(parent.id)
-		if not record.is_empty(): record.state = "living"
-		parent.role = "ancestor"
-		child.role = "player"
-		player = child
-		evolution.observe_successor(child)
-	if progress:evolution.offspring_id = parent.id if folded else child.id
-	return true
+	if remote_client:return edit("reproduce",{"mode":mode})
+	return Lifecycle.reproduce(self,player,lineage,mode,follow)
+
+func request_division(_active: bool=true) -> bool:
+	return false # Staged/queued division investment is retired.
+
+func _divide_paid(parent,ledger,dormant: bool=false,follow: bool=false,_progress: bool=false) -> bool:
+	return false if dormant else Lifecycle.reproduce(self,parent,ledger,"mitosis",follow)
 
 func follow_family(identity: int) -> bool:
 	if remote_client: return edit("follow",{"id":identity})
@@ -2194,22 +2137,6 @@ func edit(action: String,args: Dictionary = {}):
 		return true
 	return preload("res://scripts/network/editor_commands.gd").execute(self,action,args)
 
-func _fund_reproduction(cell,dt: float) -> void:
-	if not automatic_reproduction or remote_client or cell.dead or cell.health<=0 or dt<=0:return
-	if cell==player and build_original!=null:return
-	cell.reproduction_elapsed+=dt
-	if cell.reproduction_elapsed<.5:return
-	var elapsed: float=cell.reproduction_elapsed;cell.reproduction_elapsed=0
-	if cell.count("feeding")+cell.count("photosynthesis")==0:return
-	if cell.energy<REPRODUCTION_ATP_FLOOR or cell.starvation_seconds>0:return
-	var quote:=offspring_quote(cell)
-	var target_material: float=quote.material
-	var tissue: float=minf(REPRODUCTION_RATE*elapsed,minf(maxf(0,cell.biomass-REPRODUCTION_TISSUE_FLOOR),maxf(0,target_material-cell.brood_mass)))
-	var atp: float=minf(REPRODUCTION_RATE*elapsed,minf(maxf(0,cell.energy-REPRODUCTION_ATP_FLOOR),maxf(0,quote.energy-cell.brood_energy)))
-	if tissue<=0 and atp<=0:return
-	cell.biomass-=tissue;cell.brood_mass+=tissue
-	if atp>0:cell.chemistry.reserve_atp(atp,true)
-	cell.update_geometry();cell.render_revision+=1
 
 func _family_ledger(cell):
 	if lineage.root_id==cell.lineage_id():
@@ -2223,15 +2150,4 @@ func _family_ledger(cell):
 	return ledger
 
 func _step_reproduction() -> void:
-	if remote_client:return
-	FamilyMerging.step(self)
-	lineage.discard_stored(self)
-	for ledger in family_ledgers:ledger.discard_stored(self)
-	if not automatic_reproduction:return
-	for cell in cells.duplicate():
-		if cell.dead or cell.health<=0 or not (cell.automatic_division or cell.division_requested) or cell.brood_mass<=0 or cell.brood_energy<60 or time<cell.reproduction_retry_at:continue
-		if cell==player and (build_original!=null or (not server_mode and evolution.terminal())):continue
-		var quote:=offspring_quote(cell)
-		if cell.brood_mass+.000001<quote.material:continue
-		cell.reproduction_retry_at=time+.5
-		_divide_paid(cell,_family_ledger(cell),false,false,cell==player and cell.division_requested)
+	Lifecycle.step(self)

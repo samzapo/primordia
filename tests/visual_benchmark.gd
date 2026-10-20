@@ -51,7 +51,7 @@ func run() -> void:
 						var quote: Dictionary = sim.offspring_quote()
 						sim.player.biomass += quote.material
 						sim.player.energy = 100
-						sim.player.reserve(maxf(60,quote.material),quote.material)
+						sim.player.biomass=200;sim.player.energy=100;sim.player.reproduction_retry_at=0
 						if not sim.divide_lineage(false,false):
 							push_error("Family benchmark could not place its paid successor")
 							quit(1)

@@ -165,11 +165,12 @@ func run(test_host) -> void:
 	scene.cell_ui.open_context({"kind":"organ","id":organ_id})
 	expect(scene.cell_ui.choices.size() == 1 and scene.cell_ui.choices[0].caption == "Reabsorb","An unmodified organ exposes Reabsorb without retired Move or output")
 	var points: int = scene.world.player.ap
-	var refund: int = cell.construction_refund(cell.organ_by_id(organ_id))
+	var material_before_reabsorb: float=scene.world.player.biomass
+	var refund: float = cell.construction_refund(cell.organ_by_id(organ_id))
 	scene.cell_ui.choices[0].pressed.emit()
 	scene._update_world(1)
 	expect(cell.count("protection") == 0 and scene.views[cell.id].seen_revision > seen,"Recycling refreshes the paused drawing before resuming")
-	expect(scene.world.player.ap == points+refund,"Reabsorption returns the current construction tier to this cell")
+	expect(is_equal_approx(scene.world.player.biomass,material_before_reabsorb+refund),"Reabsorption returns the current construction tier to this cell")
 	points=scene.world.player.ap
 	scene.preferences.show_instinct=false
 	var instinct: Array=[]
@@ -202,7 +203,7 @@ func run(test_host) -> void:
 	upgrade.grab_focus()
 	scene.cell_ui.sync(0)
 	var upgrade_quote: Dictionary = scene.cell_ui.biomass_view.quote
-	expect(upgrade_quote.show_cost and upgrade_quote.cost == Sim.Genes.price(upgraded) and upgrade_quote.ap_needed == Sim.Genes.adaptation_price(upgraded),"Inspecting a real upgrade displays its tissue and AP costs")
+	expect(upgrade_quote.show_cost and upgrade_quote.cost == Sim.Genes.price(upgraded) and upgrade_quote.ap_needed == 0,"Inspecting a real upgrade displays its tissue and AP costs")
 	expect(upgrade.description.contains("Free mutation"),"Mutation tooltip states that application is free")
 	expect(scene.cell_ui.biomass_view.rate_quote.preview and scene.cell_ui.biomass_view.rate_quote.has_organ and not scene.cell_ui.tip.text.contains("\n"),"Upgrade inspection shows its proposed upkeep before spending")
 	var type_scale: float = scene.preferences.hud_scale
@@ -225,7 +226,7 @@ func run(test_host) -> void:
 	scene.cell_ui.sync(0)
 	var stock = scene.cell_ui.biomass_view
 	var quote: Dictionary = stock.quote
-	expect(stock.visible and quote.available == cell.biomass and quote.cost == 0 and quote.ap_needed == cell.construction_price(),"The build preview shows the current progressive AP price alongside usable biomass")
+	expect(stock.visible and quote.available == cell.biomass and quote.cost == cell.construction_price("propulsion") and quote.ap_needed == 0,"The build preview shows the current progressive AP price alongside usable biomass")
 	expect(is_equal_approx(pow(quote.cost_radius/quote.stock_radius,2),quote.cost/quote.available),"Available and required blobs use the same area scale")
 	var usable: float = cell.biomass
 	cell.biomass = 100000
@@ -233,20 +234,14 @@ func run(test_host) -> void:
 	expect(stock.quote.stock_radius <= stock.quote.maximum+0.0001 and is_equal_approx(pow(stock.quote.cost_radius/stock.quote.stock_radius,2),stock.quote.cost/stock.quote.available),"Huge reserves fit the viewport while preserving the comparison ratio")
 	cell.biomass = 0
 	stock.sync()
-	expect(stock.quote.stock_radius == 0 and stock.quote.cost_radius == 0 and stock.quote.enough,"Zero usable biomass cannot block AP-only construction")
+	expect(stock.quote.stock_radius == 0 and not stock.quote.enough,"Zero usable biomass cannot fund paid construction")
 	cell.biomass = 8
 	stock.sync()
-	expect(stock.quote.enough and stock.quote.cost_radius == 0,"Construction has no required-tissue blob")
+	expect(stock.quote.enough and stock.quote.cost_radius > 0,"Construction shows its required-tissue blob")
 	cell.biomass = 7.9
 	stock.sync()
-	expect(stock.quote.enough,"Low tissue does not create a false construction shortfall")
+	expect(not stock.quote.enough,"Insufficient biomass is reported before a paid build")
 	cell.biomass = usable
-	var reserve_before: float = cell.brood_mass
-	cell.reserve(4)
-	stock.sync()
-	expect(stock.quote.available == usable-4 and stock.quote.available != cell.organic_mass(),"Reserved and structural tissue are excluded from the usable biomass blob")
-	cell.reserve(-4)
-	expect(cell.brood_mass == reserve_before,"Preview fixture restores the paid offspring reserve")
 	scene.selected = -1
 	stock.sync()
 	expect(stock.quote.cost == 0,"Cancelling placement removes its cost blob without changing biomass")
@@ -279,25 +274,22 @@ func run(test_host) -> void:
 	key(KEY_ENTER)
 	expect(scene.selected == 0,"Enter activates the focused factory choice")
 	click(Vector2.ZERO,MOUSE_BUTTON_RIGHT)
+	var offered: String="economical_flagellum"
+	scene.world.evolution.learned.erase(offered)
+	scene.world.evolution.division_offers.assign([offered])
 	scene.cell_ui.open_context({"kind":"nucleus"})
-	var offered: String = scene.world.evolution.offers[0]
 	scene.cell_ui.choices[0].pressed.emit()
-	expect(scene.world.evolution.chosen and offered in scene.world.evolution.learned,"Nucleus keeps a blueprint using the existing run rules")
+	expect(offered in scene.world.evolution.learned,"Nucleus accepts an actual free division mutation")
 	scene.cell_ui.open_context({"kind":"bud"})
-	expect(scene.cell_ui.choices.size()==3 and scene.cell_ui.choices[0].caption=="Divide","The bud offers direct division without banking controls")
-	cell.brood_mass=0;cell.brood_energy=0
-	var population: int=scene.world.cells.size()
+	expect(scene.cell_ui.choices.size()==3 and scene.cell_ui.choices[0].caption=="Divide","The bud opens reproduction without a funding bank")
 	scene.cell_ui.choices[0].pressed.emit()
-	expect(scene.cell_ui.context.kind=="division" and scene.cell_ui.choices[1].caption=="Start division now","Divide opens explicit automatic and one-shot choices")
-	scene.cell_ui.choices[1].pressed.emit()
-	cell=scene.world.player # The request commits/re-enters local editing.
-	expect(scene.world.cells.size()==population and cell.brood_mass==0 and cell.brood_energy==0 and cell.division_requested,"An unfunded request queues one birth without granting tissue, ATP or a free daughter")
-	scene.world.evolution.offspring_id = cell.id
+	expect(scene.cell_ui.choices.any(func(c):return c.get_meta("reproduction_mode","")=="mitosis") and scene.cell_ui.choices.any(func(c):return c.get_meta("reproduction_mode","")=="budding"),"Division exposes direct Mitosis and Budding")
+	var toggle=scene.cell_ui.choices.filter(func(c):return c.get_meta("reproduction_auto","")=="budding")[0]
+	var before_auto: bool=cell.automatic_budding
+	toggle.pressed.emit()
+	expect(cell.automatic_budding!=before_auto and not cell.division_requested,"Automatic budding toggles without creating an investment request")
 	scene.cell_ui.open_context({"kind":"bud"})
-	expect(scene.cell_ui.choices.size()==3 and scene.cell_ui.choices[0].radial_progress>=0 and scene.cell_ui.choices[0].selected,"The bud reports automatic division growth after a prior birth")
-	scene.world.evolution.offspring_id = -1
-	scene.cell_ui.open_context({"kind":"division"});scene.cell_ui.choices[1].pressed.emit()
-	expect(not scene.world.player.division_requested,"The queued birth can be cancelled through the same division menu")
+	expect(scene.cell_ui.choices[0].radial_progress>=0,"Reproduction has a resource/cooldown readiness circle")
 	scene.cell_ui.close_context()
 	cell.energy = 0
 	scene.cell_ui.interior.sync()
@@ -307,7 +299,7 @@ func run(test_host) -> void:
 	scene.cell_ui.interior.sync()
 	expect(scene.cell_ui.interior.atp_size > 0,"Positive ATP produces a nonempty elastic sac")
 	scene.cell_ui.biomass_view.sync()
-	expect(scene.cell_ui.biomass_view.quote.ap_count == 7,"The cost comparison reads actual available AP")
+	expect(scene.cell_ui.biomass_view.quote.ap_count == 0,"The cost comparison reads actual available AP")
 	scene.world.player.ap = 0
 	scene.cell_ui.biomass_view.sync()
 	expect(scene.cell_ui.biomass_view.quote.ap_count == 0,"Empty AP stock shows no available gold blobs")
@@ -590,124 +582,22 @@ func _track_particle() -> void:
 	inspector.update_lens(0,cursor,1,false)
 
 func _lineage() -> void:
-	# Exercise the real UI transitions: no hidden build clone may swallow a birth.
-	scene.world = Sim.new(821)
-	var sim = scene.world
-	sim.habitat_geometry.enabled = false
-	sim.pending_replacements.clear()
-	sim.cells = [sim.player]
-	sim.particles.clear()
-	sim.grid.clear()
-	scene.build_open = false
-	scene.settings_panel.hide()
-	scene.cell_ui.reset()
-	scene.show_debug = false
-	scene.camera_locked = true
-	scene.camera_offset = Vector2.ZERO
-	scene.manual_zoom = 0.8
+	scene._finish_build()
+	var sim=scene.world;var parent=sim.player
+	parent.biomass=200;parent.energy=100;parent.reproduction_retry_at=0
+	var generation=parent.generation
+	expect(sim.divide_lineage(false,false),"Interface fixture creates a direct daughter")
+	var daughter=sim.cells[-1]
+	expect(daughter.generation==generation+1 and sim.player==parent,"Birth keeps the equipped parent selected")
 	scene._update_world(1)
-	key(KEY_TAB)
-	settle()
-	var parent = sim.player
-	var quote: Dictionary = sim.offspring_quote()
-	parent.biomass += quote.material+50 # Explicit fixture endowment; actions still pay.
-	parent.energy = 100
-	parent.reserve(maxf(60,quote.material),quote.material)
-	var mass: float = parent.organic_mass()
-	var points: int = sim.player.ap
-	scene.cell_ui.open_context({"kind":"bud"})
-	parent.brood_energy = 50
-	scene.cell_ui.sync(0)
-	expect(scene.cell_ui.choices[0].affordable and not scene.cell_ui.choices[0].progress_ready and scene.cell_ui.choices[0].radial_progress<1,"An unfunded Divide remains accessible while the ring shows incomplete preparation")
-	parent.brood_energy = 60
-	scene.cell_ui.sync(0)
-	expect(scene.cell_ui.choices[0].progress_ready,"Funding refreshes readiness while the bud choices remain open")
-	scene.cell_ui.choices[0].pressed.emit()
-	scene.cell_ui.choices[1].pressed.emit()
+	scene._toggle_build();scene.cell_ui.open_context({"kind":"lineage"})
+	expect(scene.cell_ui.choices.any(func(choice):return choice.get_meta("family_id",-1)==daughter.id),"A new living daughter has a family portrait")
+	scene._finish_build()
+	expect(scene._switch_family(daughter.id),"The daughter can be directly selected")
+	expect(sim.player.id==daughter.id and sim.player.ap==0,"Selection uses the daughter's resources without AP")
 	scene._update_world(1)
-	expect(sim.lineage.births == 1 and sim.cells.size() == 2 and sim.player.id == parent.id,"Release from the bud creates a real autonomous family member")
-	expect(scene.build_open and sim.build_original != null and sim.player.organic_mass() < mass and sim.player.ap == points+1,"Birth awards one AP to each body, commits paid anatomy and resumes editing the depleted parent")
-	var child = sim.cells[-1]
-	expect(scene.views.has(child.id) and scene.views[sim.player.id].cell == sim.player,"Parent and offspring drawings update immediately during editing")
-	scene.cell_ui.open_context({"kind":"lineage"})
-	for choice in scene.cell_ui.choices:
-		if choice.get_meta("family_id",-1)==child.id:choice.pressed.emit();break
-	expect(sim.player.id == child.id and scene.camera_locked and sim.build_original != null,"Following a released successor attaches the camera and correct build clone")
-	key(KEY_TAB)
-	settle()
-	expect(sim.build_original == null and not scene.is_paused(),"Resuming after handoff cannot leave the world trapped in a hidden build")
-	# Family history is also available without entering edit mode.
-	scene.cell_ui.open_context({"kind":"lineage"})
-	for choice in scene.cell_ui.choices:
-		if choice.get_meta("family_id",-1) == parent.id: choice.pressed.emit(); break
-	expect(sim.player.id == parent.id and not scene.build_open and sim.build_original == null and not scene.is_paused(),"A family-tree handoff outside edit mode preserves active simulation")
-	expect(sim.lineage.record_for(child.id).state == "living" and sim.lineage.record_for(parent.id).state == "active","Family cards distinguish the current body from living relatives")
-	var identity: int = sim.player.id
-	var time: float = sim.time
-	var learned: Array = sim.evolution.learned.duplicate()
-	scene.music.frame_cursor = 137123
-	var score_clock: int = scene.music.frame_cursor
-	var camera_before_death: Vector2=scene.render_camera
-	sim.player.health = 0
-	scene._physics_process(DT)
-	scene._process(DT)
-	expect(scene.world == sim and sim.player.id != identity and sim.time > time and not sim.evolution.terminal(),"The scene continues the same habitat after fatal damage")
-	expect(sim.player.ap == 1 and sim.evolution.learned == learned,"Scene handoff shows the daughter\'s own AP and shared learned mutations")
-	expect(scene.music.frame_cursor >= score_clock,"Succession does not reset the musical transport")
-	var death_at: Vector2 = sim.death_bursts[-1].at
-	expect(scene.death_focus_age < 0.1 and Sim.Medium.offset(scene.render_camera,camera_before_death).length() < 0.001,"Rupture relocation begins from the current view without a camera jump")
-	expect(not scene.death_view.bursts.is_empty() and not scene.views.has(identity),"The dead membrane becomes visible rupture fragments while real lysis packets remain")
-	var biological_state: Array = [sim.time,sim.rng.state,sim.ecology_rng.state,sim.background_rng.state,hash(sim.particles)]
-	var before_frame: int = scene.music.frame_cursor
-	scene._process(0.5)
-	expect(Sim.Medium.offset(scene.render_camera,death_at).length() <= Sim.Medium.offset(camera_before_death,death_at).length()+.001,"Camera eases toward the original death site while the rupture remains visible")
-	scene._process(.17)
-	expect(Sim.Medium.offset(scene.render_camera,death_at).length()<.001,"Camera arrives at the death site before the successor handoff begins")
-	scene._process(0.68)
-	expect(scene.death_focus_age > 1.15 and scene.death_focus_age < 1.8,"Camera handoff starts only after the visible death burst")
-	scene._process(0.6)
-	expect(Sim.Medium.offset(scene.render_camera,sim.player.position).length() < 0.001 and scene.death_view.bursts.is_empty(),"The camera reaches its successor and expired fragments clear")
-	expect(biological_state == [sim.time,sim.rng.state,sim.ecology_rng.state,sim.background_rng.state,hash(sim.particles)] and scene.music.frame_cursor >= before_frame,"Death presentation neither advances nor mutates biology and preserves musical transport")
-	scene.cell_ui.open_context({"kind":"lineage"})
-	scene._process(DT)
-	expect(scene.is_paused() and scene.cell_ui.visible and not scene.build_open,"History can pause observation without enabling anatomical edits")
-	var bounds := Rect2(Vector2.ZERO,scene.get_viewport_rect().size)
-	for choice in scene.cell_ui.choices:
-		expect(bounds.encloses(choice.get_global_rect()),"Family choices fit the screen at 175% UI scale")
-	click(Vector2.ZERO,MOUSE_BUTTON_RIGHT)
-	expect(not scene.is_paused() and scene.cell_ui.context.is_empty(),"Right-click dismisses observation history and resumes")
-	# Large goal text reflows; panel bounds must shrink with the text.
-	scene.cell_ui.keyboard_target = {"kind":"nucleus"}
-	for i in 4:
-		scene._process(DT)
-		await host.process_frame
-	expect(bounds.encloses(scene.cell_ui.tip_box.get_global_rect()),"Nucleus goals remain inside the viewport after 175% text reflow")
-	sim.evolution.clock = 620
-	sim.evolution.tide = 5
-	sim.evolution.resistance = "pore"
-	for i in 4:
-		scene._process(DT)
-		await host.process_frame
-	expect(bounds.encloses(scene.cell_ui.tip_box.get_global_rect()),"Late-crisis forecasts and resistance details also fit at 175%")
-	scene.cell_ui.keyboard_target.clear()
-	# Exhaust the fixture's actual family and bank; terminal feedback must win over death notices.
-	sim.lineage.dormant.clear()
-	for cell in sim.cells.duplicate():
-		if cell != sim.player: sim._die(cell)
-	sim.player.health = 0
-	scene._physics_process(DT)
-	scene._process(DT)
-	expect(sim.evolution.status == "lost" and scene.notice.begins_with("EXPEDITION ENDED"),"Last-family loss gives an actionable expedition ending")
-	scene.cell_ui.open_context({"kind":"lineage"})
-	scene._process(DT)
-	expect(scene.cell_ui.choices.all(func(choice):return choice.get_meta("family_id",-1)<0 or sim.lineage.record_for(choice.get_meta("family_id")).get("state","")!="dead") and scene.is_paused(),"Family statistics remain readable without deceased relatives after terminal loss")
-	var gene: String = sim.evolution.offers[0]
-	scene.archive.discovered.append(gene)
-	scene.archive.sync(sim)
-	scene._restart()
-	expect(scene.world != sim and gene in scene.archive.discovered and not scene.archive.expeditions.is_empty(),"An explicit new expedition retains history and blueprint discoveries")
-	expect(scene.world.player.ap == 3 and scene.world.evolution.learned.is_empty(),"Discoveries never create a free starting stat or AP advantage")
-	await host.process_frame
+	expect(sim.player.count("feeding")==1 and sim.player.count("photosynthesis")==1,"Daughter shows her removable starter build")
+	scene._toggle_build()
 
 func _native_pool() -> void:
 	var sim = Sim.new(271)

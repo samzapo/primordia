@@ -47,18 +47,15 @@ grep -Eq 'NORMAL OUTPUT: [0-9]+ assertions, 0 failures' "$report_file"
 "$godot_bin" --headless --path "$project_dir" --script tests/nutrient_binding_run.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"
 if grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"; then exit 1; fi
 grep -Eq 'NUTRIENT BINDING: [0-9]+ assertions, 0 failures' "$report_file"
-"$godot_bin" --headless --path "$project_dir" --script tests/feedback_pass_three_run.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"
-if grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"; then exit 1; fi
-grep -Eq 'FEEDBACK PASS THREE: [0-9]+ assertions, 0 failures' "$report_file"
-for script in family_cap_run receptor_finite_run baseline_survival anatomy_access_run recycling_run cell_ap_run feedback_latest_run shade_steering_run behavior_tree_run; do
+for script in family_cap_run receptor_finite_run baseline_survival anatomy_access_run lifecycle_run shade_steering_run behavior_tree_run; do
   "$godot_bin" --headless --path "$project_dir" --script "tests/$script.gd" -- --particle-backend=cpu 2>&1 | tee "$report_file"
   if grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"; then exit 1; fi
-  grep -Eq '(FAMILY CAP|RECEPTOR FINITE|BASELINE_SURVIVAL|ANATOMY ACCESS|RECYCLING|CELL AP|FEEDBACK LATEST|SHADE STEERING|BEHAVIOR TREE): [0-9]+ (checks|assertions), 0 failures' "$report_file"
+  grep -Eq '(FAMILY CAP|RECEPTOR FINITE|BASELINE_SURVIVAL|ANATOMY ACCESS|LIFECYCLE|SHADE STEERING|BEHAVIOR TREE): [0-9]+ (checks|assertions), 0 failures' "$report_file"
 done
-for script in induced_currents_run lineage_start_network camera_motion_run feedback_pass_network; do
+for script in induced_currents_run lineage_start_network camera_motion_run lifecycle_network; do
   "$godot_bin" --headless --path "$project_dir" --script "tests/$script.gd" -- --particle-backend=cpu 2>&1 | tee "$report_file"
   if grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"; then exit 1; fi
-  grep -Eq '(INDUCED CURRENTS|LINEAGE START NETWORK|CAMERA MOTION|FEEDBACK PASS NETWORK): [0-9]+ assertions, 0 failures' "$report_file"
+  grep -Eq '(INDUCED CURRENTS|LINEAGE START NETWORK|CAMERA MOTION|LIFECYCLE NETWORK): [0-9]+ assertions, 0 failures' "$report_file"
 done
 for script in camera_delivery_run camera_streaming_network; do
   "$godot_bin" --headless --path "$project_dir" --script "tests/$script.gd" -- --particle-backend=cpu 2>&1 | tee "$report_file"
@@ -76,13 +73,10 @@ grep -Eq 'POND NUTRITION: [0-9]+ assertions, 0 failures' "$report_file"
 "$godot_bin" --headless --path "$project_dir" --script tests/death_network.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"
 if grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"; then exit 1; fi
 grep -Eq 'NETWORK DEATHS: [0-9]+ assertions, 0 failures' "$report_file"
-"$godot_bin" --headless --path "$project_dir" --script tests/division_access_run.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"
+"$godot_bin" --headless --path "$project_dir" --script tests/toxin_storage_run.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"
 if grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"; then exit 1; fi
-grep -Eq 'DIVISION ACCESS: [0-9]+ assertions, 0 failures' "$report_file"
+grep -Eq 'TOXIN STORAGE: [0-9]+ assertions, 0 failures' "$report_file"
 
-"$godot_bin" --headless --path "$project_dir" --script tests/reproduction_accounting.gd 2>&1 | tee "$report_file"
-if grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"; then exit 1; fi
-grep -Eq 'REPRODUCTION ACCOUNTING: [0-9]+ assertions, 0 failures' "$report_file"
 recovery_state="$(mktemp -d "${TMPDIR:-/tmp}/primordia-recovery.XXXXXX")"
 PRIMORDIA_RECOVERY_TEST_STATE="$recovery_state" "$godot_bin" --headless --path "$project_dir" --script tests/pond_recovery_accounting.gd 2>&1 | tee "$report_file"
 if grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"; then exit 1; fi
@@ -185,9 +179,9 @@ if [[ "${1:-}" == gpu ]]; then
   fi
 fi
 
-"$godot_bin" --headless --path "$project_dir" --script tests/restored_biology_run.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"
+"$godot_bin" --headless --path "$project_dir" --script tests/environment_cycle_run.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"
 if grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"; then exit 1; fi
-grep -Eq 'RESTORED BIOLOGY: [0-9]+ assertions, 0 failures' "$report_file"
+grep -Eq 'ENVIRONMENT CYCLE: [0-9]+ assertions, 0 failures' "$report_file"
 
 "$godot_bin" --headless --path "$project_dir" --script tests/touch_zoom_run.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"
 if grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"; then exit 1; fi

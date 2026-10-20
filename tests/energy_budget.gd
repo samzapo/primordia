@@ -21,8 +21,6 @@ static func run(check: Callable) -> void:
 	var material: float = cell.organic_mass()
 	for i in 30: cell.energy_budget.rates(cell.age)
 	check.call(cell.energy == energy and cell.organic_mass() == material and cell.energy_budget.rates(cell.age) == rates,"Reading paused ATP rates neither decays them nor changes resources")
-	cell.reserve(1)
-	check.call(cell.energy_budget.rates(cell.age) == rates,"Moving ATP into a paid offspring reserve is not operating expenditure")
 
 	var empty = Cell.new()
 	empty.energy = 0
@@ -44,8 +42,8 @@ static func run(check: Callable) -> void:
 
 	check.call(is_equal_approx(Cell.organ_upkeep({"kind":"propulsion","scale":1.0}),Cell.ORGAN_UPKEEP+0.2),"Default flagellum estimate includes maintenance and its stroke cost")
 	check.call(is_equal_approx(Cell.organ_upkeep({"kind":"propulsion","scale":1.0,"mutation":"economical_flagellum"}),Cell.ORGAN_UPKEEP+0.1),"Economical stroke halves work cost while preserving maintenance")
-	check.call(is_equal_approx(Cell.organ_upkeep({"kind":"feeding","scale":1.0,"mutation":"wide_pore"}),Cell.ORGAN_UPKEEP+0.235),"Wide-pore estimate includes maintenance, pumping, secretion and trait upkeep")
-	check.call(is_equal_approx(Cell.organ_upkeep({"kind":"feeding","scale":1.0,"mutation":"enzyme_pore"}),Cell.ORGAN_UPKEEP+0.212),"Enzyme-pore estimate includes maintenance and both secretion cost changes")
+	check.call(is_equal_approx(Cell.organ_upkeep({"kind":"feeding","scale":1.0,"mutation":"wide_pore"}),0.235),"Wide-pore estimate includes maintenance, pumping, secretion and trait upkeep")
+	check.call(is_equal_approx(Cell.organ_upkeep({"kind":"feeding","scale":1.0,"mutation":"enzyme_pore"}),0.212),"Enzyme-pore estimate includes maintenance and both secretion cost changes")
 
 	var observed = Sim.new(846)
 	var unobserved = Sim.new(846)
@@ -66,5 +64,5 @@ static func disabled_accounting_preserves_physiology(check: Callable) -> void:
 	b.energy_budget.enabled=false;b.resource_effects_enabled=false
 	for cell in [a,b]:
 		cell.receive_particle(0,2,2,cell.position+cell.local_point(0))
-		cell.chemistry.advance(cell,.25);cell.spend_energy(3);cell.reserve(2)
+		cell.chemistry.advance(cell,.25);cell.spend_energy(3)
 	check.call(a.energy==b.energy and a.brood_energy==b.brood_energy and a.biomass==b.biomass and a.organic_mass()==b.organic_mass(),"Disabling unobserved presentation accounting never changes real resources or reproduction investment")

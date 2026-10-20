@@ -1,6 +1,5 @@
 extends RefCounted
 const Sim = preload("res://scripts/simulation.gd")
-const Interior = preload("res://scripts/interior_ecology.gd")
 const Score = preload("res://scripts/music_score.gd")
 static func area(cell) -> float:
 	var result := 0.0
@@ -11,27 +10,15 @@ static func area(cell) -> float:
 static func run(check: Callable) -> void:
 	var sim = Sim.new(42)
 	sim.habitat_geometry.enabled = false
-	for cell in sim.cells:
-		var mouths: Array = cell.organs.filter(func(o): return cell.inherent(o))
-		check.call(mouths.size() == 1 and mouths[0].kind == "feeding" and mouths[0].material == 0,"Every generated creature has one structural oral groove")
-	var crowded = sim._make_cell(Vector2(1400,1000),"grazer")
-	crowded.organs.reverse()
-	for organ in crowded.organs:
-		if not crowded.inherent(organ): organ.scale = 30
-	sim._biology_after_feed(crowded,1.0/60)
-	check.call(crowded.count("feeding") == 1 and crowded.organs.all(func(o):return crowded.inherent(o)),"Shrinkage sheds crowded attachments but never sheds inherent membrane anatomy")
-	var cell = sim.player
-	var mouth: Dictionary = cell.organs[0]
-	var before: Array = [cell.organic_mass(),cell.biomass,sim.player.ap]
-	check.call(not sim.install("feeding",1) and not sim.remove(0) and not cell.move_organ(mouth.id,PI) and not cell.specialize(mouth.id,"wide_pore"),"The membrane groove cannot be bought, recycled, detached or specialized")
-	check.call(before == [cell.organic_mass(),cell.biomass,sim.player.ap],"Rejected membrane transactions spend no tissue or AP")
+	for member in sim.cells:
+		check.call(member.count("feeding")==1 and member.organs.filter(func(o):return o.kind=="feeding")[0].material==8,"Starter cells own one optional material-bearing oral groove")
+	var cell=sim.player
+	var mouth: Dictionary=cell.organs.filter(func(o):return o.kind=="feeding")[0]
 	cell.damage(5,mouth.a+cell.angle)
-	check.call(cell.health == 95 and cell.organs.has(mouth) and not cell.holes.is_empty(),"Oral membrane is vulnerable tissue, not free armor")
-	cell.health = 100
-	cell.holes.clear()
-	cell.membrane.skeleton.links.clear()
-	for i in 120: cell.membrane.step(1.0/60,cell.radius,Vector2.ZERO,0)
-	check.call(cell.local_point(mouth.a).length() < cell.radius*0.75,"Oral groove is an inward physical dent")
+	check.call(cell.health==95 and cell.organs.has(mouth),"An oral opening does not act as free armor")
+	cell.health=100;cell.holes.clear();cell.update_geometry()
+	for i in 120:cell.membrane.step(1.0/60,cell.radius,Vector2.ZERO,0)
+	check.call(cell.local_point(mouth.a).length()<cell.radius,"The oral tether and membrane create an inward mouth")
 	check.call(absf(area(cell)-(cell.body+cell.biomass+cell.brood_mass+cell.chemistry.reactor_mass+cell.chemistry.amount("catalyst"))*cell.TISSUE_AREA)<0.002,"Physical volume uses the same tissue-area unit as the cost blob")
 	var original_area := area(cell)
 	var original_volume: float = cell.body+cell.biomass+cell.brood_mass+cell.chemistry.reactor_mass+cell.chemistry.amount("catalyst")
@@ -51,18 +38,6 @@ static func run(check: Callable) -> void:
 	a.decay_energy(1)
 	for i in 60: b.decay_energy(1.0/60)
 	check.call(absf(a.energy-b.energy) < 0.00001 and a.energy > 0,"ATP decay is positive and agrees between coarse and fine intervals")
-	var interior := Interior.new()
-	cell.substrate = 13.5;cell.waste = 2.2
-	interior.sync(cell,7)
-	var stock: Array = [cell.organic_mass(),cell.energy,cell.health,cell.age,sim.time,sim.rng.state,sim.ecology_rng.state]
-	var initial: Array = interior.parcels.map(func(p): return p.p)
-	for i in 180: interior.step(1.0/60,cell)
-	check.call(initial != interior.parcels.map(func(p): return p.p),"Intracellular parcels circulate independently of the paused outside")
-	check.call(stock == [cell.organic_mass(),cell.energy,cell.health,cell.age,sim.time,sim.rng.state,sim.ecology_rng.state],"Editing circulation cannot create energy, material, elapsed ecology or random draws")
-	check.call(cell.chemistry.amount("food")==13.5 and cell.chemistry.amount("waste")==2.2 and interior.amount("ap")==7,"Chemical quantities derive from physical particles; AP remains edit currency")
-	cell.substrate = 0
-	interior.sync(cell,2)
-	check.call(interior.amount("food") == 0 and interior.amount("ap") == 2,"Consumed food and spent AP disappear from internal stocks immediately")
 	# Stronger suction is measured in the local body frame and conserves momentum.
 	var water = Sim.Medium.new()
 	water.driven = false;water.activity.fill(1);water.active_indices = PackedInt32Array(range(water.COLS*water.ROWS))

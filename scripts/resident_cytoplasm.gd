@@ -220,7 +220,7 @@ func _apply(bytes: PackedByteArray,code: int) -> void:
 
 func advance(dt: float,external: float,mitochondrial_gain: float=1.0) -> void:
 	var chem=chemistry.get_ref();chem.frame_dt=dt
-	command(0,dt,Vector2.ZERO,0,-1,-1,-1,-1,0,"food",{"external":external,20:mitochondrial_gain})
+	command(0,dt,Vector2.ZERO,0,-1,-1,-1,-1,0,"food",{"external":external,20:mitochondrial_gain,21:.15 if body.get_ref().synergy()=="grazer" else 0.0})
 
 func value(index: int) -> float:return summary.decode_double(index*8) if not summary.is_empty() else 0.0
 

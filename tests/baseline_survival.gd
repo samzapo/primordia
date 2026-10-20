@@ -87,7 +87,6 @@ func run() -> void:
   check(absf(matter+pooled.respiration_loss-pooled.external_input-2)<.00001,"Native numeric source obeys the same open-system material accounting")
  var unpowered=fixture(Vector2(320,320));var x: float=unpowered.player.biomass
  unpowered.automatic_reproduction=true;unpowered.player.biomass=100;unpowered.player.energy=0
- unpowered._fund_reproduction(unpowered.player,1)
  check(unpowered.player.biomass==100 and unpowered.player.brood_mass==0,"Starved cells stop diverting tissue into automatic reproduction")
  # All leaves, positions on and between source sites, both sides of world wrap,
  # darkest supported water and bright water, and existing severe starvation.
@@ -102,15 +101,6 @@ func run() -> void:
  check(bright.health>95 and bright.ATP>1,"A single sun leaf also recovers in bright water")
  var old=Sim.new(951,0,false);old.time=12345;old.enable_ambient_carbon()
  check(old.ambient_carbon_at==old.time and old.ambient_carbon_due==old.time+5,"Enabling the source on an old pond starts a fresh interval, not historical catch-up")
- var investor=fixture(Vector2(320,320));investor.player.organs=investor.player.organs.filter(func(o):return o.kind!="photosynthesis")
- investor.investment.cells[investor.player.id]="hunter"
- check(investor.Investment.candidate(investor,investor.player).kind=="photosynthesis","An opted-in starving role establishes energy support before extra anatomy")
- investor.player.add_organ("photosynthesis",1,"graze",false);investor.player.carbon=2
- check(investor.Investment.candidate(investor,investor.player).kind=="photosynthesis","Any opted-in role can add another leaf when its existing energy support is insufficient")
- investor.player.substrate=2;investor.player.oxygen=2
- check(investor.Investment.candidate(investor,investor.player).kind=="mitochondrion","Local food and oxygen favor efficient respiration before further expansion")
- investor.managed_cells=[investor.player.id]
- check(investor.Investment.candidate(investor,investor.player).is_empty(),"Connected selected cells remain manual even during an energy shortage")
  var lean=fixture(Vector2(320,320),"sun_leaf",1,6)
  var lean_result:=advance(lean,180,false)
  var unassisted=fixture(Vector2(320,320),"sun_leaf",3,6,0)

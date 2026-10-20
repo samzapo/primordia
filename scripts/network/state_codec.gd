@@ -14,7 +14,7 @@ const TYPES := {
 	"offscreen": preload("res://scripts/offscreen_ecology.gd"),
 	"budget": preload("res://scripts/energy_budget.gd"),
 }
-const TRANSIENT := ["merge_bursts","remote_division","combat_context","managed_cells","kernels","native","grid","reaction_grid","cell_index","gpu_transport","resident","experimental_fluid","owner","_owner","build_original","build_state","bins","profile_usec","profile_counts","foreground_particle_ids","last_spawn","accelerator","render_origins","command_sink","interoceptive_cells","resource_effects_enabled","batching","plant_drag","plant_geometry","plant_revision","plant_enabled","induced_key","induced_base","induced_base_key"]
+const TRANSIENT := ["merge_bursts","remote_division","combat_context","managed_cells","unattended_protected","kernels","native","grid","reaction_grid","cell_index","gpu_transport","resident","experimental_fluid","owner","_owner","build_original","build_state","bins","profile_usec","profile_counts","foreground_particle_ids","last_spawn","accelerator","render_origins","command_sink","interoceptive_cells","resource_effects_enabled","batching","plant_drag","plant_geometry","plant_revision","plant_enabled","induced_key","induced_base","induced_base_key"]
 const DERIVED_CELL := ["raw_fuel","substrate","waste","oxygen","carbon"]
 var objects: Array = []
 var identities: Dictionary = {}
@@ -100,6 +100,7 @@ func restore(document: Dictionary):
 	for i in objects.size():
 		var record: Dictionary=objects[i]
 		if record.kind == "cell":
+			if not document.objects[i].fields.has("lifecycle_version"):record.source.lifecycle_version=0
 			record.source.chemistry.owner = weakref(record.source)
 			var ref: Dictionary=document.objects[i].fields.get("chemistry",{})
 			var old: bool=ref.has("$ref") and not document.objects[int(ref["$ref"])].fields.has("model_version")
@@ -116,12 +117,10 @@ func restore(document: Dictionary):
 			record.source.invalidate()
 		elif record.kind == "habitat": record.source.rebuild()
 	var root = _decode(document.root)
-	for i in objects.size():
-		var record: Dictionary=objects[i]
-		if record.kind=="simulation" and (not document.objects[i].fields.has("ap_model_version") or record.source.ap_model_version<1):
-			record.source.ap_model_version=0
+	for record in objects:
+		if record.kind=="simulation":
 			var accounts: Dictionary=root.get("accounts",{}) if root is Dictionary and root.get("world")==record.source else {}
-			preload("res://scripts/network/ap_migration.gd").apply(record.source,accounts)
+			preload("res://scripts/cell_lifecycle.gd").migrate(record.source,accounts)
 	objects.clear()
 	return root
 

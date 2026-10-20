@@ -14,6 +14,9 @@ var manual:=Button.new()
 var inherit:=Button.new()
 var back:=Button.new()
 var adopt:=Button.new()
+var exemplar:=Button.new()
+var auto_mitosis:=Button.new()
+var auto_bud:=Button.new()
 var cards: Array[Button]=[]
 var margin:=MarginContainer.new()
 var layout_scale:=-1.0
@@ -41,9 +44,21 @@ func initialize(owner_game) -> void:
   sync())
  back.text="Back";back.pressed.connect(func():game.cell_ui.open_context({"kind":"nucleus"}))
  status.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;box.add_child(status)
- note.text="Unattended: own AP, one action/min. Selected cells stay manual."
+ note.text="Unattended: biomass, one action/min. First two organelles free."
  note.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;box.add_child(note)
+ box.add_child(exemplar);exemplar.text="Copy a relative’s build"
+ exemplar.pressed.connect(func():
+  hide();game.cell_ui.open_context({"kind":"lineage","choose_template":true,"template_scope":scope}))
+ var auto_row:=HBoxContainer.new();box.add_child(auto_row)
+ for entry in [{"button":auto_mitosis,"mode":"mitosis"},{"button":auto_bud,"mode":"budding"}]:
+  var button: Button=entry.button;var mode: String=entry.mode
+  auto_row.add_child(button);button.toggle_mode=true;button.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+  button.pressed.connect(_set_auto.bind(mode,button))
+
  hide()
+func _set_auto(mode: String,button: Button) -> void:
+ game.world.edit("division_policy",{"mode":mode,"scope":scope,"automatic":button.button_pressed})
+
 func open() -> void:
  scope="lineage";get_parent().move_child(self,get_parent().get_child_count()-1);show();sync()
 func _scope(value: String) -> void:scope=value;sync()
@@ -58,11 +73,13 @@ func choose(kind: String) -> void:
 func sync() -> void:
  var viewport: Vector2=game.get_viewport_rect().size
  # Keep the three choices together even with large UI text on a short phone.
- var s: float=minf(game.cell_ui.ui_scale(),minf(viewport.x/330.0,viewport.y/390.0))
+ var s: float=minf(game.cell_ui.ui_scale(),minf(viewport.x/330.0,viewport.y/510.0))
  var width:=minf(540*s,viewport.x-16*s)
  family.text="Family";body.text="This cell"
  family.icon=SELECTION_MARK if scope=="lineage" else null
  body.icon=SELECTION_MARK if scope=="cell" else null
+ auto_mitosis.text="Auto mitosis";auto_bud.text="Auto budding"
+ auto_mitosis.set_pressed_no_signal(game.world.player.automatic_division);auto_bud.set_pressed_no_signal(game.world.player.automatic_budding)
  var value:=current()
  var inherited: String=game.world.investment.lineages.get(game.world.player.lineage_id(),"manual")
  var effective: String=inherited if value=="inherit" else value
@@ -90,7 +107,7 @@ func sync() -> void:
   box.add_theme_constant_override("separation",roundi(6*s))
   for card in cards:
    card.text_scale=s;card.custom_minimum_size=Vector2(88,126)*s;card.queue_redraw()
-  for button in [family,body,manual,inherit,back]:
+  for button in [family,body,manual,inherit,back,adopt,exemplar,auto_mitosis,auto_bud]:
    button.custom_minimum_size.y=30*s
    button.add_theme_constant_override("icon_max_width",roundi(16*s))
   for label in [note,status]:label.add_theme_font_size_override("font_size",roundi(13*s));label.custom_minimum_size.x=width-20*s

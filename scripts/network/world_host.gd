@@ -226,6 +226,7 @@ func _physics_process(dt: float) -> void:
 	for peer in peers.values():
 		if peer.account!="" and accounts.has(peer.account):
 			world.managed_cells.append(accounts[peer.account].selected)
+	_update_favorites()
 	world.step_autonomous_builds()
 	world.step(dt)
 	# A persistent GPU authority must not keep applying biology on a fallback
@@ -307,6 +308,8 @@ func _poll() -> void:
 			if message.get("op","")=="hello": _hello(id,message)
 			elif peer.account=="" : socket.close(1008,"Authenticate first")
 			elif message.get("op","")=="feedback":_feedback(peer,message)
+			elif message.get("op","")=="presence":
+				if message.get("state","") in ["active","paused","hidden"]:peer["presence"]=message.state;_update_favorites()
 			elif message.get("op","")=="profile":_profile(peer,message)
 			elif message.get("op","")=="lineage_color":_lineage_color(peer,message)
 			elif message.get("op","")=="update_seen":_update_seen(peer,message)
@@ -367,18 +370,26 @@ func _profile(peer: Dictionary,message: Dictionary) -> void:
 		if value.unicode_at(index)<32 or value.unicode_at(index)==127:
 			_send(peer,{"kind":"profile_result","ok":false,"message":"Use a single line for your name."});return
 	var account: Dictionary=accounts[peer.account]
+	var favorite=message.get("favorite_name",account.get("favorite_name",""))
+	if not favorite is String or favorite.strip_edges().length()>24:
+		_send(peer,{"kind":"profile_result","ok":false,"message":"Use up to24characters for the cell name."});return
+	favorite=favorite.strip_edges()
+	for index in favorite.length():
+		if favorite.unicode_at(index)<32 or favorite.unicode_at(index)==127:
+			_send(peer,{"kind":"profile_result","ok":false,"message":"Use a single line."});return
+	var previous_favorite: String=str(account.get("favorite_name",""))
 	var previous: String=str(account.get("display_name",""))
-	if value==previous:
-		_send(peer,{"kind":"profile_result","ok":true,"name":value,"message":"Name saved."});return
+	if value==previous and favorite==previous_favorite:
+		_send(peer,{"kind":"profile_result","ok":true,"name":value,"favorite_name":favorite,"message":"Names saved."});return
 	var now:=Time.get_ticks_msec()
 	if now-int(peer.get("profile_saved_at",-3000))<3000:
 		_send(peer,{"kind":"profile_result","ok":false,"message":"Please wait a moment before changing your name again."});return
-	account.display_name=value
+	account.display_name=value;account.favorite_name=favorite
 	if not checkpoint():
-		account.display_name=previous
+		account.display_name=previous;account.favorite_name=previous_favorite
 		_send(peer,{"kind":"profile_result","ok":false,"message":"Could not save your name. Your text is kept."});return
 	peer.profile_saved_at=now
-	_send(peer,{"kind":"profile_result","ok":true,"name":value,"message":"Name saved."})
+	_send(peer,{"kind":"profile_result","ok":true,"name":value,"favorite_name":favorite,"message":"Names saved."})
 
 func _lineage_names() -> Array:
 	var online: Dictionary={}
@@ -503,7 +514,7 @@ func _hello(id: int,message: Dictionary) -> void:
 	var center: Vector2=focus.position if focus!=null else cell.position
 	peer.view=Vector4(center.x,center.y,Sim.VIEW.x/.8/2,Sim.VIEW.y/.8/2)
 	peer.view_tick=world.revision
-	_send(peer,{"kind":"welcome","release_notes":ReleaseNotes.pending(account,release_instance),"release_updates":ReleaseNotes.pending_all(account,release_instance),"token":token,"world_id":world_id,"epoch":epoch,"sequence":account.sequence,"edit":account.edit,"seed":world.seed_value,"habitat":Codec.new().capture(world.habitat_geometry),"cell":cell.id,"player_name":str(account.get("display_name","")),"death_serial":world.death_serial,"merge_serial":world.merge_serial})
+	_send(peer,{"kind":"welcome","release_notes":ReleaseNotes.pending(account,release_instance),"release_updates":ReleaseNotes.pending_all(account,release_instance),"token":token,"world_id":world_id,"epoch":epoch,"sequence":account.sequence,"edit":account.edit,"seed":world.seed_value,"habitat":Codec.new().capture(world.habitat_geometry),"cell":cell.id,"player_name":str(account.get("display_name","")),"favorite_name":str(account.get("favorite_name","")),"death_serial":world.death_serial,"merge_serial":world.merge_serial})
 	var initial:=_frame(peer)
 	initial.warming=true
 	_send(peer,initial)
@@ -570,23 +581,21 @@ func _apply(id: int,message: Dictionary) -> void:
 	if not message.get("args",{}) is Dictionary: _send(peer,result);return
 	var prior_player=world.player;var prior_lineage=world.lineage;var prior_evolution=world.evolution
 	world.player=cell;world.lineage=account.lineage;world.evolution=account.evolution
-	var before_points: int=cell.ap
-	var division_reason: String=world.division_status(cell,account.lineage).reason if message.get("action","")=="divide" else ""
+	var before_biomass: float=cell.biomass
+	var division_reason: String=world.division_status(cell,account.lineage,str(message.get("args",{}).get("mode","mitosis"))).reason if message.get("action","") in ["divide","reproduce"] else ""
 	var outcome=_start_lineage(account,message.get("args",{})) if message.get("action","")=="start_lineage" else world.edit(str(message.get("action","")),message.get("args",{}))
 	account.selected=world.player.id;account.current=world.player
+	if outcome is bool and outcome:account["favorite_id"]=account.selected
 	if outcome is bool and outcome and message.get("action","")=="start_lineage" and prior_player==cell:
 		prior_player=world.player;prior_lineage=account.lineage;prior_evolution=account.evolution
 	world.player=prior_player;world.lineage=prior_lineage;world.evolution=prior_evolution
 	var ok: bool=outcome=="" if outcome is String else outcome>=0 if outcome is int else outcome==true
-	result.ok=ok;result.message="Applied" if ok else str(outcome) if outcome is String else "Cannot apply: check tissue, AP, placement and template"
+	result.ok=ok;result.message="Applied" if ok else str(outcome) if outcome is String else "Cannot apply: check biomass, ATP, placement and cooldown"
 	if message.get("action","")=="merge":result.message="Family cells merged." if ok else "Choose an unattended relative whose pheromones this cell received recently."
-	if message.get("action","")=="divide":result.message="Cell divided. Parent +1 AP, daughter +1 AP. Choose her from Family." if ok else division_reason
-	if ok and message.get("action","")=="division_request":
-		result.queued=cell.division_requested;result.automatic=cell.automatic_division
-		result.message="Queued division cancelled." if not message.args.active else "One division queued. It will happen when resources and clear water are ready." if cell.division_requested else "Cell divided. Parent +1 AP, daughter +1 AP. Choose her from Family."
+	if message.get("action","") in ["divide","reproduce"]:result.message="Cell divided." if ok else division_reason
 	if ok and message.get("action","")=="remove":
-		result.ap_refund=maxi(0,cell.ap-before_points)
-		result.message="Organelle reabsorbed · %d AP returned to this cell." % result.ap_refund
+		result.biomass_refund=maxf(0,cell.biomass-before_biomass)
+		result.message="Organelle reabsorbed · %.1f biomass returned." % result.biomass_refund
 	account.sequence=seq
 	if ok: account.edit+=1
 	result.edit=account.edit;result.server_sequence=seq
@@ -623,7 +632,7 @@ func _recover_families(dt: float) -> void:
 		account.evolution.clock=world.time
 		if not selected.dead: continue
 		world.player=selected;world.lineage=account.lineage;world.evolution=account.evolution
-		if account.lineage.recover(world,dt): account.selected=world.player.id;account.current=world.player;account.edit+=1
+		if account.lineage.recover(world,dt): account.selected=world.player.id;account.current=world.player;account.favorite_id=world.player.id;account.edit+=1
 		elif account.lineage.active_family(world).is_empty() and world.time>=float(account.get("restart_at",0)):
 			var founder=Population.introduce(world,true)
 			account.restart_at=world.time+.5
@@ -748,15 +757,15 @@ func _frame(peer: Dictionary,coverage: Vector4=Vector4.ZERO) -> Dictionary:
 	var internal_overrides: Dictionary={}
 	# Already-open older clients read this deprecated display field. Publish the
 	# selected body's balance as a read-only alias, never as a shared saved pool.
-	internal_overrides[account.evolution.get_instance_id()]={"points":_selected(account).ap}
+	internal_overrides[account.evolution.get_instance_id()]={"points":0}
 	var focus=_focus(peer)
 	for cell in world.cells:
 		if peer.get("perception","exteroception")!="interoception" or cell!=focus:internal_overrides[cell.chemistry.get_instance_id()]={"particles":[],"vacuoles":[],"presentation_totals":{"material":cell.chemistry.material(),"storage":cell.chemistry.storage_used(),"potential":cell.chemistry.potential(),"raw_fuel":cell.chemistry.raw_fuel(),"packets":cell.chemistry.particle_count()}}
 	return {"kind":"snapshot","world_id":world_id,"epoch":epoch,"tick":world.revision,"time":world.time,"presentation_usec":Time.get_ticks_usec(),"edit":account.edit,"sequence":account.sequence,
-		"division":world.division_status(_selected(account),account.lineage),
+		"division":{"mitosis":world.division_status(_selected(account),account.lineage,"mitosis"),"budding":world.division_status(_selected(account),account.lineage,"budding")},
 		"merge_available":{"cell":_selected(account).id,"targets":Sim.FamilyMerging.candidates(world,_selected(account))},
 		"family_portraits":preload("res://scripts/cell_portrait.gd").family(world,account.lineage),
-		"family_recovery":_family_recovery(account),"lineage_names":_lineage_names(),"player_name":str(account.get("display_name","")),"graph":Codec.new().capture({"cells":cells,"player":_selected(account),"focus":_focus(peer),"lineage":account.lineage,"evolution":account.evolution,"investment":world.Investment.owned_settings(world,account.root)},internal_overrides,peer.get("compact_cytoplasm",false),peer.get("cytoplasm_version",1)),
+		"family_recovery":_family_recovery(account),"lineage_names":_lineage_names(),"player_name":str(account.get("display_name","")),"favorite_name":str(account.get("favorite_name","")),"graph":Codec.new().capture({"cells":cells,"player":_selected(account),"focus":_focus(peer),"lineage":account.lineage,"evolution":account.evolution,"investment":world.Investment.owned_settings(world,account.root)},internal_overrides,peer.get("compact_cytoplasm",false),peer.get("cytoplasm_version",1)),
 		"coverage":view,"camera":peer.view,"census":world.habitat_census(),"environment":world.environment.duplicate(true),"particles":PackedByteArray(),"flow":world.fluid.velocity.duplicate(),"acid":world.acidity.values.duplicate(),
 		"sounds":world.sound_events.duplicate(true),"sound_sequence":world.sound_sequence,"sparks":world.reaction_sparks.duplicate(true),"perception":peer.get("perception","exteroception"),"warming":false,
 		"merge_serial":world.merge_serial,"merges":_merge_events(peer),"death_serial":world.death_serial,"deaths":_death_events(peer),"selected_cell":_selected(account).id,"followed_cell":focus.id if focus!=null else -1}
@@ -973,3 +982,16 @@ func _family_recovery(account: Dictionary) -> Dictionary:
 	var living: int=account.lineage.active_family(world).size()
 	var selected=_selected(account)
 	return {"living":living,"stored":0,"state":"active" if not selected.dead else "recovering" if living>0 else "restarting_lineage"}
+
+
+func _update_favorites() -> void:
+	for cell in world.cells:cell.favorite=false;cell.favorite_name="";cell.unattended_protected=false
+	for key in accounts:
+		var account: Dictionary=accounts[key]
+		if not account.has("favorite_id"):account.favorite_id=account.selected
+		var active:=false
+		for peer in peers.values():
+			if peer.account==key and peer.get("presence","active")=="active":active=true
+		for cell in world.cells:
+			if cell.id==account.favorite_id and cell.lineage_id()==account.root and not cell.dead:
+				cell.favorite=true;cell.favorite_name=str(account.get("favorite_name",""));cell.unattended_protected=not active

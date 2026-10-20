@@ -12,17 +12,19 @@ func _initialize() -> void:run.call_deferred()
 func run() -> void:
  root.size=Vector2i(64,64)
  await process_frame;await process_frame
- print("FEEDBACK_PASS_GPU ",RenderingServer.get_video_adapter_name())
+ print("CELL_CHEMISTRY_GPU ",RenderingServer.get_video_adapter_name())
  var gpu=GPU.new();gpu.rd=RenderingServer.get_rendering_device()
- for output in [1.0,2.0,4.0]:
+ for role in ["","grazer"]:
   var cell=Sim.Cell.new(31);cell.energy=10
-  cell.add_organ("mitochondrion",1,"graze",false);cell.organs[-1].output=output
+  cell.add_organ("mitochondrion",1,"graze",false);
+  if role=="grazer":
+   cell.add_organ("feeding",0,"graze",false);cell.add_organ("cilia",1,"graze",false)
   cell.chemistry.emit("food",4,Vector2(30,0));cell.chemistry.emit("oxygen",4,Vector2(30,0),-1,-1,0)
   var cpu=Sim.Cell.clone_state(cell)
   check(Cytoplasm.new().attach(gpu,cell.chemistry,cell),"Mitochondrial fixture uses resident internal particles")
   for i in 60:
    cell.chemistry.advance(cell,1.0/60);cpu.chemistry.advance(cpu,1.0/60)
-  check(absf(cell.energy-cpu.energy)<.000001 and absf(cell.biomass-cpu.biomass)<.000001 and absf(cell.raw_fuel-cpu.raw_fuel)<.000001 and absf(cell.chemistry.heat-cpu.chemistry.heat)<.000001,"Mitochondrial ATP, tissue, fuel, heat and inert legacy output match CPU reference")
+  check(absf(cell.energy-cpu.energy)<.000001 and absf(cell.biomass-cpu.biomass)<.000001 and absf(cell.raw_fuel-cpu.raw_fuel)<.000001 and absf(cell.chemistry.heat-cpu.chemistry.heat)<.000001,"Mitochondrial ATP, tissue, fuel, heat and anatomy synergy match CPU reference")
   check(cell.chemistry.particles.is_empty() and cell.chemistry.accelerator.exports==0,"Mitochondria retain GPU authority without a CPU pose mirror")
   cell.chemistry.ensure_cpu()
  # Real resident digestion must retain growth and finite energy at every efficiency.
@@ -51,21 +53,22 @@ func run() -> void:
  for packet in sim.particles:exterior+=packet.amount
  check(absf(plant.substrate-plant.fixed_carbon*.65*.75)<.000001 and absf(exterior-plant.fixed_carbon*.65*.25)<.000001,"GPU food sharing delivers exactly 75% internal and 25% external")
  plant.chemistry.ensure_cpu()
- # Division keeps resident ingested chemistry on its owner, never on the child.
+ # Division partitions finite resident inventory without duplication.
  var birth=Sim.new(61,0,false);birth.server_mode=true;birth.cells=[birth.player]
  birth.habitat_geometry=Sim.Habitat.new(61,birth.cells);birth.habitat_geometry.enabled=false
  var parent=birth.player;parent.add_organ("feeding",0,"graze",false);parent.add_organ("photosynthesis",1,"graze",false)
  birth.investment.cells[parent.id]="producer"
  var quote: Dictionary=birth.offspring_quote(parent)
- parent.biomass+=quote.material;parent.energy=100;parent.reserve(60,quote.material)
+ parent.biomass=200;parent.energy=100;parent.reproduction_retry_at=0
  parent.chemistry.emit("food",3,Vector2(20,0))
  check(Cytoplasm.new().attach(gpu,parent.chemistry,parent),"Division parent retains a real resident cytoplasm")
  var food: float=parent.substrate
  check(birth.divide_lineage(false,false),"Resident-parent paid division commits")
  var daughter=birth.cells[-1]
  check(daughter.organs.size()==2 and daughter.count("photosynthesis")==1 and birth.Investment.strategy(birth,daughter)=="producer","Resident-parent daughters inherit strategy and basic anatomy only")
- check(parent.substrate==food and daughter.substrate==0 and daughter.chemistry.particle_count()==0 and parent.chemistry.accelerator!=null,"Division neither clones resident vacuoles nor drops the parent's GPU owner")
- parent.chemistry.ensure_cpu()
+ check(is_equal_approx(parent.substrate,food*.5) and is_equal_approx(daughter.substrate,food*.5) and parent.chemistry.accelerator==null,"Birth detaches once and partitions the actual food into two owners")
+ check(Cytoplasm.new().attach(gpu,parent.chemistry,parent) and Cytoplasm.new().attach(gpu,daughter.chemistry,daughter),"Both post-birth inventories resume resident ownership")
+ parent.chemistry.ensure_cpu();daughter.chemistry.ensure_cpu()
  # Same-family fusion releases only the two internal owners and can resume residency.
  var fusion=Sim.new(612,0,false);fusion.server_mode=true;fusion.cells=[fusion.player]
  fusion.habitat_geometry=Sim.Habitat.new(612,fusion.cells);fusion.habitat_geometry.enabled=false
@@ -189,4 +192,4 @@ func run() -> void:
  low.player.energy=18;low._emit_and_attack(low.player,.25)
  check(is_equal_approx(low.player.organs[0].burst_clock,.25) and not low.player.behavior.has("low_power"),"The resident path resumes normal recharge after real ATP replenishment")
  owner.close();await owner.gpu.closed
- print("FEEDBACK PASS GPU: %d assertions, %d failures" % [assertions,failures]);quit(0 if failures==0 else 1)
+ print("CELL CHEMISTRY GPU: %d assertions, %d failures" % [assertions,failures]);quit(0 if failures==0 else 1)

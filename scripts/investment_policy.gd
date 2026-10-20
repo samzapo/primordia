@@ -1,7 +1,7 @@
 extends RefCounted
-## Saved purchase intent; anatomy, AP and feeding still use the ordinary rules.
+## Saved purchase intent; anatomy, biomass and feeding use the ordinary rules.
 const MANUAL_ONLY:=[] # Every currently available organ has an explicit strategy role.
-const STRATEGIES:=["manual","hunter","producer","grazer"]
+const STRATEGIES:=["manual","hunter","producer","grazer","custom"]
 const PRIORITIES:={
  "hunter":["hunting","toxin","propulsion","poreforming","cilia","mitochondrion","protection"],
  "producer":["photosynthesis","protection","mitochondrion","regenerative","neutralizing"],
@@ -18,6 +18,9 @@ static func strategy(sim,cell) -> String:
 static func inherit_strategy(sim,parent,child) -> void:
  # Manual is inherited too: birth never opts a player into automatic spending.
  if sim.investment.cells.has(parent.id):sim.investment.cells[child.id]=strategy(sim,parent)
+ var root=parent.lineage_id()
+ var templates=sim.investment.get("cell_templates",{}).get(root,{})
+ if templates.has(parent.id):templates[child.id]=templates[parent.id].duplicate(true)
 
 # Variants are deterministic preferences, never free organs or hidden ecology knowledge.
 const VARIANTS:={
@@ -30,9 +33,11 @@ const VARIANTS:={
 }
 static func candidate(sim,cell) -> Dictionary:
  var policy:=strategy(sim,cell)
- if policy not in VARIANTS or cell.id in sim.managed_cells:return {}
+ if cell.id in sim.managed_cells:return {}
+ if policy=="custom":return template_decision(sim,cell)
+ if policy not in VARIANTS:return {}
  # Survival support comes before expanding any opted-in role. No remote food query.
- if cell.energy<18*cell.growth_scale():
+ if policy=="producer" and cell.energy<18*cell.growth_scale():
   if cell.substrate>.1 and cell.oxygen>.1 and working(cell,"mitochondrion")<2 and cell.can_fit("mitochondrion",0,1,false):
    return {"cell":cell,"kind":"mitochondrion"}
   if working(cell,"photosynthesis")<4 and (working(cell,"photosynthesis")==0 or cell.carbon>.001) and cell.can_fit("photosynthesis",0,1,false):
@@ -68,9 +73,11 @@ static func candidate(sim,cell) -> Dictionary:
 
 static func decision(sim,cell) -> Dictionary:
  var policy:=strategy(sim,cell)
- if policy not in VARIANTS or cell.id in sim.managed_cells:return {}
+ if cell.id in sim.managed_cells:return {}
+ if policy=="custom":return template_decision(sim,cell)
+ if policy not in VARIANTS:return {}
  var choice:=candidate(sim,cell)
- if not choice.is_empty() and cell.ap>=cell.construction_price(choice.kind):
+ if not choice.is_empty() and cell.biomass>=cell.construction_price(choice.kind):
   choice["action"]="install";return choice
  var priorities: Array=VARIANTS[policy][posmod(cell.id*19349663 ^ sim.seed_value*83492791,2)]
  var missing_core: bool=working(cell,priorities[0])==0
@@ -109,4 +116,58 @@ static func owned_settings(sim,root: int) -> Dictionary:
  var overrides: Dictionary={}
  for cell in sim.cells:
   if cell.lineage_id()==root and sim.investment.cells.has(cell.id):overrides[cell.id]=sim.investment.cells[cell.id]
- return {"npc":{},"lineages":{root:sim.investment.lineages.get(root,"manual")},"cells":overrides}
+ return {"templates":sim.investment.get("templates",{}).get(root,{}),"cell_templates":sim.investment.get("cell_templates",{}).get(root,{}),"npc":{},"lineages":{root:sim.investment.lineages.get(root,"manual")},"cells":overrides}
+
+
+static func save_template(sim,scope: String,id: int) -> bool:
+ if scope not in ["cell","lineage"]:return false
+ for model in sim.cells:
+  if model.id!=id or model.dead or model.lineage_id()!=sim.player.lineage_id():continue
+  var template=[]
+  for organ in model.organs:template.append({"kind":organ.kind,"scale":organ.scale,"mutation":organ.get("mutation","")})
+  if not sim.investment.has("templates"):sim.investment["templates"]={}
+  if not sim.investment.has("cell_templates"):sim.investment["cell_templates"]={}
+  var root=sim.player.lineage_id()
+  if scope=="lineage":sim.investment.templates[root]=template
+  else:
+   if not sim.investment.cell_templates.has(root):sim.investment.cell_templates[root]={}
+   sim.investment.cell_templates[root][sim.player.id]=template
+  return set_strategy(sim,scope,"custom")
+ return false
+
+static func template_decision(sim,cell) -> Dictionary:
+ var root=cell.lineage_id()
+ var target=sim.investment.get("cell_templates",{}).get(root,{}).get(cell.id,sim.investment.get("templates",{}).get(root,[]))
+ if target.is_empty():return {}
+ var used={}
+ for wanted in target:
+  var found={}
+  for organ in cell.organs:
+   if organ.kind==wanted.kind and not used.has(organ.id):found=organ;break
+  if not found.is_empty():
+   used[found.id]=true
+   if found.get("mutation","")!=wanted.mutation and wanted.mutation!="":return {"action":"adapt","id":found.id,"gene":wanted.mutation}
+  elif cell.can_fit(wanted.kind,0,1,false) and cell.biomass>=cell.construction_price(wanted.kind):
+   return {"action":"install","kind":wanted.kind,"mutation":wanted.mutation} if wanted.mutation!="" else {"action":"install","kind":wanted.kind}
+  else:return {}
+ for organ in cell.organs:
+  if used.has(organ.id):continue
+  if organ.kind=="feeding" and cell.count("photosynthesis")==0:continue
+  if organ.kind=="photosynthesis" and cell.count("feeding")==0:continue
+  if cell.unattended_protected:continue
+  return {"action":"remove","id":organ.id}
+ # The frozen build is complete. A per-cell deterministic fallback never changes each tick.
+ var bucket=posmod(cell.id*19349663 ^ sim.seed_value,100)
+ var fallback="hunter" if bucket<10 else "producer" if bucket<55 else "grazer"
+ var saved=sim.investment.cells.get(cell.id,null);sim.investment.cells[cell.id]=fallback
+ var result=decision(sim,cell)
+ if saved==null:sim.investment.cells.erase(cell.id)
+ else:sim.investment.cells[cell.id]=saved
+ return result
+
+static func retire(sim,cell) -> void:
+ sim.investment.cells.erase(cell.id);sim.investment.npc.erase(cell.id)
+ var root=cell.lineage_id()
+ var overrides=sim.investment.get("cell_templates",{}).get(root,{})
+ overrides.erase(cell.id)
+ if overrides.is_empty():sim.investment.get("cell_templates",{}).erase(root)

@@ -1,8 +1,6 @@
 extends Node2D
 ## Intracellular resource parcels and anatomy; the outside can pause independently.
 const Visuals=preload("res://scripts/visuals.gd")
-const Ecology = preload("res://scripts/interior_ecology.gd")
-var ecology := Ecology.new()
 var game
 var anchors: Dictionary = {}
 var atp_size := 0.0
@@ -30,15 +28,13 @@ func sync() -> void:
 		rotation = cell.angle
 	# A full, elastic sac changes size rather than filling a fixed tank.
 	atp_size = anchors.radius*0.13*sqrt(log(1+maxf(0,cell.energy)/cell.energy_reference()*3))
-	ecology.sync(cell,game.world.player.ap)
-	bud_material = clampf(cell.brood_mass/maxf(0.01,game.world.offspring_quote().material),0,1)
-	bud_energy = clampf(cell.brood_energy/60,0,1)
+	bud_material = game.world.division_status().get("progress",0.0)
+	bud_energy = bud_material
 	visible = not cell.dead and game.views.has(cell.id)
 	queue_redraw()
 
 func animate(dt: float) -> void:
 	if not visible or game.settings_panel.visible or not game.internal_visible(game.world.player): return
-	ecology.step(dt,game.world.player)
 	queue_redraw()
 
 func _ellipse(at: Vector2, extent: Vector2, color: Color, fill: float = 1.0) -> void:
@@ -63,10 +59,6 @@ func _draw() -> void:
 	if not cell.dead and cell.energy<Visuals.CRITICAL_ATP:
 		var pixels_per_world: float=absf((get_viewport().get_final_transform()*get_global_transform_with_canvas()).get_scale().x)/maxf(.001,game.cell_ui.ui_scale())
 		Visuals.atp_warning(self,at,maxf(1.5,atp_size),pixels_per_world,game.ui_time)
-	for parcel in (ecology.parcels if game.internal_visible(cell) else []):
-		if parcel.kind != "ap": continue
-		draw_circle(parcel.p,parcel.radius*preload("res://scripts/visuals.gd").INTERNAL_PARTICLE_SCALE,Color("f8c650"))
-
 	if game.internal_visible(cell):
 		for side in [-1,1]:
 			var center:=Vector2(.02,side*.62)*r
@@ -76,7 +68,7 @@ func _draw() -> void:
 				draw_line(center+ray*r*.05,center+ray*r*.17,Color(.55,.94,.93,.3),r*.026,true)
 			_ellipse(center,Vector2.ONE*r*.082*swell,Color("75d9df"))
 			_ellipse(center-Vector2.ONE*r*.015,Vector2.ONE*r*.045*swell,Color("bbfff0"))
-	# Small micronucleus beside the macronucleus: the family reserve's landmark.
+	# Small micronucleus beside the macronucleus: a family-control landmark.
 	draw_circle(anchors.nucleus+Vector2(-0.23,0.06)*r,r*0.075,Color("a86bd8"))
 	draw_circle(anchors.nucleus+Vector2(-0.25,0.04)*r,r*0.035,Color("edb3ef"))
 	# Folded assembly ribbons, not an extra equipped organ.
@@ -92,17 +84,7 @@ func _draw() -> void:
 
 	at = anchors.bud
 	Visuals.offspring_store(self,at,r,bud_material,bud_energy)
-	if game.world.evolution.offspring_id >= 0:
-		draw_arc(at,0.16*r,-PI/2,-PI/2+TAU*clampf(game.world.evolution.viable_seconds/60,0,1),24,Color("9cf4b4"),r*0.045,true)
-	# Three crisis arcs show the local objective.
-	for i in (3 if game.build_open else 0):
-		var a := -PI/2+i*TAU/3
-		var fraction: float = clampf(game.world.evolution.crisis_seconds[i]/60,0,1)
-		draw_arc(anchors.nucleus,r*0.31,a,a+1.7,16,Color("547299"),r*0.026,true)
-		if fraction > 0: draw_arc(anchors.nucleus,r*0.31,a,a+1.7*fraction,16,Color("b8f0de"),r*0.038,true)
-	if bud_material >= 1 and bud_energy >= 1:
-		draw_arc(at,0.21*r,0,TAU,24,Color(1,0.92,0.61,0.5+0.25*sin(game.ui_time*3)),r*0.025,true)
-	if game.build_open and (not game.world.evolution.division_offers.is_empty() or (not game.world.evolution.sandbox and not game.world.evolution.chosen)):
+	if game.build_open and (not game.world.evolution.division_offers.is_empty()):
 		draw_circle(anchors.nucleus+Vector2(0.22,-0.20)*r,r*(0.04+0.008*sin(game.ui_time*2)),Color("fff19c"))
 	if game.build_open:
 		for key in ["assembly","chemistry","receptors","nucleus","bud"]:

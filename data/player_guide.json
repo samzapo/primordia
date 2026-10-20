@@ -17,19 +17,19 @@
       {
         "id": "build",
         "title": "Build and restore",
-        "text": "Open Assembly for movement, armor and glands, Chemistry for internal organs and photosynthesis, or the purple Receptor factory for Flight, Hunting, Toward family and Away from family. All receptors cost 0 AP and do not raise other prices. Other added organs cost 0 AP for the first, 1 for the second, 2 for the third, and so on; the oral groove does not count. Reabsorbing one of four non-receptor organs returns 3 AP; from three it returns 2. Free receptors return no AP. AP belongs to this cell. Choosing an internal organ switches smoothly to Internal for placement.",
+        "text": "Open Assembly for movement, oral grooves, armor and glands, Chemistry for internal organs and leaves, or Receptors for free chemical senses. The first two non-receptor organelles on each cell are free. With two already equipped, building another spends its biomass price. Reabsorbing one reopens a free place. Both starter organelles can be replaced.",
         "sources": []
       },
       {
         "id": "cell_details",
         "title": "Read the cell’s resources",
-        "text": "The ATP sac blinks amber when energy is critically low. A critically damaged membrane blinks coral. Open the ATP store for energy details. Chemistry factory → Food vacuoles explains digestion and waste. The nucleus and family menu show lineage progress.",
+        "text": "Biomass builds and repairs your cell. ATP powers its work. Construction shows its biomass price before you place it. Free construction does not mean free running costs.",
         "sources": []
       },
       {
         "id": "organs",
         "title": "Reabsorb and specialize",
-        "text": "Open an installed organelle to reabsorb or specialize it. Its position stays fixed after construction. Organs work at their normal rate. A small ring shows recharge progress. Select an organelle to read its state at the bottom; energy-starved organs lose their color.",
+        "text": "Open an organelle and choose Reabsorb to remove it. Half its remaining paid tissue returns as biomass. A free build returns no biomass. Adaptations change matching organelles; free division mutation offers appear in the nucleus.",
         "sources": []
       },
       {
@@ -47,7 +47,7 @@
       {
         "id": "offspring",
         "title": "Cell division",
-        "text": "Surplus tissue and ATP prepare division automatically. Open the small bud, then Divide. Auto divide starts on for new cells. Switch it off to stop continuous division, or choose Start division now for just one daughter. If resources or clear space are missing, Divide stays highlighted until that one birth succeeds. Open it again to cancel. The ring fills with preparation; green means ready and amber means waiting for space. Daughters start with a basic oral groove and one leaf. Each parent and daughter gains 1 AP. Families can have up to 12 living cells. A daughter born above that limit immediately merges back into its parent, combining AP and resources with normal merge losses. A starving cell pauses preparation while it recovers.",
+        "text": "Open Divide and choose Mitosis or Budding. Mitosis leaves your organelles with the parent and uses half your available biomass to grow a basic daughter. Budding funds a small daughter directly. Neither needs clear water. Each cell can reproduce once per minute. Both automatic modes start on and let instincts choose suitable moments. At 12 family members, an extra daughter is immediately reabsorbed.",
         "sources": []
       },
       {
@@ -59,7 +59,7 @@
       {
         "id": "settings",
         "title": "Pause and personalize",
-        "text": "Pause/settings contains Player name, private bug reports and feature requests, Gameplay, Mechanics, music volume, text size, visual options and fullscreen. Current display switches between broad moving Wave crests and continuous Streamlines. Pale marks show the water's combined motion; fading gold marks use the other style to show a passing current source. Pausing holds exactly what you see while the shared pond continues. Resume returns you to the live pond.",
+        "text": "Pause freezes your view while the pond continues. Resume returns to the live world with one press. Pause includes Gameplay, Mechanics, feedback, music, your family name and a first name for your favorite cell.",
         "sources": []
       },
       {
@@ -77,7 +77,7 @@
       {
         "id": "investment",
         "title": "Choose unattended investments",
-        "text": "Open the large orange nucleus or the small division bud, then Invest. All cells default to Manual. Choose Family or This cell, then a Hunter, Producer or Grazer picture to opt in. Hunter favors pursuit and weapons; Producer favors leaves and support; Grazer favors feeding and movement. Unattended cells may buy or reabsorb unsuitable or excess organs, at most once a minute per cell. Essential food and energy support is kept. Each uses only its own AP. Your selected cell stays manual. Inherit uses the family choice; Manual saves this cell’s AP.",
+        "text": "Open the nucleus or Divide, then Invest. Manual is the default. Choose Hunter, Producer or Grazer, or save a relative’s current build as an example. Unattended cells use their own biomass and make at most one build or reabsorption per minute. Family settings and individual exceptions are separate. The family controls also switch automatic mitosis and budding.",
         "sources": []
       },
       {
@@ -85,6 +85,11 @@
         "title": "Choose your lineage color",
         "text": "Pause → Lineage color opens a color disc. Drag around the outer ring to change hue. Drag across the inner disc for saturation and brightness, then Save color. The choice applies to your lineage and stays after reconnecting.",
         "sources": []
+      },
+      {
+        "id": "favorite-cell",
+        "title": "Your favorite cell",
+        "text": "Your last directly selected relative gets a gold outline. When you are offline, paused or the game tab is hidden, it cannot die, lose organs or be automatically absorbed. Its biomass and ATP can still run out. It becomes vulnerable when you return to active play."
       }
     ],
     "touch": [
@@ -127,7 +132,7 @@
       {
         "id": "resources",
         "title": "Show resources",
-        "text": "Biomass, AP and ATP appear along the bottom. Tap − to hide them and Resources to bring them back.",
+        "text": "Biomass and ATP appear along the bottom. Tap − to hide them and Resources to bring them back.",
         "sources": []
       },
       {
@@ -251,7 +256,7 @@
         {
           "id": "emergency",
           "title": "Emergency fuel",
-          "text": "When ATP is low, a cell can reclaim uncommitted division investment and use spare biomass as fuel. It cannot live indefinitely without food or light and carbon.",
+          "text": "Below 12 ATP, cells can burn stored biomass directly for a modest ATP yield until they recover to 18 ATP. This spends their reserves and can eventually lead to starvation; it does not create a fresh meal.",
           "sources": [
             {
               "title": "Microbial energy reserves",
@@ -453,7 +458,7 @@
         {
           "id": "organ_propulsion",
           "title": "Flagellum",
-          "text": "Pushes water to provide thrust. Anatomy and sensed signals choose the direction.",
+          "text": "Provides propulsion along its mounted axis. Cells respond quickly to thrust and local water without heavy coasting. Larger cells face more drag. Particle movement is unchanged.",
           "sources": [
             {
               "title": "Life at low Reynolds number",
@@ -486,7 +491,7 @@
         {
           "id": "organ_feeding",
           "title": "Oral groove",
-          "text": "Senses and takes in food, pumps nearby water, and releases digestive enzymes.",
+          "text": "An optional mouth on the membrane, built in Assembly. It draws surrounding water toward its opening, takes in food and releases digestive enzymes. A taut internal strand pulls the mouth inward. Reabsorb it to remove the mouth and strand; leaves and gas uptake still work without it.",
           "sources": [
             {
               "title": "Food-vacuole formation",
@@ -645,7 +650,7 @@
         {
           "id": "organ_family_away",
           "title": "Away from family receptor",
-          "text": "A free receptor from the purple Receptor factory. Steers away from locally detected family pheromone trails, helping relatives spread out. Survival needs take priority. Free receptors do not raise the next organelle’s AP price and return no AP when reabsorbed.",
+          "text": "A free receptor from the purple Receptor factory. Steers away from locally detected family pheromone trails, helping relatives spread out. Survival needs take priority. Free receptors do not raise the next organelle’s price and return no paid biomass when reabsorbed.",
           "sources": [
             {
               "title": "Chemical sensing under flow",
@@ -672,23 +677,25 @@
         },
         {
           "id": "division",
-          "title": "Reproduction and AP",
-          "text": "Cells prepare division using surplus biomass and ATP. Bud → Divide offers continuous Auto divide or one Start division now request. A one-shot waits for resources and safe space, clears after one birth and never arms the daughter. New daughters have an oral groove and one ordinary leaf, paid from the material budget. Auto divide starts on for new cells. Daughters inherit their parent’s setting; saved choices stay as you left them. A committed division gives 1 AP to each parent and daughter. A family keeps at most 12 living cells: an excess newborn merges back into its parent after the paid division. Existing oversized families merge younger unattended relatives into older ones until 12 remain, preferring their parent. Your controlled cell is protected. These costs, limits and AP awards are game rules.",
+          "title": "Mitosis and budding",
+          "text": "Mitosis and budding use available biomass and ATP directly, with no investment bank. Mitosis keeps the parent’s organs and splits its biomass budget and remaining ATP. Budding pays for a small daughter. Daughters begin with a leaf and removable oral groove, inherit investment choices, and wait a minute before reproducing. Families keep at most 12 cells through immediate reabsorption.",
           "sources": [
             {
               "title": "Cell division",
-              "url": "https://www.ncbi.nlm.nih.gov/books/NBK26831/"
+              "url": "https://www.ncbi.nlm.nih.gov/books/NBK26831/",
+              "text": "Open Divide and choose Mitosis or Budding. Mitosis leaves your organelles with the parent and uses half your available biomass to grow a basic daughter. Budding funds a small daughter directly. Neither needs clear water. Each cell can reproduce once per minute. Both automatic modes start on and let instincts choose suitable moments. At 12 family members, an extra daughter is immediately reabsorbed."
             }
           ]
         },
         {
           "id": "mutations",
           "title": "Mutations and inheritance",
-          "text": "Division has a 10% chance to offer a free mutation. Keep it through the nucleus, then apply it to a matching organelle. Daughters start with a basic oral groove and inherit the investment strategy, rather than the parent’s organs or mutations. The chance and choices are game rules.",
+          "text": "Each completed birth has a 10% chance to offer a free mutation in the nucleus. Daughters inherit investment settings, not copies of the parent’s organelles. They start with a removable oral groove and leaf.",
           "sources": [
             {
               "title": "Cell division",
-              "url": "https://www.ncbi.nlm.nih.gov/books/NBK26831/"
+              "url": "https://www.ncbi.nlm.nih.gov/books/NBK26831/",
+              "text": "Open Divide and choose Mitosis or Budding. Mitosis leaves your organelles with the parent and uses half your available biomass to grow a basic daughter. Budding funds a small daughter directly. Neither needs clear water. Each cell can reproduce once per minute. Both automatic modes start on and let instincts choose suitable moments. At 12 family members, an extra daughter is immediately reabsorbed."
             }
           ]
         },
@@ -738,7 +745,7 @@
         {
           "id": "npc_growth",
           "title": "Other cells develop too",
-          "text": "Every cell defaults to Manual investment. Choose Hunter, Producer or Grazer for unattended cells; each uses its own AP and can make one purchase or Reabsorb action per minute. Family is the default, while individual cell settings stay separate. Use family returns a cell to that default. Daughters follow Family when their parent does, or keep a parent's individual exception. Your selected cell does not spend AP automatically.",
+          "text": "Manual investment is the default. Opt into Hunter, Producer, Grazer or a saved relative’s build for unattended development. A cell can spend biomass or reabsorb an unsuitable organelle once per minute. Family defaults and individual choices are both available.",
           "sources": []
         }
       ]
@@ -833,7 +840,7 @@
         {
           "id": "family_fusion",
           "title": "Merging relatives",
-          "text": "Merge a relative into this cell through Family. Only members of the same lineage can merge. Selecting an unattended relative whose pheromones were received in the past five seconds merges it immediately, even in crowded water. Biomass and AP have no storage limit. Its image slides into your cell. Autonomous relatives still need physical contact to merge. The donor's organs are reabsorbed first using normal AP refunds. All remaining AP and internal food/gases transfer; 90% of the remaining body material and ATP are retained. Some material becomes waste and some ATP becomes heat. The receiving cell keeps its organs. Unattended family cells can merge on their own, more often in a crowd. A player's selected cell cannot be an automatic donor. Fusion earns no division AP. The 12-cell family limit uses the same transfer: excess newborns return to their parent, and oversized families merge younger unattended cells into older relatives. These cap merges need no pheromone cue or contact. These yields and restrictions are game rules inspired by cell fusion.",
+          "text": "Choose an unattended relative through Family after receiving its pheromone within the last five seconds. The merge happens immediately, and its image briefly slides into your cell. Resources combine once. Cells do not randomly merge below the family limit. Extra births beyond 12 are immediately reabsorbed into their parent.",
           "sources": [
             {
               "title": "Cell fusion and membrane merger",
@@ -855,6 +862,51 @@
               "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3678083/"
             }
           ]
+        }
+      ]
+    },
+    {
+      "id": "new-lifecycle",
+      "title": "Cell roles and limits",
+      "items": [
+        {
+          "id": "anatomy-synergies",
+          "title": "Roles come from anatomy",
+          "text": "A leafless cell with a hunting receptor, flagellum and attack gland becomes a Hunter: quicker, cheaper movement and protection from its own pore parts. Two leaves and a mitochondrion without weapons make a Producer with stronger photosynthesis. An oral groove and cilia without leaves or weapons make a Grazer with greater intake and ATP recovery. Only one role bonus applies. These are simplified game bonuses.",
+          "sources": [
+            {
+              "title": "Growth and maintenance energy",
+              "url": "https://doi.org/10.1007/s10811-011-9674-3"
+            }
+          ]
+        },
+        {
+          "id": "crowding-autolysis",
+          "title": "Crowding and autolysis",
+          "text": "Unattended, unprotected cells that keep receiving signals from more than six relatives have a small chance to break down and return their contents. A family cannot trigger this more than once per minute. Chemical reports are the only crowding information. The numerical probabilities are game rules.",
+          "sources": [
+            {
+              "title": "Quorum-associated autolysis",
+              "url": "https://doi.org/10.1016/j.cub.2015.11.056"
+            }
+          ]
+        },
+        {
+          "id": "stress-tears",
+          "title": "Growing beyond membrane support",
+          "text": "Above 3,000 total organic material, a cell can develop a temporary tear and leak stored material. Protection organs increase the supported amount. The tear closes after the excess is relieved. This is recoverable stress, not a hard biomass limit.",
+          "sources": [
+            {
+              "title": "Cell membrane repair",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3678083/"
+            }
+          ]
+        },
+        {
+          "id": "free-construction",
+          "title": "Two free organelles",
+          "text": "Each cell has two reusable free construction places, excluding the always-free sensing receptors. The starter leaf and oral groove fill both. Reabsorption returns half of biomass actually paid into an organ; free tissue gives no biomass refund. Free construction material is an explicit game allowance.",
+          "sources": []
         }
       ]
     }

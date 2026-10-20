@@ -25,10 +25,7 @@ func load_history() -> void:
 	if entries is Array:
 		for item in entries.slice(-64):
 			if not item is Dictionary or not item.get("family") is Array: continue
-			var entry := {"id":int(number(item,"id")),"status":words(item,"status"),"seconds":number(item,"seconds"),"seed":int(number(item,"seed")),"crises":[],"family":[]}
-			var crises = item.get("crises",[])
-			if crises is Array:
-				for done in crises.slice(0,3): entry.crises.append(done == true)
+			var entry := {"id":int(number(item,"id")),"status":words(item,"status"),"seconds":number(item,"seconds"),"seed":int(number(item,"seed")),"family":[]}
 			for member in item.family.slice(-128):
 				if not member is Dictionary: continue
 				var record := {}
@@ -58,7 +55,7 @@ func sync(sim) -> void:
 	for gene in sim.evolution.learned:
 		if gene not in discovered: discovered.append(gene)
 	var entry := {"id":current,"seed":sim.seed_value,"status":sim.evolution.status,"seconds":sim.time,
-		"crises":sim.evolution.completed.duplicate(),"family":sim.lineage.records.duplicate(true)}
+		"family":sim.lineage.records.duplicate(true)}
 	var replaced := false
 	for i in expeditions.size():
 		if expeditions[i].id == current: expeditions[i] = entry; replaced = true; break
@@ -68,7 +65,7 @@ func sync(sim) -> void:
 	else: retry_at = Time.get_ticks_msec()+5000
 
 func recall(run, gene: String) -> bool:
-	if run.terminal() or run.chosen or gene not in discovered or gene in run.learned: return false
+	if run.terminal() or gene not in discovered or gene in run.learned: return false
 	if gene not in run.offers: run.offers.append(gene)
 	return run.choose(gene)
 

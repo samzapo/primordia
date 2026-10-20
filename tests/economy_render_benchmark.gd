@@ -34,7 +34,7 @@ func run() -> void:
 				sim.player.biomass += quote.material
 				sim.player.energy = 100
 				sim.player.oxygen = 24
-				sim.player.reserve(maxf(quote.material,quote.energy),quote.material)
+				sim.player.biomass=200;sim.player.energy=100;sim.player.reproduction_retry_at=0
 				if not sim.divide_lineage():
 					push_error("Offspring render fixture could not divide")
 					quit(1)

@@ -408,7 +408,7 @@ func receptor_factory_controls(_previous_scene) -> void:
    var choice=ui.choices[2]
    click(choice.get_global_rect().get_center())
    for frame in 3:ui.sync(0);await process_frame
-   check(scene.selected==15 and not scene.placement_status().contains("Needs") and ui.mobile_stocks.text.contains("Cost 0 AP") if mobile else scene.selected==15 and not scene.placement_status().contains("Needs"),"Actual factory choice enters ordinary zero-AP placement without switching cell")
+   check(scene.selected==15 and not scene.placement_status().contains("Needs") and ui.mobile_stocks.text.contains("Cost 0 biomass") if mobile else scene.selected==15 and not scene.placement_status().contains("Needs"),"Actual factory choice enters ordinary free receptor placement without switching cell")
    scene._cancel_placement()
  ui.close_context();scene.queue_free();await process_frame
  _previous_scene.show();_previous_scene.ui.show()

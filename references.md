@@ -559,3 +559,11 @@ The existing Alberts mitochondrial and ATP-coupling sources motivate recovery of
 Motivation: the flow-transported chemical communication and chemotaxis study by Scheidweiler et al. (2024), cited above, supports only the broad use of transported local chemical cues. The game's Toward family/Away from family receptors, encoded lineage reports, free build price, hunter choice of any non-family cell and explicit avoidance of armed non-family cells/toxin positions are authored gameplay abstractions. No molecular identification of family, precise hostility inference or this exact sensory policy is claimed. Existing chemistry contacts now have no kinship immunity; finite toxin/pore/decoy encounters affect relatives and their source as well.
 
 **October19 family-limit rule:** the twelve-living-cell threshold, post-division daughter reabsorption and forced younger-to-older reconciliation reuse the fusion abstraction above. They are explicit population-management game rules; the cited fusion experiments do not support a twelve-cell biological limit, remote fusion or numeric AP awards. Normal chemical sensing/navigation and investment capabilities are unchanged.
+
+
+## Revision76: cell lifecycle and biomass gameplay
+- Purcell, E.M. (1977), *Life at low Reynolds number*, https://doi.org/10.1119/1.10903 — motivates strongly damped cell motion relative to water. This game calibration is not a resolved Stokes-flow model. Particle transport and fluid viscosity are unchanged.
+- Kliphuis et al. (2012), https://doi.org/10.1007/s10811-011-9674-3 — motivates separate growth, maintenance and stored-energy costs. Biomass prices, reserve ATP yield and role bonuses are game abstractions.
+- Hazan et al. (2016), https://doi.org/10.1016/j.cub.2015.11.056 — motivates chemically signaled population-associated autolysis. A seven-relative threshold and the selected probabilities do not model the paper quantitatively.
+- Cell membrane repair: https://pmc.ncbi.nlm.nih.gov/articles/PMC3678083/ — motivates recoverable membrane injury; the organic-material stress threshold and protection bonus are game rules.
+- Favorite protection, two free construction places, family caps and investment blueprints are explicit game rules, without a claim of biological equivalence.

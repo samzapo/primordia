@@ -50,17 +50,17 @@ func run() -> void:
 	check(sim.FamilyMerging.candidates(sim,cell)[donor.id]==10.01,"A fresh actual reception renews the window")
 	check(not sim.FamilyMerging.touching(sim,cell,donor),"The selected donor is still separated from the receiver")
 	var blocker=Sim.Cell.new(502,cell.position);sim.cells.append(blocker)
-	cell.biomass=25000;cell.ap=10000;donor.biomass=50000;donor.ap=20000
-	var total_ap: int=cell.ap+donor.ap
-	var expected_mass: float=cell.biomass+(donor.body+donor.biomass+donor.brood_mass+donor.surface_material()+donor.organ_mass()*.5)*.9
+	cell.biomass=25000;donor.biomass=50000
+	var total_ap: int=0
+	var expected_mass: float=cell.biomass+(donor.body+donor.biomass+donor.brood_mass+donor.surface_material()+donor.organs.reduce(func(total,o):return total+donor.construction_refund(o),0.0))*.9
 	var organs: int=donor.organs.size()
 	check(sim.FamilyMerging.request(sim,donor.id) and not sim.cells.has(donor) and not cell.behavior.has("merge_order"),"Selection immediately commits one transfer without waiting for contact or navigation")
-	check(cell.biomass>74999*.9 and is_equal_approx(cell.biomass,expected_mass) and cell.ap==total_ap,"Crowding and large biomass/AP balances never cap or truncate the transfer")
+	check(cell.biomass>74999*.9 and is_equal_approx(cell.biomass,expected_mass) and cell.ap==total_ap,"Crowding and large biomass balances never cap or truncate the transfer")
 	var retained_radius: float=cell.radius
 	cell.biomass*=4;cell.update_geometry()
 	check(cell.radius>retained_radius*1.9,"Cell geometry keeps growing above large balances without a size ceiling")
 	var checkpoint=Codec.new().restore(Codec.new().capture(sim))
-	check(checkpoint.player.biomass==cell.biomass and checkpoint.player.ap==total_ap,"Checkpoint round-trip retains uncapped biomass and AP")
+	check(checkpoint.player.biomass==cell.biomass and checkpoint.player.ap==total_ap,"Checkpoint round-trip retains uncapped biomass")
 	check(sim.merge_bursts.size()==1 and sim.merge_bursts[0].portrait.organs.size()==organs,"The committed fact retains the donor artwork before organs are reabsorbed")
 	check(not sim.FamilyMerging.request(sim,donor.id) and sim.merge_bursts.size()==1,"Retried selection cannot transfer again or replay the animation")
 	var stored: Dictionary=Codec.new().capture(sim)

@@ -7,7 +7,7 @@ static func capture(cell) -> Dictionary:
  var extent: float=cell.extent()
  for organ in cell.organs:
   var at: Vector2=cell.organ_local_position(organ)
-  var inherent: bool=cell.inherent(organ)
+  var inherent: bool=organ.kind=="feeding"
   organs.append({"kind":organ.kind,"at":at,"heading":cell.organ_normal(organ).angle(),
    "scale":organ.scale,"mode":organ.mode,"hp":organ.hp/organ.max_hp,
    "inherent":inherent,"mouth":Visuals.oral_path(cell,organ.a) if inherent else PackedVector2Array(),

@@ -62,8 +62,8 @@ func _process(dt: float) -> void:
 
 func sync() -> void:
  var viewport: Vector2=owner_ui.get_viewport_rect().size
- title.text="Choose a relative to merge" if owner_ui.context.get("kind","")=="merge_family" else "Family"
- merge_button.visible=owner_ui.context.get("kind","")!="merge_family"
+ title.text="Choose a build to remember" if owner_ui.context.get("choose_template",false) else "Choose a relative to merge" if owner_ui.context.get("kind","")=="merge_family" else "Family"
+ merge_button.visible=not owner_ui.context.get("choose_template",false) and owner_ui.context.get("kind","")!="merge_family"
  var s: float=minf(owner_ui.ui_scale(),minf(viewport.x/220.0,viewport.y/170.0))
  var count: int=owner_ui.choices.size()
  var tile: float=80*s

@@ -683,3 +683,5 @@ Update guide and stable-only notice; no rendering-speed campaign.
 October19 continuation: Auto divide starts on for new cells. Preserve saved
 choices and parent-to-daughter inheritance; one-shot still disables continuous
 auto. Maintain the cap, paid resource accounting and1+1AP.
+
+October19 Revision76 supersedes prior AP, inherent-groove, staged-reproduction and crisis rules. Read docs/REVISION_76.md. Implement the approved biomass economy, two reusable free places, optional oral groove, direct mitosis/budding, sixty-second per-cell cooldown, persistent favorite protection and anatomy synergies. Experimental-only rollout under the fresh-main-copy policy. Cell-motion damping only: do not change particle motion or global fluid viscosity. No dedicated failure-reproduction campaign or rendering-speed campaign. Preserve main, accounts, keys and private feedback.
