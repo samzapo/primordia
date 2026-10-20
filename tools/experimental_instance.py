@@ -237,12 +237,20 @@ def main():
         guard(stable,baseline)
         snapshot,source_generations=capture(stable/"state",root)
         path=root/"stable-pond-copy.log"
-        with path.open("w") as output:
-            call(str(godot),"--headless","--path",str(candidate),"--script","tools/copy_stable_pond.gd","--",
-                 "--state-dir="+str(state),"--snapshot-dir="+str(snapshot),
-                 "--source-world="+baseline["world_id"],"--confirm-sha="+sha,
-                 env={**environment,"PRIMORDIA_BUILD_SHA":sha},stdout=output,stderr=subprocess.STDOUT)
-        result=path.read_text();print(result,flush=True)
+        try:
+            with path.open("w") as output:
+                call(str(godot),"--headless","--path",str(candidate),"--script","tools/copy_stable_pond.gd","--",
+                     "--state-dir="+str(state),"--snapshot-dir="+str(snapshot),
+                     "--source-world="+baseline["world_id"],"--confirm-sha="+sha,
+                     env={**environment,"PRIMORDIA_BUILD_SHA":sha},stdout=output,stderr=subprocess.STDOUT)
+        finally:
+            # Keep the actual copy error visible even when call() raises.
+            # Bound diagnostics independently of any repeating engine output.
+            with path.open("rb") as output:
+                output.seek(0,os.SEEK_END)
+                output.seek(max(0,output.tell()-32768))
+                result=output.read(32768).decode(errors="replace")
+            print(result,flush=True)
         if re.search(r"SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:",result,re.M):
             raise RuntimeError("Stable pond copy failed")
         copy_report=json.loads(next(line.removeprefix("POND_COPY ") for line in result.splitlines() if line.startswith("POND_COPY ")))
