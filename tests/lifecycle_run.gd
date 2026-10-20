@@ -56,6 +56,14 @@ func run() -> void:
 	for i in 120:sim._metabolize(hunter,.25)
 	check(hunter.energy>0 and hunter.biomass<100 and hunter.health==100,"Leafless Hunter can pay maintenance from reserves during a food gap")
 	check(not sim.evolution.terminal() and not sim.evolution.forecast().contains("crisis"),"Persistent progression has no crisis ending")
+	var legacy=fixture();legacy.player.lifecycle_version=0;legacy.player.ap=9;legacy.player.brood_mass=20;legacy.player.brood_energy=30
+	var retention=preload("res://scripts/network/cell_retention.gd")
+	var original={"world_id":"fixture","tick":legacy.revision,"graph":Codec.new().capture(legacy)}
+	var reloaded=Codec.new().restore(original.graph)
+	var recovered={"world_id":"fixture","tick":reloaded.revision,"graph":Codec.new().capture(reloaded)}
+	check(retention.compare(retention.manifest(original),retention.manifest(recovered)).ok,"Strict startup retention validates the intact legacy save before game-rule migration")
+	reloaded.step(.01)
+	check(reloaded.player.lifecycle_version==1 and reloaded.player.ap==0 and reloaded.player.brood_mass==0 and reloaded.player.brood_energy==0,"The first authority tick retires AP and returns old reserves")
 	await controls()
 	roles_and_presence()
 	print("LIFECYCLE: %d assertions, %d failures" % [checks,failures]);quit(0 if failures==0 else 1)
@@ -103,6 +111,13 @@ func roles_and_presence() -> void:
 	check(sim.Investment.save_template(sim,"lineage",model.id),"Investment snapshots a living relative")
 	model.add_organ("toxin",0,"graze",false)
 	check(sim.investment.templates[cell.lineage_id()].size()==1,"Later edits do not change the remembered build")
+	var copying=fixture();var copier=copying.player;copier.biomass=100
+	copier.add_organ("feeding",0,"graze",false)
+	copying.Investment.save_template(copying,"lineage",copier.id)
+	copying.Investment.template_decision(copying,copier)
+	copier.add_organ("protection",1,"graze",false)
+	var next=copying.Investment.template_decision(copying,copier)
+	check(next.get("action","")!="remove","Completed exemplar build can expand without reabsorbing its own fallback purchases")
 	cell.chemistry.emit("food",8,Vector2(20,0),-1,-1,144);cell.chemistry.emit("oxygen",3,Vector2(20,0))
 	var child=Sim.Cell.new(555)
 	child.chemistry.partition(cell.chemistry,.5)

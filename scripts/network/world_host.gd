@@ -216,6 +216,8 @@ func _process(_dt: float) -> void:
 
 func _physics_process(dt: float) -> void:
 	if not running: return
+	# Retention validates the exact copied save before the first authority tick.
+	if world.cells.any(func(cell):return cell.lifecycle_version<Sim.Lifecycle.VERSION):Sim.Lifecycle.migrate(world,accounts)
 	var start := Time.get_ticks_usec()
 	for request in queued: _apply(request.peer,request.message)
 	queued.clear()

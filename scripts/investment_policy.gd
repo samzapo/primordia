@@ -139,6 +139,8 @@ static func template_decision(sim,cell) -> Dictionary:
  var root=cell.lineage_id()
  var target=sim.investment.get("cell_templates",{}).get(root,{}).get(cell.id,sim.investment.get("templates",{}).get(root,[]))
  if target.is_empty():return {}
+ var signature=hash(target)
+ if sim.investment.get("completed_templates",{}).get(cell.id,-1)==signature:return fallback_decision(sim,cell)
  var used={}
  for wanted in target:
   var found={}
@@ -152,11 +154,14 @@ static func template_decision(sim,cell) -> Dictionary:
   else:return {}
  for organ in cell.organs:
   if used.has(organ.id):continue
-  if organ.kind=="feeding" and cell.count("photosynthesis")==0:continue
-  if organ.kind=="photosynthesis" and cell.count("feeding")==0:continue
   if cell.unattended_protected:continue
   return {"action":"remove","id":organ.id}
- # The frozen build is complete. A per-cell deterministic fallback never changes each tick.
+ if not sim.investment.has("completed_templates"):sim.investment["completed_templates"]={}
+ sim.investment.completed_templates[cell.id]=signature
+ return fallback_decision(sim,cell)
+
+static func fallback_decision(sim,cell) -> Dictionary:
+ # Once the frozen build is complete, expansion is never undone next minute.
  var bucket=posmod(cell.id*19349663 ^ sim.seed_value,100)
  var fallback="hunter" if bucket<10 else "producer" if bucket<55 else "grazer"
  var saved=sim.investment.cells.get(cell.id,null);sim.investment.cells[cell.id]=fallback
@@ -167,6 +172,7 @@ static func template_decision(sim,cell) -> Dictionary:
 
 static func retire(sim,cell) -> void:
  sim.investment.cells.erase(cell.id);sim.investment.npc.erase(cell.id)
+ sim.investment.get("completed_templates",{}).erase(cell.id)
  var root=cell.lineage_id()
  var overrides=sim.investment.get("cell_templates",{}).get(root,{})
  overrides.erase(cell.id)

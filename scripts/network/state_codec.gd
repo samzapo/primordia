@@ -117,10 +117,6 @@ func restore(document: Dictionary):
 			record.source.invalidate()
 		elif record.kind == "habitat": record.source.rebuild()
 	var root = _decode(document.root)
-	for record in objects:
-		if record.kind=="simulation":
-			var accounts: Dictionary=root.get("accounts",{}) if root is Dictionary and root.get("world")==record.source else {}
-			preload("res://scripts/cell_lifecycle.gd").migrate(record.source,accounts)
 	objects.clear()
 	return root
 

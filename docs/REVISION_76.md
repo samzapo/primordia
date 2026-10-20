@@ -16,3 +16,5 @@ Merge artwork has an independent live presentation clock, and is transient, nonp
 Remove scripted three-crisis gameplay, rings, goals, tides and endings; keep persistent mutations, lineage generation/totals and hourly environmental weather. Gameplay/Mechanics and one experimental-only consolidated announcement reflect this revision.
 
 Validation and target acceptance are retained in the private task records. Physical phone performance is not implied by functional GPU checks.
+
+Legacy reserve/AP/groove conversion runs at the first authority tick, after strict restart retention has validated the intact copied save. Deserialization and browser snapshots stay data-only; migration is versioned and idempotent.

@@ -73,7 +73,6 @@ static func reproduce(sim,parent,ledger,mode: String,follow: bool=false) -> bool
 
 static func step(sim) -> void:
 	if sim.remote_client:return
-	migrate(sim)
 	sim.FamilyMerging.enforce_limit(sim)
 	if sim.time<sim.lifecycle_due:return
 	sim.lifecycle_due+=floor((sim.time-sim.lifecycle_due)/PERIOD+1)*PERIOD

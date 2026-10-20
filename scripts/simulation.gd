@@ -622,6 +622,7 @@ func step(dt: float) -> void:
 	var before: float=time
 	prepare_combat_rules()
 	if remote_client: return
+	if cells.any(func(cell):return cell.lifecycle_version<Lifecycle.VERSION):Lifecycle.migrate(self)
 	preload("res://scripts/induced_currents.gd").update(self)
 	if resident != null:
 		var shown_half:=view_half
