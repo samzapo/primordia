@@ -130,9 +130,10 @@ func run() -> void:
  var donor=host.world.cells.filter(func(body):return not body.dead and body.lineage_id()==account.root and body!=selected)[-1]
  for body in host.world.cells:
   if body!=selected and body!=donor:body.position=Vector2(2600+body.id*10,2200);body.previous_position=body.position
- donor.position=selected.position+Vector2(selected.support(0)+donor.support(PI)-5,0);donor.previous_position=donor.position
+ # Emit a real tracer within receptor reach in every backend. Pool metadata
+ # patches intentionally do not teleport authoritative numeric particle poses.
+ donor.position=selected.organ_position(selected.organs.filter(func(o):return o.kind=="feeding")[0]);donor.previous_position=donor.position
  var family_trace: Dictionary=host.world._emit_pheromone(donor)
- family_trace.p=selected.organ_position(selected.organs.filter(func(o):return o.kind=="feeding")[0]);family_trace.previous=family_trace.p
  family_trace.expires_at=host.world.time+8
  host.world._commit_spawn_metadata()
  if host.cpu:
