@@ -196,7 +196,7 @@ func synergy_shapes() -> void:
 	var ShapeArt=preload("res://scripts/synergy_art.gd")
 	var Portrait=preload("res://scripts/cell_portrait.gd")
 	var Retention=preload("res://scripts/network/cell_retention.gd")
-	for mouth_angle in [0.0,.7,-2.1]:
+	for mouth_angle in [0.0,.7,-2.1,-PI/2+PI/28]:
 		var sim=fixture();var hunter=sim.player;hunter.body=120
 		for kind in ["feeding","hunting","propulsion","toxin"]:hunter.add_organ(kind,0,"graze",false)
 		var mouth=hunter.organs.filter(func(organ):return organ.kind=="feeding")[0]
@@ -206,9 +206,17 @@ func synergy_shapes() -> void:
 		var ref=Sim.Cell.clone_state(hunter);ref.membrane.native_constraints=false;ref.membrane.native_outline=false
 		for tick in 120:
 			for body in [hunter,ref]:body.membrane.step(1.0/60,body.radius,Vector2(90,-60),tick/60.0)
-		var width=hunter.visible_support(axis+PI/2)+hunter.visible_support(axis-PI/2)
-		var length=hunter.visible_support(axis)+hunter.visible_support(axis+PI)
-		check(length/width>1.75 and hunter.visible_support(axis)>hunter.visible_support(axis+PI)*1.2,"Hunter is elongated with a longer pointed front")
+		var pronounced:=0;var curve: PackedVector2Array=hunter.membrane.outline()
+		for i in curve.size():
+			var reach:=curve[i].length()
+			if reach>hunter.radius*1.25 and reach>curve[posmod(i-1,curve.size())].length() and reach>curve[(i+1)%curve.size()].length():pronounced+=1
+		check(pronounced==6,"Hunter has exactly six pronounced pointed membrane projections")
+		var concave:=true;var supported:=true
+		for i in 6:
+			var tip: float=axis+i*TAU/6
+			concave=concave and hunter.visible_support(tip)>hunter.visible_support(tip+PI/6)*1.7
+			supported=supported and absf(hunter.support(hunter.angle+tip)-hunter.visible_support(tip))<hunter.radius*.01
+		check(concave and supported,"Concave spans separate six tips present in both collision support and artwork")
 		var area=preload("res://tests/paramecium.gd").area(hunter)
 		check(absf(area-hunter.membrane.COUNT*hunter.radius*hunter.radius*sin(TAU/hunter.membrane.COUNT)*.5)<.05,"Hunter silhouette preserves tissue area")
 		var error:=0.0
@@ -219,7 +227,7 @@ func synergy_shapes() -> void:
 		var recovered={"world_id":"shape","tick":sim.revision,"graph":Codec.new().capture(restored)}
 		check(Retention.compare(Retention.manifest(original),Retention.manifest(recovered)).ok and is_equal_approx(restored.player.membrane.hunter_angle,axis),"Checkpoint derives Hunter axis without changing saved points or anatomy")
 		var model=Portrait.capture(hunter)
-		check(model.synergy.role=="hunter" and model.synergy.spine[-1].length()>hunter.radius,"Portrait includes the live membrane's supported pointed front")
+		check(model.synergy.role=="hunter" and model.synergy.spine.size()==12 and model.synergy.spine[-1].length()>hunter.radius,"Live portraits include all six center-to-tip support strands")
 		hunter.recycle(hunter.organs.find(mouth))
 		var receptor=hunter.organs.filter(func(organ):return organ.kind=="hunting")[0]
 		check(hunter.synergy()=="hunter" and hunter.membrane.hunter_angle==receptor.a,"Mouthless Hunter uses its receptor as the anatomical front")

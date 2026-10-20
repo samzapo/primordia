@@ -39,10 +39,25 @@ func _init(radius: float = 47.0, anatomy_seed: int = -1) -> void:
 	if anatomy_seed >= 0: skeleton.seed_layout(anatomy_seed,self,radius)
 
 static func hunter_profile(angle: float) -> float:
-	var direction:=Vector2.from_angle(angle)
-	var power:=1.25 if direction.x>=0 else 2.0
-	var reach:=1.8 if direction.x>=0 else 1.15
-	return 1.0/pow(pow(absf(direction.x)/reach,power)+pow(absf(direction.y)/.72,power),1.0/power)
+	# One inward-bowed quadratic arc between each pair of six narrow tips.
+	# Solve its ray intersection; the stable root also handles the arc midpoint.
+	var half:=PI/6
+	var phi:=fposmod(angle,TAU/6)-half
+	var tangent:=tan(phi)
+	var outer:=1.75
+	var control:=outer*.10
+	var forward: float=(outer*cos(half)+control)*.5
+	var curve: float=(outer*cos(half)-control)*.5
+	var side: float=outer*sin(half)
+	var u: float=2*tangent*forward/(side+sqrt(maxf(0,side*side-4*tangent*tangent*curve*forward)))
+	return Vector2(forward+curve*u*u,side*u).length()
+
+static func hunter_node_angle(index: int,axis: float) -> float:
+	var nominal:=TAU*index/COUNT
+	var tip: float=axis+roundi((nominal-axis)/(TAU/6))*(TAU/6)
+	# One existing node owns each exact tip, including half-sector ties.
+	# No ring resize or saved-point conversion is needed.
+	return tip if posmod(roundi(fposmod(tip,TAU)/TAU*COUNT),COUNT)==index else nominal
 
 func step(dt: float, radius: float, acceleration: Vector2, time: float, _aspect: float = 1.0, traction: PackedVector2Array = PackedVector2Array()) -> void:
 	if dt < 0.000001: return
@@ -54,9 +69,8 @@ func step(dt: float, radius: float, acceleration: Vector2, time: float, _aspect:
 		var contraction := (1.0+0.14*sin(a*3+time*0.48)+0.075*sin(a*5-time*0.71))/1.006
 		rest_points[i] = normals[i]*radius*contraction
 		if is_finite(hunter_angle):
-			# A tapered front and rounder rear, both centered on an anatomical
-			# axis. Positive polar radii preserve ordered, noncrossing outlines.
-			rest_points[i]=normals[i]*radius*hunter_profile(a-hunter_angle)
+			var polar:=hunter_node_angle(i,hunter_angle)
+			rest_points[i]=Vector2.from_angle(polar)*radius*hunter_profile(polar-hunter_angle)
 		if cell_wall:
 			# Rounded square, normalized below to the same represented tissue area.
 			var axis:=normals[i].abs()
@@ -139,16 +153,19 @@ func step(dt: float, radius: float, acceleration: Vector2, time: float, _aspect:
 			var corrected:=normals[i]*clampf(points[i].length(),rest_points[i].length()*.98,rest_points[i].length()*1.02)
 			previous[i]+=corrected-points[i];points[i]=corrected
 	if is_finite(hunter_angle):
-		# The longitudinal scaffold supports this actual membrane shape; random
-		# tensile chords may deform it, but cannot pinch away the pointed front.
+		# Six radial supports preserve sharp tips and inward-bowed spans.
+		# All nodes remain angularly ordered, with no added bodies or forces.
 		for i in COUNT:
-			var corrected:=points[i].normalized()*clampf(points[i].length(),rest_points[i].length()*.92,rest_points[i].length()*1.08)
+			var corrected:=rest_points[i].normalized()*clampf(points[i].length(),rest_points[i].length()*.98,rest_points[i].length()*1.02)
 			previous[i]+=corrected-points[i];points[i]=corrected
 	# A permanent shallow vestibule. Apply before area normalization so the
 	# displaced volume remains elsewhere in the gel. Same curve drives physics.
 	if is_finite(oral_angle):
 		for i in COUNT:
-			var distance := absf(wrapf(TAU*i/COUNT-oral_angle,-PI,PI))
+			# Supported tip nodes can shift by half a sector; use their actual
+			# direction so the mouth cannot clip its two neighboring points.
+			var direction: float=points[i].angle() if is_finite(hunter_angle) else TAU*i/COUNT
+			var distance := absf(wrapf(direction-oral_angle,-PI,PI))
 			if distance > 0.5: continue
 			var weight := pow(0.5+0.5*cos(PI*distance/0.5),1.5)
 			var corrected := points[i].normalized()*minf(points[i].length(),radius*(1-0.36*weight))
@@ -207,6 +224,12 @@ func refresh_arcs() -> void:
 
 func outline() -> PackedVector2Array:
 	if not outline_dirty: return cached_outline
+	if is_finite(hunter_angle):
+		# Ordinary smooth splines round off the supported tips. Keep the six
+		# corners while interpolating concave spans through the physical nodes.
+		cached_outline=hunter_outline()
+		outline_dirty=false
+		return cached_outline
 	if native_outline:
 		cached_outline = kernels.membrane_outline(points)
 		outline_dirty = false
@@ -231,6 +254,22 @@ func outline() -> PackedVector2Array:
 	cached_outline = curve
 	outline_dirty = false
 	return cached_outline
+
+
+func hunter_outline() -> PackedVector2Array:
+	var curve:=PackedVector2Array()
+	var angles:=ordered_angles(points)
+	for i in COUNT:
+		var next: int=(i+1)%COUNT
+		var angle: float=angles[i]
+		var delta:=fposmod(angles[next]-angle,TAU)
+		var start: float=points[i].length()/hunter_profile(angle-hunter_angle)
+		var end: float=points[next].length()/hunter_profile(angles[next]-hunter_angle)
+		for j in 4:
+			var t:=j/4.0
+			var at:=angle+delta*t
+			curve.append(Vector2.from_angle(at)*hunter_profile(at-hunter_angle)*lerpf(start,end,t))
+	return curve
 
 
 static func ordered_angles(nodes: PackedVector2Array) -> PackedFloat64Array:

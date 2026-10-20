@@ -6,7 +6,10 @@ static func capture(cell) -> Dictionary:
 	var model: Dictionary={"role":role,"spine":PackedVector2Array(),"roots":PackedVector2Array(),"normals":PackedVector2Array()}
 	if role=="hunter" and is_finite(cell.membrane.hunter_angle):
 		var axis: float=cell.membrane.hunter_angle
-		model.spine=PackedVector2Array([-Vector2.from_angle(axis)*cell.radius*.45,Vector2.ZERO,cell.local_point(cell.surface_parameter(axis))*.96])
+		for i in 6:
+			var tip: float=axis+i*TAU/6
+			model.spine.append(Vector2.ZERO)
+			model.spine.append(cell.local_point(cell.surface_parameter(tip))*.96)
 	elif role=="grazer":
 		# Leave the oral vestibule clear. The ten roots follow the real outline,
 		# with modest local offsets away from equipped membrane organs.
@@ -41,8 +44,8 @@ static func hair(model: Dictionary,index: int,radius: float,age: float) -> Packe
 static func draw(canvas: Node2D,model: Dictionary,outline: PackedVector2Array,radius: float,hue: Color,age: float) -> void:
 	var role: String=model.get("role","")
 	if role=="hunter" and model.spine.size()>1:
-		canvas.draw_polyline(model.spine,hue.lightened(.7)*Color(1,1,1,.28),maxf(.8,radius*.018),true)
-		canvas.draw_polyline(model.spine,hue.lightened(.85)*Color(1,1,1,.45),maxf(.4,radius*.006),true)
+		canvas.draw_multiline(model.spine,hue.lightened(.7)*Color(1,1,1,.28),maxf(.8,radius*.018),true)
+		canvas.draw_multiline(model.spine,hue.lightened(.85)*Color(1,1,1,.45),maxf(.4,radius*.006),true)
 	elif role=="producer":
 		# Keep the existing Producer wall exactly as it appears in the pond.
 		var wall:=PackedVector2Array()

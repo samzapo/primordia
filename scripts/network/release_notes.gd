@@ -515,6 +515,17 @@ const RELEASES=[
  ],
  "footer":"Experimental starts from a fresh copy of the main pond. Main is unchanged.",
  "button":"Back to the pond"
+},
+{
+ "id":"2026-10-19-experimental-six-point-hunters",
+ "audience":"experimental",
+ "title":"What’s new in the pond",
+ "items":[
+  "Hunters now have six narrow points, with the membrane curving inward between them.",
+  "Fine strands extend from the center to support each point. Family portraits and investment pictures match."
+ ],
+ "footer":"Experimental starts from a fresh copy of the main pond. Main is unchanged.",
+ "button":"Back to the pond"
 }
 ]
 const CURRENT=RELEASES[-1]

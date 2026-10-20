@@ -38,7 +38,9 @@ func _picture() -> void:
    var normal:=Vector2.from_angle(angle).abs()
    reach=28/pow(pow(normal.x,8)+pow(normal.y,8),1.0/8)
   outline.append(Vector2.from_angle(angle)*reach)
- if strategy=="hunter":model.spine=PackedVector2Array([-Vector2.from_angle(axis)*12,Vector2.ZERO,Vector2.from_angle(axis)*44])
+ if strategy=="hunter":
+  for i in 6:
+   model.spine.append(Vector2.ZERO);model.spine.append(Vector2.from_angle(axis+i*TAU/6)*44)
  elif strategy=="grazer":
   for i in 10:
    var a:=.62+(TAU-1.24)*(i+.5)/10
