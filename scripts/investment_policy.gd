@@ -27,7 +27,7 @@ const VARIANTS:={
  "hunter":[["hunting","toxin","propulsion","poreforming","sensing","protection","mitochondrion","regenerative"],
            ["hunting","poreforming","cilia","counterattack","protection","neutralizing","mitochondrion","regenerative","toxin_sac","family_toward"]],
  "producer":[["photosynthesis","protection","regenerative","mitochondrion","neutralizing","cilia","sensing","family_away","toxin_sac"],
-             ["photosynthesis","cilia","neutralizing","mitochondrion","counterattack","regenerative","protection","sensing","family_toward","toxin_sac"]],
+             ["photosynthesis","cilia","neutralizing","mitochondrion","regenerative","protection","sensing","family_toward","toxin_sac"]],
  "grazer":[["cilia","mitochondrion","regenerative","sensing","feeding","protection","neutralizing","family_toward"],
            ["cilia","neutralizing","regenerative","acidifying","mitochondrion","feeding","sensing","protection","family_away"]],
 }
@@ -76,6 +76,9 @@ static func decision(sim,cell) -> Dictionary:
  if cell.id in sim.managed_cells:return {}
  if policy=="custom":return template_decision(sim,cell)
  if policy not in VARIANTS:return {}
+ if policy=="producer" and working(cell,"photosynthesis")>=2 and working(cell,"mitochondrion")>0:
+  for organ in cell.organs:
+   if organ.kind=="feeding" and not cell.unattended_protected:return {"action":"remove","id":organ.id}
  var choice:=candidate(sim,cell)
  if not choice.is_empty() and cell.biomass>=cell.construction_price(choice.kind):
   choice["action"]="install";return choice

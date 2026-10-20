@@ -177,7 +177,15 @@ func _draw() -> void:
 	if role=="hunter":
 		for i in 3:draw_line(Vector2(-.5,.12+i*.13)*cell.radius,Vector2(-.34,.04+i*.13)*cell.radius,Color(1,.75,.35,.45),maxf(.8,cell.radius*.015),true)
 	elif role=="producer":
-		for i in 6:draw_circle(Vector2.from_angle(i*TAU/6)*cell.radius*.62,cell.radius*.025,Color(.65,1,.45,.4))
+		# Wall follows the physical outline and stays inside it, below appendages.
+		var wall:=PackedVector2Array()
+		for point in outline:wall.append(point*.975)
+		wall.append(wall[0])
+		draw_polyline(wall,hue.lightened(.55)*Color(1,1,1,.8),maxf(1,cell.radius*.045),true)
+		var inner:=PackedVector2Array()
+		for point in outline:inner.append(point*.92)
+		inner.append(inner[0])
+		draw_polyline(inner,hue.darkened(.45)*Color(1,1,1,.65),maxf(.7,cell.radius*.018),true)
 	elif role=="grazer":
 		draw_arc(Vector2.ZERO,cell.radius*.7,.6,2.5,18,Color(.55,1,.9,.4),maxf(.8,cell.radius*.015),true)
 	if cell.behavior.has("autolysis_at"):

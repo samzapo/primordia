@@ -491,7 +491,7 @@
         {
           "id": "organ_feeding",
           "title": "Oral groove",
-          "text": "An optional mouth on the membrane, built in Assembly. It draws surrounding water toward its opening, takes in food and releases digestive enzymes. A taut internal strand pulls the mouth inward. Reabsorb it to remove the mouth and strand; leaves and gas uptake still work without it.",
+          "text": "An optional mouth on the membrane, built in Assembly. It draws surrounding water toward its opening, takes in food and releases digestive enzymes. A taut internal strand connects the mouth to the center of the cell. Reabsorb it to remove the mouth and strand; leaves and gas uptake still work without it.",
           "sources": [
             {
               "title": "Food-vacuole formation",
@@ -757,7 +757,7 @@
         {
           "id": "currents",
           "title": "Currents and plants",
-          "text": "Broad currents carry chemical parcels through the pond. Swimming and feeding disturb the water locally. Plants damp flow; cells meet plant branches while chemistry can pass through. This is a stylized fluid world, not a calibrated microscopic-water model.",
+          "text": "Broad currents carry cells and chemical parcels through the pond. Swimming adds movement relative to the local water; leftover cell motion quickly settles back into that current. Feeding stirs the water locally. Plants damp flow; cells meet plant branches while chemistry can pass through. This is a stylized fluid world, not a calibrated microscopic-water model.",
           "sources": [
             {
               "title": "Life at low Reynolds number",
@@ -872,11 +872,15 @@
         {
           "id": "anatomy-synergies",
           "title": "Roles come from anatomy",
-          "text": "A leafless cell with a hunting receptor, flagellum and attack gland becomes a Hunter: quicker, cheaper movement and protection from its own pore parts. Two leaves and a mitochondrion without weapons make a Producer with stronger photosynthesis. An oral groove and cilia without leaves or weapons make a Grazer with greater intake and ATP recovery. Only one role bonus applies. These are simplified game bonuses.",
+          "text": "A leafless cell with a hunting receptor, flagellum and attack gland becomes a Hunter: quicker, cheaper movement and protection from its own pore parts. Two working leaves and a mitochondrion, with no weapons or mouth, make a Producer: stronger photosynthesis and a firm, boxy cell wall. An oral groove and cilia without leaves or weapons make a Grazer with greater intake and ATP recovery. Only one role bonus applies. These are simplified game bonuses.",
           "sources": [
             {
               "title": "Growth and maintenance energy",
               "url": "https://doi.org/10.1007/s10811-011-9674-3"
+            },
+            {
+              "title": "Plant cell-wall mechanics",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3346220/"
             }
           ]
         },

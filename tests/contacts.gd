@@ -41,6 +41,7 @@ static func run(check: Callable) -> void:
 	var resting_velocity: Vector2 = b.velocity
 	Contact.pair(a,b,DT,true)
 	check.call(b.position == asleep and b.velocity == resting_velocity,"Dormant contact boundaries never acquire hidden motion")
+	_rotating_contact(check)
 	_plants(check)
 	_spikes(check)
 	_hunting(check)
@@ -125,3 +126,14 @@ static func _pruning(check: Callable) -> void:
 		sim._contacts(DT)
 		results.append([sim.player.position,sim.player.velocity,near.position,near.velocity,near.health])
 	check.call(results[0] == results[1],"Spatial contact pruning preserves ordinary body collision")
+
+
+static func _rotating_contact(check: Callable) -> void:
+	var cell=body(700,Vector2(2000,1200))
+	cell.velocity=Vector2(70,0);cell.angular_velocity=3
+	var kinetic: float=.5*cell.mass*cell.velocity.length_squared()+.5*cell.inertia*cell.angular_velocity*cell.angular_velocity
+	var at: Vector2=cell.position+Vector2(12,36)
+	check.call(Contact.velocity_at(cell,at).distance_to(cell.velocity+Vector2(-36,12)*3)<.0001,"Contact uses the same positive rotation as fluid and the rendered body")
+	for i in 20:Contact.solve(cell,null,at,Vector2.RIGHT,0)
+	var after: float=.5*cell.mass*cell.velocity.length_squared()+.5*cell.inertia*cell.angular_velocity*cell.angular_velocity
+	check.call(after<=kinetic*1.00001,"Repeated glancing contact cannot amplify existing spin")

@@ -567,3 +567,8 @@ Motivation: the flow-transported chemical communication and chemotaxis study by 
 - Hazan et al. (2016), https://doi.org/10.1016/j.cub.2015.11.056 — motivates chemically signaled population-associated autolysis. A seven-relative threshold and the selected probabilities do not model the paper quantitatively.
 - Cell membrane repair: https://pmc.ncbi.nlm.nih.gov/articles/PMC3678083/ — motivates recoverable membrane injury; the organic-material stress threshold and protection bonus are game rules.
 - Favorite protection, two free construction places, family caps and investment blueprints are explicit game rules, without a claim of biological equivalence.
+
+### Revision76 follow-up: viscous body response and Producer cell walls
+The existing Purcell source motivates using a local-water-relative velocity response instead of inertial body/fluid feedback. The 30ms relaxation, direct body-slip decay and bounded navigation turn are authored gameplay rules, not a conservative coupled fluid solver. The medium and chemical transport are unchanged.
+
+[Viscoelastic properties of cell walls of single living plant cells determined by dynamic nanoindentation (2012)](https://pmc.ncbi.nlm.nih.gov/articles/PMC3346220/) measures cell-wall mechanics and explains how stiffness counters internal pressure and constrains shape. Primordia's rounded-square Producer silhouette, deformation resistance, two-leaf/mitochondrion/no-mouth qualification and photosynthesis bonus are fictional gameplay abstractions; real plant cells need not be square and do not gain a wall by collecting organelles. The game adds no chemical immunity. The fixed mouth-to-center strand is an anatomical construction rule, not a literal model of a universal biological tether.

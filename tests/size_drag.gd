@@ -26,6 +26,7 @@ static func swim(size_factor: float, flagella: int) -> float:
 	return total
 
 static func run(check: Callable) -> void:
+	viscous_response(check)
 	var baseline = Sim.Cell.new()
 	var large = Sim.Cell.new()
 	large.body = baseline.body*8
@@ -61,3 +62,32 @@ static func run(check: Callable) -> void:
 		body.angular_velocity = 0
 		for i in 6: fluid.exchange(body,Vector2.from_angle(TAU*i/6.0)*body.radius,0.5,body.fluid_drag()/6.0)
 		check.call(body.velocity.x > 0 and body.velocity.x <= 30.01,"Larger passive cells are still carried by currents, with no world-speed clamp")
+
+
+static func viscous_response(check: Callable) -> void:
+	# The former body-mass-only impulse exploded for large bodies/coarse ticks.
+	var sim=Sim.new(4,0,false);var cell=sim.player
+	sim.cells=[cell];sim.habitat_geometry=sim.Habitat.new(4,sim.cells);sim.habitat_geometry.enabled=false
+	cell.organs.clear()
+	for tissue in [30,1300,10000]:
+		cell.body=30;cell.biomass=tissue;cell.update_geometry()
+		for dt in [1.0/180,.125,.5]:
+			var current:=Vector2(180,-90)
+			cell.position=Vector2(2047,1287);cell.target=Vector2.ZERO
+			cell.velocity=current+Vector2(80,20);cell.angular_velocity=2
+			sim.fluid.velocity.fill(current)
+			var water=sim.fluid.velocity.duplicate()
+			sim._motion_cell(cell,dt)
+			var decay:=exp(-dt/.03)
+			check.call(cell.velocity.distance_to(current+Vector2(80,20)*decay)<.0001 and absf(cell.angular_velocity-2*decay)<.0001,"Only body slip and spin decay at tissue="+str(tissue)+" dt="+str(dt))
+			for i in 30:sim._motion_cell(cell,dt)
+			check.call(cell.velocity.is_finite() and cell.velocity.distance_to(current)<.4 and sim.fluid.velocity==water,"Passive bodies settle into the current without feeding energy into it")
+	# The same swimming command in a translating water frame has the same slip.
+	cell.body=60;cell.biomass=18;cell.update_geometry();cell.add_organ("propulsion",PI,"graze",false)
+	var slips=[]
+	for current in [Vector2.ZERO,Vector2(180,-90)]:
+		cell.position=Vector2(2047,1287);cell.angle=0;cell.angular_velocity=0
+		cell.velocity=current;cell.target=Vector2.RIGHT;cell.facing=Vector2.RIGHT;cell.target_mouth=0;cell.energy=100
+		sim.fluid.velocity.fill(current);sim._motion_cell(cell,.125)
+		slips.append(cell.velocity-current)
+	check.call(slips[0].distance_to(slips[1])<.0001 and slips[0].x>0,"Swimming depends on the local water frame, not world velocity")

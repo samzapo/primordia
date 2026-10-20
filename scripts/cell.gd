@@ -177,7 +177,7 @@ func construction_refund(organ: Dictionary) -> float:
 func synergy() -> String:
 	var attack=int(working("poreforming"))+int(working("toxin"))+int(working("counterattack"))
 	if working("hunting") and working("propulsion") and attack>0 and count("photosynthesis")==0:return "hunter"
-	if working("photosynthesis",2) and working("mitochondrion") and attack==0:return "producer"
+	if working("photosynthesis",2) and working("mitochondrion") and attack==0 and count("feeding")==0:return "producer"
 	if working("feeding") and working("cilia") and count("photosynthesis")==0 and attack==0:return "grazer"
 	return ""
 
@@ -214,6 +214,7 @@ func update_geometry() -> void:
 	for organ in organs:
 		if organ.kind=="feeding": membrane.oral_angle = organ.a
 	_sync_oral_link()
+	membrane.cell_wall=synergy()=="producer"
 	mass = maxf(4, organic_mass()*0.45)
 	inertia = (body + biomass + substrate + waste + carbon + brood_mass) * radius * radius * 0.5
 	for organ in organs:
@@ -672,6 +673,7 @@ static func clone_state(source):
 		if key in ["membrane","skeleton"]: value = clone_state(value)
 		elif key == "chemistry": value = value.clone_for(copy)
 		elif value is Array or value is Dictionary: value = value.duplicate(true)
+		elif typeof(value)>=TYPE_PACKED_BYTE_ARRAY and typeof(value)<=TYPE_PACKED_VECTOR4_ARRAY:value=value.duplicate()
 		copy.set(key,value)
 	return copy
 
@@ -777,14 +779,17 @@ func lineage_id() -> int:
 func _sync_oral_link() -> void:
 	var links=membrane.skeleton.links
 	if not is_finite(membrane.oral_angle):
-		membrane.skeleton.links=links.filter(func(link):return not link.get("oral",false))
+		for link in links.duplicate():
+			if link.get("oral",false):membrane.skeleton.remove_group(link.group)
 		return
 	for link in links:
 		if link.get("oral",false):
 			link.a={"kind":"membrane","a":membrane.oral_angle}
-			link.b={"kind":"membrane","a":fposmod(membrane.oral_angle+PI,TAU)}
+			if link.b.kind!="center":
+				link.length=radius;link.radius=radius;link.lambda=0.0
+			link.b={"kind":"center"}
 			link.tension=1.0
 			return
-	var group=membrane.skeleton.connect_points({"kind":"membrane","a":membrane.oral_angle},{"kind":"membrane","a":fposmod(membrane.oral_angle+PI,TAU)},1.0,membrane,radius)
+	var group=membrane.skeleton.connect_points({"kind":"membrane","a":membrane.oral_angle},{"kind":"center"},1.0,membrane,radius)
 	for link in membrane.skeleton.links:
 		if link.group==group:link["oral"]=true

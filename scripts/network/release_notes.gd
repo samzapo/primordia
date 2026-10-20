@@ -480,6 +480,18 @@ const RELEASES=[
  ],
  "footer": "Experimental starts from a fresh copy of the main pond. Main is unchanged.",
  "button": "Back to the pond"
+},
+{
+ "id":"2026-10-19-experimental-steady-cells",
+ "audience":"experimental",
+ "title":"What’s new in the pond",
+ "items":[
+  "Cells settle into the local current instead of bouncing wildly. Swimming still moves them through the water.",
+  "The oral groove’s internal strand now joins the center of the cell and disappears when the mouth is reabsorbed.",
+  "Producers grow a firm, boxy wall. They need two working leaves, a mitochondrion, no weapons and no mouth."
+ ],
+ "footer":"Experimental starts from a fresh copy of the main pond. Main is unchanged.",
+ "button":"Back to the pond"
 }
 ]
 const CURRENT=RELEASES[-1]

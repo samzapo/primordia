@@ -159,7 +159,7 @@ static func feeding_request(sim, cell, dt: float, period: float) -> Dictionary:
 		var pump: float=24*organ.scale*organ.hp/organ.max_hp*Genes.factor(organ,"suction")*cell.work_capacity()
 		var center: Vector2=cell.pore_center(organ)
 		var arm: Vector2=Medium.offset(cell.position,center)
-		var local_flow: float=(cell.velocity+arm.orthogonal()*cell.angular_velocity-sim.fluid.sample(center)).length()
+		var local_flow: float=(cell.velocity+Vector2(-arm.y,arm.x)*cell.angular_velocity-sim.fluid.sample(center)).length()
 		capture+=2*(cell.pore_radius(organ)+8)*(local_flow+pump+4)
 	var area: float=PI*maxf(1,radius*radius-cell.radius*cell.radius)
 	return {"dt":dt,"radius":radius,"nutrient":COLLECTION_SWEEP*capture/area,
@@ -178,7 +178,7 @@ func _feed(sim, cell, dt: float) -> void:
 		var pump: float = 24*organ.scale*organ.hp/organ.max_hp*Genes.factor(organ,"suction")*cell.work_capacity()
 		var center: Vector2 = cell.pore_center(organ)
 		var arm: Vector2 = Medium.offset(cell.position,center)
-		var local_flow: float = (cell.velocity+arm.orthogonal()*cell.angular_velocity-sim.fluid.sample(center)).length()
+		var local_flow: float = (cell.velocity+Vector2(-arm.y,arm.x)*cell.angular_velocity-sim.fluid.sample(center)).length()
 		capture += 2*(cell.pore_radius(organ)+8)*(local_flow+pump+4)
 	var area: float = PI*maxf(1,radius*radius-cell.radius*cell.radius)
 	if sim.native_feeding:

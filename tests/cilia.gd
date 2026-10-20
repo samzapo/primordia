@@ -70,20 +70,17 @@ static func run(check: Callable) -> void:
 	before = sim.fluid.momentum()+cell.velocity*cell.mass
 	energy = cell.energy
 	sim._motion_cell(cell,0.1)
-	check.call(cell.velocity.length() > 0 and (sim.fluid.momentum()+cell.velocity*cell.mass-before).length() < 0.01,"Cilia propel the body through conservative fluid impulses")
+	check.call(cell.velocity.length() > 0 and sim.fluid.momentum().length() < .001,"Cilia add swimming velocity without pushing the water during body relaxation")
 	check.call(is_equal_approx(energy-cell.energy,Cell.CILIA_MOTION*0.1),"Ciliary motion pays its own ATP rate")
 	check.call(Cell.organ_upkeep(cell.organs[0]) == Cell.CILIA_PUMP+Cell.CILIA_MOTION+Cell.ORGAN_UPKEEP,"Cilia preview includes maintenance, motion and feeding-current upkeep")
 
-	# Steering torque must be paired too, not add the same rotation to water.
+	# Steering is a bounded velocity response; it does not inject fluid torque.
 	sim = fixture()
 	cell = sim.player
 	cell.facing = Vector2.UP
 	sim._motion_cell(cell,0.125)
-	var steering_momentum: float = cell.angular_velocity*cell.inertia
-	for i in sim.fluid.velocity.size():
-		var node := Vector2(i%Medium.COLS+0.5,int(i/Medium.COLS)+0.5)*Medium.SIZE
-		steering_momentum += Medium.offset(Vector2(2048,1280),node).cross(sim.fluid.velocity[i]*Medium.NODE_MASS)
-	check.call(absf(steering_momentum) < .1,"Ciliary steering applies opposite angular momentum to the water")
+	check.call(cell.angular_velocity < 0 and absf(cell.angular_velocity)<=3 and sim.fluid.momentum().length()<.001,"Ciliary steering turns toward its target without water feedback")
+
 	sim = fixture()
 	cell = sim.player
 	cell.energy = 0

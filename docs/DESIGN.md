@@ -772,3 +772,6 @@ merges back into its parent immediately. Existing oversized families merge
 younger unattended relatives into older ones, preferring their parent. Protect
 connected selected cells, retry when necessary, and preserve all ordinary
 merge yields, AP, lifetime counts, pond identity and startup retention checks.
+
+### Cell-relative motion and Producer walls (October19,2026)
+Revision76's follow-up replaces reactive damping with direct decay of body velocity relative to the local water. Swimming adds a paid local slip; passive cells follow current, without damping impulses amplifying water motion. Particle behavior and global fluid viscosity remain unchanged. A mouth tethers to the cell center and removes its strand when reabsorbed. Mouthless, unarmed cells with two working leaves and a mitochondrion form a boxier Producer wall, preserving tissue area and resisting deformation. The wall follows actual contact geometry and is not chemical armor.

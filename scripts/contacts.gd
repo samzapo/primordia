@@ -15,7 +15,8 @@ static func surface(cell, direction: Vector2) -> Dictionary:
 
 static func velocity_at(cell, at: Vector2) -> Vector2:
 	if cell == null or cell.activity <= 0: return Vector2.ZERO
-	return cell.velocity+Medium.offset(cell.position,at).orthogonal()*cell.angular_velocity
+	var arm:=Medium.offset(cell.position,at)
+	return cell.velocity+Vector2(-arm.y,arm.x)*cell.angular_velocity
 
 static func apply(cell, impulse: Vector2, at: Vector2) -> void:
 	if cell == null or cell.activity <= 0: return

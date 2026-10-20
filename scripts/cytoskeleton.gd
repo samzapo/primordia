@@ -9,6 +9,7 @@ var next_junction := 0
 var last_radius := 0.0
 
 func point(anchor: Dictionary, membrane) -> Vector2:
+	if anchor.kind == "center": return Vector2.ZERO
 	if anchor.kind == "point": return anchor.p
 	if anchor.kind == "junction": return junctions[anchor.id].p
 	if anchor.kind == "link":
@@ -26,6 +27,7 @@ func link_by_id(identity: int) -> Dictionary:
 
 func valid(anchor: Dictionary) -> bool:
 	if anchor.is_empty(): return false
+	if anchor.kind == "center": return true
 	if anchor.kind == "point": return anchor.p.is_finite()
 	if anchor.kind == "membrane": return is_finite(anchor.a)
 	if anchor.kind == "junction": return junctions.has(anchor.id)
@@ -107,12 +109,14 @@ func begin(radius: float) -> void:
 	for link in links: link.lambda = 0.0
 
 func _inverse_mass(anchor: Dictionary, count: int) -> float:
+	if anchor.kind == "center": return 0.0
 	if anchor.kind == "junction": return 1.5
 	var fraction := fposmod(anchor.a,TAU)/TAU*count
 	fraction -= floorf(fraction)
 	return pow(1-fraction,2)+fraction*fraction
 
 func _move(anchor: Dictionary, displacement: Vector2, membrane) -> void:
+	if anchor.kind == "center": return
 	if anchor.kind == "junction":
 		junctions[anchor.id].p += displacement*1.5
 		return

@@ -10,6 +10,7 @@ const Network = preload("res://scripts/cytoskeleton.gd")
 var skeleton = Network.new()
 var maximum_radius := 47.0
 var oral_angle := NAN
+var cell_wall := false # Derived from working, mouthless Producer anatomy.
 var points := PackedVector2Array()
 var previous := PackedVector2Array()
 var edge_lambda := PackedFloat32Array()
@@ -45,17 +46,27 @@ func step(dt: float, radius: float, acceleration: Vector2, time: float, _aspect:
 		var a := TAU*i/COUNT
 		var contraction := (1.0+0.14*sin(a*3+time*0.48)+0.075*sin(a*5-time*0.71))/1.006
 		rest_points[i] = normals[i]*radius*contraction
+		if cell_wall:
+			# Rounded square, normalized below to the same represented tissue area.
+			var axis:=normals[i].abs()
+			rest_points[i]=normals[i]*radius/pow(pow(axis.x,8)+pow(axis.y,8),1.0/8)
+	if cell_wall:
+		var area:=0.0
+		for i in COUNT:area+=rest_points[i].cross(rest_points[(i+1)%COUNT])*.5
+		var scale:=sqrt(COUNT*radius*radius*sin(TAU/COUNT)*.5/area)
+		for i in COUNT:rest_points[i]*=scale
 	for i in COUNT: rest_lengths[i] = rest_points[i].distance_to(rest_points[(i+1)%COUNT])
 	for i in COUNT:
 		var p := points[i]
-		var motion := (p-previous[i])*0.84
+		var motion := (p-previous[i])*(.35 if cell_wall else .84)
 		previous[i] = p
-		points[i] += motion+(rest_points[i]-p)*dt*0.85-acceleration*dt*dt*0.18
-		if traction.size() == COUNT: points[i] += traction[i]*dt*dt*22.0
+		var softness:=.12 if cell_wall else 1.0
+		points[i] += motion+(rest_points[i]-p)*(1-exp(-dt*8) if cell_wall else dt*.85)-acceleration*dt*dt*.18*softness
+		if traction.size() == COUNT: points[i] += traction[i]*dt*dt*22.0*softness
 	skeleton.begin(radius)
 	edge_lambda.fill(0)
 	area_lambda = 0
-	var edge_alpha := 0.0008/(dt*dt)
+	var edge_alpha := (0.00008 if cell_wall else 0.0008)/(dt*dt)
 	var area_alpha := 0.00001/(dt*dt)
 	for iteration in 6:
 		if native_constraints:
@@ -72,7 +83,9 @@ func step(dt: float, radius: float, acceleration: Vector2, time: float, _aspect:
 				edge_lambda[i] += dl
 				points[i] -= delta/length*dl
 				points[j] += delta/length*dl
-		skeleton.solve(self,dt,radius)
+		# A wall resists the lightly drawn internal network instead of being
+		# pinched into lobes by it. Mouthless eligibility guarantees no oral link.
+		if not cell_wall:skeleton.solve(self,dt,radius)
 		if native_constraints:
 			var solved: Array = kernels.membrane_area(points,area_lambda,area_alpha,COUNT*radius*radius*sin(TAU/COUNT)*0.5)
 			points = solved[0]
@@ -110,6 +123,10 @@ func step(dt: float, radius: float, acceleration: Vector2, time: float, _aspect:
 		var corrected := points[i].normalized()*length
 		previous[i] += corrected-points[i]
 		points[i] = corrected
+	if cell_wall:
+		for i in COUNT:
+			var corrected:=normals[i]*clampf(points[i].length(),rest_points[i].length()*.98,rest_points[i].length()*1.02)
+			previous[i]+=corrected-points[i];points[i]=corrected
 	# A permanent shallow vestibule. Apply before area normalization so the
 	# displaced volume remains elsewhere in the gel. Same curve drives physics.
 	if is_finite(oral_angle):
@@ -131,6 +148,7 @@ func step(dt: float, radius: float, acceleration: Vector2, time: float, _aspect:
 		points[i] = corrected
 
 func compress(local_angle: float, depth: float, radius: float) -> void:
+	if cell_wall:depth*=.12
 	if native_constraints and native_compression:
 		var solved: Array = kernels.membrane_compress(points,previous,local_angle,depth,radius)
 		points = solved[0]

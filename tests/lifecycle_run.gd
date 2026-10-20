@@ -19,7 +19,7 @@ func run() -> void:
 	var sim=fixture();var cell=sim.player;cell.biomass=100
 	check(sim.install("feeding",0) and cell.biomass==100,"First place is free and allows an oral groove")
 	check(sim.install("photosynthesis",PI) and cell.biomass==100,"Second place is free")
-	check(cell.membrane.skeleton.links.any(func(link):return link.get("oral",false) and link.tension==1),"Optional oral groove has a full-tension tether")
+	check(cell.membrane.skeleton.links.any(func(link):return link.get("oral",false) and link.tension==1 and link.b.kind=="center"),"Optional oral groove has a full-tension tether fixed at the cell center")
 	check(sim.install("propulsion",1) and cell.biomass==92,"Third organ uses biomass, without AP")
 	var amount=cell.biomass
 	check(sim.remove(0) and cell.biomass==amount,"Free oral groove returns no biomass")
@@ -66,6 +66,7 @@ func run() -> void:
 	check(reloaded.player.lifecycle_version==1 and reloaded.player.ap==0 and reloaded.player.brood_mass==0 and reloaded.player.brood_energy==0,"The first authority tick retires AP and returns old reserves")
 	await controls()
 	roles_and_presence()
+	producer_wall()
 	print("LIFECYCLE: %d assertions, %d failures" % [checks,failures]);quit(0 if failures==0 else 1)
 
 
@@ -138,3 +139,34 @@ func controls() -> void:
 		cell.organs=cell.organs.duplicate(true);button.pressed.emit();button.pressed.emit()
 		check(cell.organ_by_id(organ.id).is_empty() and cell.biomass==before+4,"Desktop/mobile reabsorption resolves the stable ID once after a snapshot")
 	game.queue_free();await process_frame
+
+
+func producer_wall() -> void:
+	var sim=fixture();var cell=sim.player
+	for kind in ["photosynthesis","photosynthesis","mitochondrion"]:cell.add_organ(kind,0,"graze",false)
+	check(cell.synergy()=="producer" and cell.membrane.cell_wall,"Mouthless Producer anatomy forms a wall")
+	var restored=Codec.new().restore(Codec.new().capture(sim))
+	check(restored.player.membrane.cell_wall and restored.player.membrane.points==cell.membrane.points,"Checkpoint restores the anatomy-derived wall without rewriting saved shape")
+	var a=Sim.Cell.clone_state(cell);var b=Sim.Cell.clone_state(cell)
+	a.membrane.native_constraints=false;a.membrane.native_compression=false;a.membrane.native_outline=false
+	for i in 120:
+		for c in [a,b]:c.membrane.step(1.0/60,c.radius,Vector2(200,-80),i/60.0)
+	var ratio=a.visible_support(PI/4)/a.visible_support(0)
+	check(ratio>1.20 and ratio<1.4,"Producer wall has a boxy rounded-square outline")
+	var area=preload("res://tests/paramecium.gd").area(a)
+	check(absf(area-cell.membrane.COUNT*cell.radius*cell.radius*sin(TAU/cell.membrane.COUNT)*.5)<.01,"Boxy walls preserve represented tissue area")
+	print("WALL_PARITY ",{"distance":a.membrane.points[0].distance_to(b.membrane.points[0]),"ratio":ratio})
+	check(a.membrane.points[0].distance_to(b.membrane.points[0])<.01,"Native and reference wall constraints agree")
+	var soft=Sim.Cell.clone_state(a);soft.membrane.cell_wall=false
+	var hard_before=a.support(0);var soft_before=soft.support(0)
+	a.membrane.compress(0,cell.radius*.06,cell.radius);soft.membrane.compress(0,cell.radius*.06,cell.radius)
+	print("WALL_DENT ",{"hard":hard_before-a.support(0),"soft":soft_before-soft.support(0),"radius":cell.radius})
+	check(hard_before-a.support(0)<(soft_before-soft.support(0))*.25,"The wall resists contact dents more strongly than a soft membrane")
+	cell.add_organ("feeding",1,"graze",false)
+	check(cell.synergy()=="" and not cell.membrane.cell_wall,"Any installed mouth disqualifies a Producer wall")
+	var mouth=cell.organs[-1]
+	sim.investment.cells[cell.id]="producer"
+	var decision=sim.Investment.decision(sim,cell)
+	check(decision.get("action","")=="remove" and decision.id==mouth.id,"Opted-in Producer investment reabsorbs its mouth after establishing photosynthesis")
+	cell.recycle(cell.organs.find(mouth))
+	check(cell.membrane.cell_wall and not cell.membrane.skeleton.links.any(func(link):return link.get("oral",false)),"Reabsorbing the mouth removes its center tether and restores the wall")

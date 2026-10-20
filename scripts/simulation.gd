@@ -71,7 +71,6 @@ var native_chemistry_lazy_acid := true
 var native_transport_bookkeeping := kernels != null
 var native_particle_compaction := kernels != null
 var native_fluid := kernels != null
-var native_body_fluid: bool = kernels != null and kernels.has_method("fluid_body_exchange")
 var native_traction: bool = kernels != null and kernels.has_method("fluid_traction")
 var native_render := kernels != null
 var native_exclusion := kernels != null
@@ -1739,28 +1738,19 @@ func _motion_cell(cell, local_dt: float) -> void:
 		desired_drift+=thrust*power/cell.fluid_drag()
 		steering_power+=power
 		cell.spend_energy(energy_cost*capacity,organ,"movement")
-	# Only bodies use overdamped motility. The medium and packet integrators are unchanged.
+	# Viscous gameplay: velocity relative to local water decays directly. This
+	# body-only relaxation is not an impulse on the finite-mass fluid grid.
 	var response: float=1-exp(-local_dt/.03)
 	var flow: Vector2=fluid.sample(cell.position)
-	var next_velocity: Vector2=cell.velocity.lerp(flow+desired_drift,response)
-	var impulse: Vector2=(next_velocity-cell.velocity)*cell.mass
-	if fluid.deposit(cell.position,-impulse):cell.velocity=next_velocity
-	var desired_turn:=0.0
+	cell.velocity=flow+(cell.velocity-flow).lerp(desired_drift,response)
+	var arm: Vector2=Vector2.from_angle(cell.angle)*cell.radius*.8
+	var tangent:=Vector2(-arm.y,arm.x)
+	var water_turn: float=(fluid.sample(cell.position+arm)-fluid.sample(cell.position-arm)).dot(tangent)/(2*arm.length_squared())
+	var desired_turn:=water_turn
 	if steering_power>0:
 		var error: float=wrapf(cell.facing.angle()-cell.target_mouth-cell.angle,-PI,PI)
 		desired_turn=clampf(error*4,-3,3)
-	var next_turn: float=lerpf(cell.angular_velocity,desired_turn,response)
-	var turn_arm: Vector2=Vector2.from_angle(cell.angle)*cell.radius*.8
-	if fluid.can_couple(cell.position+turn_arm) and fluid.can_couple(cell.position-turn_arm):
-		var turn_impulse: Vector2=Vector2(-turn_arm.y,turn_arm.x)*(next_turn-cell.angular_velocity)*cell.inertia/(2*turn_arm.length_squared())
-		fluid.deposit(cell.position+turn_arm,-turn_impulse);fluid.deposit(cell.position-turn_arm,turn_impulse)
-		cell.angular_velocity=next_turn
-	if native_body_fluid:
-		fluid.velocity = kernels.fluid_body_exchange(fluid.velocity,fluid.activity,cell,local_dt,fluid.global_coupling)
-	else:
-		for i in 6:
-			var arm = Vector2.from_angle(TAU*i/6.0+cell.angle)*cell.radius
-			fluid.exchange(cell,arm,local_dt,cell.fluid_drag()/6.0)
+	cell.angular_velocity=lerpf(cell.angular_velocity,desired_turn,response)
 	cell.angle = wrapf(cell.angle+cell.angular_velocity*local_dt,-PI,PI)
 	if coarse_mode:
 		var moved: Array = habitat_geometry.move(previous,Medium.wrap_position(previous+cell.velocity*local_dt),cell.velocity,cell.extent())

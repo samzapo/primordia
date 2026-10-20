@@ -116,7 +116,6 @@ func run() -> void:
 	if "legacy" in switches or "contacts" in switches: sim.native_contacts = false
 	if "field_views" in switches: sim.fluid.native_views=false
 	if "suction" in switches: sim.fluid.native_suction=false
-	if "body_fluid" in switches: sim.native_body_fluid = false
 	if "traction" in switches: sim.native_traction = false
 	for cell in sim.cells:
 		if "outline" in switches: cell.membrane.native_outline = false
