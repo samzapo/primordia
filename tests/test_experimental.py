@@ -105,6 +105,11 @@ class ExperimentalTests(unittest.TestCase):
                 with self.assertRaises(HTTPError) as error:opener.open(spoof,timeout=3)
                 self.assertEqual(error.exception.code,403);error.exception.close()
                 gateway.trusted_proxy=True
+                for private_path in ["/metrics","/api/network","/setup","/ca.crt"]:
+                    with self.assertRaises(HTTPError) as hidden:
+                        opener.open(f"http://127.0.0.1:{port}"+private_path,timeout=3)
+                    self.assertEqual(hidden.exception.code,404)
+                    hidden.exception.close()
                 with socket.create_connection(("127.0.0.1",port),timeout=3) as client:
                     client.sendall(f"GET /ws HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nOrigin: https://127.0.0.1:{port}\r\nX-Forwarded-Proto: https\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n".encode())
                     self.assertIn(b"101 Switching Protocols",client.recv(4096))

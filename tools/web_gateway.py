@@ -102,6 +102,11 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         path = urlsplit(self.path).path
+        # The experimental gateway must enforce its own public URL boundary,
+        # including when an installed Caddy route has different directive order.
+        if self.server.trusted_proxy and path in {"/setup", "/ca.crt", "/api/network", "/metrics"}:
+            self.send_error(404)
+            return
         if path == "/ca.crt" and self.server.tls_directory:
             data = (self.server.tls_directory / "authority/ca.crt").read_bytes()
             self.send_response(200)
