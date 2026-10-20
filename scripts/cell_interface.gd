@@ -337,7 +337,7 @@ func _toggle_reproduction(mode: String) -> void:
 
 func _merge(identity: int) -> void:
 	if identity==game.world.player.id:return
-	if game.world.edit("merge",{"id":identity}):game._message("Merge requested. Seeking your relative’s chemical trail.")
+	if game.world.edit("merge",{"id":identity}):game._message("Absorbing relative…" if game.world.remote_client else "Family cells merged.")
 	else:game._message("Choose a living, unattended member of this family.")
 	close_context()
 

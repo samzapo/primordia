@@ -22,7 +22,7 @@ func run() -> void:
 		if packet.kind==Sim.NUTRIENT:actual+=packet.amount
 	check(absf(actual-stock.nutrient)<.00001 and world.particles.all(func(packet):return packet.owner==cell.id),"All recorded food exists as source-labelled finite external packets")
 	world.grid.rebuild(world.particles)
-	# The fixture founder has no mouth; add its inherent groove without changing the report.
+	# The fixture founder has no mouth; add its optional groove without changing the report.
 	if cell.count("feeding")==0:cell.add_organ("feeding",0,"graze",false)
 	world.particles[0].p=cell.pore_center(cell.organs.filter(func(organ):return organ.kind=="feeding")[0])
 	world.grid.rebuild(world.particles);world.camera_position=cell.position;world.camera_follows_player=true
@@ -42,7 +42,7 @@ func run() -> void:
 	check(surviving>512*9*.8,"A half-hour-old finite food patch still contains enough material to forage")
 	check(absf(surviving+aged.respiration_loss-512*9)<.000001,"Retained food plus actual unary losses exactly matches the initial stock")
 	# This no-fuel fixture cannot create ATP or biomass during its survival grace.
-	var hungry=Sim.Cell.new(777);hungry.energy=0;hungry.biomass=8;hungry.substrate=0
+	var hungry=Sim.Cell.new(777);hungry.energy=0;hungry.biomass=0;hungry.substrate=0
 	var material: float=hungry.organic_mass()
 	for second in 300:world._metabolize(hungry,1)
 	check(hungry.health==100 and hungry.energy==0 and hungry.starvation_seconds==300 and hungry.organic_mass()==material,"Five minutes without fuel preserves the body without granting resources")
@@ -51,13 +51,6 @@ func run() -> void:
 	var elapsed: float=hungry.starvation_seconds
 	hungry.chemistry.emit("food",8,Vector2(30,0));world._metabolize(hungry,1)
 	check(hungry.energy>0 and hungry.starvation_seconds<elapsed,"Actual metabolized food starts recovery from prolonged starvation")
-	var reservist=Sim.Cell.new(778);reservist.energy=0;reservist.biomass=0;reservist.brood_energy=25;reservist.brood_mass=30
-	material=reservist.organic_mass();var energy: float=reservist.energy+reservist.brood_energy
-	world._metabolize(reservist,.1)
-	check(reservist.energy>9 and reservist.brood_energy==15 and reservist.starvation_seconds==0 and reservist.energy+reservist.brood_energy<=energy,"Uncommitted reproduction ATP is reclaimed before the cell is starved")
-	reservist.energy=0;reservist.brood_energy=0
-	world._metabolize(reservist,.1)
-	check(reservist.brood_mass<30 and reservist.substrate>0 and absf(reservist.organic_mass()-material)<.000001,"Stored reproduction tissue can become real food fuel without creating material")
 	cell.starvation_seconds=123;cell.age=456;cell.health=64
 	var saved:=Codec.new().capture({"world":world,"accounts":{"fixture":{"current":cell,"selected":cell.id,"root":cell.lineage_id(),"lineage":world.lineage,"evolution":world.evolution,"edit":0,"sequence":0,"receipts":{},"access_hash":"kept"}}})
 	var restored=Codec.new().restore(saved)

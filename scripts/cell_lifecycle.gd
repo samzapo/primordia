@@ -21,9 +21,19 @@ static func migrate(sim,accounts: Dictionary={}) -> void:
 		cell.lifecycle_version=VERSION;cell.update_geometry()
 	for account in accounts.values():
 		if not account.has("favorite_id"):account.favorite_id=account.selected
-	sim.evolution.points=0
+	retire_objectives(sim.evolution)
 	for ledger in sim.family_ledgers:
-		if ledger.progression!=null:ledger.progression.points=0
+		if ledger.progression!=null:retire_objectives(ledger.progression)
+	for account in accounts.values():
+		if account.get("evolution")!=null:retire_objectives(account.evolution)
+	sim.pending_replacements=sim.pending_replacements.filter(func(item):return int(item.get("id",-1))>=0)
+
+static func retire_objectives(progression) -> void:
+	progression.points=0;progression.chosen=true;progression.offers.clear()
+	progression.status="growing";progression.ending="";progression.light_factor=1.0;progression.tide=0
+	progression.challenge="";progression.challenge_result="";progression.completed.clear()
+	progression.viable_seconds=0;progression.offspring_id=-1
+	progression.arrival_budget=0;progression.counter_budget=0;progression.resistance="";progression.resistance_clock=0
 
 static func quote(sim,parent,mode: String) -> Dictionary:
 	var q={"cell":parent.id,"mode":mode,"ready":false,"progress":0.0,"automatic":parent.automatic_division,"automatic_budding":parent.automatic_budding,"queued":false,"reason":"","cooldown":maxf(0,parent.reproduction_retry_at-sim.time)}

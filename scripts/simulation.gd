@@ -1985,24 +1985,19 @@ func _replace_population() -> void:
 	# replacement trigger until a full organism can fit outside the view.
 	for pending in pending_replacements.duplicate():
 		if time < float(pending.get("not_before",0)): continue
-		if evolution.enabled and evolution.clock < float(pending.get("not_before",0)): continue
 		var at := Vector2.ZERO
 		var found := false
 		for attempt in 24:
 			at = Medium.wrap_position(player.position+Vector2.from_angle(rng.randf()*TAU)*1100)
 			if attempt > 0: at = Vector2(rng.randf()*WORLD.x,rng.randf()*WORLD.y)
 			var hidden := Medium.visibility(at,player.position if camera_follows_player else camera_position,view_half+Vector2.ONE*160) <= 0
-			var announced: bool = evolution.enabled and evolution.arrival_budget > 0 and evolution.clock >= evolution.resistance_clock and Medium.offset(player.position,at).length() > 700+player.extent()
-			if safe_birth_position(at,160) and (hidden or announced):
+			if safe_birth_position(at,160) and hidden:
 				found = true
 				break
 		if not found: continue
 		var role: String = pending.role
-		if evolution.enabled and evolution.tide >= 1 and evolution.newcomer_count%2 == 0: role = "hunter"
 		var replacement = _make_cell(at,role)
 		replacement.activity = 1.0 if activity_for_cell(replacement) > 0 else 0.0
-		evolution.newcomer(replacement,self)
-		evolution.arrival_budget = maxi(0,evolution.arrival_budget-1)
 		external_input += replacement.organic_mass()
 		events.append({"time":time,"type":"population_arrival" if pending.id < 0 else "population_replacement","id":replacement.id,"replaces":pending.id})
 		pending_replacements.erase(pending)

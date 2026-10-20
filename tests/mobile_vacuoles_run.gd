@@ -49,10 +49,10 @@ func run() -> void:
 	game._toggle_build();game.cell_ui.open_context({"kind":"assembly"})
 	await process_frame
 	game.cell_ui.sync(0)
-	check(game.cell_ui.choices.size()==6 and game.cell_ui.choices.all(func(choice):return choice.get_parent()==game.cell_ui.mobile_flow),"Mobile Assembly exposes its complete non-receptor set in the top tray")
+	check(game.cell_ui.choices.size()==7 and game.cell_ui.choices.all(func(choice):return choice.get_parent()==game.cell_ui.mobile_flow),"Mobile Assembly exposes its complete non-receptor set in the top tray")
 	check(game.touch_zoom.pause_button.get_global_rect().position.y>=game.cell_ui.mobile_menu_height,"Opening a top tray moves the utility controls below it immediately")
 	check(game.cell_ui.mobile_menu_height>0 and game.cell_ui.mobile_tray.position.y<30,"Mobile action menus are attached to the top of the screen")
-	check(game.cell_ui.mobile_resources.visible and game.cell_ui.mobile_stocks.text.contains("AP") and game.cell_ui.mobile_stocks.text.contains("ATP"),"Mobile stock display is visible without hovering")
+	check(game.cell_ui.mobile_resources.visible and game.cell_ui.mobile_stocks.text.contains("Biomass") and game.cell_ui.mobile_stocks.text.contains("ATP"),"Mobile stock display is visible without hovering")
 	game.cell_ui.mobile_hide.pressed.emit();game.cell_ui.sync(0)
 	check(not game.cell_ui.mobile_stocks.visible and game.cell_ui.mobile_hide.visible,"A small button hides and restores mobile resource readouts")
 	game.cell_ui.mobile_hide.pressed.emit();game.cell_ui.sync(0)
@@ -65,12 +65,12 @@ func run() -> void:
 		game.cell_ui.open_context({"kind":"chemistry"});game.cell_ui.sync(0)
 		var options: Array=game.cell_ui.choices.filter(func(choice):return choice.kind==game.Simulation.KINDS[index])
 		check(options.size()==1,"Each requested chemical gland has one unambiguous factory choice")
-		var before_biomass: float=game.world.player.biomass;var before_ap: int=game.world.player.ap
+		var before_biomass: float=game.world.player.biomass
 		options[0].pressed.emit();game.cell_ui.sync(0)
 		check(game.selected==index and not game.cell_ui.mobile_tray.visible and game.cell_ui.mobile_stocks.text.contains("Cost"),"Choosing each gland enters the existing placement flow with visible resource cost")
-		var price: int=game.world.player.construction_price()
+		var price: int=game.world.player.construction_price(game.Simulation.KINDS[index])
 		check(game._place_at(1.0+[7,9,3,8].find(index)),"Each restored gland can be placed on the membrane")
-		check(game.world.player.biomass==before_biomass and before_ap-game.world.player.ap==price,"Gland placement charges AP exactly once without debiting biomass")
+		check(game.world.player.biomass==before_biomass-price,"Gland placement charges its actual biomass price once")
 	game._select(6);game.cell_ui.sync(0)
 	check(game.cell_ui.cancel_icon.visible and game.cell_ui.cancel_icon.kind=="photosynthesis" and game.cell_ui.cancel_icon.position.x<30,"Selected organ remains as a circular top-left cancel action")
 	game.cell_ui.cancel_icon.pressed.emit();game.cell_ui.sync(0)
