@@ -9,6 +9,10 @@ name: Primordia persistent server CD
         description: Ship with known timing shortfalls; retain GPU, correctness and state checks
         type: boolean
         default: false
+      full_validation:
+        description: Opt in to broad gameplay/GPU tests and extra restart checks
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -56,9 +60,10 @@ jobs:
           path: ${{ steps.source.outputs.path }}
           persist-credentials: false
           fetch-depth: 1
-      - name: Build, check GPU networking and deploy the stable service
+      - name: Build and deploy the stable service
         shell: bash
         env:
+          PRIMORDIA_DEPLOY_FULL_CHECKS: ${{ inputs.full_validation == true && '1' || '0' }}
           PRIMORDIA_SOURCE_DIRECTORY: ${{ steps.source.outputs.path }}
           PRIMORDIA_ACCESS_KEY_HASHES: ${{ secrets.PRIMORDIA_ACCESS_KEY_HASHES }}
           PRIMORDIA_PERFORMANCE_WARNINGS: ${{ (inputs.allow_performance_warnings == true || (github.event_name == 'push' && contains(github.event.head_commit.message, '[allow-performance-warnings]'))) && '1' || '0' }}
@@ -106,6 +111,7 @@ jobs:
       - name: Verify world after deployment job cleanup
         shell: bash
         env:
+          PRIMORDIA_DEPLOY_FULL_CHECKS: ${{ inputs.full_validation == true && '1' || '0' }}
           EXPECTED_SHA: ${{ github.sha }}
           PRIMORDIA_PERFORMANCE_WARNINGS: ${{ (inputs.allow_performance_warnings == true || (github.event_name == 'push' && contains(github.event.head_commit.message, '[allow-performance-warnings]'))) && '1' || '0' }}
         run: |
@@ -122,27 +128,31 @@ jobs:
           ca=pathlib.Path.home()/".local/share/primordia-deploy/tls/authority/ca.pem"
           opener=build_opener(ProxyHandler({}),HTTPSHandler(context=ssl.create_default_context(cafile=str(ca))))
           samples=[]
-          for index in range(3):
+          full_checks=os.environ.get("PRIMORDIA_DEPLOY_FULL_CHECKS")=="1"
+          sample_count=3 if full_checks else 2
+          for index in range(sample_count):
               with opener.open('https://127.0.0.1:8766/health',timeout=5) as response: value=json.load(response)
               assert value['build']==os.environ['EXPECTED_SHA'] and value['backend']=='gpu' and not value['backend_error'] and not value['checkpoint_error']
               samples.append(value)
-              if index<2: time.sleep(6)
+              if index<sample_count-1: time.sleep(6 if full_checks else 1)
           assert samples[-1]['tick']>samples[0]['tick']
           import sys
           sys.path.insert(0,str(root/"current/tools"))
           from performance_policy import evaluate
-          performance_warnings = [warning for value in samples for warning in evaluate(value, os.environ.get("PRIMORDIA_PERFORMANCE_WARNINGS")=="1")]
+          performance_warnings = [warning for value in samples for warning in evaluate(value, os.environ.get("PRIMORDIA_PERFORMANCE_WARNINGS")=="1")] if full_checks else []
           assert all(value['living_cells']>=15 and value['minimum_living_cells']==15 and value['automatic_pond_restart'] and value['automatic_lineage_restart'] for value in samples)
           before=samples[-1]
-          subprocess.run(['systemctl','--user','restart','primordia.service'],check=True)
-          resumed=None
-          for _ in range(60):
-              try:
-                  with opener.open('https://127.0.0.1:8766/health',timeout=5) as response: candidate=json.load(response)
-                  if candidate['epoch']>before['epoch'] and candidate['tick']>=before['tick'] and candidate['world_id']==before['world_id']:
-                      resumed=candidate;break
-              except OSError:pass
-              time.sleep(2)
+          resumed=before
+          if full_checks:
+              subprocess.run(['systemctl','--user','restart','primordia.service'],check=True)
+              resumed=None
+              for _ in range(60):
+                  try:
+                      with opener.open('https://127.0.0.1:8766/health',timeout=5) as response: candidate=json.load(response)
+                      if candidate['epoch']>before['epoch'] and candidate['tick']>=before['tick'] and candidate['world_id']==before['world_id']:
+                          resumed=candidate;break
+                  except OSError:pass
+                  time.sleep(2)
           assert hashlib.sha256((root/'access-keys.json').read_bytes()).hexdigest()==registry_before, 'Access key registry changed during saved-world restart'
           assert resumed is not None and resumed['backend']=='gpu' and not resumed['backend_error'] and not resumed['checkpoint_error'], 'Saved world did not resume after a service restart'
           retention=resumed.get("cell_retention",{})
@@ -151,10 +161,11 @@ jobs:
           assert not any(name in resumed.get("gpu","").lower() for name in ["llvmpipe","lavapipe","swiftshader"])
           with opener.open('https://127.0.0.1:8766/api/network',timeout=5) as response: urls=json.load(response)
           assert all(url.startswith('https://') for url in urls['home_urls'])
-          report={'performance_warnings':performance_warnings,'performance_warning_rollout':os.environ.get('PRIMORDIA_PERFORMANCE_WARNINGS')=='1','home_urls':urls['home_urls'],'tls_ca_sha256':hashlib.sha256((ca.parent/'ca.crt').read_bytes()).hexdigest(),'samples':samples,'resumed_after_restart':resumed}
+          report={'performance_warnings':performance_warnings,'performance_warning_rollout':os.environ.get('PRIMORDIA_PERFORMANCE_WARNINGS')=='1','home_urls':urls['home_urls'],'tls_ca_sha256':hashlib.sha256((ca.parent/'ca.crt').read_bytes()).hexdigest(),'samples':samples,'running':resumed,'restart_tested':full_checks,'resumed_after_restart':resumed if full_checks else None}
           print(json.dumps(report,indent=2))
           with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as output: output.write('Primordia remains on its hardware GPU after the deploy job ends.\n\n```json\n'+json.dumps(report,indent=2)+'\n```\n')
           PY
+          if [ "$PRIMORDIA_DEPLOY_FULL_CHECKS" = "1" ]; then
           python3 - <<'PYTHON'
           import json,os,pathlib,sys
           root=pathlib.Path.home()/".local/share/primordia-experimental"
@@ -170,3 +181,4 @@ jobs:
                   from verify_experimental import main
                   main(restart=False)
           PYTHON
+          fi

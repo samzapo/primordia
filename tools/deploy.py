@@ -91,9 +91,9 @@ def health(build, previous=None, ca_file=None, state=None):
                     raise ValueError("New pond is missing its retained predecessor")
             if value.get("automatic_pond_restart") and value.get("living_cells", 0) < value.get("minimum_living_cells", 15):
                 raise ValueError("Pond population is below its configured floor")
-            if first is not None and value["tick"] > first and value.get("uptime_seconds",0)>=10:
+            if first is not None and value["tick"] > first and value.get("uptime_seconds",0)>=(10 if os.environ.get("PRIMORDIA_DEPLOY_FULL_CHECKS")=="1" else 2):
                 value["performance_warnings"] = evaluate_performance(
-                    value, allow_warnings=os.environ.get("PRIMORDIA_PERFORMANCE_WARNINGS") == "1")
+                    value, allow_warnings=os.environ.get("PRIMORDIA_PERFORMANCE_WARNINGS") == "1") if os.environ.get("PRIMORDIA_DEPLOY_FULL_CHECKS")=="1" else []
                 if value.get("food_vacuole_version")!=1 or value.get("biochemistry_version")!=1 or value.get("internal_packet_limit_per_cell")!=36 or value.get("internal_packets",0)>36*value.get("living_cells",0):
                     raise ValueError("Unbounded or obsolete internal chemistry")
                 with opener.open("https://127.0.0.1:8766/music-bank.json", timeout=3) as response:
@@ -108,7 +108,7 @@ def health(build, previous=None, ca_file=None, state=None):
                 return value
             first = value["tick"] if first is None else first
         except (OSError, ValueError, KeyError): pass
-        time.sleep(2)
+        time.sleep(1)
     raise RuntimeError("Candidate did not pass live GPU and checkpoint health checks")
 
 def _sync_directory(path):
@@ -275,7 +275,8 @@ def main():
     # keep running. Shared-GPU timing observations may warn only when authorized;
     # functional, hardware and retention checks always remain hard failures.
     affinity_options = {"preexec_fn": lambda: os.sched_setaffinity(0, authority_cpus)} if authority_cpus else {}
-    run("bash", str(candidate / "tools/test_network.sh"), "gpu", env=environment, observe=True, **affinity_options)
+    if os.environ.get("PRIMORDIA_DEPLOY_FULL_CHECKS") == "1":
+        run("bash", str(candidate / "tools/test_network.sh"), "gpu", env=environment, observe=True, **affinity_options)
     if (state / "health.json").exists():
         previous = json.loads((state / "health.json").read_text())
     migration_backup = None

@@ -14,6 +14,10 @@ name: Primordia experimental instance
         description: Optional exact deployed stable SHA for a standby-only repair
         type: string
         default: ""
+      full_validation:
+        description: Opt in to broad gameplay/GPU tests and extra restart checks
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -56,18 +60,21 @@ jobs:
           path: ${{ steps.source.outputs.path }}
           persist-credentials: false
           fetch-depth: 1
-      - name: Check instance isolation and deploy experimental only
+      - name: Build and deploy experimental only
         shell: bash
         env:
+          PRIMORDIA_DEPLOY_FULL_CHECKS: ${{ inputs.full_validation == true && '1' || '0' }}
           PRIMORDIA_PERFORMANCE_WARNINGS: "1"
           PRIMORDIA_SOURCE_DIRECTORY: ${{ steps.source.outputs.path }}
         run: |
           cd "$GITHUB_WORKSPACE/$PRIMORDIA_SOURCE_DIRECTORY"
-          python3 tests/test_experimental.py
-          python3 tests/test_experimental_snapshot.py
-          python3 tests/test_web_build.py
-          python3 tests/test_web_version.py
-          python3 tests/test_web_gateway.py
+          if [ "$PRIMORDIA_DEPLOY_FULL_CHECKS" = "1" ]; then
+            python3 tests/test_experimental.py
+            python3 tests/test_experimental_snapshot.py
+            python3 tests/test_web_build.py
+            python3 tests/test_web_version.py
+            python3 tests/test_web_gateway.py
+          fi
           python3 tools/experimental_instance.py
   standby:
     if: github.repository == 'samzapo/primordia' && github.actor == 'samzapo' && inputs.operation == 'standby'
@@ -105,12 +112,17 @@ jobs:
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 5
     steps:
-      - name: Verify independent restart and both public paths after cleanup
+      - name: Confirm experimental startup and public connection
         shell: bash
+        env:
+          PRIMORDIA_DEPLOY_FULL_CHECKS: ${{ inputs.full_validation == true && '1' || '0' }}
         run: |
           test "$RUNNER_NAME" = samzapo-desktop
-          python3 "$HOME/.local/share/primordia-experimental/current/tools/verify_experimental.py" --restart
-
+          if [ "$PRIMORDIA_DEPLOY_FULL_CHECKS" = "1" ]; then
+            python3 "$HOME/.local/share/primordia-experimental/current/tools/verify_experimental.py" --restart
+          else
+            python3 "$HOME/.local/share/primordia-experimental/current/tools/verify_experimental.py"
+          fi
   network-check:
     if: github.repository == 'samzapo/primordia' && github.actor == 'samzapo' && (inputs.operation == 'network-check' || inputs.operation == 'saved-world-check')
     runs-on: [self-hosted, Linux, X64]

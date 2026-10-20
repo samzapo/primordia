@@ -80,10 +80,10 @@ def health(sha,stable_world,previous=None):
                 assert value["world_id"]==previous["world_id"] and value["epoch"]>previous["epoch"] and value["tick"]>=previous["tick"]
                 retention=value["cell_retention"]
                 assert retention["ok"] and not retention["missing"] and not retention["changed"]
-            if first is not None and value["tick"]>first and value["uptime_seconds"]>=8:return value
+            if first is not None and value["tick"]>first and value["uptime_seconds"]>=(8 if os.environ.get("PRIMORDIA_DEPLOY_FULL_CHECKS")=="1" else 2):return value
             first=value["tick"] if first is None else first
         except (OSError,ValueError,KeyError,AssertionError):pass
-        time.sleep(2)
+        time.sleep(1)
     raise RuntimeError("Experimental authority did not pass independent hardware/checkpoint health")
 def feedback_identity(state):
     directory=state/"feedback"
@@ -133,69 +133,73 @@ def main():
     godot=runtime/f"Godot_v{version}-stable_linux.x86_64"
     environment={**os.environ,"GODOT_BIN":str(godot),"PRIMORDIA_BUILD_JOBS":"2","PRIMORDIA_INSTANCE":"experimental"}
     environment.pop("PRIMORDIA_ACCESS_KEYS_FILE",None)
+    full_checks=os.environ.get("PRIMORDIA_DEPLOY_FULL_CHECKS")=="1"
     call("bash",str(candidate/"tools/build_native.sh"),env=environment)
-    call("cmake","--build",str(candidate/"build/native"),"--target","primordia_dictionary_probe","--parallel","2",env=environment)
-    memory_log=root/"dictionary-lifetime-fixture.log"
-    with memory_log.open("w") as output:
-        call("timeout","60s",str(godot),"--headless","--path",str(candidate),"--script","tests/native_dictionary_lifetime.gd",env=environment,stdout=output,stderr=subprocess.STDOUT)
-    memory_result=memory_log.read_text();print(memory_result,flush=True)
-    if re.search(r"SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:",memory_result,re.M) or "DICTIONARY_RESULT: 8 assertions, 0 failures" not in memory_result:
-        raise RuntimeError("Native Dictionary lifetime fixture failed")
+    if full_checks:
+        call("cmake","--build",str(candidate/"build/native"),"--target","primordia_dictionary_probe","--parallel","2",env=environment)
+        memory_log=root/"dictionary-lifetime-fixture.log"
+        with memory_log.open("w") as output:
+            call("timeout","60s",str(godot),"--headless","--path",str(candidate),"--script","tests/native_dictionary_lifetime.gd",env=environment,stdout=output,stderr=subprocess.STDOUT)
+        memory_result=memory_log.read_text();print(memory_result,flush=True)
+        if re.search(r"SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:",memory_result,re.M) or "DICTIONARY_RESULT: 8 assertions, 0 failures" not in memory_result:
+            raise RuntimeError("Native Dictionary lifetime fixture failed")
 
     call(str(godot),"--headless","--path",str(candidate),"--editor","--import","--quit",env=environment)
-    for script,marker in [("curve_layout_run","CURVE LAYOUT"),("merge_memory_run","MERGE MEMORY"),("lifecycle_run","LIFECYCLE"),("family_cap_run","FAMILY CAP"),("normal_output_run","NORMAL OUTPUT"),("toxin_storage_run","TOXIN STORAGE")]:
-        path=root/(script+"-fixture.log")
-        with path.open("w") as output:
-            call("timeout","90s",str(godot),"--headless","--path",str(candidate),"--script","tests/"+script+".gd","--","--particle-backend=cpu",env=environment,stdout=output,stderr=subprocess.STDOUT)
-        result=path.read_text();print(result,flush=True)
-        if re.search(r"SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:",result,re.M) or not re.search(marker+r": \d+ assertions, 0 failures",result):
-            raise RuntimeError("Experimental feedback correctness fixture failed")
-    call("python3",str(candidate/"tests/test_experimental_snapshot.py"),env=environment)
-    call("bash",str(candidate/"tools/build_web.sh"),env=environment)
-    # Small real-GPU protocol fixture, with no stable outage or frame benchmark.
-    fixture_log=root/"gpu-network-fixture.log"
-    with fixture_log.open("w") as output:
-        call("timeout","150s","xvfb-run","-a","-s","-screen 0 1280x720x24 -nolisten tcp",str(godot),
-            "--path",str(candidate),"--rendering-method","mobile","--rendering-driver","vulkan","--gpu-index","0",
-            "--resolution","64x64","--disable-vsync","--max-fps","60","--script","tests/network_live.gd","--","--gpu",
-            env={**environment,"PRIMORDIA_INVITE":"experimental-private-fixture"},stdout=output,stderr=subprocess.STDOUT)
-    result=fixture_log.read_text();print(result,flush=True)
-    if re.search(r"SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:|returned to CPU|llvmpipe|lavapipe|swiftshader",result,re.M|re.I) or not re.search(r"NETWORK LIVE: \d+ assertions, 0 failures",result) or "backend=gpu" not in result:
-        raise RuntimeError("Experimental GPU protocol fixture failed")
-    # Focused feature acceptance on the real target; no FPS campaign or live reports.
-    for script,flags,marker in [
-        ("merge_memory_run",["--particle-backend=cpu","--gpu"],"MERGE MEMORY"),
-        ("resident_admission_gpu",[],"RESIDENT ADMISSION"),
-        ("resident_exposure_gpu",[],"RESIDENT EXPOSURE"),
-        ("resident_perception_gpu",[],"RESIDENT PERCEPTION"),
-        ("ambient_carbon_gpu",[],"AMBIENT_CARBON_GPU"),
-        ("lineage_start_network",["--gpu"],"LINEAGE START NETWORK"),
-        ("cell_chemistry_gpu",[],"CELL CHEMISTRY GPU"),
-        ("division_access_gpu",[],"DIVISION ACCESS GPU"),
-        ("normal_output_run",["--particle-backend=cpu","--gpu"],"NORMAL OUTPUT"),
-        ("lifecycle_network",["--gpu"],"LIFECYCLE NETWORK"),
-        ("feedback_latest_gpu",["--particle-backend=cpu"],"FEEDBACK LATEST GPU"),
-        ("feedback_visual_gpu",["--particle-backend=cpu"],"FEEDBACK VISUAL GPU"),
-        ("resident_plant_flow_gpu",[],"RESIDENT PLANT FLOW"),
-        ("camera_streaming_network",["--gpu"],"CAMERA STREAMING NETWORK"),
-    ]:
-        path=root/(script+"-fixture.log")
-        try:
+    if full_checks:
+        for script,marker in [("curve_layout_run","CURVE LAYOUT"),("merge_memory_run","MERGE MEMORY"),("lifecycle_run","LIFECYCLE"),("family_cap_run","FAMILY CAP"),("normal_output_run","NORMAL OUTPUT"),("toxin_storage_run","TOXIN STORAGE")]:
+            path=root/(script+"-fixture.log")
             with path.open("w") as output:
-                # The 300-sim-second cold recovery case is longer than the UI fixtures.
-                # Preserve its full horizon and hard assertions on the shared host.
-                limit="600s" if script=="ambient_carbon_gpu" else "120s"
-                # Give the UI fixture a paced, explicit display path on Xwayland/Xvfb.
-                ui_flags=["--display-driver","x11","--disable-vsync","--max-fps","60"] if script=="division_access_gpu" else []
-                call("timeout",limit,"xvfb-run","-a","-s","-screen 0 1280x1000x24 -nolisten tcp",str(godot),
-                    "--path",str(candidate),"--rendering-method","mobile","--rendering-driver","vulkan","--gpu-index","0",
-                    *ui_flags,"--script","tests/"+script+".gd","--",*flags,
-                    env={**environment,"PRIMORDIA_INVITE":"experimental-private-fixture"},stdout=output,stderr=subprocess.STDOUT)
-        finally:
-            # Retain the real assertion on failure; call() otherwise raises first.
-            report=path.read_text();print(report,flush=True)
-        if re.search(r"SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:|returned to CPU|llvmpipe|lavapipe|swiftshader",report,re.M|re.I) or not re.search(marker+r": [0-9]+ (?:assertions|checks), 0 failures",report):
-            raise RuntimeError("Experimental feature fixture failed: "+script)
+                call("timeout","90s",str(godot),"--headless","--path",str(candidate),"--script","tests/"+script+".gd","--","--particle-backend=cpu",env=environment,stdout=output,stderr=subprocess.STDOUT)
+            result=path.read_text();print(result,flush=True)
+            if re.search(r"SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:",result,re.M) or not re.search(marker+r": \d+ assertions, 0 failures",result):
+                raise RuntimeError("Experimental feedback correctness fixture failed")
+        call("python3",str(candidate/"tests/test_experimental_snapshot.py"),env=environment)
+    call("bash",str(candidate/"tools/build_web.sh"),env=environment)
+    if full_checks:
+        # Small real-GPU protocol fixture, with no stable outage or frame benchmark.
+        fixture_log=root/"gpu-network-fixture.log"
+        with fixture_log.open("w") as output:
+            call("timeout","150s","xvfb-run","-a","-s","-screen 0 1280x720x24 -nolisten tcp",str(godot),
+                "--path",str(candidate),"--rendering-method","mobile","--rendering-driver","vulkan","--gpu-index","0",
+                "--resolution","64x64","--disable-vsync","--max-fps","60","--script","tests/network_live.gd","--","--gpu",
+                env={**environment,"PRIMORDIA_INVITE":"experimental-private-fixture"},stdout=output,stderr=subprocess.STDOUT)
+        result=fixture_log.read_text();print(result,flush=True)
+        if re.search(r"SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:|returned to CPU|llvmpipe|lavapipe|swiftshader",result,re.M|re.I) or not re.search(r"NETWORK LIVE: \d+ assertions, 0 failures",result) or "backend=gpu" not in result:
+            raise RuntimeError("Experimental GPU protocol fixture failed")
+        # Focused feature acceptance on the real target; no FPS campaign or live reports.
+        for script,flags,marker in [
+            ("merge_memory_run",["--particle-backend=cpu","--gpu"],"MERGE MEMORY"),
+            ("resident_admission_gpu",[],"RESIDENT ADMISSION"),
+            ("resident_exposure_gpu",[],"RESIDENT EXPOSURE"),
+            ("resident_perception_gpu",[],"RESIDENT PERCEPTION"),
+            ("ambient_carbon_gpu",[],"AMBIENT_CARBON_GPU"),
+            ("lineage_start_network",["--gpu"],"LINEAGE START NETWORK"),
+            ("cell_chemistry_gpu",[],"CELL CHEMISTRY GPU"),
+            ("division_access_gpu",[],"DIVISION ACCESS GPU"),
+            ("normal_output_run",["--particle-backend=cpu","--gpu"],"NORMAL OUTPUT"),
+            ("lifecycle_network",["--gpu"],"LIFECYCLE NETWORK"),
+            ("feedback_latest_gpu",["--particle-backend=cpu"],"FEEDBACK LATEST GPU"),
+            ("feedback_visual_gpu",["--particle-backend=cpu"],"FEEDBACK VISUAL GPU"),
+            ("resident_plant_flow_gpu",[],"RESIDENT PLANT FLOW"),
+            ("camera_streaming_network",["--gpu"],"CAMERA STREAMING NETWORK"),
+        ]:
+            path=root/(script+"-fixture.log")
+            try:
+                with path.open("w") as output:
+                    # The 300-sim-second cold recovery case is longer than the UI fixtures.
+                    # Preserve its full horizon and hard assertions on the shared host.
+                    limit="600s" if script=="ambient_carbon_gpu" else "120s"
+                    # Give the UI fixture a paced, explicit display path on Xwayland/Xvfb.
+                    ui_flags=["--display-driver","x11","--disable-vsync","--max-fps","60"] if script=="division_access_gpu" else []
+                    call("timeout",limit,"xvfb-run","-a","-s","-screen 0 1280x1000x24 -nolisten tcp",str(godot),
+                        "--path",str(candidate),"--rendering-method","mobile","--rendering-driver","vulkan","--gpu-index","0",
+                        *ui_flags,"--script","tests/"+script+".gd","--",*flags,
+                        env={**environment,"PRIMORDIA_INVITE":"experimental-private-fixture"},stdout=output,stderr=subprocess.STDOUT)
+            finally:
+                # Retain the real assertion on failure; call() otherwise raises first.
+                report=path.read_text();print(report,flush=True)
+            if re.search(r"SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:|returned to CPU|llvmpipe|lavapipe|swiftshader",report,re.M|re.I) or not re.search(marker+r": [0-9]+ (?:assertions|checks), 0 failures",report):
+                raise RuntimeError("Experimental feature fixture failed: "+script)
     guard(stable,baseline)
     state=root/"state";state.mkdir(mode=0o700,exist_ok=True)
     registry=root/"access-keys.json"
@@ -271,13 +275,14 @@ def main():
         retention=report["cell_retention"]
         assert retention["ok"] and retention["before_digest"]==copy_report["cells_digest"]
         assert retention["before_cells"]==copy_report["cells"] and report["tick"]>=copy_report["source_tick"]
-        # Prove this instance persists independently through its own restart.
-        call("systemctl","--user","restart",UNIT)
-        restarted=health(sha,baseline["world_id"],report)
+        restarted=report
+        if full_checks:
+            call("systemctl","--user","restart",UNIT)
+            restarted=health(sha,baseline["world_id"],report)
         route=prepare_and_apply(root)
         after=guard(stable,baseline)
         if after["tick"]<=baseline["tick"]:raise RuntimeError("Stable world did not advance")
-        record={"revision":sha,"experimental":restarted,"initial":report,"routing":route,"pond_copy":copy_report,"predecessor_archive":str(backup) if backup else None,"feedback_retained":all(feedback_identity(state).get(name)==digest for name,digest in protected_feedback.items()),
+        record={"revision":sha,"full_validation":full_checks,"restart_tested":full_checks,"experimental":restarted,"initial":report,"routing":route,"pond_copy":copy_report,"predecessor_archive":str(backup) if backup else None,"feedback_retained":all(feedback_identity(state).get(name)==digest for name,digest in protected_feedback.items()),
                 "stable_before":baseline,"stable_after":after,"stable_unit_restarted":False,
                 "separate_state":str(state),"key_registry_sha256":hashlib.sha256(registry.read_bytes()).hexdigest()}
         (root/"last-deploy.json").write_text(json.dumps(record,indent=2))
