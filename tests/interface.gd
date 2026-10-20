@@ -226,7 +226,7 @@ func run(test_host) -> void:
 	scene.cell_ui.sync(0)
 	var stock = scene.cell_ui.biomass_view
 	var quote: Dictionary = stock.quote
-	expect(stock.visible and quote.available == cell.biomass and quote.cost == cell.construction_price("propulsion") and quote.ap_needed == 0,"The build preview shows the current progressive AP price alongside usable biomass")
+	expect(stock.visible and quote.available == cell.biomass and quote.cost == cell.construction_price("propulsion") and quote.ap_needed == 0,"The build preview shows the current cell biomass price")
 	expect(is_equal_approx(pow(quote.cost_radius/quote.stock_radius,2),quote.cost/quote.available),"Available and required blobs use the same area scale")
 	var usable: float = cell.biomass
 	cell.biomass = 100000
@@ -235,10 +235,11 @@ func run(test_host) -> void:
 	cell.biomass = 0
 	stock.sync()
 	expect(stock.quote.stock_radius == 0 and not stock.quote.enough,"Zero usable biomass cannot fund paid construction")
-	cell.biomass = 8
+	var build_price: float=cell.construction_price("propulsion")
+	cell.biomass = build_price
 	stock.sync()
-	expect(stock.quote.enough and stock.quote.cost_radius > 0,"Construction shows its required-tissue blob")
-	cell.biomass = 7.9
+	expect(stock.quote.enough and stock.quote.cost_radius > 0,"Construction shows its required-tissue blob at the current tier")
+	cell.biomass = build_price-.1
 	stock.sync()
 	expect(not stock.quote.enough,"Insufficient biomass is reported before a paid build")
 	cell.biomass = usable
