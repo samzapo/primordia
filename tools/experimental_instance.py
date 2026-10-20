@@ -246,10 +246,13 @@ def main():
         finally:
             # Keep the actual copy error visible even when call() raises.
             # Bound diagnostics independently of any repeating engine output.
-            with path.open("rb") as output:
-                output.seek(0,os.SEEK_END)
-                output.seek(max(0,output.tell()-32768))
-                result=output.read(32768).decode(errors="replace")
+            try:
+                with path.open("rb") as output:
+                    output.seek(0,os.SEEK_END)
+                    output.seek(max(0,output.tell()-32768))
+                    result=output.read(32768).decode(errors="replace")
+            except OSError as error:
+                result="Experimental copy log unavailable: "+type(error).__name__
             print(result,flush=True)
         if re.search(r"SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:",result,re.M):
             raise RuntimeError("Stable pond copy failed")

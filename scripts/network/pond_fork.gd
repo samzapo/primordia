@@ -17,8 +17,10 @@ static func write(snapshot: String, destination: String, expected_world: String,
 	var output := Store.new()
 	output.directory = destination
 	var prior: Dictionary = output.load_latest()
-	if not output.last_error.is_empty():
-		return {"error":"Experimental predecessor is invalid"}
+	# The deployment archives the stopped predecessor before this replacement.
+	# Only the source must be valid: an unreadable old experiment must not block
+	# a fresh independent fork, and both destination slots are replaced below.
+	var predecessor_unreadable := not output.last_error.is_empty()
 	var fork: Dictionary = saved.duplicate(true)
 	fork.world_id = Crypto.new().generate_random_bytes(16).hex_encode()
 	fork.epoch = maxi(int(saved.get("epoch",0)),int(prior.get("epoch",0)))
@@ -34,6 +36,7 @@ static func write(snapshot: String, destination: String, expected_world: String,
 	var cells: Dictionary = Retention.manifest(saved)
 	return {"source_world_id":expected_world,"source_build":saved.get("build",""),
 		"source_tick":saved.get("tick",-1),"world_id":fork.world_id,
-		"epoch":fork.epoch,"accounts":graph.root.accounts.size(),
+		"epoch":fork.epoch,"predecessor_unreadable":predecessor_unreadable,
+		"accounts":graph.root.accounts.size(),
 		"cells":cells.cells.size(),"cells_digest":cells.digest,
 		"graph_sha256":Retention.digest(graph),"graph_unchanged":var_to_bytes(graph)==var_to_bytes(restored.graph)}

@@ -72,5 +72,21 @@ func _initialize() -> void:
 	var restored = Codec.new().restore(target.load_latest().graph)
 	check(restored.accounts["fixture-token-hash"].current == restored.world.player,"Account-to-body shared references survive the fork")
 	check(restored.world.player.organs.size() == world.player.organs.size() and restored.world.cells.size() == 2,"Actual anatomy and NPC bodies survive decode")
+	# Every experimental update replaces its archived predecessor, even if the
+	# old experiment has no readable generation. Source validation stays strict.
+	for slot in ["world-0.pworld","world-1.pworld"]:
+		file = FileAccess.open(target.directory.path_join(slot),FileAccess.WRITE)
+		file.store_string("unreadable archived experiment")
+		file.close()
+	var recovered := Fork.write(source.directory,target.directory,saved.world_id,"recovered-candidate")
+	check(not recovered.has("error") and recovered.get("predecessor_unreadable",false),"Unreadable experimental predecessor does not block a valid main fork")
+	check(var_to_bytes(target.load_latest().graph) == var_to_bytes(source.load_latest().graph),"Recovery retains the exact validated main graph")
+	check(FileAccess.get_file_as_string(feedback) == "private experimental fixture","Recovery preserves the private experimental inbox")
+	var recovered_bytes := FileAccess.get_file_as_bytes(target.directory.path_join("world-0.pworld"))
+	file = FileAccess.open(source.directory.path_join("world-0.pworld"),FileAccess.WRITE)
+	file.store_string("no valid source remains")
+	file.close()
+	check(Fork.write(source.directory,target.directory,saved.world_id,"invalid-source").has("error"),"Unreadable main source still fails closed")
+	check(FileAccess.get_file_as_bytes(target.directory.path_join("world-0.pworld")) == recovered_bytes,"Rejected source never replaces the recovered experiment")
 	print("POND FORK: %d assertions, %d failures" % [checks,failures])
 	quit(0 if failures == 0 else 1)
