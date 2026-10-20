@@ -504,10 +504,16 @@ static func applies(update: Dictionary,instance: String) -> bool:
 	return audience=="shared" or audience==instance
 static func pending_all(account: Dictionary,instance: String="stable") -> Array:
 	var updates: Array=[]
-	var releases=RELEASES.slice(seen_index(account)+1)
-	var consolidated=instance=="experimental" and releases.any(func(update):return update.get("supersedes_experimental",false))
-	for update in releases:
-		if consolidated and update.get("audience","")=="experimental" and not update.get("supersedes_experimental",false):continue
+	var first:=seen_index(account)+1
+	var consolidated:=-1
+	if instance=="experimental":
+		for i in range(first,RELEASES.size()):
+			if RELEASES[i].get("audience","")=="experimental" and RELEASES[i].get("supersedes_experimental",false):consolidated=i
+	for release_index in range(first,RELEASES.size()):
+		var update: Dictionary=RELEASES[release_index]
+		# Consolidation replaces earlier experimental notices only. Later updates
+		# must still appear in publication order and be acknowledged normally.
+		if release_index<consolidated and update.get("audience","")=="experimental":continue
 		if applies(update,instance):
 			var visible: Dictionary=update.duplicate(true)
 			var items: Array=[]

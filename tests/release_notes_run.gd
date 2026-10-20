@@ -30,7 +30,11 @@ func run() -> void:
 		if release.audience=="experimental":check(release.id not in stable_ids,"Experimental copy stays outside main")
 		if release.audience=="stable":check(release.id not in experimental_ids,"Main copy stays outside experimental")
 	check(experimental_ids.filter(func(id):return id==Notes.CURRENT.id).size()==1,"New experimental notice appears once")
-	check(Notes.pending_all({},"experimental").filter(func(update):return update.audience=="experimental").size()==1,"Consolidation replaces superseded experimental notices")
+	var consolidated:=0
+	for i in Notes.RELEASES.size():
+		if Notes.RELEASES[i].get("supersedes_experimental",false):consolidated=i
+	var expected:=Notes.RELEASES.slice(consolidated).filter(func(update):return update.audience=="experimental").map(func(update):return update.id)
+	check(Notes.pending_all({},"experimental").filter(func(update):return update.audience=="experimental").map(func(update):return update.id)==expected,"Consolidation replaces earlier notices while later updates remain in order")
 	check(not Notes.acknowledge({},"unknown","experimental"),"Unrecognized notice cannot skip the queue")
 	for instance in ["stable","experimental"]:
 		var migrated: Dictionary={}
