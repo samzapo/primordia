@@ -25,6 +25,14 @@ const ORGAN_UPKEEP := 0.35
 const LEAF_UPKEEP := 0.04
 const MITOCHONDRION_UPKEEP := 0.04
 const MOTION_UPKEEP := 0.20
+# Body-only viscous response; no water/particle force feedback.
+const SWIM_SPEED_GAIN := 1.12
+const LINEAR_RESPONSE := 0.22
+const LINEAR_ACCELERATION := 180.0
+const TURN_RESPONSE := 0.55
+const TURN_ACCELERATION := 1.5
+const TURN_SPEED := 1.6
+const TURN_GAIN := 1.8
 const PUMP_UPKEEP := 0.10
 const CILIA_MOTION := 0.16
 const CILIA_PUMP := 0.08
@@ -848,6 +856,12 @@ func restore_organ(identity: int, paid: bool = true) -> bool:
 		return true
 	return false
 
+
+func limit_motion(before: Vector2, before_turn: float, dt: float) -> void:
+	# A bounded derivative applies to steering, current changes and contact
+	# corrections alike. Position projection still prevents solid penetration.
+	velocity=before+(velocity-before).limit_length(LINEAR_ACCELERATION*maxf(0,dt))
+	angular_velocity=clampf(angular_velocity,before_turn-TURN_ACCELERATION*maxf(0,dt),before_turn+TURN_ACCELERATION*maxf(0,dt))
 
 func fluid_drag() -> float:
 	# Stokes-inspired radius scaling. Baseline 47-unit cell retains total drag 90.

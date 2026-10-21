@@ -842,7 +842,7 @@ func _step_cell_motion(dt: float) -> void:
 			if organ.kind == "poreforming": organ.feeding = false
 	for substep in 3:
 		var starts: Dictionary = {}
-		for cell in cells: starts[cell.id] = {"p":cell.position,"angle":cell.angle}
+		for cell in cells: starts[cell.id] = {"p":cell.position,"angle":cell.angle,"v":cell.velocity,"w":cell.angular_velocity}
 		_motion(dt/3.0)
 		var contact_mark := Time.get_ticks_usec() if profiling else 0
 		_contacts(dt/3.0)
@@ -850,6 +850,7 @@ func _step_cell_motion(dt: float) -> void:
 		for cell in cells:
 			if cell.dead or cell.activity <= 0: continue
 			habitat_geometry.move_cell(cell,cell.position,cell.position,dt/3.0)
+			cell.limit_motion(starts[cell.id].v,starts[cell.id].w,dt*cell.activity/3.0)
 	for cell in cells:
 		cell.shape_acceleration = ((cell.velocity-before_motion[cell.id])/dt).limit_length(600)
 	if profiling: profile_usec["contacts"] = contacts_us
@@ -1735,6 +1736,8 @@ func _motion(dt: float) -> void:
 func _motion_cell(cell, local_dt: float) -> void:
 	cell.update_power_state()
 	var previous: Vector2 = cell.position
+	var before_velocity: Vector2=cell.velocity
+	var before_turn: float=cell.angular_velocity
 	var steering_power := 0.0
 	var desired_drift:=Vector2.ZERO
 	for organ in cell.organs:
@@ -1750,7 +1753,7 @@ func _motion_cell(cell, local_dt: float) -> void:
 		var thrust: Vector2 = cell.organ_normal(organ).rotated(cell.angle)
 		# Flagella can reverse their stroke, but force follows their mounted axis.
 		if organ.kind in ["propulsion","cilia"] and thrust.dot(cell.target) < 0: thrust = -thrust
-		desired_drift+=thrust*power/cell.fluid_drag()
+		desired_drift+=thrust*power*Cell.SWIM_SPEED_GAIN/cell.fluid_drag()
 		steering_power+=power
 		cell.spend_energy(energy_cost*capacity,organ,"movement")
 		# Cilia already pay their shared work rate while pumping; a hunting
@@ -1758,7 +1761,7 @@ func _motion_cell(cell, local_dt: float) -> void:
 		if organ.kind=="propulsion":cell.spend_work(local_dt*capacity,organ,"movement")
 	# Viscous gameplay: velocity relative to local water decays directly. This
 	# body-only relaxation is not an impulse on the finite-mass fluid grid.
-	var response: float=1-exp(-local_dt/.03)
+	var response: float=1-exp(-local_dt/Cell.LINEAR_RESPONSE)
 	var flow: Vector2=fluid.sample(cell.position)
 	cell.velocity=flow+(cell.velocity-flow).lerp(desired_drift,response)
 	var arm: Vector2=Vector2.from_angle(cell.angle)*cell.radius*.8
@@ -1767,15 +1770,17 @@ func _motion_cell(cell, local_dt: float) -> void:
 	var desired_turn:=water_turn
 	if steering_power>0:
 		var error: float=wrapf(cell.facing.angle()-cell.target_mouth-cell.angle,-PI,PI)
-		desired_turn=clampf(error*4,-3,3)
-	cell.angular_velocity=lerpf(cell.angular_velocity,desired_turn,response)
-	cell.angle = wrapf(cell.angle+cell.angular_velocity*local_dt,-PI,PI)
+		desired_turn+=clampf(error*Cell.TURN_GAIN,-Cell.TURN_SPEED,Cell.TURN_SPEED)
+	cell.angular_velocity=lerpf(cell.angular_velocity,desired_turn,1-exp(-local_dt/Cell.TURN_RESPONSE))
+	cell.limit_motion(before_velocity,before_turn,local_dt)
+	cell.angle = wrapf(cell.angle+(before_turn+cell.angular_velocity)*.5*local_dt,-PI,PI)
+	var displacement: Vector2=(before_velocity+cell.velocity)*.5*local_dt
 	if coarse_mode:
-		var moved: Array = habitat_geometry.move(previous,Medium.wrap_position(previous+cell.velocity*local_dt),cell.velocity,cell.extent())
+		var moved: Array = habitat_geometry.move(previous,Medium.wrap_position(previous+displacement),cell.velocity,cell.extent())
 		cell.position = moved[0]
 		cell.velocity = moved[1]
 	else:
-		habitat_geometry.move_cell(cell,previous,Medium.wrap_position(previous+cell.velocity*local_dt),local_dt)
+		habitat_geometry.move_cell(cell,previous,Medium.wrap_position(previous+displacement),local_dt)
 	# Continuous sweep against other bodies catches high-speed crossings.
 	for other in cells:
 		if other == cell or other.dead: continue
@@ -1791,6 +1796,8 @@ func _motion_cell(cell, local_dt: float) -> void:
 			var c = start.length_squared()-distance*distance
 			var hit = (-b-sqrt(maxf(0,b*b-4*a*c)))/(2*a)
 			if hit >= 0 and hit <= 1: cell.position = Medium.wrap_position(previous+travel*hit)
+
+	cell.limit_motion(before_velocity,before_turn,local_dt)
 
 func _contacts(dt: float) -> void:
 	if native_contacts:

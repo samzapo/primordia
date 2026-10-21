@@ -592,3 +592,13 @@ Modeled rule: Hunters retain finite raw food in moving food vacuoles and digest 
 October20 foraging-only suction uses the existing [low-Reynolds-number flow motivation](https://doi.org/10.1119/1.10903). Opening a particle-only attractor according to the cell's current feeding intention, and exempting pheromone tracers, are explicit gameplay abstractions. No new biological selectivity is claimed; actual water, diffusion and ciliary flow remain shared.
 
 October20 active-upkeep game rule: zero idle organ-specific ATP charge and per-work billing are gameplay abstractions; cellular basal maintenance remains. Existing maintenance-energy references motivate a continuing cell-level cost, not the exact authored organ rates.
+
+October21 smooth-motion calibration uses the existing [Purcell low-Reynolds-number
+motivation](https://doi.org/10.1119/1.10903). Slower linear/angular response,
+finite acceleration bounds and12%more swimming are authored control choices.
+Water/particle transport remains shared. The biomass-surplus release reuses the
+existing [microbial growth/respiration motivation](https://www.nature.com/articles/s42003-025-07574-2)
+for organic material returning to the environment. The500threshold,1%surplus
+rate,70/30nutrient/waste split and pink opening are explicit game choices.
+Release reallocates actual tissue mass and finite potential; the source does
+not validate those numbers or a literal reversed digestive reaction.

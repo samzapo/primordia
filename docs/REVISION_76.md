@@ -106,3 +106,37 @@ Working ATP estimates describe capacity; recent actual spending remains the
 authoritative display. This is an explicit gameplay energy-cost abstraction,
 not a claim that real dormant organelles have zero maintenance.
 Experimental only, focused work/idle and CPU/resident correctness checks.
+
+## October21 smooth body motion and surplus biomass release
+
+Swimming slip is12% stronger. Body velocity relaxes toward actual local water
+plus paid mounted thrust with0.22s response and180world-units/s² acceleration
+bound. Angular response is0.55s with1.5rad/s² acceleration bound; navigation adds
+at most1.6rad/s relative to sampled water rotation, proportional gain1.8.
+Start, stop, reversed intentions and current changes retain the previous
+velocity. Trapezoidal pose integration uses old/new velocities.
+Detailed contact passes and plant projection share the same per-substep
+velocity/turn budget; the existing physical contact helpers and positional
+nonpenetration projection remain. Coarse/resident body calls use the same
+integrator and limits. This bounds body motion without adding forces to water
+or changing particles, fluid viscosity, signal logic or action prices. These
+responses are authored game smoothing, not calibrated Stokes transients.
+
+Surplus venting now depends solely on numeric spare biomass above500. Stored
+food, waste, gas, body structure, installed organs and armor do not change that
+threshold. The surplus decays at1%/s, batched at the existing half-second cadence:
+q=(biomass-500)*(1-exp(-.01*elapsed)). This ramps release continuously with
+surplus, remains finite for late/coarse calls and cannot consume the first500.
+A pink-rimmed stress opening marks the release. It clears below the threshold
+and leaves ordinary wounds intact; old food-triggered stress state clears on
+the next ordinary physiology call. Separate existing family-signal autolysis
+is unchanged and is not an overfull-biomass timer.
+
+Each actual debit becomes70%nutrient and30%spent waste, two visible finite
+parcels from that real membrane opening. Nutrient capacity is limited to the
+potential in the tissue actually lost (300per unit), rather than granting
+fresh-food720per unit. No food/chemistry readback, body/organ drain, new oxygen,
+free material, new particle contents or inventory refill. The allocation is a
+game recycling rule inspired by the existing digestion/respiration references.
+Favorite protection remains. Guide and experimental-only notice describe the
+new threshold and output; main remains unchanged.

@@ -20,6 +20,10 @@ func fixture():
 	sim.Lifecycle.migrate(sim);sim.player.reproduction_retry_at=0
 	return sim
 func run() -> void:
+	if "--smooth-motion" in OS.get_cmdline_user_args():
+		smooth_motion_and_venting()
+		print("SMOOTH_MOTION: %d assertions, %d failures" % [checks,failures]);quit(0 if failures==0 else 1);return
+	smooth_motion_and_venting()
 	investment_growth()
 	var sim=fixture();var cell=sim.player;cell.biomass=100
 	check(sim.install("feeding",0) and cell.biomass==100,"First place is free and allows an oral groove")
@@ -106,7 +110,7 @@ func roles_and_presence() -> void:
 	var before=cell.organic_mass();sim.Lifecycle.physiology(sim,cell,1)
 	check(cell.biomass<4000 and cell.holes.any(func(h):return h.get("stress",false)),"Overfilled cells leak gradually through a visible stress hole")
 	var mass=sim.particles.reduce(func(total,p):return total+p.amount*sim.Catalog.material(p.kind),0.0)
-	check(absf(cell.organic_mass()+mass-before)<.00001 and sim.particle_count()==1,"Stress leak is one finite coalesced parcel, with conserved material")
+	check(absf(cell.organic_mass()+mass-before)<.00001 and sim.particle_count()==2,"Surplus vent emits finite nutrient and waste parcels with conserved material")
 	var investing=fixture();var investor=investing.player;investor.body=500;investor.biomass=100;investor.update_geometry()
 	investor.add_organ("feeding",0,"graze",false);investing.investment.cells[investor.id]="producer"
 	investing.step_autonomous_builds();var count=investor.organs.size()
@@ -316,3 +320,78 @@ func synergy_shapes() -> void:
 	check(Retention.digest(Retention.canonical(snapshot.root,snapshot.objects))==Retention.digest(Retention.canonical(after.root,after.objects)),"Synergy illustrations only warm geometry caches, without changing biology or random state")
 	grazer.organs[-1].hp=0;grazer.update_geometry()
 	check(ShapeArt.capture(grazer).roots.is_empty(),"Losing Grazer eligibility removes the decorative hairs")
+
+func smooth_motion_and_venting() -> void:
+	# Actual shared body integrator, without chemistry/ecology or a speed benchmark.
+	for dt in [1.0/30,1.0/60,1.0/120]:
+		var sim=fixture();var cell=sim.player
+		cell.body=70;cell.biomass=20;cell.energy=100;cell.angle=0;cell.angular_velocity=0
+		cell.velocity=Vector2.ZERO;cell.activity=1;cell.add_organ("propulsion",0,"graze",false)
+		cell.target=Vector2.RIGHT;cell.facing=Vector2.RIGHT;cell.target_mouth=0
+		sim.fluid.velocity.fill(Vector2.ZERO)
+		var unchanged=sim.fluid.velocity.duplicate();var state=sim.rng.state
+		var smooth:=true;var reversed:=false
+		for i in roundi(3.0/dt):
+			if i==roundi(1.0/dt):
+				cell.target=Vector2.LEFT;cell.facing=Vector2.LEFT
+			if i==roundi(2.0/dt):sim.fluid.velocity.fill(Vector2(45,-25))
+			var before: Vector2=cell.velocity;var turn: float=cell.angular_velocity
+			sim._motion_cell(cell,dt)
+			smooth=smooth and cell.velocity.distance_to(before)<=Sim.Cell.LINEAR_ACCELERATION*dt+.0001 and absf(cell.angular_velocity-turn)<=Sim.Cell.TURN_ACCELERATION*dt+.0001
+			if i==roundi(1.0/dt):reversed=cell.velocity.x>0 and absf(cell.angular_velocity)<.1
+		check(smooth,"Steering/current changes respect both acceleration bounds at "+str(dt))
+		check(reversed,"Reversed instinct retains motion and turns gradually rather than snapping")
+		check(sim.rng.state==state,"Body smoothing adds no navigation random draws")
+		check(unchanged[0]==Vector2.ZERO and sim.fluid.velocity[0]==Vector2(45,-25),"Body response does not inject feedback into water")
+	var sim=fixture();var cell=sim.player
+	cell.activity=1;cell.energy=100;cell.biomass=20;cell.add_organ("propulsion",0,"graze",false)
+	cell.velocity=Vector2.ZERO;cell.angle=0;cell.angular_velocity=0;cell.target=Vector2.RIGHT;cell.facing=Vector2.RIGHT;cell.target_mouth=0
+	sim.fluid.velocity.fill(Vector2.ZERO)
+	for i in 240:sim._motion_cell(cell,1.0/60)
+	var motor: Dictionary=cell.organs[0]
+	var previous_speed: float=13000.0*motor.scale*motor.scale/float(cell.fluid_drag())
+	check(absf(cell.velocity.length()/previous_speed-1.12)<.01,"Settled swimming is twelve percent faster with unchanged anatomy")
+	var flow=Vector2(30,15);sim.fluid.velocity.fill(flow);cell.target=Vector2.ZERO
+	for i in 240:sim._motion_cell(cell,1.0/60)
+	check(cell.velocity.distance_to(flow)<.01,"Idle relative velocity decays back to the actual local current")
+	# Real contact wrappers keep geometric collision resolution, but cannot
+	# produce an instantaneous spin/launch in the final body velocity.
+	var other=Sim.Cell.new(988,cell.position+Vector2(cell.radius*1.4,0))
+	other.activity=1;sim.cells.append(other);other.velocity=Vector2(-100,-20);cell.velocity=Vector2(100,20)
+	cell.target=Vector2.ZERO;cell.angular_velocity=0;other.angular_velocity=0
+	var velocities=[cell.velocity,other.velocity];var turns=[cell.angular_velocity,other.angular_velocity]
+	sim._step_cell_motion(1.0/30)
+	for i in 2:
+		check(sim.cells[i].velocity.distance_to(velocities[i])<=Sim.Cell.LINEAR_ACCELERATION/30+.001 and absf(sim.cells[i].angular_velocity-turns[i])<=Sim.Cell.TURN_ACCELERATION/30+.001,"Detailed contacts remain within the same acceleration budget")
+	var coarse=fixture();coarse.coarse_mode=true;cell=coarse.player
+	cell.activity=1;cell.velocity=Vector2.ZERO;cell.angular_velocity=0;cell.add_organ("propulsion",0,"graze",false);cell.target=Vector2.LEFT;cell.facing=Vector2.LEFT
+	coarse.fluid.velocity.fill(Vector2(60,0));coarse.offscreen_ecology.advance_body(coarse,cell,.25)
+	check(cell.velocity.length()<=Sim.Cell.LINEAR_ACCELERATION*.25+.001 and absf(cell.angular_velocity)<=Sim.Cell.TURN_ACCELERATION*.25+.001,"Coarse/resident body call uses the same smooth response")
+	# A large meal has no venting cost, including a saved old stress marker.
+	var fed=fixture();cell=fed.player;cell.biomass=25;cell.health=100
+	cell.chemistry.emit("food",7000,Vector2.ZERO)
+	cell.holes=[{"a":PI,"size":.15,"stress":true},{"a":0.0,"size":.1}]
+	cell.behavior={"stress":true}
+	var food: float=cell.substrate;var fuel: float=cell.chemistry.raw_fuel()
+	fed.Lifecycle.physiology(fed,cell,1)
+	check(cell.biomass==25 and cell.substrate==food and cell.chemistry.raw_fuel()==fuel and fed.particle_count()==0,"Stored food neither triggers nor pays for biomass venting")
+	check(cell.health==100 and cell.holes.size()==1 and not cell.holes[0].get("stress",false),"Food-only surplus vent clears while actual wounds remain")
+	for biomass in [500.0,600.0,1000.0]:
+		var vent=fixture();cell=vent.player;cell.biomass=biomass
+		var body: float=cell.body;var health: float=cell.health;var material: float=cell.organic_mass()
+		vent.Lifecycle.physiology(vent,cell,1)
+		var lost: float=biomass-cell.biomass
+		if biomass==500:
+			check(lost==0 and vent.particle_count()==0 and cell.holes.is_empty(),"Venting begins strictly above500 biomass")
+		else:
+			var nutrient:=0.0;var waste:=0.0;var emitted_fuel:=0.0
+			for packet in vent.particles:
+				if packet.kind==Sim.NUTRIENT:nutrient+=packet.amount;emitted_fuel+=minf(packet.amount,packet.capacity)*cell.Chemistry.FOOD_FUEL
+				if packet.kind==Sim.WASTE:waste+=packet.amount
+			check(absf(lost-(biomass-500)*(1-exp(-.01)))<.000001,"Outward rate ramps smoothly with biomass surplus")
+			check(absf(nutrient-lost*.7)<.000001 and absf(waste-lost*.3)<.000001 and vent.particle_count()==2,"Actual vent loss becomes visible nutrient and waste particles")
+			check(absf(cell.organic_mass()+nutrient+waste-material)<.000001 and emitted_fuel<=lost*cell.Chemistry.TISSUE_FUEL+.000001,"Reverse release conserves material and cannot create fresh-food energy")
+			check(cell.body==body and cell.health==health and cell.biomass>=500,"Venting preserves anatomy, health and the first500 biomass")
+	var delayed=fixture();delayed.player.biomass=1000
+	delayed.Lifecycle.physiology(delayed,delayed.player,10000)
+	check(delayed.player.biomass>=500 and is_finite(delayed.player.biomass),"A delayed vent cannot overshoot below its biomass threshold")

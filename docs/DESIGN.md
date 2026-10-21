@@ -785,3 +785,5 @@ October20 meal storage: Hunters keep compact food vacuoles and digest to ATP dem
 October20 oral pumping control: a mouth pumps only during its current valid foraging intention and with gut space, paying ATP only while active. Pheromones bypass the oral attractor on every transport backend. They retain water advection and diffusion. See Revision76 for shared CPU/coarse/resident gates and focused checks.
 
 October20: Installed organs have no idle ATP tax; charge work at its real source. Basal cell maintenance/ATP turnover remain. Share actual aerobic receipts for mitochondrial billing and keep observation/presentation out of physics. See Revision76.
+
+October21: smooth body swimming/turning uses shared finite acceleration limits for ordinary and coarse motion, including contact velocity corrections; swim slip+12%, water/particles unchanged. Surplus release depends only on biomass above500 and returns70%nutrient/30%waste with finite tissue fuel. Full food vacuoles never trigger it. See Revision76.

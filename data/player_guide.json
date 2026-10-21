@@ -776,7 +776,7 @@
         {
           "id": "currents",
           "title": "Currents and plants",
-          "text": "Broad currents carry cells and chemical parcels through the pond. Swimming adds movement relative to the local water; leftover cell motion quickly settles back into that current. Cilia stir the water locally. Plants damp flow; cells meet plant branches while chemistry can pass through. This is a stylized fluid world, not a calibrated microscopic-water model.",
+          "text": "Broad currents carry cells and chemical parcels through the pond. Swimming is a little faster, with gradual starts, stops and turns. Movement stays relative to the local water. Cilia stir water locally and plants damp flow. Cells meet solid plant branches while chemistry can pass through. This is a stylized fluid world.",
           "sources": [
             {
               "title": "Life at low Reynolds number",
@@ -930,6 +930,17 @@
           "title": "Two free organelles",
           "text": "Each cell has two reusable free construction places, excluding the always-free sensing receptors. The starter leaf and oral groove fill both. Reabsorption returns half of biomass actually paid into an organ; free tissue gives no biomass refund. Free construction material is an explicit game allowance.",
           "sources": []
+        },
+        {
+          "id": "surplus_biomass_vent",
+          "title": "Surplus biomass release",
+          "text": "Above 500 biomass, a cell gradually releases some surplus as nutrient and waste particles. More surplus gives a stronger release. Food in vacuoles does not count. The release keeps the first 500 biomass and preserves the body and organs. This is a game balance rule.",
+          "sources": [
+            {
+              "title": "Microbial growth and respiration",
+              "url": "https://www.nature.com/articles/s42003-025-07574-2"
+            }
+          ]
         }
       ]
     }

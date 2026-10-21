@@ -3,6 +3,9 @@ extends RefCounted
 const VERSION:=1
 const PERIOD:=1.0
 const COOLDOWN:=60.0
+const VENT_BIOMASS:=500.0
+const VENT_RATE:=0.01
+const VENT_NUTRIENT_SHARE:=0.7
 
 static func migrate(sim,accounts: Dictionary={}) -> void:
 	for cell in sim.cells:
@@ -115,42 +118,33 @@ static func crowding(sim,cell) -> void:
 		cell.behavior["autolysis_at"]=sim.time+3;sim.autolysis_after[key]=sim.time+60
 
 static func physiology(sim,cell,dt: float) -> void:
+	# This is surplus-reserve release, not a limit on food, anatomy or cell life.
 	if cell.unattended_protected:
-		cell.behavior.erase("autolysis_at");cell.behavior.erase("stress");cell.holes=cell.holes.filter(func(h):return not h.get("stress",false))
-		return
-	if cell.behavior.has("autolysis_at") and sim.time>=cell.behavior.autolysis_at:
+		cell.behavior.erase("autolysis_at")
+	elif cell.behavior.has("autolysis_at") and sim.time>=cell.behavior.autolysis_at:
 		cell.health=0;cell.death_hint="Crowding autolysis";return
-	var capacity=3000.0
-	for organ in cell.organs:
-		if organ.kind=="protection":capacity+=1000*organ.scale*organ.scale*organ.hp/organ.max_hp
-	var mass=cell.organic_mass()
-	if mass>capacity:cell.behavior["stress"]=true
-	elif mass<capacity*.9:cell.behavior.erase("stress")
-	if not cell.behavior.get("stress",false):
-		cell.holes=cell.holes.filter(func(h):return not h.get("stress",false));return
+	var surplus: float=maxf(0,cell.biomass-VENT_BIOMASS)
+	if cell.unattended_protected or surplus<=0:
+		cell.behavior.erase("stress");cell.behavior.erase("leak_elapsed")
+		cell.holes=cell.holes.filter(func(h):return not h.get("stress",false))
+		return
+	cell.behavior["stress"]=true
 	if not cell.holes.any(func(h):return h.get("stress",false)):cell.holes.append({"a":PI,"size":.15,"stress":true})
 	cell.behavior["leak_elapsed"]=float(cell.behavior.get("leak_elapsed",0))+dt
 	if cell.behavior.leak_elapsed<.5:return
 	var elapsed: float=cell.behavior.leak_elapsed;cell.behavior.leak_elapsed=0.0
-	var budget=maxf(0,mass-capacity*.9)*.01*elapsed
-	var amount=minf(cell.biomass,budget);cell.biomass-=amount;budget-=amount
-	var tissue=minf(maxf(0,cell.body-30),budget);cell.body-=tissue;amount+=tissue;budget-=tissue
-	var at=cell.position+Vector2.from_angle(cell.angle+PI)*(cell.extent()+12)
-	if amount>0:
-		# One finite parcel per batch, rather than a shower of tiny leaks.
-		sim.spawn_particle(sim.NUTRIENT,at,Vector2.ZERO,amount,cell.id)
-		sim.last_spawn.capacity=amount*cell.Chemistry.TISSUE_FUEL/cell.Chemistry.FOOD_FUEL;sim._commit_spawn_metadata()
-	if budget>0 and cell.chemistry.material()>0:
-		cell.chemistry.ensure_cpu()
-		for packet in cell.chemistry.particles:
-			if budget<=0:break
-			if not packet.alive or packet.species=="oxygen":continue
-			var used=minf(packet.amount,budget)
-			var nutrition=float(packet.get("nutrition",0))/maxf(.000000001,packet.amount)
-			var fuel=cell.chemistry._consume(packet,used);budget-=used
-			var kind={"food":sim.NUTRIENT,"waste":sim.WASTE,"carbon":sim.CARBON}[packet.species]
-			sim.spawn_particle(kind,at,Vector2.ZERO,used,cell.id)
-			if kind==sim.NUTRIENT:
-				sim.last_spawn.capacity=minf(used,fuel/cell.Chemistry.FOOD_FUEL)+used*nutrition;sim._commit_spawn_metadata()
-		cell.chemistry.refresh()
+	# Exact decay of the surplus: finite even after a late/coarse update and
+	# never below the threshold. Higher biomass gives a larger outward flux.
+	var amount: float=surplus*(1-exp(-VENT_RATE*elapsed))
+	if amount<=0:return
+	cell.biomass-=amount
+	var normal: Vector2=cell.local_normal(PI).rotated(cell.angle)
+	var at: Vector2=cell.position+cell.local_point(PI).rotated(cell.angle)+normal*12
+	var nutrients: float=amount*VENT_NUTRIENT_SHARE
+	var waste: float=amount-nutrients
+	sim.spawn_particle(sim.NUTRIENT,at,cell.velocity+normal*18,nutrients,cell.id)
+	# Nutrient fuel comes from the tissue actually lost, not fresh-food fuel.
+	sim.last_spawn.capacity=minf(nutrients,amount*cell.Chemistry.TISSUE_FUEL/cell.Chemistry.FOOD_FUEL)
+	sim._commit_spawn_metadata()
+	sim.spawn_particle(sim.WASTE,at+normal*3,cell.velocity+normal*14,waste,cell.id)
 	cell.update_geometry()

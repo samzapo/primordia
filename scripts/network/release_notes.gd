@@ -589,6 +589,18 @@ const RELEASES=[
  "footer":"Try these changes in the experimental pond.",
  "button":"Back to the pond"
 },
+{
+ "id":"2026-10-21-smoother-swimming-and-surplus-release",
+ "audience":"experimental",
+ "title":"What’s new in the pond",
+ "items":[
+  "Swimming is a little faster, with smoother starts, stops and turns.",
+  "Food stores no longer cause overfull venting. Surplus biomass above 500 gradually returns to the pond as nutrient and waste particles."
+ ],
+ "footer":"Try these changes in the experimental pond.",
+ "button":"Back to the pond"
+},
+
 ]
 const CURRENT=RELEASES[-1]
 static func seen_index(account: Dictionary) -> int:
