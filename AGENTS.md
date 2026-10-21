@@ -15,7 +15,13 @@ copy-main workflow choice; never use it as a silent recovery fallback.
 Every experimental update publishes one cumulative player-facing roundup for
 the next main release. Pool new changes with the pending main-release message,
 rewrite superseded details to the final behavior, and use the same voice/wording
-intended for main. Give each published update a fresh ID and both consolidation
+intended for main. Compare with the latest main release and describe each final
+feature once. Fold corrections and refinements to new experimental features
+into their original descriptions, rather than listing them as separate fixes.
+Only describe a correction as a fix when it repairs behavior already released
+on main. Omit internal details, preview-only badges and minor iteration history.
+Keep the roundup concise and useful for players.
+Give each published update a fresh ID and both consolidation
 flags so acknowledged players see the new preview once, while missed iterations
 collapse to one message. Preserve all historical IDs and main's queue. After
 main promotion, begin the next pool from the newly landed baseline.
