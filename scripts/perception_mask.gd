@@ -36,7 +36,7 @@ func sync() -> void:
 		body.mesh=preload("res://scripts/membrane_art.gd").mesh(focus.membrane.outline(),game.native_geometry)
 	cached_revision=focus.render_revision;cached_cell=focus.id
 	var extent: float=maxf(1,focus.extent()*1.05)
-	body.position=Vector2.ONE*128;body.scale=Vector2.ONE*128/extent
+	body.transform=Transform2D(0,Vector2.ONE*128/extent,0,Vector2.ONE*128)*view.motion.deformation
 	material.set_shader_parameter("focus_center",game.Simulation.Medium.wrap_position(game.render_camera+view.position))
 	material.set_shader_parameter("focus_heading",view.rotation)
 	material.set_shader_parameter("focus_extent",extent)
@@ -62,6 +62,6 @@ func _sync_selection() -> void:
 		elif mask.get_meta("revision",-1)!=cell.render_revision:
 			mask.mesh=preload("res://scripts/membrane_art.gd").mesh(cell.membrane.outline(),game.native_geometry)
 		mask.set_meta("revision",cell.render_revision)
-		mask.transform=conversion*view.get_global_transform_with_canvas();mask.show()
+		mask.transform=conversion*view.get_global_transform_with_canvas()*view.motion.deformation;mask.show()
 	for id in selection_bodies.keys():
 		if not retained.has(id):selection_bodies[id].queue_free();selection_bodies.erase(id)

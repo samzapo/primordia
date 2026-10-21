@@ -23,7 +23,8 @@ static func atlas() -> Texture2D:
 	image.generate_mipmaps();cached_atlas=ImageTexture.create_from_image(image)
 	return cached_atlas
 
-func sync(chem,alpha: float,mask: Texture2D,extent: float) -> void:
+func sync(chem,alpha: float,mask: Texture2D,extent: float,motion=null) -> void:
+	material.set_shader_parameter("body_scale",motion.deformation.get_scale() if motion!=null else Vector2.ONE)
 	material.set_shader_parameter("focus_mask",mask)
 	material.set_shader_parameter("focus_extent",extent)
 	var gpu=chem.accelerator
@@ -52,6 +53,7 @@ func sync(chem,alpha: float,mask: Texture2D,extent: float) -> void:
 		var packet: Dictionary=carriers[i];var origin: Dictionary=chem.render_origins.get(packet.id,{})
 		var previous: Vector2=origin.get("p",packet.p)
 		var at: Vector2=previous.lerp(packet.p,alpha)
+		if motion!=null:at=motion.point(at)
 		var gas: bool=packet.species in ["oxygen","carbon"]
 		var angle: float=lerp_angle(origin.get("angle",packet.angle),packet.angle,alpha) if gas else 0.0
 		var contents:=0.0

@@ -2,6 +2,7 @@ shader_type canvas_item;
 render_mode unshaded;
 uniform sampler2D state_texture : filter_nearest, repeat_disable;
 uniform bool cpu_instances = false;
+uniform vec2 body_scale=vec2(1.0);
 #include "res://shaders/vacuole_art.gdshaderinc"
 uniform sampler2D focus_mask : filter_linear, repeat_disable;
 uniform float focus_extent=1.0;
@@ -19,7 +20,7 @@ void vertex(){
   vec4 pose=texelFetch(state_texture,pixel,0),stock=texelFetch(state_texture,pixel+ivec2(1,0),0);
   contents=stock.gba;kind=pose.w;
   float co=cos(pose.z),si=sin(pose.z);
-  VERTEX=mat2(vec2(co,si),vec2(-si,co))*VERTEX*stock.r+pose.xy;
+  VERTEX=mat2(vec2(co,si),vec2(-si,co))*VERTEX*stock.r+pose.xy*body_scale;
   local_position=VERTEX;
  }
  COLOR=vec4(1);

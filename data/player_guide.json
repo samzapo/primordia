@@ -77,7 +77,7 @@
       {
         "id": "camera_transitions",
         "title": "Smooth camera changes",
-        "text": "Following, recentering, changing views and switching family members glide into place. Pause holds the camera; direct camera gestures stay responsive. Nearby water is prepared ahead of your view to reduce empty patches while exploring. Cell bodies wobble and settle smoothly between pond updates; Pause holds that animation too.",
+        "text": "Following, recentering, changing views and switching family members glide into place. Pause holds the camera; direct camera gestures stay responsive. Nearby water is prepared ahead of your view to reduce empty patches while exploring. Cell bodies gently squash and stretch. Internal structures move with the cell while keeping their size and shape; Pause holds the animation too.",
         "sources": []
       },
       {

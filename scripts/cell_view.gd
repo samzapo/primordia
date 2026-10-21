@@ -5,7 +5,9 @@ const Surface = preload("res://scripts/membrane_art.gd")
 const Visuals = preload("res://scripts/visuals.gd")
 var body_ink:=Node2D.new()
 var raster: SubViewport
-var raster_sprite:=MeshInstance2D.new()
+var raster_sprite:=Sprite2D.new()
+var raster_units:=1.0
+var internal_organs: Dictionary={}
 const Layout=preload("res://scripts/factory_layout.gd")
 var motion=preload("res://scripts/cell_motion.gd").new()
 var nucleus_ink:=Node2D.new()
@@ -24,8 +26,6 @@ var cytoplasm=preload("res://scripts/cytoplasm_view.gd").new()
 var seen_revision := -1
 var simple_view := false
 var last_draw_tick := -2
-var emission_seen: Dictionary={}
-var emission_started: Dictionary={}
 var last_internal_tick := -1
 var was_internal := false
 var detail_lod := true
@@ -46,11 +46,6 @@ var membrane_warning:=false
 
 func _ready() -> void:
 	add_child(body_ink);body_ink.draw.connect(_draw_body)
-	body_ink.material=ShaderMaterial.new();body_ink.material.shader=preload("res://shaders/cell_motion.gdshader")
-	motion.bind(body_ink.material)
-	raster_sprite.mesh=Layout.grid()
-	raster_sprite.material=ShaderMaterial.new();raster_sprite.material.shader=preload("res://shaders/cell_motion.gdshader")
-	motion.bind(raster_sprite.material,true)
 	raster_sprite.texture_filter=CanvasItem.TEXTURE_FILTER_LINEAR
 	add_child(raster_sprite);raster_sprite.hide()
 	# Keep each shaded body immediately behind its own contents, so another
@@ -61,10 +56,9 @@ func _ready() -> void:
 	interior_backing.show_behind_parent=true
 	interior_backing.material=ShaderMaterial.new()
 	interior_backing.material.shader=preload("res://shaders/interior_backing.gdshader")
-	motion.bind(surface.material);motion.bind(interior_backing.material)
 	body_ink.add_child(interior_backing)
 	body_ink.add_child(surface)
-	body_ink.add_child(cytoplasm)
+	add_child(cytoplasm)
 	water_wake.z_as_relative=false
 	water_wake.z_index = 1 # Cells are at z=2; all wakes remain below every body.
 	water_wake.material = ShaderMaterial.new()
@@ -81,7 +75,6 @@ func _ready() -> void:
 	appendages.z_index = 0 # Keep each body and all its organs in one cell-local drawing order.
 	body_ink.add_child(appendages)
 	appendages.draw.connect(_draw_organs)
-	appendages.use_parent_material=true
 	add_child(sound_waves)
 	sound_waves.draw.connect(_draw_sound_waves)
 
@@ -96,13 +89,6 @@ func sync(render_position: Vector2, render_angle: float, zoom: float, alpha: flo
 	position = render_position
 	rotation = render_angle
 	motion.sync(cell,game.ui_time,global_transform)
-	nucleus_lag=motion.nucleus_lag
-	var nucleus_anchor: Vector2=Layout.layout(cell).nucleus if cell==game.world.player else Vector2(-6,-4)
-	nucleus_center=motion.point(nucleus_anchor)+nucleus_lag
-	nucleus_size=Layout.NUCLEUS
-	nucleus_ink.position=nucleus_center
-	if seen_revision!=cell.render_revision:nucleus_ink.queue_redraw()
-	sound_waves.queue_redraw()
 	if depth_style != game.membrane_depth:
 		depth_style = game.membrane_depth
 		seen_revision = -1
@@ -115,15 +101,14 @@ func sync(render_position: Vector2, render_angle: float, zoom: float, alpha: flo
 	interior_backing.visible=internal
 	interior_backing.mesh=surface.mesh if surface.mesh!=null else Surface.mesh(cell.membrane.outline(),game.native_geometry)
 	cytoplasm.visible=internal
-	if internal:cytoplasm.sync(cell.chemistry,alpha,game.perception_mask.viewport.get_texture(),maxf(1,cell.extent()*1.05))
+	if internal:motion.cached=false
+	if internal:cytoplasm.sync(cell.chemistry,alpha,game.perception_mask.viewport.get_texture(),maxf(1,cell.extent()*1.05),motion)
 	if internal!=was_internal or (internal and last_internal_tick!=cell.chemistry.tick):
 		_queue_body_redraw();last_internal_tick=cell.chemistry.tick;was_internal=internal
 	var reduced: bool = detail_lod and cell.radius*zoom*game.detail_canvas_scale < 18*game.detail_pixel_ratio and not game.build_open and not internal
 	var detail_changed: bool = reduced != simple_view
 	simple_view = reduced
-	motile_art.sync(cell,not simple_view,game.ui_time,game.world,motion)
-	proboscis_art.sync(self,not simple_view)
-	if (seen_revision != cell.render_revision and (not reduced or game.world.revision-last_draw_tick >= 2)) or detail_changed or game.show_senses != get_meta("senses",false) or game.build_open != get_meta("assembly",false):
+	if seen_revision != cell.render_revision or detail_changed or game.show_senses != get_meta("senses",false) or game.build_open != get_meta("assembly",false):
 		seen_revision = cell.render_revision
 		last_draw_tick = game.world.revision
 		set_meta("senses",game.show_senses)
@@ -135,7 +120,10 @@ func sync(render_position: Vector2, render_angle: float, zoom: float, alpha: flo
 	if depth_style and not raster_active:
 		_sync_surface(render_angle,detail_changed)
 	_sync_raster(detail_lod and cell.radius*zoom*game.detail_canvas_scale<28*game.detail_pixel_ratio and raster_enabled and game.world.remote_client and cell!=game.world.player and not internal and not game.build_open and not game.show_senses and not game.merge_selecting())
-	_gel_enabled(not raster_active)
+	motion.cached=raster_active
+	if raster_active:raster_sprite.transform=motion.deformation.scaled(Vector2.ONE*raster_units)
+	else:body_ink.transform=motion.deformation
+	_sync_anchor_art()
 	label.visible = cell.rival_name != "" and (game.show_senses or get_global_mouse_position().distance_to(global_position) < cell.extent()*zoom+20)
 	if label.visible:
 		label.text = cell.rival_name
@@ -153,7 +141,7 @@ func _sync_raster(enabled: bool) -> void:
 			body_ink.reparent(self,false);move_child(body_ink,0);body_ink.position=Vector2.ZERO;body_ink.scale=Vector2.ONE
 			if depth_style:_sync_surface(rotation,true)
 			raster.render_target_update_mode=SubViewport.UPDATE_DISABLED
-			raster_sprite.hide();raster_active=false;_queue_body_redraw();appendages.queue_redraw();_gel_enabled(true)
+			raster_sprite.hide();raster_active=false;_queue_body_redraw();appendages.queue_redraw()
 		return
 	if raster_zoom==0 or absf(log(game.zoom/raster_zoom))>.18:raster_dirty=true;raster_zoom=game.zoom
 	if raster==null:
@@ -169,7 +157,6 @@ func refresh_raster() -> void:
 	if not raster_active or not raster_dirty:return
 	raster_outline=cell.membrane.outline()
 	motion.capture_raster(raster_outline)
-	_gel_enabled(false)
 	if depth_style:_sync_surface(rotation,false)
 	body_ink.queue_redraw();appendages.queue_redraw()
 	var extent: float=cell.extent()*1.25
@@ -181,7 +168,10 @@ func refresh_raster() -> void:
 	raster.size=Vector2i(pixels,pixels)
 	var scale_value: float=pixels/(extent*2)
 	body_ink.position=Vector2.ONE*pixels*.5;body_ink.scale=Vector2.ONE*scale_value
-	raster_sprite.scale=Vector2.ONE*extent
+	raster_units=1/scale_value
+	motion.cached=true
+	raster_sprite.transform=motion.deformation.scaled(Vector2.ONE*raster_units)
+	_sync_anchor_art()
 	raster.render_target_update_mode=SubViewport.UPDATE_ONCE;raster_dirty=false
 	if game.frame_trace!=null:game.frame_trace.count("cell_raster_updates")
 
@@ -222,9 +212,43 @@ func _sync_surface(render_angle: float, changed: bool) -> void:
 	water_wake.material.set_shader_parameter("clock",game.world.time)
 
 
-func _gel_enabled(detailed: bool) -> void:
-	for item in [body_ink,surface,interior_backing]:item.material.set_shader_parameter("gel_enabled",detailed)
-	raster_sprite.material.set_shader_parameter("gel_enabled",true)
+func _sync_anchor_art() -> void:
+	nucleus_lag=Vector2.ZERO
+	var nucleus_anchor: Vector2=Layout.layout(cell).nucleus if cell==game.world.player else Vector2(-6,-4)
+	nucleus_center=motion.point(nucleus_anchor)
+	nucleus_size=Layout.NUCLEUS;nucleus_ink.position=nucleus_center
+	if seen_revision!=cell.render_revision:nucleus_ink.queue_redraw()
+	_sync_internal_organs()
+	motile_art.sync(cell,not simple_view,game.ui_time,game.world,motion)
+	proboscis_art.sync(self,not simple_view)
+	sound_waves.queue_redraw()
+
+func _sync_internal_organs() -> void:
+	var present: Dictionary={}
+	for organ in cell.organs:
+		if not cell.internal_organ(organ.kind):continue
+		present[organ.id]=true
+		if not internal_organs.has(organ.id):
+			var created:=Node2D.new();add_child(created);internal_organs[organ.id]=created
+			created.draw.connect(_draw_internal_organ.bind(organ.id,created))
+		var ink: Node2D=internal_organs[organ.id]
+		ink.position=visible_point(cell.organ_local_position(organ))
+		ink.rotation=cell.organ_normal(organ).angle()
+		if ink.get_meta("revision",-1)!=cell.render_revision or ink.get_meta("detail",false)!=simple_view or ink.get_meta("owner",-1)!=cell.get_instance_id():
+			ink.set_meta("revision",cell.render_revision);ink.set_meta("detail",simple_view);ink.set_meta("owner",cell.get_instance_id());ink.queue_redraw()
+	for id in internal_organs.keys():
+		if not present.has(id):internal_organs[id].queue_free();internal_organs.erase(id)
+
+func _draw_internal_organ(id: int,ink: Node2D) -> void:
+	var organ: Dictionary=cell.organ_by_id(id)
+	if organ.is_empty():return
+	var status: Dictionary=preload("res://scripts/organelle_status.gd").state(game.world,cell,organ)
+	var cached_icon: bool=game.zoom*organ.scale*game.detail_canvas_scale<=.8*game.detail_pixel_ratio and not game.internal_visible(cell) and not game.build_open and organ.consume_flash<.001 and organ.charge_flash<.001 and not status.depleted
+	if not cached_icon or not preload("res://scripts/organ_atlas.gd").draw(ink,Vector2.ZERO,organ.kind,0,organ.scale):
+		Visuals.icon(ink,Vector2.ZERO,organ.kind,0,organ.scale,game.ui_time,organ.mode,organ.consume_flash,not simple_view,organ.charge_flash,status.depleted,preload("res://scripts/toxin_sac.gd").fraction(organ) if organ.kind=="toxin_sac" else 0)
+	if status.progress>=0:ink.draw_arc(Vector2.ZERO,19*organ.scale,-PI/2,-PI/2+TAU*maxf(.001,status.progress),28,Color("fff0ac") if not status.depleted else Color("8c969f"),1.8*organ.scale,true)
+	if organ.get("mutation","")!="":ink.draw_circle(Vector2.ZERO,3.5*organ.scale,Color("fff2a3"))
+	if organ.hp<organ.max_hp:ink.draw_arc(Vector2.ZERO,19*organ.scale,-PI/2,-PI/2+TAU*organ.hp/organ.max_hp,24,Color("fc8c90"),2,true)
 
 func visible_point(at: Vector2) -> Vector2:return motion.point(at)
 func visible_normal(at: Vector2,direction: Vector2) -> Vector2:return motion.normal(at,direction)
@@ -305,20 +329,12 @@ func _draw_organs() -> void:
 	var outlet_normal: Vector2 = cell.local_normal(cell.excretion_angle())
 	appendages.draw_line(outlet-outlet_normal.orthogonal()*5,outlet+outlet_normal.orthogonal()*5,Color("9677cb"),3,true)
 	for organ in cell.organs:
+		if cell.internal_organ(organ.kind):continue
 		var point: Vector2 = cell.local_point(organ.a)
 		var normal: Vector2 = cell.organ_normal(organ)
 		var at: Vector2 = cell.organ_local_position(organ)
 		var heading := normal.angle()
-		var serial: int=int(organ.get("emission_serial",0))
-		if not emission_seen.has(organ.id) and cell.age-float(organ.get("emission_age",-100))>.3:emission_seen[organ.id]=serial
-		if serial!=int(emission_seen.get(organ.id,0)):
-			emission_seen[organ.id]=serial
-			if game.ui_time-float(emission_started.get(organ.id,-100))>=.28:emission_started[organ.id]=game.ui_time
-		var elapsed: float=game.ui_time-float(emission_started.get(organ.id,-100))
-		var bounce:=sin(elapsed*TAU*3)*exp(-elapsed*7) if elapsed<.65 else 0.0
-		if organ.kind=="proboscis":bounce=0.0 # Keep all mount cues on the stable shaft.
-		at+=normal*bounce*5*organ.scale
-		var drawn_scale: float=organ.scale*(1+.12*bounce)
+		var drawn_scale: float=organ.scale
 		var readiness: Dictionary=preload("res://scripts/organelle_status.gd").state(game.world,cell,organ)
 		var charge: float = organ.charge_flash
 		if organ.kind == "toxin" and cell.target_id >= 0 and cell.threat.length_squared() > 0.01 and cell.biomass >= 0.18*organ.scale*organ.scale*cell.Genes.factor(organ,"burst"):

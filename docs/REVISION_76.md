@@ -351,22 +351,21 @@ controls. Update guide and one final-feature cumulative experimental preview;
 retain the pond, main unchanged. Focused client UI/queue/layout checks only.
 
 
-## October21 local cell gel and fixed factories
-Owner requests one combined update. Animate membrane shape on the pause-aware
-local cosmetic clock with bounded analytic damped springs; do not step biology,
-change collision shapes, consume RNG or increase server publication. Retarget
-from the currently displayed radius/velocity. Keep per-frame deformation on
-cached GPU artwork, including small-cell rasters; reuse one tessellated quad.
-Nucleus lag advances from local elapsed time. Wall-bearing Producers stay firm,
-while Hunter points and Parasite worm shapes remain recognizable.
+## October21 local squash/stretch and fixed factories
+Owner requests a small squash/stretch oscillation instead of radial/body
+translation. One area-preserving local Node2D transform moves all membrane art
+and cached body pixels, at0.6%maximum strain (less for walls/Hunters). No radial
+shader warping, shape spring overshoot, separate nucleus lag or gland mount
+displacement. Preserve server physics, source shape, biology, RNG and cadence.
 
-Nucleus and internal factory art have fixed world sizes independent of minimum
-membrane radius. Fit distinct positions throughout actual cytoplasm, smooth
-layout changes and preserve overlap selection plus mobile minimum touch areas.
-Use an inset circle and tiny vector lower-left badge, without new screen labels
-or an external panel hiding organic outlines. Keep all clickable positions,
-membrane organs, optimistic placement and proboscis holes on the visible shape.
-ATP stock may change its sac fill/size within the fixed control footprint.
-No saved-state migration or physics/material/feeding change. Retain experimental,
-main unchanged; one cumulative final-feature notice. Actual phone FPS is separate
-from local animation cadence; do not claim60FPS from workstation rendering.
+All internal artwork follows transformed cytoplasm anchors without deforming:
+fixed-size nucleus/factories, installed mitochondria/toxin sacs, and vacuole/gas
+centers. Internal glyphs live outside the stretched body/cache; glyph dimensions
+remain unchanged. Factories fit the cytoplasm and use critically damped slot
+easing, inset circles and lower-left vector badges. Keep overlap/minimum touch
+areas. Ordinary external art shares the membrane transform, while separate
+motile/proboscis art and tap points use the same anchor map. Cached bodies expose
+their displayed source outline until refresh; immediately update external
+anchors and contact cues when a queued texture refresh changes that source.
+Retain experimental and keep main unchanged. One cumulative final-feature
+notice; focused mixed-anatomy, exaggerated-strain and WebGL checks, no FPS claim.

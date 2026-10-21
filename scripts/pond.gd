@@ -453,7 +453,6 @@ func _cell_render_alpha(cell,alpha: float) -> float:
 
 func _update_world(alpha: float) -> void:
 	preload("res://scripts/motile_art.gd").set_clock(ui_time)
-	RenderingServer.global_shader_parameter_set("primordia_cosmetic_clock",ui_time)
 	var canvas_scale:=get_viewport().get_final_transform().get_scale().abs()
 	detail_canvas_scale=maxf(.001,minf(canvas_scale.x,canvas_scale.y))
 	var sync_start := Time.get_ticks_usec() if frame_trace != null else 0
@@ -561,8 +560,8 @@ func _update_world(alpha: float) -> void:
 		if not alive_ids.has(identity):
 			views[identity].queue_free()
 			views.erase(identity)
-	proboscis_feeding_art.sync()
 	_flush_cell_rasters()
+	proboscis_feeding_art.sync()
 	# Local factories remain above membrane attachments in either perception.
 	cell_ui.interior.z_index=8
 	cell_ui.interior.sync()

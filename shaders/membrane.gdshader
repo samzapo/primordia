@@ -1,6 +1,5 @@
 shader_type canvas_item;
-render_mode unshaded, world_vertex_coords;
-#include "res://shaders/cell_motion.gdshaderinc"
+render_mode unshaded;
 uniform vec4 gel : source_color;
 uniform vec4 body : source_color;
 uniform vec4 rim : source_color;
@@ -12,7 +11,7 @@ uniform float clock = 0.0;
 uniform vec2 slip = vec2(0.0);
 uniform bool wakes = true;
 varying vec2 direction;
-void vertex() { direction = COLOR.rg*2.0-1.0; VERTEX=gel_world_point(VERTEX); }
+void vertex() { direction = COLOR.rg*2.0-1.0; }
 void fragment() {
 	float r = UV.x;
 	vec2 local = direction / max(length(direction),0.0001);
