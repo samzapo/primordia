@@ -557,7 +557,7 @@ fixed crescent. Lip thickness and cilia shrink with the body, preserving the
 factory space in small cells without changing feeding geometry or rates.
 The selected cell's local factories draw above membrane appendages. A tap or
 click shared by several controls offers each overlapping structure, using the
-mobile top tray or compact desktop choices, so drawing order cannot prevent
+one shared responsive top tray, so drawing order cannot prevent
 access. Selecting one opens its existing actions; no paid action happens during
 selection. Keyboard target cycling remains available. Existing cells, anatomy,
 resource rules and saved-world formats are unchanged.
@@ -987,3 +987,15 @@ their displayed source outline until refresh; immediately update external
 anchors and contact cues when a queued texture refresh changes that source.
 Retain experimental and keep main unchanged. One cumulative final-feature
 notice; focused mixed-anatomy, exaggerated-strain and WebGL checks, no FPS claim.
+
+
+## October21 shared interface
+
+Mobile and desktop use the same controls, resource strip, factories, action
+tray, selection and placement code. UI layout follows viewport size and scale,
+not touch capability. Touch taps and mouse clicks share primary actions; only
+camera input differs (two-finger pan/twist/pinch versus mouse drag/wheel).
+The common guide contains every gameplay interaction, with separate camera
+instructions. A small paired-input contract runs before both pond releases.
+The old desktop radial/action pagination and tissue comparison overlay are
+retired. See Revision77 for the input/GUI boundaries and maintenance contract.

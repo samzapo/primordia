@@ -1,12 +1,17 @@
 extends RefCounted
-## Raw multi-touch is used on the web; GUI controls retain native mouse emulation.
+## Shared game controls and primary actions. Only camera gestures depend on input.
+var mouse_down:=false
+var mouse_moved:=false
+var mouse_start:=Vector2.ZERO
+var mouse_last:=Vector2.ZERO
+var mouse_button:=MOUSE_BUTTON_LEFT
 var cancel_touch:=-1
 var cancel_start:=Vector2.ZERO
 var game
 var last_tap_family := -1
 var last_tap_time := -10000
 var last_tap_at := Vector2.ZERO
-var enabled := false
+var touch_enabled := false
 var pixels := 1.0
 var viewport_size := Vector2.ZERO
 var fingers: Dictionary={}
@@ -26,15 +31,15 @@ var music_volume:=HSlider.new()
 
 func initialize(owner_game) -> void:
 	game=owner_game
-	enabled=DisplayServer.is_touchscreen_available()
+	touch_enabled=DisplayServer.is_touchscreen_available()
 	if OS.has_feature("web"):
-		enabled=bool(JavaScriptBridge.eval("navigator.maxTouchPoints>0 || 'ontouchstart' in window"))
-		if enabled:JavaScriptBridge.eval("document.getElementById('canvas').style.touchAction='none'")
+		touch_enabled=bool(JavaScriptBridge.eval("navigator.maxTouchPoints>0 || 'ontouchstart' in window"))
+		if touch_enabled:JavaScriptBridge.eval("document.getElementById('canvas').style.touchAction='none'")
 	state_label.z_index=80;state_label.mouse_filter=Control.MOUSE_FILTER_IGNORE;state_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	game.ui.add_child(state_label)
 	bar.z_index=80;game.ui.add_child(bar)
 	pause_button.text="Pause";bar.add_child(pause_button)
-	pause_button.pressed.connect(game._mobile_pause_menu)
+	pause_button.pressed.connect(game._open_pause_menu)
 	minus_button.text="−";bar.add_child(minus_button)
 	plus_button.text="+";bar.add_child(plus_button)
 	minus_button.pressed.connect(func():game._zoom_button(1/1.25))
@@ -59,13 +64,13 @@ func layout() -> void:
 	if size!=viewport_size:
 		cancel();viewport_size=size
 		if OS.has_feature("web"):pixels=size.x/maxf(1,float(JavaScriptBridge.eval("window.innerWidth")))
-	bar.visible=enabled and game.touch_controls_available()
+	bar.visible=game.touch_controls_available()
 	bar.add_theme_constant_override("separation",6*pixels*.7)
 	for button in [pause_button,minus_button,plus_button]:
 		button.add_theme_font_size_override("font_size",roundi(18*pixels*.7))
 		button.custom_minimum_size=Vector2(100 if button==pause_button else 48,48)*pixels*.7
 	bar.reset_size()
-	var tray_offset: float=game.cell_ui.mobile_menu_height if enabled else 0.0
+	var tray_offset: float=game.cell_ui.mobile_menu_height
 	bar.position=Vector2(size.x-220*pixels*.7,12*pixels*.7+tray_offset)
 	pause_button.text="Resume" if game.user_paused else "Pause"
 	pause_button.disabled=not game.pause_control_ready
@@ -104,7 +109,7 @@ func layout() -> void:
 	state_label.position=Vector2(size.x-220*pixels*.7,228*pixels*.7+tray_offset);state_label.size=Vector2(208,44)*pixels*.7
 
 
-	if OS.has_feature("web") and enabled:
+	if OS.has_feature("web"):
 		var conversion:=Vector2(float(JavaScriptBridge.eval("window.innerWidth")),float(JavaScriptBridge.eval("window.innerHeight")))/size
 		var bounds: Dictionary={}
 		for pair in [["pause",pause_button],["feedback",game.feedback_menu_button],["profile",game.profile_menu_button],["palette",game.palette_menu_button],["gameplay",game.gameplay_menu_button],["mechanics",game.mechanics_menu_button],["zoom_out",minus_button],["zoom_in",plus_button],["follow",follow_button],["perception",perception_button],["music",music_button],["music_volume",music_volume]]:
@@ -128,6 +133,7 @@ func _over_gui(node: Node,at: Vector2) -> bool:
 
 func cancel() -> void:
 	cancel_touch=-1
+	mouse_down=false;mouse_moved=false
 	fingers.clear();moved=false;last_tap_family=-1
 	if game!=null:game.tube_start.clear();game.camera_dragging=false
 
@@ -148,13 +154,50 @@ func _tap(at: Vector2) -> void:
 
 	if game.cell_ui.hit(at).is_empty() and game.selected<0 and game.moving_id<0:
 		game.cell_ui.close_context();return
-	var event:=InputEventMouseButton.new();event.position=at;event.button_index=MOUSE_BUTTON_LEFT
-	event.pressed=true;game._unhandled_input(event)
-	event.pressed=false;game._unhandled_input(event)
+	game._activate_at(at)
 
 func handle(event: InputEvent) -> bool:
+	if game.settings_panel.visible:return false
+	if (event is InputEventMouseButton or event is InputEventMouseMotion) and touch_enabled and event.device==-1:return false
+	if event is InputEventMouseButton or event is InputEventMouseMotion:return _mouse(event)
+	return _touch(event)
+
+func _mouse(event: InputEvent) -> bool:
+	if event is InputEventMouseMotion:
+		if not mouse_down:return false
+		if event.position.distance_to(mouse_start)>8*pixels and not mouse_moved:
+			mouse_moved=true;last_tap_family=-1;game.inspector.touch_until=0
+			game._direct_camera();game.camera_dragging=true
+		if mouse_moved:
+			var delta: Vector2=event.position-mouse_last
+			if game.camera_locked:game.camera_offset-=delta.rotated(-game.intero_rotation if game.perception=="interoception" else -game.camera_rotation)/game.zoom
+			else:game.free_camera=game.Simulation.Medium.wrap_position(game.free_camera-delta.rotated(-game.camera_rotation)/game.zoom)
+			mouse_last=event.position;game.currents.queue_redraw()
+		return true
+	if event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
+		if not event.pressed or _over_gui(game.ui,event.position):return false
+		game._zoom_at(event.position,1.12 if event.button_index==MOUSE_BUTTON_WHEEL_UP else 1/1.12)
+		return true
+	if event.button_index==MOUSE_BUTTON_RIGHT and event.pressed:
+		if _over_gui(game.ui,event.position):return false
+		if game.merge_selecting():game._end_merge_selection()
+		elif game.selected>=0 or game.moving_id>=0:game._cancel_placement()
+		else:game.cell_ui.close_context()
+		return true
+	if event.button_index not in [MOUSE_BUTTON_LEFT,MOUSE_BUTTON_MIDDLE]:return false
+	if event.pressed:
+		if _over_gui(game.ui,event.position):return false
+		mouse_down=true;mouse_moved=false;mouse_start=event.position;mouse_last=event.position;mouse_button=event.button_index
+		return true
+	if not mouse_down or event.button_index!=mouse_button:return false
+	mouse_down=false;game.camera_dragging=false
+	if not mouse_moved and mouse_button==MOUSE_BUTTON_LEFT and not _over_gui(game.ui,event.position):_tap(event.position)
+	mouse_moved=false
+	return true
+
+func _touch(event: InputEvent) -> bool:
 	if not event is InputEventScreenTouch and not event is InputEventScreenDrag:return false
-	if not enabled:enabled=true;layout()
+	if not touch_enabled:touch_enabled=true;layout()
 	if game.merge_selecting():
 		var cancel_button=game.cell_ui.merge_cancel_button
 		if event is InputEventScreenTouch and event.pressed and cancel_button.is_visible_in_tree() and cancel_button.get_global_rect().has_point(event.position):

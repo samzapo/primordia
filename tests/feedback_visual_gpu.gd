@@ -191,7 +191,7 @@ func current_style_controls(game) -> void:
 	for touch in [true,false]:
 		root.content_scale_size=Vector2i.ZERO
 		root.size=Vector2i(412,915) if touch else Vector2i(1280,800)
-		game.touch_zoom.enabled=touch;game.touch_zoom.pixels=1;game._layout()
+		game.controls.touch_enabled=touch;game.controls.pixels=1;game._layout()
 		game.set_current_style("crests")
 		for button in [game.streamline_style_button,game.crest_style_button]:
 			var scroll: ScrollContainer=button.get_parent().get_parent().get_parent()
@@ -325,7 +325,7 @@ func resource_warning_pixels(game) -> void:
 	var original_rng: int=game.world.rng.state
 	for mobile in [false,true]:
 		root.size=Vector2i(412,915) if mobile else Vector2i(1200,900)
-		game.touch_zoom.enabled=mobile;game.touch_zoom.pixels=1
+		game.controls.touch_enabled=mobile;game.controls.pixels=1
 		game.camera_has_pose=false;game.camera_followed_id=-1;game.camera_motion.cancel()
 		for depth in [true,false]:
 			game.membrane_depth=depth
@@ -358,4 +358,4 @@ func resource_warning_pixels(game) -> void:
 			game._update_world(1);await settle()
 			check(not game.views.has(cell.id) and not game.cell_ui.interior.visible,"A dead cell does not continue resource warning cues")
 			cell.dead=false;cell.health=100;cell.energy=50
-	game.membrane_depth=true;game.touch_zoom.enabled=false
+	game.membrane_depth=true;game.controls.touch_enabled=false

@@ -103,7 +103,7 @@ func division_controls() -> void:
 	for mobile in [false,true]:
 		game.world.player.automatic_division=true;game.world.player.division_requested=false
 		root.size=Vector2i(412,915) if mobile else Vector2i(1280,800)
-		game.touch_zoom.enabled=mobile;game.touch_zoom.pixels=1;game._layout();game._update_world(1)
+		game.controls.touch_enabled=mobile;game.controls.pixels=1;game._layout();game._update_world(1)
 		game.preferences.show_instinct=true;game.cell_ui.open_context({"kind":"nucleus"});await settle_ui()
 		var choices: Array=game.cell_ui.choices.filter(func(choice):return choice.symbol=="Instinct")
 		check(choices.size()==1 and choices[0].selected,"Instinct appears as an active direct toggle on both platforms")
@@ -185,7 +185,7 @@ func merge_controls() -> void:
 		var trace: Dictionary=sim._emit_pheromone(bodies[0]);trace.p=cell.organ_position(cell.organs[0]);sim.grid.rebuild(sim.particles);cell.behavior["family_cues"]=sim._family_reports(cell)
 		var commands: Array=[];sim.remote_client=true;sim.command_sink=func(action,args):commands.append({"action":action,"id":int(args.get("id",-1))})
 		game.merge_available={"cell":cell.id,"targets":sim.FamilyMerging.candidates(sim,cell)}
-		game.touch_zoom.enabled=mobile;game.touch_zoom.pixels=1;game.perception="interoception" if mobile else "exteroception"
+		game.controls.touch_enabled=mobile;game.controls.pixels=1;game.perception="interoception" if mobile else "exteroception"
 		var before_perception: String=game.perception
 		game.manual_zoom=8;game.camera_zoom=8;game.camera_locked=true;game.camera_offset=Vector2.ZERO;game.focus_animating=false
 		game._layout();game._update_world(1);game.cell_ui.open_context({"kind":"lineage"});await settle_ui()
@@ -203,7 +203,7 @@ func merge_controls() -> void:
 		game._update_world(1)
 		check(game._merge_at(game.views[900].get_global_transform_with_canvas().origin)==900,"An eligible relative remains clickable where its body overlaps the receiving cell")
 		bodies[0].position=original_position;bodies[0].previous_position=original_position;game._update_world(1)
-		check(game.touch_zoom.perception_button.text=="Internal" and game.perception_menu_button.text=="Internal [I]","Both platform controls use the new plain view names")
+		check(game.controls.perception_button.text=="Internal" and game.perception_menu_button.text=="Internal [I]","Both platform controls use the new plain view names")
 		var image:=root.get_texture().get_image()
 		var values: Array=[]
 		for body in bodies:

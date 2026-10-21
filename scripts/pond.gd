@@ -55,7 +55,7 @@ var ui := Control.new()
 var player_help:=preload("res://scripts/player_help.gd").new()
 var gameplay_menu_button: Button
 var mechanics_menu_button: Button
-var touch_zoom := preload("res://scripts/touch_zoom.gd").new()
+var controls := preload("res://scripts/game_controls.gd").new()
 var user_paused := false
 var perception := "exteroception"
 var perception_menu_button: Button
@@ -439,10 +439,10 @@ func _toggle_perception() -> void:
 	if build_open:observation_view={"zoom":manual_zoom,"locked":true,"free":_follow_cell().position,"offset":Vector2.ZERO}
 	if perception=="interoception" and world.resident!=null and can_follow() and _follow_cell().chemistry.accelerator==null:
 		world.resident.gpu.attach_cytoplasm(_follow_cell().chemistry,_follow_cell())
-	touch_zoom.cancel()
+	controls.cancel()
 	for view in views.values():view.seen_revision=-1;view._queue_body_redraw()
 	_update_world(1.0 if is_paused() else Engine.get_physics_interpolation_fraction())
-	touch_zoom.layout();_update_perception_menu()
+	controls.layout();_update_perception_menu()
 
 func can_follow() -> bool:
 	return _follow_cell()!=null and not _follow_cell().dead
@@ -518,7 +518,7 @@ func _update_world(alpha: float) -> void:
 	currents.position = Simulation.Medium.offset(render_camera,currents_origin)
 	habitat_view.sync(render_camera,world.view_half)
 	currents.visible = not flow_streamers
-	flow_view.mobile_quality=touch_zoom.enabled
+	flow_view.mobile_quality=controls.touch_enabled
 	flow_view.sync(world,render_camera,world.view_half,zoom,flow_streamers,flow_wakes)
 	reaction_view.sync(world,render_camera,world.view_half,zoom,show_reaction_sparks and perception=="exteroception")
 	merge_view.sync(world,render_camera,death_frame_dt,alpha)
@@ -751,17 +751,17 @@ func _toggle_camera() -> void:
 	_ease_camera()
 	if perception=="interoception":
 		camera_locked=true;camera_offset=Vector2.ZERO;intero_rotation=0
-		_update_world(1);touch_zoom.layout();return
+		_update_world(1);controls.layout();return
 	if not camera_locked and not can_follow():
-		_message("There is currently no living cell to follow.");touch_zoom.layout();return
+		_message("There is currently no living cell to follow.");controls.layout();return
 	if camera_locked:
 		free_camera=Simulation.Medium.wrap_position(render_camera);camera_rotation=render_rotation;camera_motion.cancel()
 	camera_locked = not camera_locked
 	if camera_locked: camera_offset = Vector2.ZERO;camera_rotation=0
 	camera_dragging = false
-	touch_zoom.cancel()
+	controls.cancel()
 	_update_world(1.0 if is_paused() else Engine.get_physics_interpolation_fraction())
-	touch_zoom.layout()
+	controls.layout()
 	currents.queue_redraw()
 	_update_hud()
 
@@ -800,7 +800,7 @@ func _camera_gesture(anchor_a: Vector2,anchor_b: Vector2,screen_a: Vector2,scree
 
 func _update_perception_menu() -> void:
 	if perception_menu_button!=null:
-		perception_menu_button.text=("Internal" if perception=="exteroception" else "External")+" [I]"
+		perception_menu_button.text="Internal" if perception=="exteroception" else "External"
 
 func lineage_color(root_id: int) -> String:
 	for row in lineage_names:
@@ -871,7 +871,7 @@ func _build_ui() -> void:
 	options.add_theme_constant_override("separation",12)
 	options.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	settings_scroll.add_child(options)
-	_label(options,"SETTINGS [M]",MINT)
+	_label(options,"Pause",MINT)
 	profile_menu_button=_button(options,"Player name",profile.open)
 	palette_menu_button=_button(options,"Lineage color",palette.open)
 	feedback_menu_button=_button(options,"Feature request / Bug report",feedback.open)
@@ -891,7 +891,7 @@ func _build_ui() -> void:
 	for scale_value in Preferences.SCALES: scale_select.add_item("%d%%" % roundi(scale_value*100))
 	scale_select.item_selected.connect(func(i): _apply_ui_scale(Preferences.SCALES[i]))
 	options.add_child(fullscreen_check)
-	fullscreen_check.text = "Fullscreen [F11]"
+	fullscreen_check.text = "Fullscreen"
 	fullscreen_check.toggled.connect(func(on): set_fullscreen(on))
 	options.add_child(bloom_check)
 	bloom_check.text = "Light bloom"
@@ -910,24 +910,24 @@ func _build_ui() -> void:
 		preferences.music_volume = value/100
 		music_label.text = "Music volume · %d%%" % roundi(value)
 		preferences.save_settings())
-	perception_menu_button=_button(options,"Internal [I]",_toggle_perception)
+	perception_menu_button=_button(options,"Internal",_toggle_perception)
 	perception_menu_button.tooltip_text="Switch between the cell interior and the surrounding water"
-	_button(options,"Sense view [S]",func(): show_senses = not show_senses)
-	_button(options,"Performance overlay [F3]",func(): show_debug = not show_debug)
-	if not world.remote_client:_button(options,"Next habitat [H]",func(): _restart((world.habitat+1)%3))
+	_button(options,"Sense view",func(): show_senses = not show_senses)
+	_button(options,"Performance overlay",func(): show_debug = not show_debug)
+	if not world.remote_client:_button(options,"Next habitat",func(): _restart((world.habitat+1)%3))
 	_button(options,"Family history",func():
 		settings_panel.hide()
 		cell_ui.open_context({"kind":"lineage"}))
 	if world.remote_client:_button(options,"Start new lineage",_request_new_lineage)
-	else:_button(options,"New expedition [R]",func(): _restart())
+	else:_button(options,"New expedition",func(): _restart())
 	ui.add_child(lineage_confirmation)
 	lineage_confirmation.title="Start a new lineage?"
 	lineage_confirmation.dialog_text="Your current family will stay in the pond and live under computer control. You will begin with a new cell. The shared pond will continue."
 	lineage_confirmation.ok_button_text="Start new lineage"
 	lineage_confirmation.confirmed.connect(_start_new_lineage)
-	settings_help=_label(options,"Tab: enter cell / keep edits and resume\nClick factories, nucleus, bud or installed organs\nNew organs have a fixed size · no Undo\nRight-click: cancel a held organ or close choices\nMicrotubules are sampled per cell\nWheel elsewhere: zoom · middle-drag: pan\nSpace: follow/free outside · recenter inside\nM: open / close settings\nI: Internal / External · inside zoom up to 120×\n[ / ]: cycle cell targets · Enter: choose / place\nArrow keys: navigate choices or membrane placement\nHover particles: inspect through a local lens\nNo movement keys: anatomy steers.",MUTED)
-	_button(options,"Resume / Close [M]",func():
-		if touch_zoom.enabled and user_paused:_toggle_user_pause()
+	settings_help=_label(options,"Select Gameplay for controls and Mechanics for the living pond.",MUTED)
+	_button(options,"Resume",func():
+		if user_paused:_toggle_user_pause()
 		else:_toggle_settings())
 	options_box.add_child(HSeparator.new())
 	options_box.add_child(session_controls)
@@ -935,7 +935,7 @@ func _build_ui() -> void:
 	quit_button.text = "Close game"
 	quit_button.pressed.connect(func(): get_tree().quit())
 	settings_panel.hide()
-	touch_zoom.initialize(self)
+	controls.initialize(self)
 
 func _style(color: Color, border: Color) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
@@ -971,7 +971,7 @@ func _apply_ui_scale(value: float) -> void:
 	_layout.call_deferred()
 
 func _layout_water(size: Vector2) -> void:
-	if not OS.has_feature("web") or not touch_zoom.enabled or not water_cache_enabled:
+	if not OS.has_feature("web") or not controls.touch_enabled or not water_cache_enabled:
 		if water_target!=null:
 			if light_layer.get_parent()!=self:light_layer.reparent(self,false);move_child(light_layer,world_layer.get_index())
 			water_target.render_target_update_mode=SubViewport.UPDATE_DISABLED;water_display.hide()
@@ -988,26 +988,26 @@ func _layout_water(size: Vector2) -> void:
 	water_display.show();water_target.render_target_update_mode=SubViewport.UPDATE_ALWAYS
 	# One sample per CSS pixel is enough for diffuse water, retaining full-resolution
 	# foreground, controls and the exact approved shader/pH palette.
-	water_target.size=Vector2i((size/maxf(1,touch_zoom.pixels)).ceil()).max(Vector2i.ONE)
+	water_target.size=Vector2i((size/maxf(1,controls.pixels)).ceil()).max(Vector2i.ONE)
 	light_layer.size=Vector2(water_target.size);water_display.size=size
 
 func _layout() -> void:
 	var size := get_viewport_rect().size
-	current_style_choices.columns=1 if touch_zoom.enabled else 2
-	touch_zoom.layout()
+	current_style_choices.columns=1
+	controls.layout()
 	_layout_water(size)
 	microscope_layer.size = size
-	var density: float=touch_zoom.pixels if touch_zoom.enabled else 1.0
+	var density: float=controls.pixels
 	var margin:=16*density
 	var width := minf(530*preferences.hud_scale*density,size.x-margin*2)
-	var top: float=60*density if touch_zoom.enabled else margin
+	var top: float=60*density
 	settings_panel.position = Vector2(size.x-width-margin,top)
 	settings_panel.size = Vector2(width,size.y-top-margin)
-	if touch_zoom.enabled and ui.theme!=null:
+	if ui.theme!=null:
 		var mobile_theme: Theme=ui.theme.duplicate()
 		mobile_theme.default_font_size=roundi(18*preferences.hud_scale*density)
 		settings_panel.theme=mobile_theme
-		if settings_help!=null:settings_help.text="Tap factories, nucleus, bud or organelles.\nDouble-tap a family cell to switch to it.\nTwo fingers drag, twist and pinch the camera.\nTap the held icon at top left to cancel placement.\nTap particles for names and details below.\nPause opens settings; the shared pond continues.\nAnatomy steers the cell."
+		if settings_help!=null:settings_help.text="Select factories, the nucleus, division bud or organelles.\nDouble-select a family cell to switch to it.\nSelect the held icon to cancel placement.\nSelect particles for names and details below.\nGameplay explains the camera controls for your device.\nThe shared pond continues while this view is paused.\nAnatomy steers the cell."
 		_size_touch_settings(settings_panel,40*preferences.hud_scale*density)
 	else:settings_panel.theme=null
 	preview.queue_redraw()
@@ -1128,7 +1128,7 @@ func placement_status() -> String:
 	if world.player.biomass < world.player.construction_price(Simulation.KINDS[selected]): return "Needs %d biomass." % world.player.construction_price(Simulation.KINDS[selected])
 	if not world.player.can_fit(Simulation.KINDS[selected],0,1,false): return "Needs more membrane area."
 	var place: String="inside the cell" if world.player.internal_organ(Simulation.KINDS[selected]) else "the membrane"
-	return "Tap "+place+" · tap the held icon to cancel." if touch_zoom.enabled else "Click "+place+" · right-click cancels."
+	return "Select "+place+" · select the held icon to cancel."
 
 func _placement_hit(relative: Vector2) -> bool:
 	var organ: Dictionary=world.player.organ_by_id(moving_id)
@@ -1197,7 +1197,7 @@ func _start_new_lineage() -> void:
 
 func _restart(profile: int = -1) -> void:
 	if merge_selecting():_end_merge_selection(false)
-	user_paused=false;touch_zoom.cancel()
+	user_paused=false;controls.cancel()
 	archive.sync(world)
 	archive.begin()
 	if resident_controller!=null: resident_controller.close()
@@ -1247,7 +1247,7 @@ func _cancel_placement() -> void:
 	selected=-1;moving_id=-1;tube_start.clear()
 	cell_ui.close_context()
 
-func _mobile_pause_menu() -> void:
+func _open_pause_menu() -> void:
 	if not pause_control_ready:return
 	if user_paused:
 		_toggle_user_pause()
@@ -1262,33 +1262,17 @@ func _toggle_user_pause() -> void:
 		settings_panel.hide()
 		if build_open:_finish_build()
 		cell_ui.close_context()
-	touch_zoom.cancel();touch_zoom.layout()
+	controls.cancel();controls.layout()
 
 func _notification(what: int) -> void:
-	if what==NOTIFICATION_WM_WINDOW_FOCUS_OUT:touch_zoom.cancel()
+	if what==NOTIFICATION_WM_WINDOW_FOCUS_OUT:controls.cancel()
 
 func _input(event: InputEvent) -> void:
 	if feedback.opened or profile.opened or palette.opened or player_help.opened or lineage_confirming:return
 	if cell_ui.family_picker.handle_touch(event):get_viewport().set_input_as_handled();return
-	if event is InputEventScreenTouch or event is InputEventScreenDrag:
-		if touch_zoom.handle(event):get_viewport().set_input_as_handled()
-		return
-	if touch_zoom.enabled and (event is InputEventMouseButton or event is InputEventMouseMotion) and event.device==-1:return
-	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT and build_open and not settings_panel.visible:
-		if selected >= 0 or moving_id >= 0 or not cell_ui.context.is_empty():
-			selected = -1
-			moving_id = -1
-			cell_ui.close_context()
-			get_viewport().set_input_as_handled()
-			return
-	if event is InputEventMouseMotion: placement_keyboard = false
-	if event is InputEventMouseButton and not event.pressed:
-		if event.button_index == camera_button: camera_dragging = false
-		if event.button_index == MOUSE_BUTTON_LEFT and not tube_start.is_empty():
-			if not _can_edit_tubules() or get_viewport().gui_get_hovered_control() != null: tube_start.clear()
-			else: _unhandled_input(event)
-			get_viewport().set_input_as_handled()
-			return
+	if (event is InputEventMouseButton or event is InputEventMouseMotion) and controls.touch_enabled and event.device==-1:return
+	if event is InputEventMouseMotion:placement_keyboard=false
+	if controls.handle(event):get_viewport().set_input_as_handled();return
 	if event is InputEventKey and event.pressed and not event.echo:
 		if settings_panel.visible and event.keycode not in [KEY_M,KEY_F11,KEY_F3,KEY_I]: return
 		match event.keycode:
@@ -1353,8 +1337,8 @@ func _begin_merge_selection() -> void:
 	var base: float=minf(size.x/Simulation.VIEW.x,size.y/Simulation.VIEW.y)
 	var radius: float=world.FamilyMerging.neighborhood(world.player)
 	manual_zoom=clampf(minf(size.x,size.y)/(2.4*radius*base),MIN_ZOOM,MAX_ZOOM);camera_zoom=manual_zoom;focus_animating=false
-	touch_zoom.cancel();inspector.box.hide();inspector.touch_until=0
-	_update_perception_menu();_update_world(1);touch_zoom.layout();cell_ui.sync(0)
+	controls.cancel();inspector.box.hide();inspector.touch_until=0
+	_update_perception_menu();_update_world(1);controls.layout();cell_ui.sync(0)
 	_message("No available relatives detected yet. Wait for a family trail, or Cancel." if merge_candidates.is_empty() else "Choose a bright relative to merge. Dim cells cannot be selected.")
 
 func _end_merge_selection(restore: bool=true) -> void:
@@ -1365,7 +1349,7 @@ func _end_merge_selection(restore: bool=true) -> void:
 	if restore and world.player.id==previous.cell and not world.player.dead:
 		perception=previous.perception;camera_locked=previous.locked;free_camera=previous.free;camera_offset=previous.offset
 		camera_rotation=previous.rotation;intero_rotation=previous.intero_rotation;manual_zoom=previous.zoom;camera_zoom=manual_zoom;focus_animating=false
-	touch_zoom.cancel();_update_perception_menu();_update_world(1);touch_zoom.layout();cell_ui.sync(0)
+	controls.cancel();_update_perception_menu();_update_world(1);controls.layout();cell_ui.sync(0)
 
 func _merge_at(screen: Vector2) -> int:
 	var selected_id:=-1;var top:=-1000;var distance:=INF
@@ -1417,94 +1401,26 @@ func _switch_family(identity: int) -> bool:
 	if world.remote_client:return true # Reframe only after the authoritative selected body arrives.
 	_ease_camera()
 	camera_locked = true; camera_offset = Vector2.ZERO; intero_rotation = 0
-	touch_zoom.last_tap_family = -1
+	controls.last_tap_family = -1
 	_update_world(1)
 	return true
 
 func _unhandled_input(event: InputEvent) -> void:
 	if feedback.opened or profile.opened or palette.opened or player_help.opened or lineage_confirming:return
-	if touch_zoom.enabled and (event is InputEventMouseButton or event is InputEventMouseMotion) and event.device==-1:return
-	if merge_selecting() and event is InputEventMouseButton and event.pressed:
-		if event.button_index==MOUSE_BUTTON_RIGHT:_end_merge_selection();return
-		if event.button_index==MOUSE_BUTTON_LEFT:_choose_merge_at(event.position);return
-	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT and not cell_ui.context.is_empty():
-		cell_ui.close_context()
-		return
-	if not _can_edit_tubules(): tube_start.clear()
-	if settings_panel.visible or world.evolution.terminal(): return
-	if event is InputEventMouseMotion and camera_dragging:
-		if camera_locked: camera_offset -= event.relative.rotated(-intero_rotation if perception=="interoception" else -camera_rotation)/zoom
-		else: free_camera = Simulation.Medium.wrap_position(free_camera-event.relative.rotated(-camera_rotation)/zoom)
-		currents.queue_redraw()
-		return
-	if not event is InputEventMouseButton: return
-	var relative := _player_relative(event.position)
-	var local := relative.rotated(-_player_heading())
-	if not event.pressed:
-		if event.button_index == camera_button: camera_dragging = false
-		if event.button_index == MOUSE_BUTTON_LEFT and not tube_start.is_empty():
-			var endpoint := _tubule_anchor(local)
-			if not endpoint.is_empty():
-				tube_group = world.edit("link_add",{"start":tube_start,"end":endpoint,"value":tube_tension})
-				if tube_group >= 0:
-					shape_preview_ticks = 60
-			tube_start.clear()
-		return
-	if event.button_index == MOUSE_BUTTON_MIDDLE and (merge_selecting() or build_open or not camera_locked or perception=="interoception"):
-		_direct_camera()
-		camera_dragging = true
-		camera_button = event.button_index
-		tube_start.clear()
-		return
-	if event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
-		var hit := _nearest_tubule(local) if _can_edit_tubules() and selected < 0 and moving_id < 0 and cell_ui.hit(event.position).is_empty() else {}
-		if not hit.is_empty():
-			var link: Dictionary = world.player.membrane.skeleton.link_by_id(hit.id)
-			tube_group = link.group
-			tube_tension = clampf(link.tension+(0.05 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -0.05),0,1)
-			world.edit("tension",{"id":tube_group,"value":tube_tension})
-			shape_preview_ticks = 60
-			return
-		_zoom_at(event.position,1.12 if event.button_index == MOUSE_BUTTON_WHEEL_UP else 1/1.12)
-		return
-	if world.player.dead:
-		if event.button_index==MOUSE_BUTTON_LEFT and not camera_locked:
-			_direct_camera()
-			camera_dragging=true;camera_button=event.button_index
-		return
-	if event.button_index == MOUSE_BUTTON_RIGHT:
-		if selected >= 0 or moving_id >= 0:
-			selected = -1
-			moving_id = -1
-			return
-		if not tube_start.is_empty(): tube_start.clear(); return
-		if not cell_ui.context.is_empty(): cell_ui.close_context(); return
-		if _can_edit_tubules() and cell_ui.hit(event.position).is_empty():
-			var hit := _nearest_tubule(local)
-			if not hit.is_empty():
-				world.edit("link_remove",{"id":world.player.membrane.skeleton.link_by_id(hit.id).group})
-				tube_group = -1
-				shape_preview_ticks = 60
-		return
-	if event.button_index == MOUSE_BUTTON_LEFT:
-		if event.double_click and _switch_family(_family_at(event.position)): return
-		if build_open and (selected >= 0 or moving_id >= 0):
-			if _placement_hit(relative):
-				_place_at(world.player.surface_parameter(local.angle()))
-				return
-		var target: Dictionary = cell_ui.pick(event.position)
-		if not target.is_empty():
-			if not build_open: _toggle_build()
-			cell_ui.open_context(target)
-			return
-		if not cell_ui.context.is_empty(): cell_ui.close_context(); return
-		if _can_edit_tubules() and selected < 0 and moving_id < 0:
-			var anchor := _tubule_anchor(local)
-			if not anchor.is_empty(): tube_start = anchor; return
-		if not build_open and not camera_locked:
-			_direct_camera()
-			camera_dragging = true
-			camera_button = event.button_index
+	if controls.handle(event):get_viewport().set_input_as_handled()
+
+func _activate_at(at: Vector2) -> void:
+	# One primary action for real taps, clicks and every future pointing device.
+	if settings_panel.visible or user_paused or world.player.dead or world.evolution.terminal():return
+	var relative:=_player_relative(at)
+	var local:=relative.rotated(-_player_heading())
+	if build_open and (selected>=0 or moving_id>=0) and _placement_hit(relative):
+		_place_at(world.player.surface_parameter(local.angle()));return
+	var target: Dictionary=cell_ui.pick(at)
+	if not target.is_empty():
+		if not build_open:_toggle_build()
+		cell_ui.open_context(target);return
+	cell_ui.close_context()
 
 func _nearest_tubule(local: Vector2) -> Dictionary:
 	var membrane = world.player.membrane

@@ -1139,6 +1139,21 @@ const RELEASES=[
  "footer": "Your cell and its progress carry on in this pond.",
  "button": "Back to the pond"
 },
+{
+ "id": "2026-10-21-experimental-shared-controls",
+ "audience": "experimental",
+ "supersedes_experimental": true,
+ "supersedes_shared_for_experimental": true,
+ "title": "What’s new in the pond",
+ "items": [
+  "Desktop now has the same cell controls, menus, resource strip and placement feedback as your phone.",
+  "Choose organs, switch relatives and inspect particles the same way on either screen. Menus adapt to the space available.",
+  "On desktop, click and drag to move the view and scroll to zoom. On a phone, keep using two fingers to move, turn and zoom."
+ ],
+ "footer": "Your cell and its progress carry on in this pond.",
+ "button": "Back to the pond"
+},
+
 
 
 ]

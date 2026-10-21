@@ -27,11 +27,11 @@ func initialize(owner_game) -> void:
 	get_viewport().size_changed.connect(_layout);hide();set_process(false)
 func open(which: String) -> void:
 	page=which;opened=true;title.text="Gameplay" if page=="gameplay" else "Mechanics"
-	sections.visible=page=="mechanics";sections.select(0);game.touch_zoom.cancel()
+	sections.visible=page=="mechanics";sections.select(0);game.controls.cancel()
 	_content()
 	if OS.has_feature("web"):
 		var guide: Dictionary=Guide.data()
-		var groups: Array=guide.mechanics if page=="mechanics" else [{"title":"Your controls","items":guide.gameplay.touch if game.touch_zoom.enabled else guide.gameplay.desktop},{"title":"Shape your cell","items":guide.gameplay.common}]
+		var groups: Array=guide.mechanics if page=="mechanics" else [{"title":"Your controls","items":guide.gameplay.touch if game.controls.touch_enabled else guide.gameplay.desktop},{"title":"Shape your cell","items":guide.gameplay.common}]
 		JavaScriptBridge.eval("window.primordiaReaders.openHelp("+JSON.stringify({"title":title.text,"science":page=="mechanics","groups":groups})+")")
 		hide();set_process(true)
 	else:show();_layout();back.grab_focus()
@@ -43,12 +43,12 @@ func _process(_dt: float) -> void:
 	var action=JSON.parse_string(str(JavaScriptBridge.eval("window.primordiaReaders.take('help')")))
 	if action is Dictionary and action.get("close",false):close()
 func _content() -> void:
-	body.text=Guide.gameplay(game.touch_zoom.enabled) if page=="gameplay" else Guide.mechanics(sections.selected-1)
+	body.text=Guide.gameplay(game.controls.touch_enabled) if page=="gameplay" else Guide.mechanics(sections.selected-1)
 	var scroll: ScrollContainer=body.get_parent();scroll.scroll_vertical=0
 func _layout() -> void:
 	if not opened or OS.has_feature("web"):return
 	var available:=get_viewport_rect().size
-	var density: float=game.touch_zoom.pixels if game.touch_zoom.enabled else 1.0
+	var density: float=game.controls.pixels
 	var fonts:=Theme.new();fonts.default_font_size=roundi(18*game.preferences.hud_scale*density);theme=fonts
 	title.add_theme_font_size_override("font_size",roundi(24*density))
 	back.custom_minimum_size=Vector2(0,48*density);sections.custom_minimum_size=Vector2(0,44*density)

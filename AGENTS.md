@@ -926,3 +926,27 @@ roundups begin from this new main baseline, rather than repeating this batch.
 Retain main's world/cells/accounts/keys/feedback and the independent running
 experimental pond. Routine focused checks/deploy only; no new reset/standby,
 network helper, schedule, balance trial or FPS benchmark.
+
+
+## October21 shared desktop/touch interface
+Mobile is the owner's design reference. Desktop and touch must use one interface
+and one world-action path, responsive only to available viewport/UI scale.
+GameControls owns the shared Pause/Follow/Internal/music/zoom widgets;
+CellInterface owns the shared action tray, resources, placement cancel and descriptions. Its touch_enabled flag is an
+input/render-budget fact, never a menu/feature/layout selector. Tap and click
+both call the same _tap/_activate_at flow, including family double-selection,
+inspection, overlap picking and immediate optimistic placement. Only camera
+adapters differ: desktop left/middle drag and wheel, touch two-finger pan/twist/
+pinch. GUI gestures consume input before world/camera actions; release/resize/
+focus loss cancels capture. Family list dragging normalizes mouse and touch.
+
+Do not restore desktop radial menus, pagination limits, separate resource-cost
+overlays or keyboard-heavy mobile labels. Common gameplay help comes from one
+list; only camera help differs. Native and web use the same controls source.
+Offline/native launch semantics remain explicit; input capability must not
+select a different game mode. Both release pipelines call the small
+isolated tools/check_interface.py contract after import and before web export or
+service cutover. Keep that paired check current as interactions are added; it
+checks real menus/actions at phone/desktop sizes, not render speed. Shared UI
+classes cannot branch on touch capability. Retain both ponds; experimental first,
+new cumulative preview pool after the October21 main release.

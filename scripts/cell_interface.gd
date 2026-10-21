@@ -3,7 +3,6 @@ extends Control
 var pathways := preload("res://scripts/chemistry_editor.gd").new()
 const Interior = preload("res://scripts/cell_interior.gd")
 const Action = preload("res://scripts/cell_action.gd")
-const Biomass = preload("res://scripts/biomass_preview.gd")
 var game
 var family_picker:=preload("res://scripts/family_picker.gd").new()
 var investment_picker:=preload("res://scripts/investment_picker.gd").new()
@@ -19,20 +18,14 @@ var resources_hidden:=false
 var merge_cancel_button:=Button.new()
 var cancel_icon=Action.new()
 const COMIC=preload("res://assets/fonts/ComicNeue-Regular.ttf")
-func mobile() -> bool:return game!=null and game.touch_zoom.enabled
-func ui_scale() -> float:return game.preferences.hud_scale*(game.touch_zoom.pixels if mobile() else 1.0)
+func ui_scale() -> float:return game.preferences.hud_scale*game.controls.pixels
 var interior := Interior.new()
-var biomass_view := Biomass.new()
 var choices: Array[Button] = []
 var context: Dictionary = {}
 var hovered: Dictionary = {}
-var hovered_price: Dictionary = {}
 var tip_box := PanelContainer.new()
 var tip := Label.new()
 var status_feed:=preload("res://scripts/status_feed.gd").new()
-var edit_hint := Label.new()
-var menu_center := Vector2.ZERO
-var menu_radius := 100.0
 var keyboard_index := -1
 var keyboard_target: Dictionary = {}
 var last_tide := 0
@@ -60,7 +53,7 @@ func initialize(owner_game) -> void:
 	stock_row.add_child(mobile_hide);mobile_hide.pressed.connect(func():resources_hidden=not resources_hidden)
 	merge_cancel_button.z_index=90;merge_cancel_button.text="Cancel merge";add_child(merge_cancel_button);merge_cancel_button.hide()
 	merge_cancel_button.pressed.connect(func():game._end_merge_selection())
-	cancel_icon.z_index=90;cancel_icon.caption="Cancel placement";cancel_icon.description="Tap to cancel";add_child(cancel_icon)
+	cancel_icon.z_index=90;cancel_icon.caption="Cancel placement";cancel_icon.description="Select to cancel";add_child(cancel_icon)
 	cancel_icon.pressed.connect(func():
 		if game.merge_selecting():game._end_merge_selection()
 		else:game._cancel_placement())
@@ -72,8 +65,6 @@ func initialize(owner_game) -> void:
 	interior.game = game
 	interior.z_index = 8
 	game.world_layer.add_child(interior)
-	biomass_view.game = game
-	add_child(biomass_view)
 	add_child(tip_box)
 	tip_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tip.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -81,12 +72,6 @@ func initialize(owner_game) -> void:
 	tip_box.add_child(tip)
 	tip.add_theme_font_override("font",COMIC)
 	tip_box.z_index = 20
-	for label in [edit_hint]:
-		add_child(label)
-		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		label.add_theme_color_override("font_outline_color",Color("122443"))
-		label.add_theme_constant_override("outline_size",6)
 	tip_box.hide()
 	reset()
 
@@ -106,14 +91,12 @@ func close_context() -> void:
 	family_picker.hide()
 	context.clear()
 	mobile_tray.hide();mobile_menu_height=0.0
-	if mobile():game.touch_zoom.layout()
-	hovered_price.clear()
+	game.controls.layout()
 	for choice in choices:
 		choice.get_parent().remove_child(choice)
 		choice.queue_free()
 	choices.clear()
 	tip_box.hide()
-	biomass_view.sync()
 	queue_redraw()
 
 func screen_at(target: Dictionary) -> Vector2:
@@ -146,7 +129,7 @@ func _hit_candidates(screen: Vector2) -> Array:
 	for target in targets():
 		var radius := maxf(18*game.preferences.hud_scale,preload("res://scripts/factory_layout.gd").radius(target.kind)*game.zoom)
 		if target.kind in ["organ","scar"]: radius = maxf(17*game.preferences.hud_scale,14*game.zoom)
-		radius=maxf(radius*1.15,(22 if mobile() else 20)*ui_scale())
+		radius=maxf(radius*1.15,22*ui_scale())
 		var distance := screen.distance_to(screen_at(target))
 		if distance < radius: found.append({"target":target,"score":distance/radius})
 	found.sort_custom(func(a,b):return a.score < b.score)
@@ -181,8 +164,7 @@ func _choice(title: String, description: String, action: Callable, organ_kind: S
 	node.rate_model = rate_model
 	node.pressed.connect(action)
 	if context.get("kind","") in ["lineage","merge_family"]:family_picker.grid.add_child(node)
-	elif mobile():mobile_flow.add_child(node)
-	else:add_child(node)
+	else:mobile_flow.add_child(node)
 	choices.append(node)
 
 func open_context(target: Dictionary) -> void:
@@ -301,19 +283,6 @@ func open_context(target: Dictionary) -> void:
 					open_context({"kind":"archive","page":page}),data.kind,"",not run.terminal())
 			if known.size() > 3: _choice("More blueprints","Next page.",open_context.bind({"kind":"archive","page":(page+1)%ceili(known.size()/3.0)}),"","More")
 			_choice("Nucleus","Return to the nucleus.",open_context.bind({"kind":"nucleus"}),"","Back")
-	# At most four actions plus a next-page node around any structure.
-	if choices.size() > 5 and not mobile() and target.kind not in ["lineage","merge_family"]:
-		var all_choices: Array[Button] = choices.duplicate()
-		var page := posmod(int(target.get("menu_page",0)),ceili(all_choices.size()/4.0))
-		choices = []
-		for i in all_choices.size():
-			if i >= page*4 and i < page*4+4: choices.append(all_choices[i])
-			else:
-				all_choices[i].get_parent().remove_child(all_choices[i])
-				all_choices[i].queue_free()
-		var next := target.duplicate()
-		next["menu_page"] = page+1
-		_choice("More","Next choices.",open_context.bind(next),"","…")
 	if not choices.is_empty():
 		for i in choices.size():
 			choices[i].focus_neighbor_left = choices[(i-1+choices.size())%choices.size()].get_path()
@@ -425,32 +394,14 @@ func _tooltip(value: String, at: Vector2) -> void:
 			value=game.TITLES[game.Simulation.KINDS.find(organ.kind)]+" · "+state.label+"\n"+value
 	tip_box.visible = value != ""
 	if value == "": return
-	if mobile():
-		value=value.replace("\n"," · ").replace("Click","Tap").replace("click","tap")
-		if value.length()>220:value=value.left(217)+"…"
-	elif not Input.is_key_pressed(KEY_ALT): value = value.split("\n")[0]
-	var s: float = ui_scale()
-	tip.custom_minimum_size.x = minf(320*s,get_viewport_rect().size.x-48)
-	tip.add_theme_font_size_override("font_size",roundi(16*s))
-	if tip.text != value:
-		tip.text = value
-		tip_box.reset_size()
-	var extent := tip_box.get_combined_minimum_size()
-	tip_box.size = extent # Shrink after text reflow; stale tall panels otherwise clip at large UI scales.
-	tip_box.position = (at+Vector2(18,18)).clamp(Vector2(12,12),get_viewport_rect().size-extent-Vector2(12,12))
-	if mobile() or game.merge_selecting() or context.get("kind","")=="organ":
-		tip.custom_minimum_size.x=maxf(50,get_viewport_rect().size.x-32*s)
-		tip.max_lines_visible=3
-		tip.add_theme_font_size_override("font_size",roundi(18*s))
-		tip_box.reset_size();tip_box.size=tip_box.get_combined_minimum_size()
-		tip_box.position=Vector2(8*s,maxf(8*s,status_feed.top-tip_box.size.y-5*s))
-		return
-	var budget_area: Rect2 = biomass_view.comparison_bounds()
-	if game.build_open and Rect2(tip_box.position,extent).intersects(budget_area):
-		var left: float = budget_area.position.x-extent.x-18*s
-		if left >= 12: tip_box.position.x = left
-		elif budget_area.end.y+extent.y+18*s <= get_viewport_rect().size.y:
-			tip_box.position.y = budget_area.end.y+18*s
+	value=value.replace("\n"," · ").replace("Click","Select").replace("click","select").replace("Tap","Select").replace("tap","select")
+	if value.length()>220:value=value.left(217)+"…"
+	var s: float=ui_scale()
+	tip.custom_minimum_size.x=maxf(50,get_viewport_rect().size.x-32*s)
+	tip.max_lines_visible=3;tip.add_theme_font_size_override("font_size",roundi(18*s))
+	if tip.text!=value:tip.text=value;tip_box.reset_size()
+	tip_box.size=tip_box.get_combined_minimum_size()
+	tip_box.position=Vector2(8*s,maxf(8*s,status_feed.top-tip_box.size.y-5*s))
 
 func _events() -> void:
 	var cell=game.world.player;var family=game.world.lineage
@@ -480,7 +431,6 @@ func sync(_dt: float) -> void:
 	if game == null: return
 	status_feed.advance(_dt)
 	_events()
-	biomass_view.sync()
 	var active: bool = not game.settings_panel.visible
 	visible = active
 	if not active:
@@ -492,12 +442,6 @@ func sync(_dt: float) -> void:
 	var size := get_viewport_rect().size
 	var bottom: float=size.y-(mobile_resources.get_combined_minimum_size().y+16*s if mobile_resources.visible else 12*s)
 	status_feed.sync(0,game.world.player,game.preferences.show_instinct,game.world.Behavior.summary(game.world.player),game.waiting_for_world(),s,size,bottom)
-	edit_hint.visible = game.build_open and not mobile() and context.get("kind","") not in ["lineage","merge_family"] and (game.selected>=0 or game.moving_id>=0 or not context.is_empty())
-	var placing_kind: String=game.Simulation.KINDS[game.selected] if game.selected>=0 else game.world.player.organ_by_id(game.moving_id).get("kind","")
-	edit_hint.text = "Tab · return to habitat" if placing_kind=="" else ("Place inside the cell · right-click cancels" if game.world.player.internal_organ(placing_kind) else "Place on membrane · right-click cancels")
-	edit_hint.add_theme_font_size_override("font_size",roundi(14*s))
-	edit_hint.size = Vector2(minf(540*s,size.x-32),0)
-	edit_hint.position = Vector2((size.x-edit_hint.size.x)*0.5,14)
 	if not game.build_open and not context.is_empty() and context.kind not in ["lineage","merge_family","archive","past"]: close_context()
 	if context.get("kind","") in ["bud","division"]:
 		for choice in choices:
@@ -510,28 +454,18 @@ func sync(_dt: float) -> void:
 				choice.selected=game.world.player.automatic_division if choice.get_meta("reproduction_auto")=="mitosis" else game.world.player.automatic_budding
 				choice.queue_redraw()
 	if context.get("kind","") in ["lineage","merge_family"]:family_picker.sync()
-	_layout_mobile()
+	_layout_controls()
 	if investment_picker.visible:investment_picker.sync()
 	for choice in choices:
 		if choice.has_meta("instinct_toggle"):
 			choice.selected=game.preferences.show_instinct
-			choice.description=game.world.Behavior.summary(game.world.player)+(" · Tap again to hide." if mobile() else " · Click again to hide.") if game.preferences.show_instinct else "Show this cell’s current intention and direction."
+			choice.description=game.world.Behavior.summary(game.world.player)+" · Select again to hide." if game.preferences.show_instinct else "Show this cell’s current intention and direction."
 			choice.queue_redraw()
 	if not context.is_empty() and context.kind not in ["lineage","merge_family"]:
-		if mobile():
-			for choice in choices:
-				choice.text_scale=s*.85
-				choice.custom_minimum_size=Vector2.ONE*60*s
-				choice.queue_redraw()
-		else:
-			var anchor:=screen_at(context)
-			menu_radius=106*s if choices.size()>3 else 88*s
-			var margin:=Vector2.ONE*(menu_radius+38*s+12)
-			menu_center=anchor.clamp(margin,size-margin)
-			for i in choices.size():
-				var choice=choices[i];choice.text_scale=s;choice.size=Vector2.ONE*68*s
-				choice.position=menu_center+Vector2.from_angle(-PI/2+TAU*i/maxi(1,choices.size()))*menu_radius-choice.size*.5
-				choice.queue_redraw()
+		for choice in choices:
+			choice.text_scale=s*.85
+			choice.custom_minimum_size=Vector2.ONE*60*s
+			choice.queue_redraw()
 
 
 	var cursor := get_global_mouse_position()
@@ -552,7 +486,6 @@ func sync(_dt: float) -> void:
 			if choice.has_focus():
 				inspected_choice = choice
 				break
-	hovered_price.clear()
 	if inspected_choice != null:
 		_tooltip(inspected_choice.caption+"\n"+inspected_choice.description,inspected_choice.position+Vector2(inspected_choice.size.x,0))
 		if not inspected_choice.rate_model.is_empty():
@@ -561,10 +494,8 @@ func sync(_dt: float) -> void:
 			var existing: Dictionary = game.world.player.organ_by_id(model.get("id",-1))
 			var current: float = game.Simulation.Cell.organ_upkeep(existing) if not existing.is_empty() else 0.0
 			_tooltip(inspected_choice.caption+"\n"+inspected_choice.description+"\nWorking ATP estimate %.2f/s · change %+.2f/s\nIdle organs cost no ATP; actual work varies." % [future,future-current],inspected_choice.position+Vector2(inspected_choice.size.x,0))
-		if inspected_choice.tissue_cost >= 0:
-			hovered_price = {"tissue":inspected_choice.tissue_cost,"ap":inspected_choice.ap_cost,"rate_model":inspected_choice.rate_model}
 	else:
-		if game.merge_selecting():_tooltip("No available relatives detected yet. Wait for a family signal, or Cancel merge." if game.merge_candidates.is_empty() else "Tap a bright relative to merge. Signals keep it available for five seconds. Cancel merge goes back." if mobile() else "Click a bright relative to merge. Signals keep it available for five seconds. Right-click or Cancel merge goes back.",Vector2.ZERO)
+		if game.merge_selecting():_tooltip("No available relatives detected yet. Wait for a family signal, or Cancel merge." if game.merge_candidates.is_empty() else "Select a bright relative to merge. Signals keep it available for five seconds. Cancel merge goes back.",Vector2.ZERO)
 		elif not context.is_empty() and choices.is_empty() and context.kind!="investment": _tooltip(describe(context),screen_at(context))
 		elif not hovered.is_empty() and (game.build_open or Input.is_key_pressed(KEY_ALT)) and (hovered.kind != "body" or Input.is_key_pressed(KEY_ALT)) and game.selected < 0 and game.moving_id < 0: _tooltip(describe(hovered),screen_at(hovered))
 		elif not keyboard_target.is_empty() and game.selected < 0: _tooltip(describe(keyboard_target),screen_at(keyboard_target))
@@ -573,23 +504,22 @@ func sync(_dt: float) -> void:
 		else:
 			tip_box.hide()
 	if context.get("kind","")=="organ" and not tip_box.visible:_tooltip(describe(context),Vector2.ZERO)
-	if mobile() and game.inspector.box.visible:tip_box.hide()
-	biomass_view.sync()
+	if game.inspector.box.visible:tip_box.hide()
 	queue_redraw()
 
-func _layout_mobile() -> void:
+func _layout_controls() -> void:
 	var prior_height:=mobile_menu_height
 	var s:=ui_scale();var size:=get_viewport_rect().size
-	mobile_tray.visible=mobile() and not context.is_empty() and context.kind not in ["lineage","merge_family"] and not choices.is_empty()
-	mobile_resources.visible=not game.world.player.dead and ((mobile() and game.touch_controls_available()) or (not mobile() and game.build_open))
-	mobile_menu_height=investment_picker.size.y+16*s if mobile() and investment_picker.visible else 0.0
-	if mobile() and family_picker.visible:mobile_menu_height=family_picker.position.y+family_picker.size.y+8*s
+	mobile_tray.visible=not context.is_empty() and context.kind not in ["lineage","merge_family"] and not choices.is_empty()
+	mobile_resources.visible=not game.world.player.dead and game.touch_controls_available()
+	mobile_menu_height=investment_picker.size.y+16*s if investment_picker.visible else 0.0
+	if family_picker.visible:mobile_menu_height=family_picker.position.y+family_picker.size.y+8*s
 	merge_cancel_button.visible=game.merge_selecting() and not game.settings_panel.visible
 	if merge_cancel_button.visible:
 		var scale: float=minf(s,size.x/340.0)
 		merge_cancel_button.position=Vector2(8,38)*scale;merge_cancel_button.size=Vector2(132,42)*scale
 		merge_cancel_button.add_theme_font_size_override("font_size",roundi(18*scale))
-	cancel_icon.visible=mobile() and (game.selected>=0 or game.moving_id>=0) and not game.settings_panel.visible and not game.merge_selecting()
+	cancel_icon.visible=(game.selected>=0 or game.moving_id>=0) and not game.settings_panel.visible and not game.merge_selecting()
 	if cancel_icon.visible:
 		var organ: Dictionary=game.world.player.organ_by_id(game.moving_id)
 		cancel_icon.kind=game.Simulation.KINDS[game.selected] if game.selected>=0 else organ.get("kind","")
@@ -607,8 +537,8 @@ func _layout_mobile() -> void:
 		mobile_menu_height=height+12*s
 	if mobile_resources.visible:
 		mobile_stocks.custom_minimum_size.x=minf(330*s,size.x-70*s)
-		mobile_stocks.visible=not resources_hidden or not mobile()
-		mobile_hide.visible=mobile()
+		mobile_stocks.visible=not resources_hidden
+		mobile_hide.visible=true
 		mobile_stocks.add_theme_font_size_override("font_size",roundi(18*s))
 		mobile_stocks.text="Biomass %.1f   ATP %.1f" % [game.world.player.biomass,game.world.player.energy]
 		if game.selected>=0:mobile_stocks.text+="\nCost %d biomass" % game.world.player.construction_price(game.Simulation.KINDS[game.selected])
@@ -617,7 +547,7 @@ func _layout_mobile() -> void:
 		mobile_hide.custom_minimum_size=Vector2(30,30)*s
 		mobile_resources.reset_size()
 		mobile_resources.position=Vector2(8*s,size.y-mobile_resources.get_combined_minimum_size().y-8*s)
-	if mobile() and not is_equal_approx(prior_height,mobile_menu_height):game.touch_zoom.layout()
+	if not is_equal_approx(prior_height,mobile_menu_height):game.controls.layout()
 
 func mobile_diagnostics(conversion: Vector2) -> Dictionary:
 	var bounds:=func(node: Control) -> Array:
@@ -657,14 +587,6 @@ func activate_keyboard() -> bool:
 
 func _draw() -> void:
 	if game == null or game.settings_panel.visible: return
-	if not context.is_empty() and context.kind not in ["investment","lineage","merge_family"] and not mobile():
-		draw_line(screen_at(context),menu_center,Color(0.5,0.91,0.85,0.35),1.5,true)
-		for choice in choices:
-			var origin := menu_center
-			if context.kind == "lineage" and choice.has_meta("parent_id"):
-				for parent in choices:
-					if parent.get_meta("family_id",-2) == choice.get_meta("parent_id",-1): origin = parent.position+parent.size*0.5
-			draw_line(origin,choice.position+choice.size*0.5,Color(0.5,0.91,0.85,0.50),2,true)
 	if game.build_open and not hovered.is_empty() and hovered.kind != "body" and game.selected < 0:
 		draw_arc(screen_at(hovered),24*game.preferences.hud_scale,0,TAU,32,Color(0.67,1,0.89,0.8),1.5,true)
 	if game.build_open and not keyboard_target.is_empty():

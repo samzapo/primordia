@@ -10,7 +10,7 @@ func run() -> void:
 	var game = load("res://scenes/pond.tscn").instantiate(); game.use_particle_pool = false
 	root.add_child(game); game.set_process(false); game.set_physics_process(false)
 	game.music.enabled = false; game.music.player.stop()
-	game.touch_zoom.enabled = true; game.touch_zoom.pixels = 2
+	game.controls.touch_enabled = true; game.controls.pixels = 2
 	var cell = game.world.player
 	var mouth: Dictionary = cell.organs.filter(func(o):return o.kind=="feeding")[0].duplicate(true)
 	cell.organs = [mouth]; mouth.a = 0.0
@@ -23,7 +23,7 @@ func run() -> void:
 	var other = game.Simulation.Cell.clone_state(cell)
 	other.id = 990; other.lineage = 990; other.position += Vector2(18,8); other.previous_position = other.position
 	game.world.cells = [cell,other]; game.manual_zoom = 12
-	game._update_world(1); game.touch_zoom.layout(); game.cell_ui.sync(0)
+	game._update_world(1); game.controls.layout(); game.cell_ui.sync(0)
 	for frame in 8: await process_frame
 	var image := root.get_texture().get_image()
 	for i in 3:

@@ -54,7 +54,7 @@ func run() -> void:
 	var client=Client.new();client.server_url="ws://127.0.0.1:"+str(host.port);client.invitation="feedback-authenticated-fixture"
 	root.add_child(client);client.music.enabled=false;client.music.player.stop()
 	check(await until(func():return client.connected and not client.loading_world and client.world.revision>0),"Real client signs in and receives a complete world")
-	client._mobile_pause_menu()
+	client._open_pause_menu()
 	var entries: Array[Node]=client.settings_panel.find_children("*","Button",true,false)
 	var entry=entries.filter(func(button):return button.text=="Feature request / Bug report")
 	check(entry.size()==1,"Pause/settings contains the feedback action")
@@ -116,7 +116,7 @@ func logout_session() -> void:
 	check(not first_token.is_empty() and FileAccess.get_file_as_string(client.identity_path)==first_token,"Real identity storage remembers this player's login")
 	client.update_popup.close();client.pending_release_updates.clear()
 	root.content_scale_size=Vector2i.ZERO;root.size=Vector2i(360,640)
-	client._mobile_pause_menu();await process_frame;await process_frame
+	client._open_pause_menu();await process_frame;await process_frame
 	check(client.logout_menu_button.text=="Log out" and client.logout_menu_button.is_visible_in_tree(),"Pause exposes Log out on a phone-size viewport")
 	client.feedback.details.text="Private unfinished draft"
 	client.commands.append({"op":"command","sequence":99})
@@ -132,7 +132,7 @@ func logout_session() -> void:
 	check(client.token!=first_token and client.world.player.id!=first_cell and host.accounts.size()==2,"Switching reaches the other player's cell with both accounts retained")
 	check(FileAccess.get_file_as_string(client.identity_path)==client.token and host.accounts.values().all(func(account):return account.sequence==0),"Only the new login is remembered and old queued commands are not replayed")
 	root.size=Vector2i(1280,720);client.update_popup.close();client.pending_release_updates.clear()
-	client._mobile_pause_menu();await process_frame
+	client._open_pause_menu();await process_frame
 	check(client.logout_menu_button.is_visible_in_tree(),"Desktop Pause exposes the same Log out action")
 	client.logout_menu_button.pressed.emit()
 	check(await until(func():return host.peers.is_empty()),"Second logout also disconnects cleanly")

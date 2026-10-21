@@ -275,21 +275,17 @@ func update_lens(dt: float, screen: Vector2, alpha: float, allowed: bool) -> voi
 			if not report.is_empty():
 				value += "\nDefense: "+("defended" if report.get("defended",true) else "undefended")+" at emission"
 				value += "\nReported size: %.0f μm across · %s\nSignal age: %.1f s" % [report.radius*2*game.scale_bar.MICROMETERS_PER_UNIT,"armed" if report.hostile else "unarmed",maxf(0,game.world.time-report.emitted_at)]
-		if game.cell_ui.mobile():
-			value=value.replace("\n"," · ")
-			if value.length()>220:value=value.left(217)+"…"
-			label.max_lines_visible=3
-		label.custom_minimum_size.x = (get_viewport_rect().size.x-32*game.cell_ui.ui_scale()) if game.cell_ui.mobile() else minf(260*game.cell_ui.ui_scale(),get_viewport_rect().size.x-36)
+		value=value.replace("\n"," · ")
+		if value.length()>220:value=value.left(217)+"…"
+		label.max_lines_visible=3
+		label.custom_minimum_size.x=get_viewport_rect().size.x-32*game.cell_ui.ui_scale()
 		label.add_theme_font_size_override("font_size",roundi(15*game.cell_ui.ui_scale()))
 		if label.text != value:
 			label.text = value
 			box.reset_size()
-		var magnified_at: Vector2 = lens_center+((hovered.screen-lens_center)*lerpf(1,MAGNIFICATION,lens_amount)).limit_length(RADIUS*0.45*game.cell_ui.ui_scale())
-		var extent := box.get_combined_minimum_size()
-		box.position = (magnified_at+Vector2(18,24)*game.cell_ui.ui_scale()).clamp(Vector2(12,12),get_viewport_rect().size-extent-Vector2(12,12))
-		if game.cell_ui.mobile():
-			var scale: float=game.cell_ui.ui_scale()
-			box.position=Vector2(8*scale,get_viewport_rect().size.y-game.cell_ui.mobile_resources.get_combined_minimum_size().y-extent.y-16*scale)
+		var extent:=box.get_combined_minimum_size()
+		var scale: float=game.cell_ui.ui_scale()
+		box.position=Vector2(8*scale,get_viewport_rect().size.y-game.cell_ui.mobile_resources.get_combined_minimum_size().y-extent.y-16*scale)
 	queue_redraw()
 
 func _draw() -> void:

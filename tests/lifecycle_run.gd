@@ -213,7 +213,7 @@ func controls() -> void:
 	game.set_process(false);game.set_physics_process(false);game.music.enabled=false;game.music.player.stop()
 	game.build_open=true;var sim=game.world;sim.server_mode=true
 	for mobile in [false,true]:
-		game.touch_zoom.enabled=mobile
+		game.controls.touch_enabled=mobile
 		var cell=sim.player;cell.organs.clear();cell.biomass=100;cell.update_geometry()
 		for kind in ["feeding","photosynthesis","propulsion"]:sim.install(kind,1)
 		var organ=cell.organs[-1];var before=cell.biomass

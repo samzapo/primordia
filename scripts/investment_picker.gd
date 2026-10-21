@@ -141,7 +141,7 @@ func sync() -> void:
   for label in [note,status]:label.add_theme_font_size_override("font_size",roundi(13*s));label.custom_minimum_size.x=width-20*s
   title.add_theme_font_size_override("font_size",roundi(18*s))
  size=Vector2(width,0);reset_size()
- position=Vector2((viewport.x-size.x)*.5,8*s if game.cell_ui.mobile() else maxf(8*s,(viewport.y-size.y)*.5))
+ position=Vector2((viewport.x-size.x)*.5,8*s)
 
 func diagnostics(conversion: Vector2) -> Dictionary:
  var bounds:=func(node: Control) -> Array:

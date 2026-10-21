@@ -24,7 +24,7 @@ func run() -> void:
  game.set_process(false);game.set_physics_process(false);game.music.enabled=false;game.music.player.stop()
  root.content_scale_size=Vector2i.ZERO
  game.connected=true;game.connection_stage="ready";game.login.hide();game.loading_world=false
- game.touch_zoom.enabled=true;game.touch_zoom.pixels=1;game.preferences.show_instinct=true
+ game.controls.touch_enabled=true;game.controls.pixels=1;game.preferences.show_instinct=true
  game.cell_ui.close_context();game.cell_ui.sync(0)
  var feed=game.cell_ui.status_feed
  check(feed.entries.is_empty(),"Initial view and family history do not replay routine notices")
@@ -71,13 +71,13 @@ func run() -> void:
  check(feed.entries.is_empty(),"Notices expire while menus are open instead of returning later")
  game.settings_panel.hide()
  for view in [Vector2i(393,740),Vector2i(1170,2100),Vector2i(740,393),Vector2i(1280,720)]:
-  root.size=view;game.touch_zoom.enabled=view.x<1200;game.touch_zoom.pixels=3 if view.x==1170 else 1
+  root.size=view;game.controls.touch_enabled=view.x<1200;game.controls.pixels=3 if view.x==1170 else 1
   game._layout();game.cell_ui.sync(0);await process_frame;await process_frame;game.cell_ui.sync(0)
   game._queue_command("follow",{"id":92});game.cell_ui.sync(0)
   var visible_area:=Rect2(Vector2.ZERO,Vector2(view))
   check(visible_area.encloses(feed.instinct.get_global_rect()) and visible_area.encloses(feed.waiting.get_global_rect()),"Status and waiting amoeba fit "+str(view)+" actual="+str(game.get_viewport_rect())+" instinct="+str(feed.instinct.get_global_rect())+" waiting="+str(feed.waiting.get_global_rect()))
   check(feed.waiting.visible and not feed.waiting.get_global_rect().intersects(feed.instinct.get_global_rect()),"Bottom-right waiting stays clear of Instinct "+str(view))
-  if game.touch_zoom.enabled:check(game.cell_ui.mobile_resources.visible and not game.cell_ui.mobile_resources.get_global_rect().intersects(feed.instinct.get_global_rect()),"Instinct stays above the active mobile resource bar "+str(view))
+  if game.controls.touch_enabled:check(game.cell_ui.mobile_resources.visible and not game.cell_ui.mobile_resources.get_global_rect().intersects(feed.instinct.get_global_rect()),"Instinct stays above the active mobile resource bar "+str(view))
   sequence=game.inflight.sequence;game._command_result({"sequence":sequence,"ok":true,"edit":1,"message":"Applied"})
  game.connection_stage="connecting";game.connecting=true;game._show_connection("Connecting to the shared pond…")
  check(not game.login.visible and game.status.text.is_empty() and game.waiting_for_world(),"Simple connection progress uses the amoeba instead of a message")

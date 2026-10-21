@@ -11,7 +11,7 @@ func run() -> void:
  root.size=Vector2i(360,760)
  var scene=load("res://scenes/pond.tscn").instantiate();scene.use_particle_pool=false;root.add_child(scene)
  scene.set_process(false);scene.set_physics_process(false);scene.music.enabled=false;scene.music.player.stop()
- root.content_scale_size=Vector2i.ZERO;root.size=Vector2i(360,760);scene.touch_zoom.enabled=true;scene.touch_zoom.pixels=1
+ root.content_scale_size=Vector2i.ZERO;root.size=Vector2i(360,760);scene.controls.touch_enabled=true;scene.controls.pixels=1
  scene.settings_panel.show();scene.palette.open()
  for i in 5:await process_frame
  var wheel=scene.palette.wheel
@@ -36,11 +36,11 @@ func run() -> void:
  check(scene.palette.caption.text.begins_with("#") and scene.palette.preview.color==wheel.color(),"Color swatch and code match the selected value")
  scene.palette.close()
  for setting in [{"logical":Vector2i(1170,2100),"pixels":3.0},{"logical":Vector2i(760,360),"pixels":1.0}]:
-  root.size=Vector2i(Vector2(setting.logical)/setting.pixels);root.content_scale_size=setting.logical;scene.touch_zoom.pixels=setting.pixels;scene.palette.open()
+  root.size=Vector2i(Vector2(setting.logical)/setting.pixels);root.content_scale_size=setting.logical;scene.controls.pixels=setting.pixels;scene.palette.open()
   for frame in 4:await process_frame
   check(Rect2(Vector2.ZERO,Vector2(setting.logical)).encloses(scene.palette.panel.get_global_rect()),"Color controls and fixed actions fit dense portrait and landscape layouts")
   scene.palette.close()
- root.content_scale_size=Vector2i.ZERO;root.size=Vector2i(360,760);scene.touch_zoom.pixels=1.0
+ root.content_scale_size=Vector2i.ZERO;root.size=Vector2i(360,760);scene.controls.pixels=1.0
  var vp:=SubViewport.new();vp.size=Vector2i(256,128);vp.transparent_bg=true;vp.render_target_update_mode=SubViewport.UPDATE_ALWAYS;root.add_child(vp)
  var canvas:=Node2D.new();vp.add_child(canvas)
  canvas.draw.connect(func():
@@ -70,14 +70,14 @@ func investment_input(scene) -> void:
  scene.build_open=true;scene.perception="exteroception";scene.manual_zoom=5;scene._update_world(1)
  for setting in [{"logical":Vector2i(390,844),"pixels":1.0,"mobile":true},{"logical":Vector2i(1170,2100),"pixels":3.0,"mobile":true},{"logical":Vector2i(760,360),"pixels":1.0,"mobile":true},{"logical":Vector2i(1280,800),"pixels":1.0,"mobile":false},{"logical":Vector2i(760,360),"pixels":1.0,"mobile":true,"scale":1.5},{"logical":Vector2i(390,844),"pixels":1.0,"mobile":true,"scale":1.5},{"logical":Vector2i(1280,800),"pixels":1.0,"mobile":false,"scale":2.0}]:
   root.size=Vector2i(Vector2(setting.logical)/setting.pixels);root.content_scale_size=setting.logical
-  scene.touch_zoom.enabled=setting.mobile;scene.touch_zoom.pixels=setting.pixels
+  scene.controls.touch_enabled=setting.mobile;scene.controls.pixels=setting.pixels
   scene.preferences.hud_scale=setting.get("scale",1.0)
   scene._update_world(1);scene.cell_ui.sync(0)
   for frame in 3:await process_frame
   var at: Vector2=scene.cell_ui.screen_at({"kind":"chemistry"})
   check(scene.cell_ui.interior.is_visible_in_tree() and Rect2(Vector2.ZERO,Vector2(setting.logical)).has_point(at),"The factory is on screen in desktop and touch layouts")
   # Use the actual world click path; overlaps must retain a factory choice.
-  scene.camera_motion.cancel();scene._update_world(1);scene.cell_ui.sync(0);scene.touch_zoom.layout()
+  scene.camera_motion.cancel();scene._update_world(1);scene.cell_ui.sync(0);scene.controls.layout()
   at=scene.cell_ui.screen_at({"kind":"chemistry"})
   if capture!="" and setting.logical==Vector2i(390,844):root.get_texture().get_image().save_png(capture+"/factory-portrait.png")
   click(at)
@@ -91,7 +91,7 @@ func investment_input(scene) -> void:
   if not scene.cell_ui.choices.is_empty():click(scene.cell_ui.choices[0].get_global_rect().get_center())
   for frame in 2:await process_frame
   check(scene.perception=="interoception" and scene.selected==12,"Internal selection begins placement in Interoception")
-  scene._cancel_placement();scene.camera_motion.cancel();scene._update_world(1);scene.cell_ui.sync(0);scene.touch_zoom.layout()
+  scene._cancel_placement();scene.camera_motion.cancel();scene._update_world(1);scene.cell_ui.sync(0);scene.controls.layout()
   click(scene.cell_ui.screen_at({"kind":"chemistry"}))
   for frame in 2:await process_frame
   if scene.cell_ui.context.get("kind","")=="overlap":
@@ -125,7 +125,7 @@ func investment_input(scene) -> void:
 
   scene.cell_ui.close_context();scene.perception="exteroception"
  # The shared drawings must produce visible icons, not names or blank circles.
- scene.touch_zoom.enabled=false;scene.preferences.hud_scale=1.0;root.content_scale_size=Vector2i.ZERO;root.size=Vector2i(1280,800)
+ scene.controls.touch_enabled=false;scene.preferences.hud_scale=1.0;root.content_scale_size=Vector2i.ZERO;root.size=Vector2i(1280,800)
  scene.cell_ui.open_context({"kind":"overlap","targets":["assembly","chemistry","nucleus","atp","bud"].map(func(kind):return {"kind":kind})})
  for frame in 4:scene.cell_ui.sync(0);await process_frame
  var image:=root.get_texture().get_image()
@@ -154,7 +154,7 @@ func family_portraits(scene) -> void:
  var ui=scene.cell_ui
  for setting in [{"logical":Vector2i(390,844),"pixels":1.0,"mobile":true},{"logical":Vector2i(1170,2100),"pixels":3.0,"mobile":true},{"logical":Vector2i(760,360),"pixels":1.0,"mobile":true},{"logical":Vector2i(1280,800),"pixels":1.0,"mobile":false},{"logical":Vector2i(390,844),"pixels":1.0,"mobile":true,"scale":1.5}]:
   root.size=Vector2i(Vector2(setting.logical)/setting.pixels);root.content_scale_size=setting.logical
-  scene.touch_zoom.enabled=setting.mobile;scene.touch_zoom.pixels=setting.pixels;scene.preferences.hud_scale=setting.get("scale",1.0)
+  scene.controls.touch_enabled=setting.mobile;scene.controls.pixels=setting.pixels;scene.preferences.hud_scale=setting.get("scale",1.0)
   scene._update_world(1);ui.open_context({"kind":"lineage"})
   for frame in 5:ui.sync(0);await process_frame
   var cards: Array=ui.choices.filter(func(choice):return choice.has_meta("family_id"))
@@ -182,7 +182,7 @@ func family_portraits(scene) -> void:
   if capture!="" and setting.logical==Vector2i(390,844):image.save_png(capture+"/family-portrait.png")
  # Existing controls keep working above the illustration.
  root.size=Vector2i(390,844);root.content_scale_size=Vector2i.ZERO
- scene.touch_zoom.enabled=true;scene.touch_zoom.pixels=1;scene.preferences.hud_scale=1
+ scene.controls.touch_enabled=true;scene.controls.pixels=1;scene.preferences.hud_scale=1
  ui.open_context({"kind":"lineage"})
  for frame in 4:ui.sync(0);await process_frame
  var cards: Array=ui.choices.filter(func(choice):return choice.get_meta("family_id",-1)==42)
@@ -244,7 +244,7 @@ func family_grid(scene) -> void:
  family_fixture(scene,16)
  for setting in [{"logical":Vector2i(390,844),"pixels":1.0,"mobile":true},{"logical":Vector2i(1170,2100),"pixels":3.0,"mobile":true},{"logical":Vector2i(760,360),"pixels":1.0,"mobile":true},{"logical":Vector2i(1280,800),"pixels":1.0,"mobile":false},{"logical":Vector2i(390,844),"pixels":1.0,"mobile":true,"scale":1.5},{"logical":Vector2i(1280,800),"pixels":1.0,"mobile":false,"scale":2.0}]:
   root.size=Vector2i(Vector2(setting.logical)/setting.pixels);root.content_scale_size=setting.logical
-  scene.touch_zoom.enabled=setting.mobile;scene.touch_zoom.pixels=setting.pixels
+  scene.controls.touch_enabled=setting.mobile;scene.controls.pixels=setting.pixels
   scene.preferences.hud_scale=setting.get("scale",1.0)
   scene._update_world(1);ui.open_context({"kind":"lineage"})
   for frame in 6:ui.sync(0);await process_frame
@@ -269,7 +269,7 @@ func family_grid(scene) -> void:
  var picker=ui.family_picker
  for setting in [{"logical":Vector2i(574,1106),"pixels":1.0},{"logical":Vector2i(1170,2100),"pixels":3.0},{"logical":Vector2i(390,500),"pixels":1.0}]:
   root.size=Vector2i(Vector2(setting.logical)/setting.pixels);root.content_scale_size=setting.logical
-  scene.touch_zoom.enabled=true;scene.touch_zoom.pixels=setting.pixels;scene.preferences.hud_scale=1
+  scene.controls.touch_enabled=true;scene.controls.pixels=setting.pixels;scene.preferences.hud_scale=1
   scene._update_world(1);ui.open_context({"kind":"lineage"})
   for frame in 6:ui.sync(0);await process_frame
   check(Rect2(Vector2.ZERO,Vector2(setting.logical)).encloses(picker.get_global_rect()),"All64 portraits stay in a bounded panel after viewport resizing: "+str(picker.get_global_rect()))
@@ -373,7 +373,7 @@ func leaf_selection(scene) -> void:
  var leaf: Dictionary=cell.organs.filter(func(o):return o.kind=="photosynthesis")[0]
  for mobile in [false,true]:
   root.content_scale_size=Vector2i.ZERO;root.size=Vector2i(390,844) if mobile else Vector2i(1280,800)
-  scene.touch_zoom.enabled=mobile;scene.touch_zoom.pixels=1;scene.preferences.hud_scale=1
+  scene.controls.touch_enabled=mobile;scene.controls.pixels=1;scene.preferences.hud_scale=1
   leaf.mutation="shade_leaf";scene.cell_ui.open_context({"kind":"organ","id":leaf.id})
   for frame in 4:scene.cell_ui.sync(0);await process_frame
   var options: Array=scene.cell_ui.choices.filter(func(choice):return choice.caption.begins_with("Sun"))
@@ -393,7 +393,7 @@ func receptor_factory_controls(_previous_scene) -> void:
  var cell=scene.world.player;cell.ap=0
  for mobile in [false,true]:
   root.content_scale_size=Vector2i.ZERO;root.size=Vector2i(412,915) if mobile else Vector2i(1280,800)
-  scene.touch_zoom.enabled=mobile;scene.touch_zoom.pixels=1;scene.preferences.hud_scale=1
+  scene.controls.touch_enabled=mobile;scene.controls.pixels=1;scene.preferences.hud_scale=1
   for mode in ["exteroception","interoception"]:
    scene.perception=mode;scene.camera_locked=true;scene.camera_offset=Vector2.ZERO;scene.manual_zoom=4;scene.build_open=true;scene.camera_followed_id=-1;scene.camera_has_pose=false
    scene.camera_motion.cancel()

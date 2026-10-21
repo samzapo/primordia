@@ -6,6 +6,6 @@ func expect(value: bool,message: String) -> void:
 	if not value:failures+=1;push_error("FAIL: "+message)
 func _initialize() -> void:run.call_deferred()
 func run() -> void:
-	await preload("res://tests/touch_zoom.gd").new().run(self)
+	await preload("res://tests/controls.gd").new().run(self)
 	print("TOUCH CONTROLS: %d assertions, %d failures" % [assertions,failures])
 	quit(0 if failures==0 else 1)
