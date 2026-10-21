@@ -35,9 +35,9 @@ func run() -> void:
   cell.velocity=Vector2(3,4);var velocity=cell.velocity
   sim._suction_cell(cell,.1);sim.fluid.prepare_attractors(sim.cells)
   var normal: Vector2=cell.organ_normal(mouth).rotated(cell.angle)
-  var near: Vector2=at+normal*120;var far: Vector2=at+normal*260
-  check((sim.fluid.transport_sample(near)-sim.fluid.sample(near)).dot(-normal)>100,role+" mouth has strong pull beyond old intake radius")
-  check((sim.fluid.transport_sample(far)-sim.fluid.sample(far)).dot(-normal)>10,role+" mouth has a wider influence zone")
+  var near: Vector2=at+normal*cell.oral_reach(mouth)*.45;var far: Vector2=at+normal*cell.oral_reach(mouth)*1.1
+  check((sim.fluid.transport_sample(near)-sim.fluid.sample(near)).dot(-normal)>100,role+" mouth retains strong local nutrient pull")
+  check((sim.fluid.transport_sample(far)-sim.fluid.sample(far)).length()<.00001,role+" mouth stops pulling outside its cell-scaled reach")
   check(sim.fluid.velocity==water and cell.velocity==velocity,"Oral attraction cannot inject water/cell momentum")
   var start:=near
   for i in 240:start=preload("res://scripts/particle_transport.gd").advect(start,Vector2.ZERO,sim.fluid,1.0/60)
@@ -126,7 +126,7 @@ func resident_attractor() -> void:
  print("FOCUSED_GPU ",RenderingServer.get_video_adapter_name())
  var sim=fixture();var cell=sim.player;cell.add_organ("feeding",0,"graze",false)
  var at: Vector2=cell.pore_center(cell.organs[0]);sim.fluid.prepare_attractors(sim.cells)
- var start: Vector2=at+cell.organ_normal(cell.organs[0]).rotated(cell.angle)*180
+ var start: Vector2=at+cell.organ_normal(cell.organs[0]).rotated(cell.angle)*cell.oral_reach(cell.organs[0])*.8
  var data:=PackedFloat32Array([start.x,start.y,0,0,0,0,0,0,8,.3,.3,0])
  var gpu=preload("res://scripts/resident_particles.gd").new()
  gpu.initialize(data,sim.fluid.particle_flow())

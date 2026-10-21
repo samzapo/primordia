@@ -4,7 +4,7 @@ const Medium = preload("res://scripts/medium.gd")
 const Genes = preload("res://scripts/mutations.gd")
 const PERIOD := 1.0
 const SUBSTEP := 0.125
-const FEED_MARGIN := 320.0
+const FEED_MARGIN := 48.0 # Minimum gas/intake margin; oral reach follows cell size.
 const CONTACT_DUTY := 0.5
 # Calibrated swept collection area for unresolved pore motion and fluid delivery.
 # This affects encounters with real packets, never cell storage/metabolic stats.
@@ -62,9 +62,9 @@ func advance(sim, cell, elapsed: float, hidden: bool = true) -> void:
 	if hidden:
 		var patch: Array[int] = []
 		if sim.particle_pool:
-			patch = sim.kernels.pool_filter(sim.grid.query(cell.position,cell.extent()+FEED_MARGIN+60),-1,true,sim.player.position if sim.camera_follows_player else sim.camera_position,sim.view_half)
+			patch = sim.kernels.pool_filter(sim.grid.query(cell.position,cell.extent()+feeding_margin(cell)+60),-1,true,sim.player.position if sim.camera_follows_player else sim.camera_position,sim.view_half)
 		else:
-			for index in sim.grid.query(cell.position,cell.extent()+FEED_MARGIN+60):
+			for index in sim.grid.query(cell.position,cell.extent()+feeding_margin(cell)+60):
 				var packet: Dictionary = sim.particles[index]
 				if packet.alive and sim.activity_at(packet.p) <= 0: patch.append(index)
 		# Same oriented contact rules; timestamped unary chemistry prevents two
@@ -148,12 +148,18 @@ static func _swim(cell) -> float:
 			thrust += (2600.0 if organ.kind == "propulsion" else cell.CILIA_THRUST)*organ.scale*organ.scale*organ.hp/organ.max_hp*Genes.factor(organ,"thrust")
 	return thrust*cell.work_capacity()/(cell.fluid_drag()+cell.mass*0.2)
 
+static func feeding_margin(cell) -> float:
+	var reach:=FEED_MARGIN
+	for organ in cell.organs:
+		if organ.kind=="feeding" and organ.hp>0:reach=maxf(reach,cell.oral_reach(organ))
+	return reach
+
 static func feeding_request(sim, cell, dt: float, period: float) -> Dictionary:
 	# Same unresolved swept collection model as _feed; GPU consumption still
 	# competes for actual packets and ordinary storage capacity.
 	var capture := 0.0
 	var relative: float=(cell.velocity-sim.fluid.sample(cell.position)).length()
-	var radius: float=cell.extent()+FEED_MARGIN+minf(60,relative*period)
+	var radius: float=cell.extent()+feeding_margin(cell)+minf(60,relative*period)
 	for organ in cell.organs:
 		if organ.kind!="feeding" or organ.hp<=0: continue
 		var pump: float=(cell.ORAL_FLOW*.375)*organ.scale*organ.hp/organ.max_hp*Genes.factor(organ,"suction")*cell.work_capacity()
@@ -171,7 +177,7 @@ func _feed(sim, cell, dt: float) -> void:
 	var mouth: Dictionary = {}
 	var capture := 0.0
 	var relative: float = (cell.velocity-sim.fluid.sample(cell.position)).length()
-	var radius: float = cell.extent()+FEED_MARGIN+minf(60,relative*period)
+	var radius: float = cell.extent()+feeding_margin(cell)+minf(60,relative*period)
 	for organ in cell.organs:
 		if organ.kind != "feeding" or organ.hp <= 0: continue
 		if mouth.is_empty(): mouth = organ

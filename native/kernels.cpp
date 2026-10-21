@@ -1,4 +1,5 @@
 #include "chemical_catalog.h"
+#include "mouth_attraction.h"
 #include "music_mixer.h"
 #include "simulation_workers.h"
 #include "mutual_matching.h"
@@ -52,6 +53,9 @@ Vector2 sample(const PackedVector2Array &v, Vector2 p) {
   return v[node(x, y)]
       .lerp(v[node(x + 1, y)], p.x - x)
       .lerp(v[node(x, y + 1)].lerp(v[node(x + 1, y + 1)], p.x - x), p.y - y);
+}
+Vector2 transport_sample(const PackedVector2Array &flow,Vector2 at,int kind) {
+  return sample(flow,at)+primordia_mouth::pull(flow.ptr(),flow.size(),at,kind);
 }
 double acid_sample(const PackedFloat32Array &v, Vector2 p) {
   p = wrapv(p) / 64 - Vector2(.5, .5);
@@ -1720,14 +1724,14 @@ public:
       // Keep RNG call order explicit, matching the reference backend.
       double nx = rng->randfn(0, 1), ny = rng->randfn(0, 1);
       if (t <= .05) {
-        at = wrapv(at + (v + sample(flow, at)) * t);
+        at = wrapv(at + (v + transport_sample(flow, at,int(p[keys.kind]))) * t);
       } else {
         int steps = std::clamp(int(std::ceil(t / .25)), 1, 8);
         double h = t / steps, damping = std::exp(-.8*h);
         Vector2 launch = v;
         for (int j = 0; j < steps; ++j) {
-          Vector2 midpoint = at + sample(flow, at)*(h*.5) + launch*((1-std::exp(-.4*h))/.8);
-          at = wrapv(at + sample(flow, midpoint)*h + launch*((1-damping)/.8));
+          Vector2 midpoint = at + transport_sample(flow, at,int(p[keys.kind]))*(h*.5) + launch*((1-std::exp(-.4*h))/.8);
+          at = wrapv(at + transport_sample(flow, midpoint,int(p[keys.kind]))*h + launch*((1-damping)/.8));
           launch *= damping;
         }
       }
@@ -1769,11 +1773,12 @@ public:
     // happen on workers. Each ordinary scheduler ID is unique.
     const Vector2 *velocities=flow.ptr();
     Vector2 *positions=packet_positions.ptrw();
-    auto sample_flow=[&](Vector2 p) {
-      p=wrapv(p)/64-Vector2(.5,.5);
-      int x=std::floor(p.x),y=std::floor(p.y);
-      return velocities[node(x,y)].lerp(velocities[node(x+1,y)],p.x-x)
-        .lerp(velocities[node(x,y+1)].lerp(velocities[node(x+1,y+1)],p.x-x),p.y-y);
+    auto sample_flow=[&](Vector2 at,int kind) {
+      Vector2 q=wrapv(at)/64-Vector2(.5,.5);
+      int x=std::floor(q.x),y=std::floor(q.y);
+      return velocities[node(x,y)].lerp(velocities[node(x+1,y)],q.x-x)
+        .lerp(velocities[node(x,y+1)].lerp(velocities[node(x+1,y+1)],q.x-x),q.y-y)
+        +primordia_mouth::pull(velocities,flow.size(),at,kind);
     };
     SimulationWorkers::shared().run(transport_jobs_buffer.size(),simulation_threads,[&](size_t begin,size_t end) {
       for (size_t k=begin;k<end;++k) {
@@ -1783,13 +1788,13 @@ public:
         bool tracer=p.kind==3;double angle=p.angle;
         p.updated=revision;p.previous=at;p.jump=t>.05;
         if (clock>=0) {p.transport_at=clock;slot.has_transport_clock=true;}
-        if (t<=.05) at=wrapv(at+(v+sample_flow(at))*t);
+        if (t<=.05) at=wrapv(at+(v+sample_flow(at,p.kind))*t);
         else {
           int steps=std::clamp(int(std::ceil(t/.25)),1,8);
           double h=t/steps,damping=std::exp(-.8*h);Vector2 launch=v;
           for (int j=0;j<steps;++j) {
-            Vector2 midpoint=at+sample_flow(at)*(h*.5)+launch*((1-std::exp(-.4*h))/.8);
-            at=wrapv(at+sample_flow(midpoint)*h+launch*((1-damping)/.8));
+            Vector2 midpoint=at+sample_flow(at,p.kind)*(h*.5)+launch*((1-std::exp(-.4*h))/.8);
+            at=wrapv(at+sample_flow(midpoint,p.kind)*h+launch*((1-damping)/.8));
             launch*=damping;
           }
         }
@@ -1816,7 +1821,7 @@ public:
       if (result>=0) return result;
     }
     int count = 0;
-    if (parcels.enabled && pool_enabled && background)
+    if (flow.size()==2560 && parcels.enabled && pool_enabled && background)
       parcels.prepare(packet_slots,ids,flow,clock,dt,sample,wrapv);
     std::vector<int> liquid_ids;
     std::vector<Vector2> liquid_positions,liquid_motion;
@@ -1851,17 +1856,17 @@ public:
       }
       // Keep RNG call order explicit, matching the reference backend.
       double nx = rng->randfn(0, 1), ny = rng->randfn(0, 1);
-      if (background && parcels.enabled && parcels.contains(id)) {
+      if (flow.size()==2560 && background && parcels.enabled && parcels.contains(id)) {
         at=wrapv(at+parcels.displacement(id));
       } else if (t <= .05) {
-        at = wrapv(at + (v + sample(flow, at)) * t);
+        at = wrapv(at + (v + transport_sample(flow, at,p.kind)) * t);
       } else {
         int steps = std::clamp(int(std::ceil(t / .25)), 1, 8);
         double h = t / steps, damping = std::exp(-.8*h);
         Vector2 launch = v;
         for (int j = 0; j < steps; ++j) {
-          Vector2 midpoint = at + sample(flow, at)*(h*.5) + launch*((1-std::exp(-.4*h))/.8);
-          at = wrapv(at + sample(flow, midpoint)*h + launch*((1-damping)/.8));
+          Vector2 midpoint = at + transport_sample(flow, at,p.kind)*(h*.5) + launch*((1-std::exp(-.4*h))/.8);
+          at = wrapv(at + transport_sample(flow, midpoint,p.kind)*h + launch*((1-damping)/.8));
           launch *= damping;
         }
       }

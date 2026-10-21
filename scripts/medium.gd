@@ -71,32 +71,31 @@ func particle_flow() -> PackedVector2Array:
 	return particle_velocity if not particle_velocity.is_empty() else velocity
 
 func prepare_attractors(cells: Array) -> void:
-	# Strongest mouth wins locally: crowded mouths cannot sum into a launch.
-	var pull:=PackedVector2Array();pull.resize(COLS*ROWS)
-	var strengths:=PackedFloat32Array();strengths.resize(COLS*ROWS)
-	for cell in cells:
-		if cell.dead:continue
+	# Append small mouth descriptors to the water field, not a blended force grid.
+	# Every transport backend chooses one mouth per sample; stable IDs break ties.
+	particle_velocity=velocity.duplicate()
+	var ordered: Array=cells.duplicate()
+	ordered.sort_custom(func(a,b):return a.id<b.id)
+	for cell in ordered:
+		if cell.dead or cell.substrate>=cell.gut_capacity()-.000001:continue
 		for organ in cell.organs:
 			if organ.kind!="feeding" or organ.hp<=0:continue
-			var at: Vector2=cell.pore_center(organ)
-			var reach: float=cell.ORAL_REACH*sqrt(organ.scale)
-			var power: float=cell.ORAL_FLOW*organ.scale*organ.hp/organ.max_hp*cell.Genes.factor(organ,"suction")*cell.work_capacity()
-			var lo:=Vector2i(((at-Vector2.ONE*reach)/SIZE-.5*Vector2.ONE).floor())
-			var hi:=Vector2i(((at+Vector2.ONE*reach)/SIZE-.5*Vector2.ONE).ceil())
-			for y in range(lo.y,mini(hi.y+1,lo.y+ROWS)):
-				for x in range(lo.x,mini(hi.x+1,lo.x+COLS)):
-					var delta:=offset(Vector2(x+.5,y+.5)*SIZE,at)
-					var distance:=delta.length()
-					if distance>=reach:continue
-					var speed: float=minf(300,power)*(1-distance/reach)
-					var i:=index(x,y)
-					if speed>strengths[i]:
-						strengths[i]=speed;pull[i]=delta.normalized()*speed
-	particle_velocity=velocity.duplicate()
-	for i in particle_velocity.size():particle_velocity[i]+=pull[i]
+			var power: float=minf(300,cell.ORAL_FLOW*organ.scale*organ.hp/organ.max_hp*cell.Genes.factor(organ,"suction")*cell.work_capacity())
+			particle_velocity.append(cell.pore_center(organ))
+			particle_velocity.append(Vector2(cell.oral_reach(organ),power))
 
-func transport_sample(p: Vector2) -> Vector2:
-	return _sample(p,particle_flow())
+func transport_sample(p: Vector2,kind: int=0) -> Vector2:
+	var field:=particle_flow()
+	var pull:=Vector2.ZERO
+	var strongest:=-1.0
+	for i in range(COLS*ROWS,field.size(),2):
+		var delta:=offset(p,field[i]);var distance:=delta.length()
+		var reach: float=field[i+1].x
+		if distance>=reach or distance<.000001:continue
+		var speed: float=field[i+1].y*(1-distance/reach)*minf(1,distance/24.0)
+		if speed>strongest+.0001:
+			strongest=speed;pull=delta/distance*speed
+	return sample(p)+pull*(1.0 if kind==0 else .2)
 
 func sample(p: Vector2) -> Vector2:
 	return _sample(p,velocity)

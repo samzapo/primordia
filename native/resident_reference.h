@@ -1,5 +1,6 @@
 #pragma once
 #include "chemical_catalog.h"
+#include "mouth_attraction.h"
 // Diagnostic transport model shared with resident_particles.glsl. Never replaces
 // gameplay RNG, chemical state, contacts, feeding or background scheduling.
 #include "simulation_workers.h"
@@ -36,7 +37,7 @@ protected:
   }
 public:
   bool configure(PackedFloat32Array values,PackedVector2Array velocity,int threads) {
-    if(values.size()==0 || values.size()%12 || values.size()>100000*12 || velocity.size()!=2560 || threads<1 || threads>8) return false;
+    if(values.size()==0 || values.size()%12 || values.size()>100000*12 || (velocity.size()<2560||velocity.size()>2688||(velocity.size()-2560)%2) || threads<1 || threads>8) return false;
     for(int i=0;i<values.size();++i) if(!std::isfinite(values[i])) return false;
     for(int i=0;i<velocity.size();++i) if(!velocity[i].is_finite()) return false;
     for(int i=0;i<values.size();i+=12) if(values[i+7]<0 || values[i+7]>=primordia_chemistry::species_count || values[i+7]!=std::floor(values[i+7]) || values[i+8]<=0) return false;
@@ -50,12 +51,12 @@ public:
         float *p=state.data()+i*12;bool tracer=p[7]==3.f;
         Vector2 at(p[0],p[1]),launch=tracer?Vector2():Vector2(p[4],p[5]);
         Vector2 original=launch;
-        if(dt<=.05f) at+= (sample(field,at)+launch)*dt;
+        if(dt<=.05f) at+= (sample(field,at)+primordia_mouth::pull(field,flow.size(),at,int(p[7]))+launch)*dt;
         else {
           int steps=std::clamp(int(std::ceil(dt/.25f)),1,8);float h=dt/steps,damping=std::exp(-.8f*h);
           for(int j=0;j<steps;++j) {
-            Vector2 mid=at+sample(field,at)*(h*.5f)+launch*((1.f-std::exp(-.4f*h))/.8f);
-            at+=sample(field,mid)*h+launch*((1.f-damping)/.8f);
+            Vector2 mid=at+(sample(field,at)+primordia_mouth::pull(field,flow.size(),at,int(p[7])))*(h*.5f)+launch*((1.f-std::exp(-.4f*h))/.8f);
+            at+=(sample(field,mid)+primordia_mouth::pull(field,flow.size(),mid,int(p[7])))*h+launch*((1.f-damping)/.8f);
             at=Vector2(wrap(at.x,4096.f),wrap(at.y,2560.f));launch*=damping;
           }
         }

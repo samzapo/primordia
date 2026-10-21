@@ -43,7 +43,7 @@ const STARVATION_DAMAGE := 0.1
 const TISSUE_AREA := Membrane.COUNT*0.5*sin(TAU/Membrane.COUNT)*47.0*47.0/78.0
 const ATP_TURNOVER := 0.002
 const ORAL_FLOW := 300.0
-const ORAL_REACH := 320.0
+const ORAL_REACH := 110.0 # Typical cell; actual reach scales with its radius.
 var automatic_division:=true
 var division_requested:=false # One paid birth at the next safe opportunity; never inherited.
 var merge_after:=0.0
@@ -485,6 +485,9 @@ func add_organ(kind: String, a: float, mode: String = "graze", paid: bool = true
 
 func sensory_output(_organ: Dictionary,_paid: bool=false) -> float:
 	return 1.0 # All receptors use their ordinary reach; no output/ATP multiplier.
+
+func oral_reach(organ: Dictionary) -> float:
+	return clampf(ORAL_REACH*radius/47.0,48.0,192.0)*sqrt(organ.scale)
 
 func pore_radius(organ: Dictionary) -> float:
 	return 18.0*organ.scale*Genes.factor(organ,"intake")

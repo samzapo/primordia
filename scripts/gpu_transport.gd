@@ -6,6 +6,7 @@ var shader := RID()
 var pipeline := RID()
 var state := RID()
 var flow := RID()
+var mouth_count:=0
 var uniform_set := RID()
 var capacity := 0
 var data := PackedFloat32Array()
@@ -23,7 +24,7 @@ func initialize() -> bool:
 		return false
 	shader = rd.shader_create_from_spirv(spirv)
 	pipeline = rd.compute_pipeline_create(shader)
-	flow = rd.storage_buffer_create(64*40*8)
+	flow = rd.storage_buffer_create(2688*8)
 	if not pipeline.is_valid():
 		close()
 		return false
@@ -48,6 +49,7 @@ func upload(values: PackedFloat32Array, velocity: PackedVector2Array) -> void:
 	reserve(values.size()/12)
 	var bytes := values.to_byte_array()
 	rd.buffer_update(state,0,bytes.size(),bytes)
+	mouth_count=(velocity.size()-2560)/2
 	bytes = velocity.to_byte_array()
 	rd.buffer_update(flow,0,bytes.size(),bytes)
 func dispatch(count: int, dt: float, repeats: int = 1) -> void:
@@ -55,6 +57,7 @@ func dispatch(count: int, dt: float, repeats: int = 1) -> void:
 	params.resize(16)
 	params.encode_u32(0,count)
 	params.encode_float(4,dt)
+	params.encode_u32(8,mouth_count)
 	var list := rd.compute_list_begin()
 	rd.compute_list_bind_compute_pipeline(list,pipeline)
 	rd.compute_list_bind_uniform_set(list,uniform_set,0)

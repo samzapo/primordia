@@ -552,6 +552,18 @@ const RELEASES=[
  ],
  "footer":"Try these changes in the experimental pond.",
  "button":"Back to the pond"
+},
+{
+ "id":"2026-10-20-local-mouth-attraction",
+ "audience":"experimental",
+ "title":"What’s new in the pond",
+ "items":[
+  "Mouth suction now stays close to the cell, with a smaller reach for smaller cells.",
+  "Nutrients get the full pull; other particles are pulled much more gently.",
+  "Food between competing mouths is drawn toward one intake instead of hovering between them."
+ ],
+ "footer":"Try these changes in the experimental pond.",
+ "button":"Back to the pond"
 }
 ]
 const CURRENT=RELEASES[-1]

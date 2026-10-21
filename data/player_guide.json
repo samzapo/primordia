@@ -491,7 +491,7 @@
         {
           "id": "organ_feeding",
           "title": "Oral groove",
-          "text": "An optional mouth on the membrane, built in Assembly. It draws surrounding water toward its opening, takes in food and releases digestive enzymes. A taut internal strand connects the mouth to the center of the cell. Reabsorb it to remove the mouth and strand; leaves and gas uptake still work without it. A strong attractor draws nearby particles toward the mouth from a wider area. It does not push cells or change the pond current. Hazardous particles are drawn in too.",
+          "text": "An optional mouth on the membrane, built in Assembly. It draws surrounding water toward its opening, takes in food and releases digestive enzymes. A taut internal strand connects the mouth to the center of the cell. Reabsorb it to remove the mouth and strand; leaves and gas uptake still work without it. A strong local attractor draws nutrients toward the mouth. Its reach scales with cell size. Other particles, including hazards, feel only one fifth of the pull. Food follows one mouth at a time, and a full gut leaves food for other cells. It does not push cells or change the pond current. Hazardous particles are drawn in too.",
           "sources": [
             {
               "title": "Food-vacuole formation",

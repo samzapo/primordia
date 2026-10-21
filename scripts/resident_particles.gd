@@ -11,6 +11,7 @@ var texture := Texture2DRD.new()
 var rd: RenderingDevice
 var state := RID()
 var flow := RID()
+var _mouth_count:=0 # Render-thread-owned descriptor count.
 var shader := RID()
 var pipeline := RID()
 var bindings := RID()
@@ -172,7 +173,7 @@ func configure_chemistry(values: PackedFloat32Array, random_seed: int=0) -> bool
 	chemistry_enabled=true;chemistry_seed=random_seed;_initial_acid=values.duplicate()
 	return true
 func environment(velocity: PackedVector2Array, values: PackedFloat32Array) -> bool:
-	if not _initialized or not chemistry_enabled or _closing or velocity.size()!=2560 or values.size()!=2560: return false
+	if not _initialized or not chemistry_enabled or _closing or (velocity.size()<2560 or velocity.size()>2688 or (velocity.size()-2560)%2!=0) or values.size()!=2560: return false
 	for vector in velocity:
 		if not vector.is_finite(): return false
 	for value in values:
@@ -185,6 +186,7 @@ func _environment_rd(velocity: PackedByteArray, values: PackedByteArray) -> void
 	# of allocating/uploading one megabyte of zeros on every gameplay tick.
 	rd.buffer_clear(contact_buffers[8],0,count*16)
 	rd.buffer_clear(contact_buffers[5],0,64)
+	_mouth_count=(velocity.size()/8-2560)/2
 	rd.buffer_update(flow,0,velocity.size(),velocity)
 	rd.buffer_update(contact_buffers[7],0,values.size(),values)
 	environment_upload_bytes+=velocity.size()+values.size()
@@ -393,7 +395,7 @@ func initialize(values: PackedFloat32Array, velocity: PackedVector2Array, metada
 		push_error("Resident pool already initialized");return
 	_started=true
 	count = values.size()/12
-	if count < 1 or count > 100000 or values.size()%12 != 0 or velocity.size()!=2560:
+	if count < 1 or count > 100000 or values.size()%12 != 0 or (velocity.size()<2560 or velocity.size()>2688 or (velocity.size()-2560)%2!=0):
 		_ready_main.call_deferred(false,"Invalid resident particle capacity or flow")
 		return
 	if DisplayServer.get_name()=="headless" or RenderingServer.get_current_rendering_method()=="gl_compatibility":
@@ -459,7 +461,9 @@ func _initialize_rd(bytes: PackedByteArray, velocities: PackedByteArray) -> void
 	format.format=RenderingDevice.DATA_FORMAT_R32G32B32A32_SFLOAT
 	format.usage_bits=usage
 	state=rd.texture_create(format,RDTextureView.new(),[bytes])
-	flow=rd.storage_buffer_create(velocities.size(),velocities)
+	_mouth_count=(velocities.size()/8-2560)/2
+	flow=rd.storage_buffer_create(2688*8)
+	rd.buffer_update(flow,0,velocities.size(),velocities)
 	if not pipeline.is_valid() or not state.is_valid() or not flow.is_valid():
 		_ready_main.call_deferred(false,"Resident pipeline/resource allocation failed")
 		return
@@ -601,7 +605,7 @@ func advance(dt: float, tick: int) -> void:
 func _advance_rd(dt: float, tick: int, now: float) -> void:
 	_grid_valid=false
 	var params := PackedByteArray()
-	params.resize(16);params.encode_u32(0,work_count);params.encode_float(4,dt);params.encode_u32(8,tick)
+	params.resize(16);params.encode_u32(0,work_count);params.encode_float(4,dt);params.encode_u32(8,tick);params.encode_u32(12,_mouth_count)
 	var list := rd.compute_list_begin()
 	rd.compute_list_bind_compute_pipeline(list,pipeline)
 	rd.compute_list_bind_uniform_set(list,bindings,0)

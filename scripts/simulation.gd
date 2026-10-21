@@ -1197,6 +1197,7 @@ func _suction_cell(cell, dt: float) -> void:
 	for organ in cell.organs:
 		if organ.kind not in ["feeding","cilia"] or organ.hp <= 0: continue
 		var ciliary: bool = organ.kind == "cilia"
+		if not ciliary and cell.substrate>=cell.gut_capacity()-.000001:continue
 		var cost: float = dt*(Cell.CILIA_PUMP if ciliary else Cell.PUMP_UPKEEP)*organ.scale*organ.scale*Genes.output_cost(organ)
 		var health: float = organ.hp/organ.max_hp
 		var power: float = (Cell.CILIA_FLOW if ciliary else Cell.ORAL_FLOW)*organ.scale*health*Genes.factor(organ,"suction")
