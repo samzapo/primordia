@@ -19,7 +19,7 @@ intended for main. Give each published update a fresh ID and both consolidation
 flags so acknowledged players see the new preview once, while missed iterations
 collapse to one message. Preserve all historical IDs and main's queue. After
 main promotion, begin the next pool from the newly landed baseline.
-No gameplay changes or full catalog/FPS/extra-restart checks.
+The notice/retention patch itself changes no gameplay. Keep later authorized gameplay work focused; no full catalog/FPS/extra-restart checks.
 
 
 ## Project isolation
@@ -729,3 +729,5 @@ October20 feeding-only suction supersedes constant oral attraction and the20%phe
 October20 activity-upkeep correction: idle organs cost no organ-specific ATP. Preserve basal cell upkeep/ATP turnover and finite action costs. Bill successful gland cycles, actual motor/pump/repair/contact work, active received-cue navigation, actual leaf fixation and CPU/resident aerobic throughput; never presentation timers. Avoid recursive reserve charges and duplicate ciliary overhead. Keep estimates labelled as working estimates, guide/notices current; experimental first and focused checks only.
 
 October21 motion/vent correction: keep body velocity continuous through bounded linear/angular acceleration, slower steering response and12%stronger swimming, shared by detailed/coarse/resident/contact wrappers. Water/particle transport and action prices stay unchanged. Surplus vent uses only biomass>500, smooth1%/s excess decay and visible70/30nutrient/waste release funded by actual tissue loss; never food stores/body/organs/armor threshold or drain. Clear food-only stress holes while preserving real wounds and independent family-signal autolysis. Update guide/science/experimental notice; focused motion/vent checks, no broad FPS/catalog/soak.
+
+October21 investment correction: assigned Hunter/Producer/Grazer roles first remove incompatible anatomy and complete their actual synergy before optional support. Hunter receptor and flagellum precede its first weapon; the pore-forming variant mounts the gland last so self-pore immunity and secretion become available together. Core parts remain essential even when another weapon/cilia exists. Preserve Manual/custom intent, selected-cell/favorite protections, normal paid pricing/accounting and one-action-per-minute cooldown. Same retained experimental pond, cumulative notice, main unchanged.

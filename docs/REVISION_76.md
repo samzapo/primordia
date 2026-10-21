@@ -158,3 +158,27 @@ October21 standing release workflow: every experimental update pools all pending
 
 
 October21 player switching: Pause → Log out disconnects only this browser, clears its saved server-scoped login and private drafts, and returns to the access-key sign-in screen. A different personal key opens that player's existing account. Accounts, cells, progress, keys and submitted feedback remain on the authority. Desktop and mobile use the same Pause action.
+
+
+## October21 synergy-first investment
+Assigned Hunter, Producer and Grazer strategies reabsorb incompatible organs
+before expansion and fund the actual missing synergy parts before optional
+support. Hunter completes hunting receptor and flagellum before its first
+weapon: deterministic variants choose a proboscis or a pore-forming gland last.
+No installed leaf may remain before that gland is chosen. Existing weapons do
+not make a missing flagellum/receptor discretionary; recovery retains the last
+weapon (including proboscis) and required flagellum. Producer completes two
+leaves and a mitochondrion without a mouth or weapons; Grazer completes mouth
+and cilia without leaves or weapons.
+Core decisions use ordinary current prices, finite tissue/refunds and the
+existing12biomass operating reserve. Optional purchases retain reproduction
+headroom after synergy completion. The one-action-per-minute cooldown, explicit
+Manual/custom intent, connected-selected-cell manual control and unattended
+favorite anatomy protection remain. A protected leaf blocks new pore-gland
+investment rather than permitting an unsafe intermediate build. Existing
+leaf-blocked Hunters correct at their next normal investment opportunity;
+startup itself does not rewrite saved anatomy or reset either pond.
+This changes an investment policy, not biological synergy qualifications,
+self-pore immunity, particle transport or runtime physics. Reuse the existing
+science references; focused strategy progression/accounting checks and a
+retained experimental rollout, with one cumulative player notice.

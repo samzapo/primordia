@@ -111,11 +111,14 @@ static func investment(check: Callable) -> void:
 			check.call(cell.organs==organs and sim.rng.state==rng,"Investment proposals never spend AP, alter anatomy or consume RNG")
 			cell.add_organ(choice.kind,1,"hunt" if choice.kind=="hunting" else "graze",false)
 			choice=policy.candidate(sim,cell)
-			if role=="producer":
-				check.call(choice.kind=="photosynthesis","Producer funds its second leaf before upkeep-heavy support")
-				cell.add_organ("photosynthesis",2,"graze",false);cell.add_organ("mitochondrion",0,"graze",false)
-				choice=policy.candidate(sim,cell)
+			if role=="producer":check.call(choice.kind=="photosynthesis","Producer funds its second leaf before upkeep-heavy support")
 			else:check.call(choice.kind!=policy.PRIORITIES[role][0],"The next purchase complements the core instead of blindly duplicating it")
+			# Diversity belongs to support after the actual role is complete.
+			cell.organs.clear();cell.biomass=2000
+			for kind in {"hunter":["hunting","propulsion","proboscis"],"producer":["photosynthesis","photosynthesis","mitochondrion"],"grazer":["feeding","cilia"]}[role]:
+				cell.add_organ(kind,cell.organs.size()*1.1,"graze",false)
+			check.call(cell.synergy()==role,"Supporting variants start from a complete anatomical synergy")
+			choice=policy.candidate(sim,cell)
 			variants[choice.kind]=true;seen[choice.kind]=true
 			cell.health=50;cell.acid_stress=.5
 			var repair: Dictionary=policy.candidate(sim,cell)

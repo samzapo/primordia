@@ -33,16 +33,47 @@ const VARIANTS:={
  "grazer":[["cilia","mitochondrion","regenerative","sensing","feeding","protection","neutralizing","family_toward"],
            ["cilia","neutralizing","regenerative","acidifying","mitochondrion","feeding","sensing","protection","family_away"]],
 }
+const WEAPONS:=["poreforming","toxin","counterattack","proboscis"]
+static func weapons(cell) -> int:
+ var count:=0
+ for kind in WEAPONS:count+=working(cell,kind)
+ return count
+
+static func synergy_blocker(cell,policy: String) -> Dictionary:
+ if cell.unattended_protected:return {}
+ for organ in cell.organs:
+  if (policy in ["hunter","grazer"] and organ.kind=="photosynthesis") or (policy in ["producer","grazer"] and organ.kind in WEAPONS) or (policy=="producer" and organ.kind=="feeding"):
+   return {"action":"remove","id":organ.id}
+ return {}
+
+static func missing_synergy_part(sim,cell,policy: String) -> String:
+ if policy=="hunter":
+  if working(cell,"hunting")==0:return "hunting"
+  if working(cell,"propulsion")==0:return "propulsion"
+  # The first weapon comes last: mounting a pore gland also grants the
+  # ordinary Hunter synergy's self-pore immunity in that same transaction.
+  if weapons(cell)==0 and cell.count("photosynthesis")==0:return "proboscis" if posmod(cell.id*19349663 ^ sim.seed_value*83492791,2)==0 else "poreforming"
+ elif policy=="producer":
+  if working(cell,"mitochondrion")==0 and cell.energy<18 and cell.substrate>.1 and cell.oxygen>.1:return "mitochondrion"
+  if working(cell,"photosynthesis")<2:return "photosynthesis"
+  if working(cell,"mitochondrion")==0:return "mitochondrion"
+ elif policy=="grazer":
+  if working(cell,"feeding")==0:return "feeding"
+  if working(cell,"cilia")==0:return "cilia"
+ return ""
+
 static func candidate(sim,cell) -> Dictionary:
  var policy:=strategy(sim,cell)
  if cell.id in sim.managed_cells:return {}
  if policy=="custom":return template_decision(sim,cell)
  if policy not in VARIANTS:return {}
- # Establish an affordable energy core before adding upkeep-heavy support.
- if policy=="producer":
-  var core: String="mitochondrion" if cell.energy<18 and cell.substrate>.1 and cell.oxygen>.1 and working(cell,"mitochondrion")==0 else "photosynthesis" if working(cell,"photosynthesis")<2 else "mitochondrion" if working(cell,"mitochondrion")==0 else ""
+ # Finish the actual anatomical synergy before scoring optional support.
+ # A protected blocker may prevent completion; never expand around it instead.
+ if cell.synergy()!=policy:
+  var core:=missing_synergy_part(sim,cell,policy)
   if core!="" and cell.can_fit(core,0,1,false):
    return {"cell":cell,"kind":core,"mutation":"shade_leaf" if sim.light_at(cell.position)<.5 else "sun_leaf"} if core=="photosynthesis" else {"cell":cell,"kind":core}
+  return {}
  # Recovery uses only this cell's stocks and local light, never a remote food query.
  if policy=="producer" and cell.energy<18:
   if cell.substrate>.1 and cell.oxygen>.1 and working(cell,"mitochondrion")<2 and cell.can_fit("mitochondrion",0,1,false):
@@ -83,9 +114,8 @@ static func decision(sim,cell) -> Dictionary:
  if cell.id in sim.managed_cells:return {}
  if policy=="custom":return template_decision(sim,cell)
  if policy not in VARIANTS:return {}
- if policy=="producer" and working(cell,"photosynthesis")>=2 and working(cell,"mitochondrion")>0:
-  for organ in cell.organs:
-   if organ.kind=="feeding" and not cell.unattended_protected:return {"action":"remove","id":organ.id}
+ var blocker:=synergy_blocker(cell,policy)
+ if not blocker.is_empty():return blocker
  var choice:=candidate(sim,cell)
  if cell.energy<18 and (choice.is_empty() or not essential(cell,policy,choice.kind) or not can_purchase(sim,cell,choice.kind)):
   var recovery:=shed_support(cell,policy)
@@ -93,7 +123,7 @@ static func decision(sim,cell) -> Dictionary:
  if not choice.is_empty() and can_purchase(sim,cell,choice.kind):
   choice["action"]="install";return choice
  var priorities: Array=VARIANTS[policy][posmod(cell.id*19349663 ^ sim.seed_value*83492791,2)]
- var missing_core: bool=working(cell,priorities[0])==0
+ var missing_core: bool=cell.synergy()!=policy
  # Only replace unsuitable/excess anatomy; do not liquidate useful support just
  # to chase another purchase. Keep passive food/energy and last defenses.
  for organ in cell.organs:
@@ -101,6 +131,8 @@ static func decision(sim,cell) -> Dictionary:
   if cell.inherent(organ):continue
   if organ.hp>0 and organ.kind in ["feeding","photosynthesis","mitochondrion"] and working(cell,organ.kind)<=1:continue
   if organ.hp>0 and organ.kind in ["protection","regenerative","neutralizing"] and working(cell,organ.kind)<=1:continue
+  if organ.hp>0 and policy=="hunter" and ((organ.kind in WEAPONS and weapons(cell)<=1) or (organ.kind=="propulsion" and working(cell,"propulsion")<=1)):continue
+  if organ.hp>0 and policy=="grazer" and organ.kind=="cilia" and working(cell,"cilia")<=1:continue
   var limit: int=4 if organ.kind=="photosynthesis" else 2 if organ.kind in ["feeding","cilia","protection","mitochondrion"] else 1
   var excess: bool=working(cell,organ.kind)>limit
   var unsuitable: bool=missing_core and organ.kind not in priorities
@@ -113,12 +145,12 @@ static func decision(sim,cell) -> Dictionary:
 static func essential(cell,policy: String,kind: String) -> bool:
  if kind=="photosynthesis":return working(cell,kind)<2 or (policy=="producer" and cell.energy<18)
  if kind=="mitochondrion":return working(cell,kind)==0 or (policy=="producer" and cell.energy<18 and working(cell,kind)<2)
- if kind=="feeding":return working(cell,"feeding")==0 and working(cell,"photosynthesis")==0
+ if kind=="feeding":return working(cell,"feeding")==0 and (policy=="grazer" or working(cell,"photosynthesis")==0)
  if kind=="regenerative" and cell.health<70:return working(cell,kind)==0
  if policy=="hunter":
-  if kind in ["hunting","toxin","poreforming","proboscis"]:return working(cell,"toxin")+working(cell,"poreforming")+working(cell,"counterattack")+working(cell,"proboscis")==0
-  if kind in ["propulsion","cilia"]:return working(cell,"propulsion")+working(cell,"cilia")==0
- return policy=="grazer" and kind=="cilia" and working(cell,kind)==0
+  if kind in ["hunting","propulsion"]:return working(cell,kind)==0
+  if kind in WEAPONS:return weapons(cell)==0
+ return policy=="grazer" and kind in ["feeding","cilia"] and working(cell,kind)==0
 
 static func can_purchase(sim,cell,kind: String) -> bool:
  var cost: float=cell.construction_price(kind)
@@ -145,8 +177,9 @@ static func shed_support(cell,policy: String) -> Dictionary:
   if organ.hp>0:
    if organ.kind in ["feeding","photosynthesis","mitochondrion"] or cell.receptor(organ.kind):continue
    if organ.kind=="regenerative" and cell.health<70:continue
-   if policy=="hunter" and organ.kind in ["toxin","poreforming","counterattack"] and working(cell,"toxin")+working(cell,"poreforming")+working(cell,"counterattack")<=1:continue
-   if policy in ["hunter","grazer"] and organ.kind in ["propulsion","cilia"] and working(cell,"propulsion")+working(cell,"cilia")<=1:continue
+   if policy=="hunter" and organ.kind in WEAPONS and weapons(cell)<=1:continue
+   if policy=="hunter" and organ.kind=="propulsion" and working(cell,"propulsion")<=1:continue
+   if policy=="grazer" and organ.kind=="cilia" and working(cell,"cilia")<=1:continue
   var upkeep: float=cell.organ_upkeep(organ)
   if organ.hp<=0 or upkeep>largest:
    worst={"action":"remove","id":organ.id};largest=upkeep
@@ -224,6 +257,13 @@ static func fallback_decision(sim,cell) -> Dictionary:
  var fallback="hunter" if bucket<10 else "producer" if bucket<55 else "grazer"
  var saved=sim.investment.cells.get(cell.id,null);sim.investment.cells[cell.id]=fallback
  var result=decision(sim,cell)
+ # A completed player-chosen example is not an order to dismantle its core
+ # when the diverse fallback happens to prefer a different synergy.
+ if result.get("action","")=="remove":
+  var kind: String=cell.organ_by_id(result.id).kind
+  var root=cell.lineage_id()
+  var target=sim.investment.get("cell_templates",{}).get(root,{}).get(cell.id,sim.investment.get("templates",{}).get(root,[]))
+  if target.filter(func(part):return part.kind==kind).size()>=cell.count(kind):result={}
  if saved==null:sim.investment.cells.erase(cell.id)
  else:sim.investment.cells[cell.id]=saved
  return result

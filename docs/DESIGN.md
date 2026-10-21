@@ -791,3 +791,12 @@ October21: smooth body swimming/turning uses shared finite acceleration limits f
 October21 owner correction: experimental updates retain their own living pond by default. The workflow has an explicit copy-main choice for deliberate refreshes. Retained updates verify the same world identity and exact stopped checkpoints/cell retention, preserving accounts, keys and private feedback. The experimental roundup covers older shared/experimental notices in that pond only. Main's queue and game remain unchanged.
 
 October21 standing release workflow: every experimental update pools all pending changes into one cumulative gameplay notice, using the intended next-main wording and a fresh acknowledgement ID. Replace superseded details, cover earlier experimental/shared iterations only for experimental, preserve historical IDs and main, and start a new pool after main lands.
+
+
+## October21 synergy-first investment
+Hunter, Producer and Grazer strategies remove incompatible anatomy and finish
+their actual synergy before optional support. The Hunter's first weapon comes
+after its receptor and flagellum; its pore-forming variant gains the gland and
+ordinary self-pore immunity together. Preserve paid accounting, minute-spaced
+actions, player/favorite protections and explicit custom templates.
+See [Revision76](REVISION_76.md) for the current policy and focused acceptance.

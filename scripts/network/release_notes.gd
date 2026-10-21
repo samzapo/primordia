@@ -643,6 +643,27 @@ const RELEASES=[
  "button":"Back to the pond"
 },
 
+{
+ "id":"2026-10-21-experimental-synergy-first",
+ "audience":"experimental",
+ "supersedes_experimental":true,
+ "supersedes_shared_for_experimental":true,
+ "title":"What’s new in the pond",
+ "items":[
+  "Build with biomass. Your first two organelles are free, and the oral groove is optional.",
+  "Choose Mitosis or Budding. Your favorite cell stays protected while you’re away, paused or in a hidden tab.",
+  "Hunters store longer-lasting meals, Grazers build biomass reserves, and Producers keep sharing food. Well-fed Hunters rest between hunts.",
+  "Try the feeding proboscis to draw food directly from another cell. Hunter, Producer and Grazer builds have their own shapes.",
+  "Organelles spend ATP while working. Mouth suction runs while feeding and leaves pheromones drifting freely.",
+  "Swimming is a little faster, with smoother starts, stops and turns.",
+  "Investment strategies complete their Hunter, Producer or Grazer synergy before adding extras. Hunters reabsorb blocking leaves and grow their pore-forming gland only when self-protection is ready.",
+  "Pause now has Log out, so you can sign in as another player. Your cells and progress stay in the pond.",
+  "Food stores no longer cause venting. Biomass above 500 gradually returns to the pond as nutrient and waste particles."
+ ],
+ "footer":"Your cell and its progress carry on in this pond.",
+ "button":"Back to the pond"
+},
+
 ]
 const CURRENT=RELEASES[-1]
 static func seen_index(account: Dictionary) -> int:

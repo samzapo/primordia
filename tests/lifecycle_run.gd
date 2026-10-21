@@ -20,6 +20,9 @@ func fixture():
 	sim.Lifecycle.migrate(sim);sim.player.reproduction_retry_at=0
 	return sim
 func run() -> void:
+	if "--synergy-priority" in OS.get_cmdline_user_args():
+		synergy_investment()
+		print("SYNERGY_INVESTMENT: %d assertions, %d failures" % [checks,failures]);quit(0 if failures==0 else 1);return
 	if "--smooth-motion" in OS.get_cmdline_user_args():
 		smooth_motion_and_venting()
 		print("SMOOTH_MOTION: %d assertions, %d failures" % [checks,failures]);quit(0 if failures==0 else 1);return
@@ -395,3 +398,58 @@ func smooth_motion_and_venting() -> void:
 	var delayed=fixture();delayed.player.biomass=1000
 	delayed.Lifecycle.physiology(delayed,delayed.player,10000)
 	check(delayed.player.biomass>=500 and is_finite(delayed.player.biomass),"A delayed vent cannot overshoot below its biomass threshold")
+
+func synergy_investment() -> void:
+	for role in ["hunter","producer","grazer"]:
+		for seed_value in [28,29]:
+			var sim=fixture();sim.seed_value=seed_value;var cell=sim.player
+			sim.investment.lineages[cell.lineage_id()]=role;cell.biomass=2000;cell.energy=200
+			for kind in ["feeding","photosynthesis","protection"]:cell.add_organ(kind,cell.organs.size()*1.5,"graze",false)
+			if role in ["producer","grazer"]:cell.add_organ("poreforming",2,"graze",false)
+			var steps:=0
+			while cell.synergy()!=role and steps<12:
+				var choice: Dictionary=sim.Investment.decision(sim,cell)
+				check(not choice.is_empty(),"An assigned "+role+" keeps progressing toward its synergy")
+				if choice.is_empty():break
+				var pore: bool=choice.get("kind","")=="poreforming"
+				if pore:check(cell.working("hunting") and cell.working("propulsion") and cell.count("photosynthesis")==0,"Pore gland waits for receptor, flagellum and no leaves")
+				var before: Array=cell.organs.duplicate(true);var input: float=sim.external_input;var mass: float=cell.organic_mass()
+				for packet in sim.particles:
+					if packet.alive:mass+=packet.amount*Sim.Catalog.material(packet.kind)
+				sim.step_autonomous_builds();steps+=1
+				check(cell.organs!=before and cell.investment_retry_at==sim.time+60,"A real strategy action respects its one-minute cooldown")
+				var after: float=cell.organic_mass()
+				for packet in sim.particles:
+					if packet.alive:after+=packet.amount*Sim.Catalog.material(packet.kind)
+				check(is_equal_approx(after-mass,sim.external_input-input),"Core building and blocker reabsorption keep ordinary material accounting")
+				if pore:check(cell.synergy()=="hunter" and not cell.accept_surface(Sim.Cell.Surface.SUBUNIT,1,0,cell.id),"Gland installation gains actual self-pore immunity immediately")
+				before=cell.organs.duplicate(true);sim.step_autonomous_builds()
+				check(cell.organs==before,"No second action runs in the same minute")
+				sim.time+=60
+			check(cell.synergy()==role and steps<=6,"Hunter, Producer and Grazer reach their synergy before optional support")
+	var old=fixture();var cell=old.player;old.investment.cells[cell.id]="hunter"
+	for kind in ["feeding","photosynthesis","hunting","propulsion","poreforming"]:cell.add_organ(kind,cell.organs.size(),"graze",false)
+	cell.energy=100;cell.biomass=60
+	old.step_autonomous_builds()
+	check(cell.synergy()=="hunter" and cell.count("photosynthesis")==0,"Existing leaf-blocked Hunter reabsorbs its last leaf at its next investment opportunity")
+	var protected_cell=fixture();cell=protected_cell.player;protected_cell.investment.cells[cell.id]="hunter"
+	for kind in ["photosynthesis","hunting","propulsion"]:cell.add_organ(kind,cell.organs.size(),"graze",false)
+	cell.unattended_protected=true;cell.biomass=200;cell.energy=100
+	check(protected_cell.Investment.decision(protected_cell,cell).is_empty(),"Protected favorite neither loses its leaf nor installs an unsafe pore gland")
+	cell.unattended_protected=false;protected_cell.managed_cells=[cell.id]
+	check(protected_cell.Investment.decision(protected_cell,cell).is_empty(),"Connected selected cell stays under manual control")
+	protected_cell.managed_cells=[];protected_cell.investment.cells[cell.id]="manual"
+	check(protected_cell.Investment.decision(protected_cell,cell).is_empty(),"Explicit Manual remains untouched")
+	cell.organs.clear()
+	for kind in ["hunting","proboscis","cilia"]:cell.add_organ(kind,cell.organs.size(),"graze",false)
+	protected_cell.investment.cells[cell.id]="hunter";cell.biomass=23;cell.energy=100
+	check(protected_cell.Investment.decision(protected_cell,cell).get("kind","")=="propulsion","Existing weapon/cilia cannot make the missing Hunter flagellum discretionary")
+	cell.add_organ("propulsion",3,"graze",false);cell.energy=0
+	var shed: Dictionary=protected_cell.Investment.shed_support(cell,"hunter")
+	check(not shed.has("id") or cell.organ_by_id(shed.id).kind not in ["propulsion","proboscis"],"Recovery preserves the actual last Hunter weapon and required flagellum")
+	var custom=fixture();cell=custom.player
+	for kind in ["photosynthesis","hunting","propulsion","proboscis"]:cell.add_organ(kind,cell.organs.size(),"graze",false)
+	check(custom.Investment.save_template(custom,"cell",cell.id),"An explicit mixed custom build can still be saved")
+	var chosen: Dictionary=custom.Investment.decision(custom,cell)
+	check(chosen.get("action","")!="remove","Completed custom example is not dismantled by a randomly different role fallback")
+	preload("res://tests/behavior_tree.gd").investment(check)

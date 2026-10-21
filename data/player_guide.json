@@ -77,7 +77,7 @@
       {
         "id": "investment",
         "title": "Choose unattended investments",
-        "text": "Open the nucleus or Divide, then Invest. Producer is the default; choose Manual to stop automatic building. Choose Hunter, Producer or Grazer, or save a relative’s current build as an example. Unattended cells use their own biomass and make at most one build or reabsorption per minute. Producers build their energy supply first; optional upgrades leave resources for reproduction. Family settings and individual exceptions are separate. The family controls also switch automatic mitosis and budding.",
+        "text": "Open the nucleus or Divide, then Invest. Producer is the default; choose Manual to stop automatic building. Choose Hunter, Producer or Grazer, or save a relative’s current build as an example. Unattended cells use their own biomass and make at most one build or reabsorption per minute. Strategies first reabsorb organs that block their role and build toward their synergy. Hunters grow their hunting receptor and flagellum before their first weapon; a pore-forming gland comes last so its self-protection is ready too. Once the synergy is complete, optional upgrades leave resources for reproduction. Family settings and individual exceptions are separate. The family controls also switch automatic mitosis and budding.",
         "sources": []
       },
       {
