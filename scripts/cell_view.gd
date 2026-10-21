@@ -7,6 +7,7 @@ var body_ink:=Node2D.new()
 var raster: SubViewport
 var raster_sprite:=Sprite2D.new()
 var raster_active:=false
+var raster_outline:=PackedVector2Array()
 var raster_dirty:=true
 var raster_zoom:=0.0
 var raster_enabled:=true # Diagnostic reference switch; presentation only.
@@ -29,6 +30,7 @@ var detail_lod := true
 var label := Label.new()
 var appendages := Node2D.new()
 var motile_art=preload("res://scripts/motile_art.gd").new()
+var proboscis_art=preload("res://scripts/proboscis_art.gd").new()
 var surface := MeshInstance2D.new()
 var interior_backing:=MeshInstance2D.new()
 var water_wake := MeshInstance2D.new()
@@ -64,6 +66,7 @@ func _ready() -> void:
 	label.add_theme_color_override("font_outline_color",Color("21375d"))
 	label.add_theme_constant_override("outline_size",4)
 	add_child(motile_art)
+	add_child(proboscis_art)
 	add_child(label)
 	appendages.texture_filter=CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	appendages.z_index = 0 # Keep each body and all its organs in one cell-local drawing order.
@@ -106,6 +109,7 @@ func sync(render_position: Vector2, render_angle: float, zoom: float, alpha: flo
 	var detail_changed: bool = reduced != simple_view
 	simple_view = reduced
 	motile_art.sync(cell,not simple_view,game.ui_time,game.world)
+	proboscis_art.sync(self,not simple_view)
 	if (seen_revision != cell.render_revision and (not reduced or game.world.revision-last_draw_tick >= 2)) or detail_changed or game.show_senses != get_meta("senses",false) or game.build_open != get_meta("assembly",false):
 		seen_revision = cell.render_revision
 		last_draw_tick = game.world.revision
@@ -149,6 +153,7 @@ func _sync_raster(enabled: bool) -> void:
 
 func refresh_raster() -> void:
 	if not raster_active or not raster_dirty:return
+	raster_outline=cell.membrane.outline()
 	if depth_style:_sync_surface(rotation,false)
 	body_ink.queue_redraw();appendages.queue_redraw()
 	var extent: float=cell.extent()*1.25
@@ -294,6 +299,7 @@ func _draw_organs() -> void:
 			if game.ui_time-float(emission_started.get(organ.id,-100))>=.28:emission_started[organ.id]=game.ui_time
 		var elapsed: float=game.ui_time-float(emission_started.get(organ.id,-100))
 		var bounce:=sin(elapsed*TAU*3)*exp(-elapsed*7) if elapsed<.65 else 0.0
+		if organ.kind=="proboscis":bounce=0.0 # Keep all mount cues on the stable shaft.
 		at+=normal*bounce*5*organ.scale
 		var drawn_scale: float=organ.scale*(1+.12*bounce)
 		var readiness: Dictionary=preload("res://scripts/organelle_status.gd").state(game.world,cell,organ)
@@ -302,7 +308,7 @@ func _draw_organs() -> void:
 			charge = maxf(charge,clampf(1-float(organ.get("burst_clock",0))/(0.75*cell.Genes.factor(organ,"cooldown")),0,1))
 		if organ.kind=="feeding":
 			Visuals.oral_groove(appendages,cell,organ,game.ui_time,false)
-		else:
+		elif organ.kind!="proboscis": # Draw its stable shaft outside the body raster.
 			var cached_icon: bool=game.zoom*organ.scale*game.detail_canvas_scale<=.8*game.detail_pixel_ratio and not game.internal_visible(cell) and not game.build_open and organ.consume_flash<.001 and charge<.001 and not readiness.depleted
 			if not cached_icon or not preload("res://scripts/organ_atlas.gd").draw(appendages,at,organ.kind,heading,drawn_scale):
 				Visuals.icon(appendages,at,organ.kind,heading,drawn_scale,cell.age,organ.mode,organ.consume_flash,not simple_view,charge,readiness.depleted,preload("res://scripts/toxin_sac.gd").fraction(organ) if organ.kind=="toxin_sac" else 0,preload("res://scripts/proboscis.gd").reach(cell,organ)/organ.scale if organ.kind=="proboscis" else 27,false)

@@ -7,6 +7,8 @@ var checks:=0
 var failures:=0
 class ViewStub extends Node2D:
  var cell
+ var raster_active:=false
+ var raster_outline:=PackedVector2Array()
 class GameStub extends RefCounted:
  var world
  var views: Dictionary={}
@@ -45,6 +47,26 @@ func run() -> void:
  var old_hole: Vector2=cue.contacts[0].hole
  second.rotation=.3;second.position+=Vector2(4,-2);cue.sync()
  check(cue.contacts[0].hole.distance_to(old_hole)>1,"The contact follows the rendered donor transform")
+ # Lateral motion and rendered heading must not leave a hole pinned to the
+ # authority's stale membrane edge. Check the real current shaft and membrane.
+ second.position+=Vector2(0,8);first.rotation=.15;cue.sync()
+ check(cue.contacts.size()==1,"A rendered contact remains visible while donor and feeder move between updates")
+ if not cue.contacts.is_empty():
+  var path:=Cue.geometry(game,first,organ);var hole: Vector2=cue.contacts[0].hole
+  check(hole.distance_to(Geometry2D.get_closest_point_to_segment(hole,path.base,path.tip))<.00001,"Puncture and transfer path stay exactly on the visible shaft")
+  var local: Vector2=second.transform.affine_inverse()*hole;var nearest:=INF
+  var curve: PackedVector2Array=donor.membrane.outline()
+  for i in curve.size():nearest=minf(nearest,local.distance_to(Geometry2D.get_closest_point_to_segment(local,curve[i],curve[(i+1)%curve.size()])))
+  check(nearest<.0001,"The reprojected puncture lies on the donor's rendered membrane; distance="+str(nearest))
+  var old: Vector2=second.transform*Cue.anchor(curve,organ.proboscis_contact)
+  check(old.distance_to(hole)>1,"The fixture exposes the stale-edge drift reported by the owner")
+ var pose: Vector2=second.position;second.position+=Vector2(300,0);cue.sync()
+ check(cue.contacts.is_empty(),"A stale feeding report cannot draw a detached hole when the shaft no longer intersects")
+ second.position=pose;cue.sync()
+ second.raster_active=true;second.raster_outline=donor.membrane.outline()
+ var cached:=Cue.geometry(game,first,organ)
+ check(cached.hole.is_finite() and cached.hole.distance_to(cue.contacts[0].hole)<.0001,"Cached donor bodies use their displayed membrane outline")
+ second.raster_active=false
  var tint:=Colors.family(game,2)
  check(tint.is_equal_approx(Color("ed386e")*Color(1,1,1,.65)),"Pheromones use the chosen family color with slight transparency")
  var stock: Color=preload("res://scripts/cell_art.gd").make(sim.seed_value,991).colors[1];stock.a=.65

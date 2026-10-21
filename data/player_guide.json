@@ -675,7 +675,7 @@
         {
           "id": "organ_proboscis",
           "title": "Feeding proboscis",
-          "text": "Its tip must touch a living cell. It draws up to 2 biomass per second as food, paying ATP for the food it actually extracts. Food still needs digestion. It drains stored biomass, never health or structural body, and the visible puncture does not leak. Depleted reserves can still lead to starvation if the cell cannot refuel. It cannot drain protected unattended favorites. These rates, the fixed tube and ATP cost are game choices inspired by protists that extract other cells’ contents. While it feeds, a puncture appears on the other cell’s membrane and a round particle travels back to the proboscis base.",
+          "text": "Its tip must touch a living cell. It draws up to 2 biomass per second as food, paying ATP for the food it actually extracts. Food still needs digestion. It drains stored biomass, never health or structural body, and the visible puncture does not leak. Depleted reserves can still lead to starvation if the cell cannot refuel. It cannot drain protected unattended favorites. These rates, the fixed tube and ATP cost are game choices inspired by protists that extract other cells’ contents. While it feeds, a puncture follows where the visible tube crosses the other cell’s membrane, and a round particle travels along the tube to its base.",
           "sources": [
             {
               "title": "Experimental study of protoplast feeding",

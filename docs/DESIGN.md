@@ -938,3 +938,16 @@ remains alive immediately, but can subsequently starve if it cannot replenish
 its reserves; there is no starvation immunity or hidden biomass grant.
 Retain the experimental pond, keep main unchanged and publish one cumulative
 player notice. Focused anatomy/investment/contact checks only.
+
+
+## October21 proboscis contact-art alignment
+The authority contact selects the real donor, but its old edge/fraction must not
+pin the visual hole while rendered cells translate/turn between snapshots.
+Reproject the stable visible shaft against that donor's current rendered outline
+on every local frame. Hole and transfer glyph stay on that shaft; omit stale
+contacts with no intersection. The existing6-unit contact tolerance may extend
+the cosmetic shaft slightly along its own axis to reach the membrane.
+Draw proboscis shafts outside small-cell body rasters with no independent
+emission displacement/scale bounce, sharing the exact cue geometry. Keep cell
+layering, cached bodies, physical tip/range, feeding transactions and donor
+health/biomass rules unchanged. Experimental retained; cumulative notice.

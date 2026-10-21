@@ -7,6 +7,10 @@ static func reach(cell,organ: Dictionary) -> float:
  # A concave Hunter membrane must not hide the feeding tip behind its own points.
  return maxf(27*organ.scale,cell.extent()-cell.organ_local_position(organ).dot(cell.organ_normal(organ))+8*organ.scale)
 
+static func local_segment(cell,organ: Dictionary) -> PackedVector2Array:
+ var base: Vector2=cell.organ_local_position(organ)
+ return PackedVector2Array([base,base+cell.organ_normal(organ)*reach(cell,organ)])
+
 static func tip(cell,organ: Dictionary) -> Vector2:
  return cell.organ_position(organ)+cell.organ_normal(organ).rotated(cell.angle)*reach(cell,organ)
 
