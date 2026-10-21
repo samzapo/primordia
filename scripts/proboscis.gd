@@ -18,8 +18,28 @@ static func touches(donor,at: Vector2,margin: float) -> bool:
   if Geometry2D.get_closest_point_to_segment(local,outline[i],outline[(i+1)%outline.size()]).distance_squared_to(local)<=margin*margin:return true
  return false
 
+static func contact(donor,from: Vector2,at: Vector2) -> Dictionary:
+ var start:=Medium.offset(donor.position,from).rotated(-donor.angle)
+ var end:=Medium.offset(donor.position,at).rotated(-donor.angle)
+ var outline: PackedVector2Array=donor.membrane.outline()
+ var chosen: Dictionary={};var distance:=INF
+ for i in outline.size():
+  var a:=outline[i];var b:=outline[(i+1)%outline.size()]
+  var hit=Geometry2D.segment_intersects_segment(start,end,a,b)
+  var point: Vector2=hit if hit!=null else Geometry2D.get_closest_point_to_segment(end,a,b)
+  var d: float=start.distance_squared_to(point) if hit!=null else end.distance_squared_to(point)
+  # An actual tube/edge intersection takes precedence over the nearest-tip fallback.
+  var crossing: bool=hit!=null
+  if not chosen.is_empty() and chosen.crossing and not crossing:continue
+  if chosen.is_empty() or (crossing and not chosen.crossing) or d<distance:
+   chosen={"cell":donor.id,"edge":i,"t":clampf((point-a).dot(b-a)/maxf(.000001,a.distance_squared_to(b)),0,1),"crossing":crossing};distance=d
+ chosen.erase("crossing")
+ return chosen
+
 static func step(sim,cell,dt: float) -> void:
  if sim.remote_client or cell.dead or dt<=0:return
+ for organ in cell.organs:
+  if organ.kind=="proboscis":organ.feeding=false;organ.erase("proboscis_contact")
  if sim.Behavior.sated(cell):return
  for organ in cell.organs:
   if organ.kind!="proboscis" or organ.hp<=0:continue
@@ -43,5 +63,6 @@ static func step(sim,cell,dt: float) -> void:
   cell.eaten+=amount
   if chosen.id!=cell.id:cell.foreign_intake+=amount
   cell.consumed(organ,amount);cell.emitted(organ)
+  organ.proboscis_contact=contact(chosen,cell.organ_position(organ),at)
   organ.feeding=true;organ.link=at;chosen.last_wound=Medium.offset(chosen.position,at).angle()-chosen.angle
   chosen.render_revision+=1;cell.render_revision+=1

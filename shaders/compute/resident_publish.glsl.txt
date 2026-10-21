@@ -5,6 +5,7 @@ layout(rgba32f,set=0,binding=0) readonly uniform image2D state;
 layout(set=0,binding=1,std430) readonly buffer Identity {uvec2 identity[];};
 layout(set=0,binding=2,std430) readonly buffer Views {vec4 views[];};
 layout(set=0,binding=3,std430) buffer Publication {uvec4 header;vec4 records[];};
+layout(set=0,binding=4,std430) readonly buffer Reports {vec4 reports[];};
 layout(push_constant,std430) uniform Params {uint count;uint limit;uint views;uint pad;} pc;
 const vec2 WORLD=vec2(4096,2560);
 ivec2 pixel(uint i){return ivec2(int(i%256u)*3,int(i/256u));}
@@ -20,5 +21,5 @@ void main(){
  uint out_id=atomicAdd(header.x,1u);if(out_id>=pc.limit)return;
  vec4 chemical=imageLoad(state,pixel(i)+ivec2(2,0));
  records[out_id*2u]=vec4(pose.xy,pose.z,motion.w);
- records[out_id*2u+1u]=vec4(chemical.y,chemical.x,uintBitsToFloat(i),uintBitsToFloat(identity[i].x));
+ records[out_id*2u+1u]=vec4(chemical.y,motion.w==3.?reports[i*4u+1u].y:chemical.x,uintBitsToFloat(i),uintBitsToFloat(identity[i].x));
 }

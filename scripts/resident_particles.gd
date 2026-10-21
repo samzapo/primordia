@@ -667,12 +667,12 @@ func _close_rd() -> void:
 func _closed_main() -> void: closed.emit()
 
 func publish_views(views: Array) -> bool:
-	if not _initialized or _closing or publication_busy or views.size()>8: return false
+	if not _initialized or _closing or publication_busy or views.size()>8 or _perception==null or _exchange==null: return false
 	publication_busy=true
 	RenderingServer.call_on_render_thread(func():
 		if _publication==null:
 			_publication=preload("res://scripts/network/gpu_publication.gd").new()
-			if not _publication.initialize(rd,state,_exchange.buffers[4]):
+			if not _publication.initialize(rd,state,_exchange.buffers[4],_perception.buffers[0]):
 				_publication.close();_publication=null
 				_publication_done.call_deferred({"error":"GPU publication initialization failed"})
 				return

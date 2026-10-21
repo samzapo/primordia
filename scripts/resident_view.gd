@@ -2,6 +2,9 @@ extends Node2D
 const ParticleArt=preload("res://scripts/particle_art.gd")
 var batch: MultiMeshInstance2D
 var particles: WeakRef
+var game
+var signal_colors=preload("res://scripts/signal_colors.gd").new()
+var signal_lineages:=Texture2DRD.new()
 func initialize(gpu) -> void:
 	particles=weakref(gpu)
 	batch=MultiMeshInstance2D.new()
@@ -33,10 +36,17 @@ func initialize(gpu) -> void:
 	material.set_shader_parameter("state_texture",gpu.texture)
 	material.set_shader_parameter("camera",Vector2.ZERO)
 	material.set_shader_parameter("cpu_instances",false)
+	var reports=gpu.get("_perception")
+	if reports!=null and reports.lineage_image.is_valid():
+		signal_lineages.texture_rd_rid=reports.lineage_image
+		material.set_shader_parameter("signal_lineage_texture",signal_lineages)
+		material.set_shader_parameter("family_tints",true)
 	batch.material=material
 	batch.position=Vector2.ZERO
 	batch.scale=Vector2.ONE
 	add_child(batch)
 func camera(at: Vector2) -> void:
+	var gpu=particles.get_ref()
+	if game!=null and gpu.get("_perception")!=null:batch.material.set_shader_parameter("signal_palette",signal_colors.palette(game,gpu._perception.visual_lineages))
 	batch.multimesh.visible_instance_count=particles.get_ref().work_count
 	batch.material.set_shader_parameter("camera",at)

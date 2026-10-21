@@ -17,7 +17,7 @@ const GOLD := Color("f5d47b")
 const TEXT := Color("e5f5ec")
 const MUTED := Color("a3bfc5")
 const TITLES := ["Flagellum","Protective cortex","Pore-forming gland","Buffer / repair gland","Oral groove","Flight receptor","Photosynthesis","Toxin gland","Toxin neutralizer","Acid gland","Hunting receptor","Cilia","Mitochondrion","Counterattack gland","Toxin sac","Toward family receptor","Away from family receptor","Feeding proboscis"]
-const HELP := ["Flagella provide thrust. Anatomy chooses travel direction.","Protects the membrane directly beneath it. Coverage follows its membrane attachment.","Spends tissue and ATP to emit surface tags and pore subunits toward a local pheromone report. Four aligned subunits assemble a membrane pore; inhibitors and repair can stop it.","Uses biomass and ATP to repair organs and close punctures faster. Releases buffers that neutralize local acidity and accelerates receptor cleaning.","Senses and pumps nutrients into its opening. Secretes reusable enzymes that turn waste into food when aligned.","Reads nearby pheromones reporting armed non-family cells and retreats from their last reported location. Also moves away from locally sensed toxin particles. It also senses harmful acidity; an actual hit can trigger a short escape reflex.","Seeks brighter water, or soft light with the Shade adaptation. Light fixes dissolved CO2 into biomass and food, releasing oxygen. Works best in bright habitat patches.","Spends ATP and biomass to fire toxins and receptor-blocking decoys toward a pheromone report received by a hunting or flight receptor.","Releases complementary particles that bind toxin into harmless waste. Costs small amounts of biomass and ATP.","Releases acidifying particles. Moderate acidity helps nutrients bind for higher ATP yield and favors digestive enzymes; excess acidity costs ATP and damages cells. Repair bodies release buffers.","Reads local pheromones from any non-family cell, regardless of size or defenses. Faces and pursues the last reported location. Pair with secretory attack glands.","A short beating ciliary band provides propulsion and a strong local feeding current from the receptor-selected direction. Draws all particles with the water, including hazards; a grazing pore still consumes food.","An internal organelle that gets more ATP from food when oxygen is available. Each healthy mitochondrion adds50% baseline aerobic ATP without reducing biomass, using finite food fuel.","Responds to locally received chemical warnings from armed cells. Its toxin spares cells without offensive organs.","Stores toxin using surplus biomass and ATP. Bursts into a cloud of ordinary toxin particles when the cell dies. Does not steer or fire at targets.","Follows locally detected family pheromone trails. Survival needs take priority; movement organs provide thrust.","Steers away from locally detected family pheromone trails. Survival needs take priority; movement organs provide thrust.","Draws food from a living cell touched by its tip. Transfers up to 2 biomass/s as finite food, costing 0.5 ATP per unit. Pair with a hunting receptor and movement."]
+const HELP := ["Flagella provide thrust. Anatomy chooses travel direction.","Protects the membrane directly beneath it. Coverage follows its membrane attachment.","Spends tissue and ATP to emit surface tags and pore subunits toward a local pheromone report. Four aligned subunits assemble a membrane pore; inhibitors and repair can stop it.","Uses biomass and ATP to repair organs and close punctures faster. Releases buffers that neutralize local acidity and accelerates receptor cleaning.","Senses and pumps nutrients into its opening. Secretes reusable enzymes that turn waste into food when aligned.","Reads nearby pheromones reporting armed non-family cells and retreats from their last reported location. Also moves away from locally sensed toxin particles. It also senses harmful acidity; an actual hit can trigger a short escape reflex.","Seeks brighter water, or soft light with the Shade adaptation. Light fixes dissolved CO2 into biomass and food, releasing oxygen. Works best in bright habitat patches.","Spends ATP and biomass to fire toxins and receptor-blocking decoys toward a pheromone report received by a hunting or flight receptor.","Releases complementary particles that bind toxin into harmless waste. Costs small amounts of biomass and ATP.","Releases acidifying particles. Moderate acidity helps nutrients bind for higher ATP yield and favors digestive enzymes; excess acidity costs ATP and damages cells. Repair bodies release buffers.","Reads local pheromones from any non-family cell, regardless of size or defenses. Faces and pursues the last reported location. Pair with secretory attack glands.","A short beating ciliary band provides propulsion and a strong local feeding current from the receptor-selected direction. Draws all particles with the water, including hazards; a grazing pore still consumes food.","An internal organelle that gets more ATP from food when oxygen is available. Each healthy mitochondrion adds50% baseline aerobic ATP without reducing biomass, using finite food fuel.","Responds to locally received chemical warnings from armed cells. Its toxin spares cells without offensive organs.","Stores toxin using surplus biomass and ATP. Bursts into a cloud of ordinary toxin particles when the cell dies. Does not steer or fire at targets.","Follows locally detected family pheromone trails. Survival needs take priority; movement organs provide thrust.","Steers away from locally detected family pheromone trails. Survival needs take priority; movement organs provide thrust.","Draws food from a living cell touched by its tip. Transfers up to 2 biomass/s as finite food, costing 0.5 ATP per unit. Pair with a hunting receptor and movement. A visible puncture and a round particle moving back to its base show active feeding."]
 var music := preload("res://scripts/music_director.gd").new()
 var music_slider := HSlider.new()
 var world: Simulation = Simulation.new()
@@ -85,6 +85,7 @@ var feedback:=preload("res://scripts/feedback_form.gd").new()
 var feedback_menu_button: Button
 var profile:=preload("res://scripts/player_profile.gd").new()
 var palette:=preload("res://scripts/lineage_palette.gd").new()
+var proboscis_feeding_art=preload("res://scripts/proboscis_feeding_art.gd").new()
 var player_color:=""
 var palette_menu_button: Button
 var nameplates:=preload("res://scripts/player_nameplates.gd").new()
@@ -238,6 +239,7 @@ func _ready() -> void:
 		var data := PackedFloat32Array()
 		data.resize(256*12)
 		buffers.append(data)
+	proboscis_feeding_art.game=self;proboscis_feeding_art.z_index=7;world_layer.add_child(proboscis_feeding_art)
 	world_layer.add_child(preview)
 	preview.z_index = 9
 	preview.draw.connect(_draw_preview)
@@ -560,6 +562,7 @@ func _update_world(alpha: float) -> void:
 		if not alive_ids.has(identity):
 			views[identity].queue_free()
 			views.erase(identity)
+	proboscis_feeding_art.sync()
 	_flush_cell_rasters()
 	# Local factories remain above membrane attachments in either perception.
 	cell_ui.interior.z_index=8
@@ -595,7 +598,7 @@ func _sync_particles(alpha: float = 1.0) -> void:
 	if world.native_render:
 		var capacities := PackedInt32Array()
 		for batch in batches: capacities.append(batch.multimesh.instance_count)
-		var result: Array = world.kernels.render_particles(world.particles,world.visible_particle_ids(30),world.cells,render_camera,world.view_half,alpha,world.revision,capacities,world.native_particle_render_cache and not is_paused())
+		var result: Array = world.kernels.render_particles(world.particles,world.visible_particle_ids(30),world.cells,render_camera,world.view_half,alpha,world.revision,capacities,world.native_particle_render_cache and not is_paused(),preload("res://scripts/signal_colors.gd").native_style(self))
 		for kind in Simulation.SPECIES_COUNT:
 			buffers[kind] = result[kind]
 			var count: int = result[-1][kind]
@@ -621,7 +624,8 @@ func _sync_particles(alpha: float = 1.0) -> void:
 			batches[kind].multimesh.instance_count *= 2
 			buffers[kind].resize(batches[kind].multimesh.instance_count*12)
 		var color := Color.WHITE
-		color.a = 0.6 if kind in [Simulation.OXYGEN,Simulation.PHEROMONE] else 1.0
+		color.a = 0.6 if kind==Simulation.OXYGEN else 1.0
+		if kind==Simulation.PHEROMONE:color=preload("res://scripts/signal_colors.gd").family(self,preload("res://scripts/signal_colors.gd").root(p))
 		var offset := slot*12
 		# Transform2D row-major (8 floats), followed by RGBA (4 floats).
 		var heading: float = lerp_angle(p.previous_angle,p.angle,alpha) if p.get("updated",-1) == world.revision else p.angle
@@ -1606,7 +1610,7 @@ func _resident_initialized(ok: bool,message: String,controller,starting_world) -
 		if resident_view!=null: resident_view.queue_free()
 		resident_view=load("res://scripts/resident_view.gd").new()
 		world_layer.add_child(resident_view);resident_view.z_index=1
-		resident_view.initialize(controller.gpu)
+		resident_view.game=self;resident_view.initialize(controller.gpu)
 	else: _message("GPU particles unavailable; continuing on CPU. "+message)
 
 func _resident_returned(message: String,controller) -> void:

@@ -113,7 +113,7 @@ func _ready() -> void:
 	update_popup.initialize(ui)
 	update_popup.dismissed.connect(func(id):_send({"op":"update_seen","id":id}))
 	update_popup.unconfirmed.connect(func(_id):defer_release_updates=true)
-	network_particles=preload("res://scripts/network/network_particles.gd").new()
+	network_particles=preload("res://scripts/network/network_particles.gd").new();network_particles.game=self
 	world_layer.add_child(network_particles)
 	notice = "Connect to the shared pond. Your lineage and chemistry continue while disconnected."
 	var box := VBoxContainer.new()
@@ -581,6 +581,7 @@ func _snapshot(message: Dictionary) -> void:
 		var angle:=bytes.decode_float(at+8)
 		packet.previous=packet.get("p",position);packet.previous_angle=packet.get("angle",angle)
 		packet.p=position;packet.angle=angle;packet.kind=int(bytes.decode_float(at+12));packet.amount=bytes.decode_float(at+16)
+		packet.signal_lineage=bytes.decode_s32(at+20) if packet.kind==3 and message.get("signal_lineage_encoding",0)==1 else -1
 		packet.alive=true;packet.updated=world.revision;packet.owner=-1;packet.v=Vector2.ZERO
 		packet._handle=(int(identity.y)&0xffffffff)*4294967296+(int(identity.x)&0xffffffff);packet._index=packets.size()
 		next[identity]=packet;packets.append(packet)

@@ -10,6 +10,7 @@ uniform int body_count = 0;
 uniform float interpolation = 1.0;
 uniform vec2 camera = vec2(2048.0,1280.0);
 varying flat float species;
+varying flat vec4 signal_tint;
 const vec2 WORLD = vec2(4096.0,2560.0);
 vec2 offset(vec2 a,vec2 b){return mod(b-a+WORLD*.5,WORLD)-WORLD*.5;}
 float turn(float a,float b){return a+mod(b-a+3.14159265,6.2831853)-3.14159265;}
@@ -60,6 +61,8 @@ void vertex(){
  vec4 prior=texelFetch(previous_texture,ivec2(INSTANCE_ID%256,INSTANCE_ID/256),0);
  vec2 at=prior.xy+offset(prior.xy,current.xy)*interpolation;
  species=data.x;
+ float rgb=data.z;
+ signal_tint=vec4(floor(rgb/65536.0),mod(floor(rgb/256.0),256.0),mod(rgb,256.0),255.0)/255.0;signal_tint.a=data.w;
  if(species!=3.0)at=exclude_bodies(at);
  float heading=mix(prior.z,turn(prior.z,current.z),interpolation);
  float size=mix(prior.w,current.w,interpolation);
@@ -70,5 +73,6 @@ void vertex(){
 void fragment(){
  if(species<0.0)discard;
  COLOR=texture(TEXTURE,vec2((UV.x+species)/26.0,UV.y));
- COLOR.a*=species==1.0 || species==3.0 ? .6 : 1.0;
+ if(species==3.0)COLOR*=signal_tint;
+ else if(species==1.0)COLOR.a*=.6;
 }

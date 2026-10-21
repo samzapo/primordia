@@ -897,3 +897,26 @@ The investment picker shows all four role portraits plus a Balanced card with
 all four miniatures. Mobile and desktop use the same direct choices.
 Retain the experimental pond; main is unchanged. No new long balance or FPS
 campaign is implied by updating the reference fixture.
+
+
+## October21 visible proboscis feeding and family signals
+Only successful paid contact marks the proboscis as feeding and records a
+donor-ID/outline-edge/fraction anchor. Reset that cue when feeding stops,
+including satiety and damaged organs. The puncture is cosmetic: no new physical
+hole, leak, damage, food grant, force or sensory input. An overlay outside
+small-cell raster caches follows both interpolated cell transforms and the
+current donor outline. One repeated round transfer glyph travels from that
+hole to the proboscis base on pause-aware local ui_time; it is not a simulated
+particle. Missing/dead donors and stopped feeding remove the cue.
+Pheromone art uses a white round mask tinted with actual seeded/custom family
+color at65%opacity. Use the emission report's lineage, never a current source
+cell lookup. The Web wire keeps32-byte records and uses its formerly unused
+pheromone diameter field for a full32-bit lineage, flagged with
+signal_lineage_encoding=1. Chemical diameters and stable handles are unchanged;
+older clients ignore that unused field. GPU gather reads immutable report
+metadata directly. Local RD art has a derived split16-bit lineage texture,
+updated alongside report admission with no extra steady-state dispatch or pose
+readback, and a small family-color palette. Native CPU and script art agree.
+Preserve pheromone motion, lifetime, chemistry, sensing and random streams.
+Experimental retained, one cumulative notice, main unchanged; focused visual/
+metadata correctness only, not a rendering-speed campaign.

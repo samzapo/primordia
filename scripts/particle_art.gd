@@ -66,7 +66,7 @@ static func texture(kind: int, simplified: bool = false) -> Texture2D:
 
 static func _svg(glyph: Dictionary, simplified: bool = false) -> String:
 	if glyph.get("point",false):
-		return "<svg xmlns='http://www.w3.org/2000/svg' width='96' height='96' viewBox='-48 -48 96 96'><circle r='38' fill='#%s'/><circle r='22' fill='#fff4df'/></svg>" % glyph.color
+		return "<svg xmlns='http://www.w3.org/2000/svg' width='96' height='96' viewBox='-48 -48 96 96'><circle r='38' fill='#fff' fill-opacity='.65'/><circle r='22' fill='#fff'/></svg>"
 	# A dark underside, saturated body and short bright front make rotation legible.
 	# Decorative branches do not add extra reaction sites or collision geometry.
 	var path := "<path d='%s' fill='none'/>" % glyph.path

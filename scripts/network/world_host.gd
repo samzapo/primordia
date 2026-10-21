@@ -737,6 +737,7 @@ func _publish() -> void:
 				if not packet.get("alive",false): continue
 				var record:=PackedByteArray();record.resize(32)
 				for i in 6: record.encode_float(i*4,[packet.p.x,packet.p.y,packet.angle,packet.kind,packet.amount,2*world.particle_radius(packet.kind)*world.particle_scale(packet.amount)][i])
+				if packet.kind==Sim.PHEROMONE:record.encode_s32(20,int(packet.get("report",{}).get("lineage",-1)))
 				record.encode_u32(24,index);record.encode_u32(28,0)
 				bytes.append_array(record)
 			_send_snapshot(peer,bytes,_frame(peer,view))
@@ -770,7 +771,7 @@ func _frame(peer: Dictionary,coverage: Vector4=Vector4.ZERO) -> Dictionary:
 	var focus=_focus(peer)
 	for cell in world.cells:
 		if peer.get("perception","exteroception")!="interoception" or cell!=focus:internal_overrides[cell.chemistry.get_instance_id()]={"particles":[],"vacuoles":[],"presentation_totals":{"material":cell.chemistry.material(),"storage":cell.chemistry.storage_used(),"potential":cell.chemistry.potential(),"raw_fuel":cell.chemistry.raw_fuel(),"packets":cell.chemistry.particle_count()}}
-	return {"kind":"snapshot","world_id":world_id,"epoch":epoch,"tick":world.revision,"time":world.time,"presentation_usec":Time.get_ticks_usec(),"edit":account.edit,"sequence":account.sequence,
+	return {"kind":"snapshot","world_id":world_id,"epoch":epoch,"tick":world.revision,"time":world.time,"presentation_usec":Time.get_ticks_usec(),"signal_lineage_encoding":1,"edit":account.edit,"sequence":account.sequence,
 		"division":{"mitosis":world.division_status(_selected(account),account.lineage,"mitosis"),"budding":world.division_status(_selected(account),account.lineage,"budding")},
 		"merge_available":{"cell":_selected(account).id,"targets":Sim.FamilyMerging.candidates(world,_selected(account))},
 		"family_portraits":preload("res://scripts/cell_portrait.gd").family(world,account.lineage),

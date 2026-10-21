@@ -30,6 +30,9 @@ func prepare(packets: Array,cells: Array) -> void:
 		var at:=i*8;var old:=i*4
 		current[at]=p.p.x;current[at+1]=p.p.y;current[at+2]=p.angle
 		current[at+3]=diameter;current[at+4]=p.kind;current[at+5]=p.amount
+		if p.kind==3:
+			var tint:=preload("res://scripts/signal_colors.gd").family(game,preload("res://scripts/signal_colors.gd").root(p))
+			current[at+6]=preload("res://scripts/signal_colors.gd").packed(tint);current[at+7]=tint.a
 		prior[old]=p.previous.x;prior[old+1]=p.previous.y
 		prior[old+2]=p.previous_angle;prior[old+3]=diameter
 	_upload(texture,current,512,rows,Image.FORMAT_RGBAF)

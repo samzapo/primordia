@@ -647,3 +647,11 @@ biomass storage/rapid digestion, the inherited swimming bonus and the authored
 2:4:10:20 investment mix are gameplay choices. The existing metabolism/storage
 sources motivate finite resource conversion; no extra material/fuel, new
 chemistry reaction, remote host sensing or fixed population ratio is added.
+
+October21 feeding/pheromone artwork is cosmetic feedback for the existing
+contact proboscis and emitted chemical reports. The puncture does not add
+another membrane wound; the moving round glyph is not another material or
+pheromone particle. Family colors,65%opacity, edge anchoring and local animation
+are authored interface choices, not evidence that real chemical signals have
+those colors or move along a visible tube. Existing contact-feeding and
+chemotaxis references motivate the underlying unchanged mechanics.

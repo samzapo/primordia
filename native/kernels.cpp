@@ -560,8 +560,8 @@ protected:
 
     ClassDB::bind_method(D_METHOD("render_particles", "particles", "ids",
                                   "bodies", "camera", "half", "alpha",
-                                  "revision", "capacities", "cache"),
-                         &PrimordiaKernels::render_particles, DEFVAL(false));
+                                  "revision", "capacities", "cache", "signal_colors"),
+                         &PrimordiaKernels::render_particles, DEFVAL(false), DEFVAL(Dictionary()));
     ClassDB::bind_method(D_METHOD("feed", "particles", "ids", "body", "organ", "camera", "half"),
                          &PrimordiaKernels::feed);
     ClassDB::bind_method(D_METHOD("coarse_feed", "particles", "ids", "body", "organ", "rates", "camera", "half", "rng", "habitat"),
@@ -1267,7 +1267,7 @@ public:
   }
   Array render_particles(Array particles, TypedArray<int64_t> ids, Array bodies,
                          Vector2 camera, Vector2 half, double alpha,
-                         int revision, PackedInt32Array capacities, bool cache) {
+                         int revision, PackedInt32Array capacities, bool cache, Dictionary signal_colors) {
     struct Body {
       Vector2 p;
       double angle, extent;
@@ -1309,6 +1309,7 @@ public:
       ++render_epoch; render_packets.resize(particles.size());
     }
     const auto &radii = primordia_chemistry::radii;
+    std::unordered_map<int64_t, Color> signal_cache;
     for (int k = 0; k < ids.size(); ++k) {
       int id=ids[k];
       RenderPacket fresh, *pose=pool_enabled ? &fresh : cache ? &render_packets[id] : &fresh;
@@ -1377,8 +1378,25 @@ public:
           std::clamp(std::sqrt(pose->amount / .3), .8, 1.7);
       float co = std::cos(heading) * diameter,
             si = std::sin(heading) * diameter;
-      instances[kind].push_back({co, -si, 0, at.x, si, co, 0, at.y, 1, 1, 1,
-                                 (kind == 1 || kind == 3) ? 0.6f : 1.0f});
+      Color tint(1,1,1,kind==1 ? .6f : kind==3 ? .65f : 1.f);
+      if(kind==3 && !signal_colors.is_empty()) {
+        Dictionary packet=pool_enabled ? packet_slots[id].d : Dictionary(particles[id]);
+        Dictionary report=packet.get("report",Dictionary());
+        int64_t root=int64_t(packet.get("signal_lineage",report.get("lineage",-1)));
+        if(signal_colors.has(root))tint=Color(signal_colors[root]);
+        else if(root>=0 && signal_colors.has("_bases")) {
+          auto held=signal_cache.find(root);
+          if(held!=signal_cache.end())tint=held->second;
+          else {
+            Ref<RandomNumberGenerator> rng; rng.instantiate();
+            rng->set_seed(uint64_t(int64_t(signal_colors.get("_seed",0))) ^ (uint64_t(root)*1640531527ULL));
+            PackedColorArray bases=signal_colors["_bases"];
+            tint=bases[rng->randi_range(0,bases.size()-1)];tint.a=.65f;
+            signal_cache[root]=tint;
+          }
+        }
+      }
+      instances[kind].push_back({co, -si, 0, at.x, si, co, 0, at.y, tint.r,tint.g,tint.b,tint.a});
     }
     Array out;
     PackedInt32Array counts;

@@ -445,7 +445,7 @@
         {
           "id": "signals",
           "title": "Pheromones carry old reports",
-          "text": "Hunting and flight receptors read drifting reports of nearby cells. Reports age and expire; they do not reveal another cell’s live location. Family signatures help relatives recognize one another. Hunters still choose non-family targets, but stray toxin, pores and decoys can affect relatives. Mouth suction never pulls pheromones; they follow the water and diffuse.",
+          "text": "Hunting and flight receptors read drifting reports of nearby cells. Reports age and expire; they do not reveal another cell’s live location. Family signatures help relatives recognize one another. Hunters still choose non-family targets, but stray toxin, pores and decoys can affect relatives. Mouth suction never pulls pheromones; they follow the water and diffuse. Round pheromones share their family’s color and are slightly transparent.",
           "sources": [
             {
               "title": "Chemical signals in flowing habitats",
@@ -675,7 +675,7 @@
         {
           "id": "organ_proboscis",
           "title": "Feeding proboscis",
-          "text": "Its tip must touch a living cell. It draws up to 2 biomass per second as food, paying ATP for the food it actually extracts. Food still needs digestion. It cannot drain protected unattended favorites. These rates, the fixed tube and ATP cost are game choices inspired by protists that extract other cells’ contents.",
+          "text": "Its tip must touch a living cell. It draws up to 2 biomass per second as food, paying ATP for the food it actually extracts. Food still needs digestion. It cannot drain protected unattended favorites. These rates, the fixed tube and ATP cost are game choices inspired by protists that extract other cells’ contents. While it feeds, a puncture appears on the other cell’s membrane and a round particle travels back to the proboscis base.",
           "sources": [
             {
               "title": "Experimental study of protoplast feeding",

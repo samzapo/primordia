@@ -11,6 +11,8 @@ var buffers: Array[RID]=[]
 var sets: Array[RID]=[]
 var shader:=RID()
 var pipeline:=RID()
+var lineage_image:=RID() # Derived visualization metadata, never physical state.
+var visual_lineages: Dictionary={}
 var count:=0
 
 static func integer(value, minimum: int=-1) -> bool:
@@ -43,6 +45,8 @@ func encode_metadata(item: Dictionary, kind: int, table: Dictionary) -> Dictiona
 		bytes.encode_float(pair[0],pair[1])
 	bytes.encode_s32(16,report.id);bytes.encode_s32(20,report.lineage)
 	bytes.encode_u32(24,1 if report.hostile else 0);bytes.encode_u32(28,1 if report.defended else 0)
+	if not visual_lineages.has(report.lineage) and visual_lineages.size()>=MAX_SOURCES:visual_lineages.erase(visual_lineages.keys()[0])
+	visual_lineages[report.lineage]=true
 	bytes.encode_u32(40,1);bytes.encode_u32(44,0 if local_sources else table[report.id])
 	return {"bytes":bytes}
 
@@ -157,16 +161,19 @@ func initialize(device: RenderingDevice, state: RID, identity: RID, order: RID, 
 		var buffer:=rd.storage_buffer_create(size,initial if buffers.is_empty() else PackedByteArray())
 		buffers.append(buffer)
 		if not buffer.is_valid(): return false
+	var format:=RDTextureFormat.new();format.width=256;format.height=maxi(1,ceili(count/256.0));format.format=RenderingDevice.DATA_FORMAT_R32G32_SFLOAT;format.usage_bits=RenderingDevice.TEXTURE_USAGE_STORAGE_BIT|RenderingDevice.TEXTURE_USAGE_SAMPLING_BIT|RenderingDevice.TEXTURE_USAGE_CAN_COPY_FROM_BIT
+	lineage_image=rd.texture_create(format,RDTextureView.new())
+	if not lineage_image.is_valid():return false
 	var text:=RDShaderSource.new();text.source_compute=source
 	var spirv:=rd.shader_compile_spirv_from_source(text)
 	if spirv.compile_error_compute!="": push_error(spirv.compile_error_compute);return false
 	shader=rd.shader_create_from_spirv(spirv);pipeline=rd.compute_pipeline_create(shader)
 	for receipt in receipts:
 		var uniforms: Array[RDUniform]=[]
-		var resources: Array=[state,identity,order,ranges,receipt]+buffers
+		var resources: Array=[state,identity,order,ranges,receipt]+buffers+[lineage_image]
 		for i in resources.size():
 			var uniform:=RDUniform.new();uniform.binding=i
-			uniform.uniform_type=RenderingDevice.UNIFORM_TYPE_IMAGE if i==0 else RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+			uniform.uniform_type=RenderingDevice.UNIFORM_TYPE_IMAGE if i in [0,9] else RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
 			uniform.add_id(resources[i]);uniforms.append(uniform)
 		var bindings:=rd.uniform_set_create(uniforms,shader,0);sets.append(bindings)
 		if not pipeline.is_valid() or not bindings.is_valid(): return false
@@ -260,5 +267,5 @@ static func decode(bytes: PackedByteArray, at: int, queries: int) -> Array:
 	return result
 
 func close() -> void:
-	for resource in sets+[pipeline,shader]+buffers:
+	for resource in sets+[pipeline,shader,lineage_image]+buffers:
 		if resource.is_valid(): rd.free_rid(resource)

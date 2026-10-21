@@ -806,3 +806,13 @@ draws or population quotas. Balanced daughters retain mixed policy. Update the
 36-cell fixture's proboscis Hunters to Parasites. Show the four role portraits
 and all-four Balanced icon on mobile/desktop. Experimental retained, cumulative
 notice, focused correctness/UI only.
+
+October21 visible feeding: read the final Revision76 section. Only real paid
+proboscis intake enables a cosmetic donor-edge puncture and locally animated
+round transfer glyph back to the proboscis base, outside raster caches. Clear
+idle/sated/damaged cues; no new wound/leak or material particle. Pheromones use
+the seeded/custom family tint at65%alpha from immutable emission-lineage facts.
+Keep32-byte records/handles; flag the reused pheromone-only unused diameter field.
+Script/native/WebGL/resident art agree, without source-cell perception lookup,
+extra physical state, steady-state GPU pass or pose download. Retain the pond,
+main and all accepted biology; focused visual/metadata checks, no FPS campaign.

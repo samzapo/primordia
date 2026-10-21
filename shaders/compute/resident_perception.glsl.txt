@@ -10,6 +10,7 @@ layout(set=0,binding=5,std430) buffer Reports { vec4 reports[]; };
 layout(set=0,binding=6,std430) readonly buffer Products { vec4 products[]; };
 layout(set=0,binding=7,std430) readonly buffer Queries { vec4 queries[]; };
 layout(set=0,binding=8,std430) buffer Latest { uvec4 latest[]; };
+layout(rg32f,set=0,binding=9) uniform image2D signal_lineage;
 layout(push_constant,std430) uniform Params {
  uint count;uint stage;uint query_count;uint source_count;
  uint emit_start;uint emit_count;uint result_start;float now;
@@ -99,10 +100,14 @@ void food_query(uint i,vec4 query,uvec4 self){
  }
 }
 
+void paint_lineage(uint i){
+ uint root=floatBitsToUint(reports[i*4u+1u].y);
+ imageStore(signal_lineage,ivec2(int(i%256u),int(i/256u)),vec4(float(root&65535u),float(root>>16),0,0));
+}
 void main(){
  uint i=gl_GlobalInvocationID.x;
  if(pc.stage==0u){
-  if(i<pc.count)identity[i].y=floatBitsToUint(reports[i*4u+3u].x);
+  if(i<pc.count){identity[i].y=floatBitsToUint(reports[i*4u+3u].x);paint_lineage(i);}
   return;
  }
  if(pc.stage==1u){
@@ -119,6 +124,7 @@ void main(){
   uvec4 receipt=floatBitsToUint(receipts[pc.emit_start+i]);
   if(receipt.x==0u)return;
   for(uint j=0u;j<4u;j++)reports[receipt.y*4u+j]=products[i*4u+j];
+  paint_lineage(receipt.y);
   return;
  }
  // Spread small receptor batches across independent workgroups; packing all

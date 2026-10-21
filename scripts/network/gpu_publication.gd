@@ -15,7 +15,7 @@ var skipped := 0
 var callback: Callable
 var closed_callback: Callable
 
-func initialize(device: RenderingDevice,state: RID,identity: RID) -> bool:
+func initialize(device: RenderingDevice,state: RID,identity: RID,reports: RID) -> bool:
 	rd = device
 	output = rd.storage_buffer_create(16+LIMIT*32)
 	views = rd.storage_buffer_create(8*16)
@@ -26,11 +26,11 @@ func initialize(device: RenderingDevice,state: RID,identity: RID) -> bool:
 	shader = rd.shader_create_from_spirv(spirv)
 	pipeline = rd.compute_pipeline_create(shader)
 	var uniforms: Array[RDUniform] = []
-	for i in 4:
+	for i in 5:
 		var uniform := RDUniform.new()
 		uniform.binding = i
 		uniform.uniform_type = RenderingDevice.UNIFORM_TYPE_IMAGE if i == 0 else RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
-		uniform.add_id([state,identity,views,output][i]); uniforms.append(uniform)
+		uniform.add_id([state,identity,views,output,reports][i]); uniforms.append(uniform)
 	bindings = rd.uniform_set_create(uniforms,shader,0)
 	return pipeline.is_valid() and bindings.is_valid()
 
