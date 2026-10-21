@@ -128,7 +128,7 @@ class DimmedInk extends RefCounted:
 	func draw_polyline(points: PackedVector2Array,color: Color,width: float=-1,antialias: bool=false) -> void:canvas.draw_polyline(points,tint(color),width,antialias)
 	func draw_colored_polygon(points: PackedVector2Array,color: Color) -> void:canvas.draw_colored_polygon(points,tint(color))
 
-static func icon(c, p: Vector2, kind: String, rotation: float, scale: float, animation_time: float = 0, mode: String = "graze", pulse: float = 0, detail: bool = true, charge: float = 0, depleted: bool=false, stored: float=0.0) -> void:
+static func icon(c, p: Vector2, kind: String, rotation: float, scale: float, animation_time: float = 0, mode: String = "graze", pulse: float = 0, detail: bool = true, charge: float = 0, depleted: bool=false, stored: float=0.0, reach: float=27.0) -> void:
 	if depleted:c=DimmedInk.new(c)
 	c.draw_set_transform(p,rotation,Vector2.ONE*scale)
 	var steps := 24 if detail else 10
@@ -224,11 +224,11 @@ static func icon(c, p: Vector2, kind: String, rotation: float, scale: float, ani
 		"proboscis":
 			c.draw_circle(Vector2(-5,0),10,Color("773558"))
 			c.draw_circle(Vector2(-5,-1),7,Color("e877a0"))
-			c.draw_line(Vector2(-2,0),Vector2(24,0),Color("91335d"),7,true)
-			c.draw_line(Vector2(-1,-1),Vector2(27,-1),Color("ffc5ac").lerp(Color("fff4a0"),pulse),3,true)
-			c.draw_circle(Vector2(27,0),3,Color("ffe0b3"))
+			c.draw_line(Vector2(-2,0),Vector2(reach-3,0),Color("91335d"),7,true)
+			c.draw_line(Vector2(-1,-1),Vector2(reach,-1),Color("ffc5ac").lerp(Color("fff4a0"),pulse),3,true)
+			c.draw_circle(Vector2(reach,0),3,Color("ffe0b3"))
 			if detail:
-				for i in 3:c.draw_circle(Vector2(4+i*7,0),1.8,Color("ffe895").lerp(Color("e877a0"),pulse))
+				for i in 3:c.draw_circle(Vector2(4+i*(reach-7)/3,0),1.8,Color("ffe895").lerp(Color("e877a0"),pulse))
 		"feeding":
 			var lip := PackedVector2Array()
 			for i in 17:

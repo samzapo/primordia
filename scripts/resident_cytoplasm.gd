@@ -51,6 +51,7 @@ func prepare(chem,cell) -> void:
 	species=Catalog.data().species.keys()
 	var constants:="const int SPECIES=%d;\nconst int FOOD=%d;\nconst int WASTE=%d;\nconst int OXYGEN=%d;\nconst int CARBON=%d;\n" % [species.size(),species.find("food"),species.find("waste"),species.find("oxygen"),species.find("carbon")]
 	constants+="const double LEAF_ATP_YIELD=%.6f,FOOD_FUEL=%.6f,TISSUE_FUEL=%.6f,LEAF_SOLAR_WORK=%.6f;\n" % [chem.LEAF_ATP_YIELD,chem.FOOD_FUEL,chem.TISSUE_FUEL,chem.LEAF_SOLAR_WORK]
+	constants+="const double AEROBIC_ATP=%.6f,FERMENT_ATP=%.6f,LEAF_BIOMASS=%.6f,LEAF_FOOD=%.6f;\n" % [chem.AEROBIC_ATP,chem.FERMENT_ATP,chem.LEAF_BIOMASS,chem.LEAF_FOOD]
 	constants+="const double NUTRIENT_BONUS_LIMIT=%.6f;\n" % Catalog.data().ecology.nutrient_bonus_limit
 	source=FileAccess.get_file_as_string("res://shaders/compute/resident_cytoplasm.glsl.txt").replace("/*CYTOPLASM_CATALOG*/",constants)
 	capacity=64
@@ -91,7 +92,7 @@ func _control(chem) -> PackedByteArray:
 
 func _anatomy(cell,external: float=.15) -> PackedByteArray:
 	var chem=chemistry.get_ref();var values:=PackedFloat32Array();values.resize(768)
-	values[0]=cell.radius;values[1]=cell.growth_scale();values[2]=cell.holes.size();values[3]=cell.biomass;values[7]=external
+	values[0]=cell.radius;values[1]=cell.growth_scale();values[2]=cell.holes.size();values[3]=cell.biomass;values[7]=external;values[4]=4.0 if cell.synergy()=="hunter" else 1.0
 	values[8]=cell.id&0xffffffff;values[9]=cell.id>>32;values[10]=0
 	var outlet: Vector2=cell.local_point(cell.excretion_angle())*.88
 	values[12]=outlet.x;values[13]=outlet.y
@@ -220,7 +221,7 @@ func _apply(bytes: PackedByteArray,code: int) -> void:
 
 func advance(dt: float,external: float,mitochondrial_gain: float=1.0) -> void:
 	var chem=chemistry.get_ref();chem.frame_dt=dt
-	command(0,dt,Vector2.ZERO,0,-1,-1,-1,-1,0,"food",{"external":external,20:mitochondrial_gain,21:.15 if body.get_ref().synergy()=="grazer" else 0.0})
+	command(0,dt,Vector2.ZERO,0,-1,-1,-1,-1,0,"food",{"external":external,23:chem.digestion_rate(body.get_ref()),20:mitochondrial_gain,21:.15 if body.get_ref().synergy()=="grazer" else 0.0})
 
 func value(index: int) -> float:return summary.decode_double(index*8) if not summary.is_empty() else 0.0
 

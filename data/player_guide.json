@@ -211,7 +211,7 @@
         {
           "id": "digestion",
           "title": "Food → ATP, biomass and waste",
-          "text": "The oral groove takes in real food particles. Food vacuoles drift inside for at least 10 seconds while digesting their contents. ATP and biomass are stored amounts; waste-filled vacuoles move to the outlet and are expelled.",
+          "text": "The oral groove takes in real food particles. Food vacuoles move inside the cell while food becomes ATP, biomass and waste. Hunters keep a dense meal and digest it as they need energy. Grazers digest faster and build larger biomass reserves. Waste-filled vacuoles travel to the outlet and empty.",
           "sources": [
             {
               "title": "Food-vacuole formation",
@@ -220,6 +220,14 @@
             {
               "title": "How cells obtain energy from food",
               "url": "https://www.ncbi.nlm.nih.gov/books/NBK26882/"
+            },
+            {
+              "title": "Digestion in an algivorous amoeba",
+              "url": "https://journals.asm.org/doi/10.1128/AEM.00160-15"
+            },
+            {
+              "title": "Food intake and lipid reserves in Paramecium",
+              "url": "https://pubmed.ncbi.nlm.nih.gov/10213200/"
             }
           ]
         },
@@ -237,7 +245,7 @@
         {
           "id": "photosynthesis",
           "title": "Carbon + light → food, biomass and oxygen",
-          "text": "Leaves use dissolved CO2 and light to make food, biomass, oxygen and ATP. Air slowly replenishes carbon throughout the pond, with excess carbon returning to the air near a low local saturation. One healthy leaf can sustain a basic cell even in dim water; larger active builds need more leaves and efficient respiration. Sun and Shade still favor different light conditions. Producers share half their new food once survival, birth and internal food reserves are covered; while recovering, they keep three quarters. Attacks and damaging acid can still kill a cell.",
+          "text": "Leaves use dissolved CO2 and light to make food, biomass, oxygen and ATP. Producers keep making and releasing all their new food, while retaining direct ATP and a modest amount of biomass growth. One leaf can sustain a basic cell even in dim water; larger active builds need more support. Sun and Shade favor different light. A leaf grows tissue much more slowly than a hunter gains from a whole meal.",
           "sources": [
             {
               "title": "Oxygen production in photosynthesis",
@@ -256,7 +264,7 @@
         {
           "id": "emergency",
           "title": "Emergency fuel",
-          "text": "Below 12 ATP, cells can burn stored biomass directly for a modest ATP yield until they recover to 18 ATP. This spends their reserves and can eventually lead to starvation; it does not create a fresh meal.",
+          "text": "Cells can burn real stored biomass for ATP when needed, keeping organelles working normally. A full meal or large reserve lasts much longer now. Reserves eventually run out if no new food or light is found.",
           "sources": [
             {
               "title": "Microbial energy reserves",
@@ -606,7 +614,7 @@
         {
           "id": "organ_mitochondrion",
           "title": "Mitochondrion",
-          "text": "Sits inside the cell and helps recover more ATP from food and nearby oxygen without reducing biomass growth. Each healthy mitochondrion adds 50% to ordinary oxygen-supported digestion: one gives 1.5x ATP, two give 2x, up to 5x. Damage reduces its benefit. It has a small upkeep cost. Direct leaf ATP and fermentation are unchanged; exhausted food cannot make extra energy.",
+          "text": "Each healthy mitochondrion adds50%to baseline ATP recovery, up to5×, when food or stored biomass is respired with real oxygen. Biomass output from digestion stays the same. The bonus uses otherwise unused food energy; it does not create food or oxygen.",
           "sources": [
             {
               "title": "The mitochondrion",
@@ -821,7 +829,7 @@
         {
           "id": "cell_instincts",
           "title": "Shared instincts, different bodies",
-          "text": "Intent view starts on. Nucleus → Instinct toggles the current intention and direction arrow on or off. This only changes what you see. All cells escape harm, recover ATP, rebuild biomass, then hunt or explore using their actual organs and locally received chemical, light and acidity signals. Unattended relatives can follow family traces to merge; crowding makes this more likely.",
+          "text": "Intent view starts on. Nucleus → Instinct toggles the current intention and direction arrow on or off. This only changes what you see. All cells escape harm, recover ATP, rebuild biomass, then hunt or explore using their actual organs and locally received chemical, light and acidity signals. Unattended relatives can follow family traces to merge; crowding makes this more likely. Well-fed hunters rest until their stored meal runs low.",
           "sources": [
             {
               "title": "Chemical sensing under flow",
@@ -883,7 +891,7 @@
         {
           "id": "anatomy-synergies",
           "title": "Roles come from anatomy",
-          "text": "A leafless cell with a hunting receptor, flagellum and attack gland becomes a Hunter: six sharp points with inward-curving edges, quicker, cheaper movement and protection from its own pore parts. Thin support strands reach each point. With a mouth, one point sits a quarter-turn from the groove. Two working leaves and a mitochondrion, with no weapons or mouth, make a Producer: stronger photosynthesis and a firm, boxy cell wall. An oral groove and cilia without leaves or weapons make a Grazer with ten fine hairs growing from rounded membrane bumps, greater intake and ATP recovery. Only one role bonus applies. These are simplified game bonuses.",
+          "text": "A leafless cell with a hunting receptor, flagellum and weapon becomes a Hunter: six sharp points, quicker movement and compact food stores. A well-fed Hunter rests instead of pursuing another kill. Two working leaves and a mitochondrion, with no weapons or mouth, make a Producer with stronger photosynthesis and a firm, boxy wall. An oral groove and cilia without leaves or weapons make a hairy Grazer that turns meals into bulkier biomass reserves. These are simplified game roles.",
           "sources": [
             {
               "title": "Growth and maintenance energy",

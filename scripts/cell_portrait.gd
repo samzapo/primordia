@@ -12,9 +12,9 @@ static func capture(cell) -> Dictionary:
   organs.append({"kind":organ.kind,"at":at,"heading":cell.organ_normal(organ).angle(),
    "scale":organ.scale,"mode":organ.mode,"hp":organ.hp/organ.max_hp,
    "inherent":inherent,"mouth":Visuals.oral_path(cell,organ.a) if inherent else PackedVector2Array(),
-   "pulse":organ.consume_flash,"stored":preload("res://scripts/toxin_sac.gd").fraction(organ) if organ.kind=="toxin_sac" else 0.0,"depleted":organ.hp<=0 or (organ.kind in ["feeding","propulsion","cilia","hunting","toxin","poreforming","counterattack","acidifying","neutralizing","regenerative"] and cell.work_capacity()<1)})
+   "reach":preload("res://scripts/proboscis.gd").reach(cell,organ)/organ.scale if organ.kind=="proboscis" else 27.0,"pulse":organ.consume_flash,"stored":preload("res://scripts/toxin_sac.gd").fraction(organ) if organ.kind=="toxin_sac" else 0.0,"depleted":organ.hp<=0 or (organ.kind in ["feeding","propulsion","cilia","hunting","toxin","poreforming","counterattack","acidifying","neutralizing","regenerative"] and cell.work_capacity()<1)})
   if not inherent:
-   var reach:=52.0 if organ.kind=="propulsion" else 32.0 if organ.kind=="cilia" else 30.0 if organ.kind=="hunting" else 26.0
+   var reach:=52.0 if organ.kind=="propulsion" else 32.0 if organ.kind=="cilia" else 30.0 if organ.kind=="hunting" else float(organs[-1].reach) if organ.kind=="proboscis" else 26.0
    extent=maxf(extent,at.length()+reach*organ.scale)
  for i in synergy.roots.size():extent=maxf(extent,preload("res://scripts/synergy_art.gd").hair(synergy,i,cell.radius,cell.age)[-1].length()+cell.radius*.05)
  return {"synergy":synergy,"id":cell.id,"lineage":cell.lineage_id(),"outline":cell.membrane.outline(),
@@ -63,7 +63,7 @@ static func draw(canvas: Node2D,model: Dictionary,art: Dictionary,mesh: ArrayMes
    canvas.draw_polyline(organ.mouth,Color("6ee6d4"),minf(5,model.radius*.10),true)
   else:
    var at: Vector2=organ.at.rotated(rotation)*scale
-   Visuals.icon(canvas,at,organ.kind,organ.heading+rotation,organ.scale*scale,model.age,organ.mode,organ.pulse,false,0,organ.depleted,float(organ.get("stored",0)))
+   Visuals.icon(canvas,at,organ.kind,organ.heading+rotation,organ.scale*scale,model.age,organ.mode,organ.pulse,false,0,organ.depleted,float(organ.get("stored",0)),float(organ.get("reach",27)))
    if organ.hp<1:
     canvas.draw_arc(at,19*organ.scale*scale,-PI/2,-PI/2+TAU*maxf(.001,organ.hp),16,Color("fc8c90"),maxf(.7,scale),true)
  canvas.draw_set_transform(Vector2.ZERO)

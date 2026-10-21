@@ -54,7 +54,10 @@ func sync(chem,alpha: float,mask: Texture2D,extent: float) -> void:
 		var at: Vector2=previous.lerp(packet.p,alpha)
 		var gas: bool=packet.species in ["oxygen","carbon"]
 		var angle: float=lerp_angle(origin.get("angle",packet.angle),packet.angle,alpha) if gas else 0.0
-		var radius: float=Visuals.internal_particle_radius(packet)
+		var contents:=0.0
+		for stock in chem.particles:
+			if stock.compartment==packet.compartment:contents+=stock.amount
+		var radius: float=Visuals.internal_particle_radius(packet) if gas else chem.carrier_radius(contents)
 		var co:=cos(angle)*radius;var si:=sin(angle)*radius;var index:=i*16
 		packet_buffer[index]=co;packet_buffer[index+1]=-si;packet_buffer[index+3]=at.x;packet_buffer[index+4]=si;packet_buffer[index+5]=co;packet_buffer[index+7]=at.y
 		var food:=0.0;var total:=0.0

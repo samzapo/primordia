@@ -101,6 +101,7 @@ func advance(sim, cell, elapsed: float, hidden: bool = true) -> void:
 	sim.rng = foreground_rng
 
 func advance_body(sim, cell, h: float) -> void:
+	preload("res://scripts/proboscis.gd").step(sim,cell,h)
 	sim._acid_stress(cell,h)
 	sim._photosynthesize(cell,h)
 	sim._metabolize(cell,h)

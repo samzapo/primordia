@@ -1,7 +1,7 @@
 extends RefCounted
 ## Shared priority selector. Only own physiology and received local cues enter it.
 ## This policy proposes intentions; organs, ATP and physical contact do the work.
-const DESCRIPTION:="Escape harmful acid or an attack first. Use only locally received chemical, light and acidity cues. With low ATP, find food or useful light; rest if food is already digesting. With little biomass, forage or follow prey traces. With healthy reserves, hunt when equipped, seek suitable light, or explore. Under attack, nearby family traces help the cell spread out. Family receptors can follow relatives or spread away from their received chemical trails; survival needs take priority. Organs determine the senses and movement available."
+const DESCRIPTION:="Escape harmful acid or an attack first. Use only locally received chemical, light and acidity cues. With low ATP, find food or useful light; rest if food is already digesting. With little biomass, forage or follow prey traces. Hunters with a stored meal rest rather than pursuing another kill; otherwise seek food, useful light or explore. Under attack, nearby family traces help the cell spread out. Family receptors can follow relatives or spread away from their received chemical trails; survival needs take priority. Organs determine the senses and movement available."
 static func update(cell) -> void:
 	var scale: float=cell.growth_scale()
 	var low_energy: bool=cell.behavior.get("low_energy",false)
@@ -26,15 +26,21 @@ static func priority(cell, mode: String) -> int:
 			return 300 if cell.substrate<18*cell.growth_scale() else 0
 		"light":return 700 if cell.behavior.get("low_energy",false) else 400 if cell.behavior.get("low_mass",false) else 250
 		"hunt":
+			if sated(cell):return 0
 			if cell.behavior.get("low_energy",false):
 				return 0 if digesting(cell) else 350
 			return 550 if cell.behavior.get("low_mass",false) else 500
 	return 0
 
+static func sated(cell) -> bool:
+	# Own reserves only; no lookup of prey positions or population.
+	return cell.synergy()=="hunter" and cell.substrate>=20*cell.growth_scale() and cell.biomass>=8
+
 static func digesting(cell) -> bool:
 	return cell.substrate>maxf(1,2*cell.growth_scale())
 
 static func fallback(cell, seed_value: int) -> Dictionary:
+	if sated(cell):return {"direction":Vector2.ZERO,"state":"RESTING · STORED MEAL"}
 	if cell.behavior.get("low_energy",false) and digesting(cell):
 		return {"direction":Vector2.ZERO,"state":"RESTING · DIGESTING FOOD"}
 	var phase: float=TAU*posmod(cell.id*19349663 ^ seed_value*83492791,65521)/65521.0

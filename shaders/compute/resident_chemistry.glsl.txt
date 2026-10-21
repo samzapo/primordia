@@ -161,7 +161,7 @@ void main(){
     float roll=(float(random>>8)+.5)/16777216.;
     if(roll<pc.dt){
      total=vec4(m.y*materials[int(v.w)],1,0,0);
-     extra.y=v.w==0.?clamp(m.z,0.,m.y)*7.5:0.;
+     extra.y=v.w==0.?clamp(m.z,0.,m.y)*/*FOOD_FUEL*/:0.;
      v.w=-1.;m=vec4(0);
      imageStore(state,pixel(i)+ivec2(1,0),v);imageStore(state,pixel(i)+ivec2(2,0),m);
     }else{total.z=1.;total.w=v.w==3.?1.:0.;extra.x=float(i+1u);}

@@ -8,7 +8,7 @@ const SIZE:=64.0
 const PERIOD:=5.0
 const GROUPS:=20
 const INTERVAL:=PERIOD/GROUPS
-const SATURATION:=8.0 # Carbon units per 64x64 water area, not a cell allowance.
+const SATURATION:=32.0 # Carbon units per 64x64 water area, not a cell allowance.
 const RELAXATION:=10.0
 const SPEED_SCALE:=20.0 # World units/s; speed-dependent exchange above background diffusion.
 
@@ -79,7 +79,7 @@ static func step(sim) -> void:
  for kind in [sim.CARBON,sim.OXYGEN]:
   var factors:=PackedFloat32Array();factors.resize(COUNT)
   var relaxation: float=RELAXATION if kind==sim.CARBON else 60.0
-  var target: float=SATURATION if kind==sim.CARBON else .5
+  var target: float=SATURATION if kind==sim.CARBON else 2.0
   for k in COUNT:
    if speeds[k]>0:factors[k]=1-exp(-elapsed*speeds[k]/relaxation)
   var added:=0.0;var removed:=0.0

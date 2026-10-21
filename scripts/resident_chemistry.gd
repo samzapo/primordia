@@ -20,7 +20,7 @@ func initialize(device: RenderingDevice, state: RID, acid: RID, order: RID, rang
 	partials=rd.storage_buffer_create(zero.size(),zero)
 	thinning_stats=rd.storage_buffer_create(32)
 	carbon_stats=rd.storage_buffer_create(2560*16)
-	var text:=RDShaderSource.new();text.source_compute=Catalog.glsl(source)
+	var text:=RDShaderSource.new();text.source_compute=Catalog.glsl(source).replace("/*FOOD_FUEL*/","%.6f" % preload("res://scripts/cell_chemistry.gd").FOOD_FUEL)
 	var spirv:=rd.shader_compile_spirv_from_source(text)
 	if spirv.compile_error_compute!="": push_error(spirv.compile_error_compute);return false
 	shader=rd.shader_create_from_spirv(spirv);pipeline=rd.compute_pipeline_create(shader)

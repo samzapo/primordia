@@ -7,15 +7,21 @@ const MAX_PACKETS := MAX_VACUOLES*2+MAX_GAS*2
 const ACTIVE_SPECIES := ["food","waste","oxygen","carbon"]
 const REACTION_REACH := 20.0
 const DIGESTION_RATE := 1.8
+const ENERGY_DENSITY := 40.0
+const AEROBIC_ATP := 2.25*ENERGY_DENSITY
+const FERMENT_ATP := ENERGY_DENSITY
+const RESERVE_ATP := ENERGY_DENSITY
+const LEAF_BIOMASS := 0.035
+const LEAF_FOOD := 1.0-LEAF_BIOMASS
 const RESIDENCE_SECONDS := 10.0
 const BIOMASS_YIELD := 0.7
 const MAX_LEAF_FIXATION := 0.7
 const LEAF_ATP_YIELD := 4.0
-# Fresh food retains respiratory energy that baseline digestion dissipates.
-# Saved parcels keep their exact finite fuel; construction tissue stays7.5.
-const FOOD_FUEL := 18.0
-const TISSUE_FUEL := 7.5
-const LEAF_SOLAR_WORK := .35*TISSUE_FUEL+.65*FOOD_FUEL+LEAF_ATP_YIELD
+# Food and tissue retain more finite chemical energy per represented unit.
+# Saved intracellular fuel is never topped up when the rules change.
+const FOOD_FUEL := 18.0*ENERGY_DENSITY
+const TISSUE_FUEL := 7.5*ENERGY_DENSITY
+const LEAF_SOLAR_WORK := LEAF_BIOMASS*TISSUE_FUEL+LEAF_FOOD*FOOD_FUEL+LEAF_ATP_YIELD
 const MIN_LEAF_LIGHT := 0.08 # Authored diffuse-light survival floor, with real carbon costs.
 var model_version := 2
 var batching:=false
@@ -126,15 +132,15 @@ func refresh() -> void:
 		if packet.species in ["oxygen","carbon"]:
 			vacuoles.append({"id":packet.id,"species":packet.species,"p":packet.p,"angle":packet.angle,"radius":1.4,"acid":0.0,"material":0.0,"contents":packet.amount,"age":float(packet.get("age",0))})
 		if packet.species!="food":continue
-		var v={"id":packet.compartment,"p":packet.p,"radius":7.0,"acid":0.0,"material":0.0,"contents":packet.amount,"age":float(packet.get("age",0))}
+		var v={"id":packet.compartment,"p":packet.p,"radius":carrier_radius(packet.amount),"acid":0.0,"material":0.0,"contents":packet.amount,"age":float(packet.get("age",0))}
 		carriers[packet.compartment]=v;vacuoles.append(v)
 	for packet in particles:
 		if packet.species!="waste":continue
 		if carriers.has(packet.compartment):
 			var v: Dictionary=carriers[packet.compartment]
-			v.contents+=packet.amount;v.acid=packet.amount/maxf(.0000001,v.contents)
+			v.contents+=packet.amount;v.acid=packet.amount/maxf(.0000001,v.contents);v.radius=carrier_radius(v.contents)
 		else:
-			var v={"id":packet.compartment,"p":packet.p,"radius":7.0,"acid":1.0,"material":0.0,"contents":packet.amount,"age":float(packet.get("age",0))}
+			var v={"id":packet.compartment,"p":packet.p,"radius":carrier_radius(packet.amount),"acid":1.0,"material":0.0,"contents":packet.amount,"age":float(packet.get("age",0))}
 			carriers[packet.compartment]=v;vacuoles.append(v)
 func _near_consume(species: String, quantity: float, at: Vector2, reach: float) -> float:
 	var used:=0.0
@@ -145,25 +151,43 @@ func _near_consume(species: String, quantity: float, at: Vector2, reach: float) 
 		if used>=quantity-.0000001:break
 	return used
 
+func carrier_radius(quantity: float) -> float:
+	var cell=owner.get_ref()
+	var density:=4.0 if cell.synergy()=="hunter" else 1.0
+	return clampf(6+sqrt(maxf(0,quantity)/density)*.6,7,maxf(7,minf(14,cell.radius*.28)))
+
+func digestion_rate(cell) -> float:
+	if cell.synergy()=="grazer":return .2*cell.growth_scale()
+	# Keep fuel in the vacuole instead of filling a quickly decaying ATP pool.
+	var aerobic:=clampf(amount("oxygen")/maxf(.001,amount("food")),0,1)
+	var yield_per_unit:=lerpf(FERMENT_ATP,AEROBIC_ATP*cell.mitochondrial_efficiency(),aerobic)
+	var maintenance: float=cell.operating_budget().steady-cell.atp_decay_rate()
+	var demand: float=maxf(0,maintenance+(100-cell.energy)/12.0)
+	return minf(DIGESTION_RATE*cell.growth_scale(),demand/yield_per_unit)
+
+func consume_oxygen(quantity: float, at: Vector2, reach: float) -> float:
+	if accelerator!=null:return accelerator.command(8,quantity,at,reach,-1,-1,-1,0,0,"oxygen")
+	var used:=_near_consume("oxygen",quantity,at,reach)
+	refresh();return used
+
 func advance(cell, dt: float, _external_osmolarity: float=.15) -> void:
 	if dt<=0 or cell.dead or particle_count()==0:return
 	var mitochondrial_gain: float=cell.mitochondrial_gain(dt)
 	if accelerator!=null:accelerator.advance(dt,.15,mitochondrial_gain);return
 	frame_dt=dt;tick+=1
-	var budget: float=DIGESTION_RATE*cell.growth_scale()*dt
+	var budget: float=digestion_rate(cell)*dt
 	var original:=particles.duplicate();batching=true
 	for packet in original:
 		packet.previous=packet.p
 		if packet.species!="food" or not packet.alive or budget<=0:continue
-		var duration: float=maxf(dt,RESIDENCE_SECONDS-float(packet.get("age",0)))
-		var used: float=minf(budget,packet.amount*minf(1,dt/duration));budget-=used
+		var used: float=minf(budget,packet.amount);budget-=used
 		var aerobic:=_near_consume("oxygen",used,packet.p,REACTION_REACH)
 		var anaerobic:=used-aerobic
 		var bonus := clampf(float(packet.get("nutrition",0))/maxf(.00000001,packet.amount),0,float(Catalog.data().ecology.nutrient_bonus_limit))
 		var fuel:=_consume(packet,used)
-		var fueled:=minf(used,fuel/7.5)
+		var fueled:=minf(used,fuel/TISSUE_FUEL)
 		var tissue: float=fueled*(.7*aerobic+.3*anaerobic)/maxf(.00000001,used)
-		var work: float=minf(maxf(0,fuel-tissue*7.5),fueled*(2.25*aerobic+1.0*anaerobic)/maxf(.00000001,used))
+		var work: float=minf(maxf(0,fuel-tissue*TISSUE_FUEL),fueled*(AEROBIC_ATP*aerobic+FERMENT_ATP*anaerobic)/maxf(.00000001,used))
 		# Nutrient quality retains its own allocation rule. Mitochondria recover
 		# only otherwise dissipated fuel, never debit the meal's biomass output.
 		var mitochondrial_extra: float=work*maxf(0,mitochondrial_gain-1)*aerobic/maxf(.00000001,used)
@@ -176,7 +200,7 @@ func advance(cell, dt: float, _external_osmolarity: float=.15) -> void:
 		cell.biomass+=tissue;cell.gain_energy(work);cell.processed+=used
 		cell.fermented+=anaerobic
 		if anaerobic>0:cell.fermentation_activity=2
-		heat+=maxf(0,fuel-tissue*7.5-work)
+		heat+=maxf(0,fuel-tissue*TISSUE_FUEL-work)
 		emit("carbon",used*.1,packet.p,-1,-1,0)
 		emit("waste",used-tissue-used*.1,packet.p,packet.source,packet.compartment,0)
 	batching=false;particles=particles.filter(func(packet):return packet.alive)
@@ -194,7 +218,7 @@ func advance(cell, dt: float, _external_osmolarity: float=.15) -> void:
 			var steps:=clampi(ceili(dt/.05),1,64)
 			for step in steps:
 				var trial: Vector2=packet.p+packet.v*(dt/steps)
-				var bounded:=constrain(cell,trial,1.4 if gas else 7.0)
+				var bounded:=constrain(cell,trial,1.4 if gas else carrier_radius(packet.amount))
 				if trial.distance_squared_to(bounded)>.000001:packet.v=packet.v.bounce((trial-bounded).normalized())
 				packet.p=bounded
 	for packet in particles:
@@ -300,14 +324,7 @@ func partition(parent,fraction: float) -> float:
 	return moved
 func anchor_photosynthesis(_cell,_organ: Dictionary) -> void:pass
 func food_share(sim,cell) -> float:
-	if sim.Investment.strategy(sim,cell)!="producer" and cell.synergy()!="producer":return .25
-	var material:=12.0;var energy:=18.0
-	if sim.automatic_reproduction:
-		for mode in ["mitosis","budding"]:
-			if not (cell.automatic_division if mode=="mitosis" else cell.automatic_budding):continue
-			var quote: Dictionary=sim.Lifecycle.quote(sim,cell,mode)
-			material=maxf(material,quote.material);energy=maxf(energy,quote.energy)
-	return .5 if cell.biomass>=material and cell.energy>=energy and cell.substrate>=2*cell.growth_scale() else .25
+	return 1.0 if sim.Investment.strategy(sim,cell)=="producer" or cell.synergy()=="producer" else .25
 
 func photosynthesize(sim,cell,organ: Dictionary,dt: float) -> void:
 	if cell.synergy()=="producer":dt*=1.15
@@ -332,13 +349,13 @@ func photosynthesize(sim,cell,organ: Dictionary,dt: float) -> void:
 		batching=true
 		used=_near_consume("carbon",budget,site,24)
 		if used>0:
-			emit("food",used*.65*(1-share),site,organ.id,-1,used*.65*(1-share)*FOOD_FUEL)
+			emit("food",used*LEAF_FOOD*(1-share),site,organ.id,-1,used*LEAF_FOOD*(1-share)*FOOD_FUEL)
 			emit("oxygen",used*2.5,site,organ.id,-1,0)
-			cell.biomass+=used*.35;solar_work+=used*LEAF_SOLAR_WORK;heat+=used*(4-LEAF_ATP_YIELD)
+			cell.biomass+=used*LEAF_BIOMASS;solar_work+=used*LEAF_SOLAR_WORK;heat+=used*(4-LEAF_ATP_YIELD)
 		batching=false;refresh()
 	if used>0:
 		var normal: Vector2=cell.organ_normal(organ).rotated(cell.angle)
-		sim.spawn_particle(0,cell.organ_position(organ)+normal*12,normal*12,used*.65*share,cell.id)
+		sim.spawn_particle(0,cell.organ_position(organ)+normal*12,normal*12,used*LEAF_FOOD*share,cell.id)
 		cell.spend_energy(maxf(0,used-baseline_budget)*extra_cost,organ,"photosynthesis")
 		cell.gain_energy(used*LEAF_ATP_YIELD,organ)
 		cell.fixed_carbon+=used;cell.oxygen_produced+=used*2.5

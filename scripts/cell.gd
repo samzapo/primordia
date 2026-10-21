@@ -35,8 +35,8 @@ const LOW_POWER_ATP := 12.0
 const POWER_RECOVERY_ATP := 18.0
 const LOW_POWER_CAPACITY := 0.25
 const SECRETION_COST := 0.10
-const AEROBIC_ATP := 2.25
-const FERMENT_ATP := 1.0
+const AEROBIC_ATP := Chemistry.AEROBIC_ATP
+const FERMENT_ATP := Chemistry.FERMENT_ATP
 const STARVATION_GRACE := 300.0
 const STARVATION_DAMAGE := 0.1
 # In this 2D habitat, enclosed area is the represented cytoplasmic volume.
@@ -215,15 +215,15 @@ func accept_surface(kind: int, amount: float, world_angle: float, source: int = 
 	return Surface.bind(self,kind,amount,world_angle,source)
 
 func update_geometry() -> void:
-	# One retained tissue unit adds exactly TISSUE_AREA of represented volume.
-	radius = tissue_radius(maxf(8,body+biomass+brood_mass+chemistry.reactor_mass+chemistry.amount("catalyst")))
+	# Dense reserves enlarge the cell less than structural tissue.
+	radius = tissue_radius(storage_volume())
 	membrane.oral_angle = NAN
 	for organ in organs:
 		if organ.kind=="feeding": membrane.oral_angle = organ.a
 	_sync_oral_link()
 	sync_membrane_anatomy()
-	mass = maxf(4, organic_mass()*0.45)
-	inertia = (body + biomass + substrate + waste + carbon + brood_mass) * radius * radius * 0.5
+	mass = maxf(4,(storage_volume()+organ_mass()+surface_material())*.45)
+	inertia = storage_volume()*radius*radius*.5
 	for organ in organs:
 		var arm = local_point(organ.a)
 		inertia += organ.material * arm.length_squared()+float(organ.get("stored_toxin",0))*organ_local_position(organ).length_squared()
@@ -312,13 +312,16 @@ func update_power_state() -> void:
 func burn_biomass(quantity: float) -> void:
 	var used:=minf(maxf(0,quantity),biomass)
 	if used<=0:return
-	biomass-=used;gain_energy(used);reserve_used+=used;reserve_activity=2
-	chemistry.heat+=used*6.5
+	var efficiency:=mitochondrial_efficiency()
+	var aerobic: float=chemistry.consume_oxygen(used,Vector2.ZERO,radius*2) if efficiency>1 else 0.0
+	var work: float=Chemistry.RESERVE_ATP*(used+aerobic*(efficiency-1))
+	biomass-=used;gain_energy(work);reserve_used+=used;reserve_activity=2
+	chemistry.heat+=used*Chemistry.TISSUE_FUEL-work
 	behavior["reserve_products"]=float(behavior.get("reserve_products",0))+used
 
 func work_capacity(required: float=0.0) -> float:
 	# Read-only, including when used by presentation or coarse intake requests.
-	if biomass>0 and energy+biomass+0.0000001>=required:return 1.0
+	if biomass>0 and energy+biomass*Chemistry.RESERVE_ATP+0.0000001>=required:return 1.0
 	var threshold: float=POWER_RECOVERY_ATP if behavior.get("low_power",false) else LOW_POWER_ATP
 	return LOW_POWER_CAPACITY if energy+0.0000001<maxf(threshold,required) else 1.0
 
@@ -333,6 +336,13 @@ func mitochondrial_efficiency() -> float:
 func mitochondrial_gain(_dt: float) -> float:
 	if chemistry.amount("food")<=0 or chemistry.amount("oxygen")<=0:return 1.0
 	return mitochondrial_efficiency()
+
+func feeding_axis(fallback: float) -> float:
+	# Use only installed anatomy: the receptor finds a cue, the feeding organ meets it.
+	for kind in ["proboscis","feeding"]:
+		for organ in organs:
+			if organ.kind==kind and organ.hp>0:return organ_normal(organ).angle()
+	return fallback
 
 func excretion_angle() -> float:
 	return (membrane.oral_angle if is_finite(membrane.oral_angle) else 0.0)+PI*0.85
@@ -368,14 +378,22 @@ func perimeter() -> float:
 	membrane.refresh_arcs()
 	return membrane.arcs[membrane.COUNT]
 
+func storage_volume(spent_biomass: float=0.0) -> float:
+	var role:=synergy()
+	var tissue:=maxf(0,biomass-spent_biomass)*(.4 if role=="grazer" else .12)
+	var food:=substrate*(.025 if role=="hunter" else .15)
+	# Reserve compression must never eject an existing saved organ layout.
+	var fitted:=78*pow(occupied()*1.1/(TAU*47),2)
+	return maxf(maxf(8,fitted),body+tissue+food+(waste+carbon)*.08+brood_mass)
+
 func growth_scale() -> float:
-	return pow(maxf(1.0,(body+biomass+brood_mass)/78.0),2.0/3.0)
+	return pow(maxf(1.0,storage_volume()/78.0),2.0/3.0)
 
 func gut_capacity() -> float:
-	return maxf(0,24.0*growth_scale()*(1.25 if synergy()=="grazer" else 1.0)-chemistry.storage_used())
+	return maxf(0,(480.0 if synergy()=="hunter" else 120.0 if synergy()=="grazer" else 72.0)*growth_scale()-chemistry.storage_used())
 
 func oxygen_capacity() -> float:
-	return 14.0*growth_scale()
+	return 56.0*growth_scale()
 
 static func tissue_radius(amount: float) -> float:
 	return 47.0*sqrt(maxf(0,amount)/78.0)
@@ -417,7 +435,7 @@ func can_fit(kind: String, a: float, size: float = 1.0, paid: bool = true) -> bo
 	var k := KINDS.find(kind)
 	if k < 0 or not is_finite(a) or not is_finite(size) or size < 0.5: return false
 	var cost: float=construction_price(kind) if paid else 0.0
-	var length := perimeter()*pow(maxf(8,body+biomass+brood_mass-cost)/maxf(8,body+biomass+brood_mass),0.5)
+	var length := perimeter()*pow(maxf(8,storage_volume(cost))/storage_volume(),0.5)
 	if internal_organ(kind):return count(kind)<maxi(1,floori(growth_scale()*3)) and occupied()<=length
 	return occupied()+WIDTH[k]*size+4 <= length
 
@@ -470,7 +488,7 @@ func add_organ(kind: String, a: float, mode: String = "graze", paid: bool = true
 	var cost: float=construction_price(kind) if paid else 0.0
 	var tissue: float=maxf(organ_cost(kind,size),cost)
 	if paid and biomass < cost: return false
-	var length := perimeter()*pow(maxf(8,body+biomass+brood_mass-(cost if paid else 0.0))/maxf(8,body+biomass+brood_mass),0.5)
+	var length := perimeter()*pow(maxf(8,storage_volume(cost if paid else 0.0))/storage_volume(),0.5)
 	if not internal_organ(kind):_make_room(a,WIDTH[k]*size+4,length)
 	if paid: biomass -= cost
 	var max_health := (70.0 if kind == "protection" else 25.0)*size*size
@@ -508,7 +526,7 @@ func consumed(organ: Dictionary, amount: float) -> void:
 	reaction_flash = 1.0
 
 func spend_energy(amount: float, organ: Dictionary = {}, category: String = "upkeep", shares: Dictionary = {}) -> float:
-	if amount>energy:burn_biomass(amount-energy)
+	if amount>energy:burn_biomass((amount-energy)/Chemistry.RESERVE_ATP)
 	var spent := minf(energy,maxf(0,amount))
 	energy-=spent
 	energy_budget.record(age,0,0,maxf(0,spent),organ.get("id",-1),category,shares)
@@ -519,7 +537,7 @@ func available_energy(_organ: Dictionary = {}) -> float:
 	return energy
 
 func spend_energy_at(amount: float, _at: Vector2, _reach: float, category: String) -> float:
-	if amount>energy:burn_biomass(amount-energy)
+	if amount>energy:burn_biomass((amount-energy)/Chemistry.RESERVE_ATP)
 	var spent := minf(energy,maxf(0,amount))
 	energy-=spent
 	energy_budget.record(age,0,0,spent,-1,category)
@@ -730,7 +748,7 @@ func resize_organ(identity: int, size: float) -> Dictionary:
 	var quote := resize_quote(identity,size)
 	if quote.is_empty(): return {}
 	var cost: float = maxf(0,quote.material)
-	var available := perimeter()*pow(maxf(8,body+biomass+brood_mass-cost)/maxf(8,body+biomass+brood_mass),0.5)
+	var available := perimeter()*pow(maxf(8,storage_volume(cost))/storage_volume(),0.5)
 	if biomass < cost or occupied()-organ_width(organ)+WIDTH[KINDS.find(organ.kind)]*size+4 > available: return {}
 	biomass -= cost
 	var debris: float = maxf(0,-quote.material)*0.5
@@ -781,7 +799,7 @@ func restore_organ(identity: int, paid: bool = true) -> bool:
 	for record in lost_organs:
 		if record.id != identity: continue
 		var cost: float=construction_price(record.kind) if paid else 0.0
-		var available := perimeter()*pow(maxf(8,body+biomass+brood_mass-(cost if paid else 0.0))/maxf(8,body+biomass+brood_mass),0.5)
+		var available := perimeter()*pow(maxf(8,storage_volume(cost if paid else 0.0))/storage_volume(),0.5)
 		if (paid and biomass < cost) or occupied()+organ_width(record) > available: return false
 		var organ: Dictionary = record.duplicate(true)
 		_make_room(organ.a,organ_width(organ),available)

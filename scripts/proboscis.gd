@@ -3,8 +3,12 @@ extends RefCounted
 const Medium=preload("res://scripts/medium.gd")
 const RATE:=2.0
 const ATP_PER_UNIT:=0.5
+static func reach(cell,organ: Dictionary) -> float:
+ # A concave Hunter membrane must not hide the feeding tip behind its own points.
+ return maxf(27*organ.scale,cell.extent()-cell.organ_local_position(organ).dot(cell.organ_normal(organ))+8*organ.scale)
+
 static func tip(cell,organ: Dictionary) -> Vector2:
- return cell.organ_position(organ)+cell.organ_normal(organ).rotated(cell.angle)*27*organ.scale
+ return cell.organ_position(organ)+cell.organ_normal(organ).rotated(cell.angle)*reach(cell,organ)
 
 static func touches(donor,at: Vector2,margin: float) -> bool:
  var local: Vector2=Medium.offset(donor.position,at).rotated(-donor.angle)
@@ -16,6 +20,7 @@ static func touches(donor,at: Vector2,margin: float) -> bool:
 
 static func step(sim,cell,dt: float) -> void:
  if sim.remote_client or cell.dead or dt<=0:return
+ if sim.Behavior.sated(cell):return
  for organ in cell.organs:
   if organ.kind!="proboscis" or organ.hp<=0:continue
   organ.feeding=false
@@ -29,7 +34,7 @@ static func step(sim,cell,dt: float) -> void:
    if chosen==null or d<distance or (d==distance and donor.id<chosen.id):chosen=donor;distance=d
   if chosen==null:continue
   var amount: float=minf(chosen.biomass,minf(maxf(0,cell.gut_capacity()-cell.substrate),RATE*organ.scale*organ.scale*organ.hp/organ.max_hp*dt*cell.work_capacity()))
-  amount=minf(amount,(cell.energy+cell.biomass)/ATP_PER_UNIT) # A meal never funds its own capture.
+  amount=minf(amount,(cell.energy+cell.biomass*cell.Chemistry.RESERVE_ATP)/ATP_PER_UNIT) # A meal never funds its own capture.
   if amount<=0:continue
   cell.spend_energy(amount*ATP_PER_UNIT,organ,"contact feeding")
   chosen.biomass-=amount

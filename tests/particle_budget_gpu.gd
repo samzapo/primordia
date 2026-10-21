@@ -33,6 +33,7 @@ func run() -> void:
 			if state[i*12+7]==kind:count+=1
 		check(count>250 and count<350,"GPU survival probability is shared across every species including signals")
 	var all: Dictionary=gpu.thin_sync(1,2)
+	check(absf(result.fuel_loss+all.fuel_loss-150*preload("res://scripts/cell_chemistry.gd").FOOD_FUEL)<.1,"Resident thinning accounts for the current finite food energy")
 	check(all.alive==0 and all.signals==0 and gpu.work_count==1,"Empty pool releases stale dispatch work without resetting generations")
 	var products: Array=[{"owner":7,"state":PackedFloat32Array([100,100,0,0,0,0,0,0,8,.3,.3,0])}]
 	var admitted: Dictionary=gpu.exchange_sync([],products,[],[],{"feeding":false,"projection":false})

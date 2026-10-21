@@ -564,7 +564,19 @@ const RELEASES=[
  ],
  "footer":"Try these changes in the experimental pond.",
  "button":"Back to the pond"
-}
+},
+{
+	"id":"2026-10-20-longer-lasting-meals",
+	"audience":"experimental",
+	"title":"What’s new in the pond",
+	"items":[
+		"Meals last much longer. Hunters keep food in compact vacuoles and digest it as they need energy.",
+		"Grazers build larger biomass reserves, while producers keep releasing food and grow steadily.",
+		"Well-fed hunters rest between hunts, giving the rest of the pond time to grow.",
+	],
+	"footer":"Try these changes in the experimental pond.",
+	"button":"Back to the pond",
+},
 ]
 const CURRENT=RELEASES[-1]
 static func seen_index(account: Dictionary) -> int:

@@ -8,7 +8,7 @@ static func thin(packets: Array,probability: float,random: RandomNumberGenerator
 		if not packet.alive or random.randf()>=probability:continue
 		result.removed+=1
 		result.loss+=float(packet.amount)*Catalog.material(packet.kind)
-		if packet.kind==0:result.fuel_loss+=clampf(float(packet.get("capacity",packet.amount)),0,packet.amount)*7.5
+		if packet.kind==0:result.fuel_loss+=clampf(float(packet.get("capacity",packet.amount)),0,packet.amount)*preload("res://scripts/cell_chemistry.gd").FOOD_FUEL
 		packet.alive=false
 	return result
 

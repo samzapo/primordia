@@ -12,6 +12,7 @@ static func state(sim,cell,organ: Dictionary) -> Dictionary:
   result.label="Collecting light";result.progress=clampf(float(organ.get("photo_elapsed",0))/.25,0,1)
   return result
  if kind=="proboscis":
+  if sim.Behavior.sated(cell):result.label="Resting · stored meal";return result
   result.label="Feeding · 0.5 ATP / biomass" if organ.get("feeding",false) else "Waiting for contact with a living cell"
   if cell.energy+cell.biomass<=0:result.label="Waiting for ATP or reserve biomass"
   elif cell.substrate>=cell.gut_capacity():result.label="Digesting a full meal"
@@ -22,9 +23,10 @@ static func state(sim,cell,organ: Dictionary) -> Dictionary:
   result.label="Full · releases toxin on death" if result.progress>=.999999 else "Waiting for surplus biomass" if cell.biomass<=12 else "Low ATP · 25% filling rate" if result.capacity<1 else "Storing toxin"
   return result
  if kind=="mitochondrion":
-  result.label=("%.2fx ATP yield · " % cell.mitochondrial_efficiency())+("Waiting for food" if cell.substrate<=.0000001 else "Waiting for oxygen" if cell.oxygen<=.0000001 else "Recovering energy from food and oxygen")
+  result.label=("%.2fx ATP yield · " % cell.mitochondrial_efficiency())+("Waiting for food" if cell.substrate<=.0000001 and cell.biomass<=.0000001 else "Waiting for oxygen" if cell.oxygen<=.0000001 else "Recovering energy from food or biomass and oxygen")
   return result
  if kind in ["toxin","poreforming","counterattack"]:
+  if kind!="counterattack" and sim.Behavior.sated(cell):result.label="Resting · stored meal";return result
   var burst: float=organ.scale*organ.scale*cell.Genes.factor(organ,"burst")
   var capacity: float=cell.work_capacity(2*burst*cell.Genes.inefficiency(organ))
   result.capacity=capacity;result.depleted=capacity<1

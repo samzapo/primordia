@@ -1464,6 +1464,7 @@ func _sense(cell, dt: float, received_by_organ: Dictionary = {}) -> void:
 		cell.state={"graze":"FORAGING","hunt":"FOLLOWING PREY PHEROMONE","light":"SEEKING LIGHT","flee":"FLEEING","evade":"ESCAPING AN ATTACK","acid":"LEAVING HARMFUL ACID","kin_toward":"FOLLOWING FAMILY PHEROMONES","kin_away":"SPREADING OUT FROM FAMILY","toxin":"AVOIDING TOXIN"}.get(cell.target_mode,"EXPLORING")
 		if cell.target_mode=="light" and organ.get("mutation","")=="shade_leaf":cell.state="SEEKING SOFT LIGHT"
 		cell.target_mouth=cell.organ_normal(organ).angle() if not organ.is_empty() else 0.0
+		if cell.target_mode=="hunt":cell.target_mouth=cell.feeding_axis(cell.target_mouth)
 	else:
 		var fallback: Dictionary=Behavior.fallback(cell,seed_value)
 		cell.target=fallback.direction;cell.facing=cell.target;cell.threat=Vector2.ZERO
@@ -1613,9 +1614,9 @@ func _metabolize(cell, dt: float) -> void:
 		cell.behavior["reserve_elapsed"]=float(cell.behavior.get("reserve_elapsed",0))+dt
 		if cell.behavior.reserve_elapsed>=.5:
 			var elapsed: float=cell.behavior.reserve_elapsed;cell.behavior.reserve_elapsed=0.0
-			var used: float=minf(cell.biomass,minf(maxf(0,18-cell.energy),elapsed*rate))
+			var used: float=minf(cell.biomass*Cell.Chemistry.RESERVE_ATP,minf(maxf(0,18-cell.energy),elapsed*rate))
 			if used>0:
-				cell.burn_biomass(used)
+				cell.burn_biomass(used/Cell.Chemistry.RESERVE_ATP)
 	else:cell.behavior.erase("reserve_elapsed")
 	_flush_reserve_products(cell)
 	if not perception_modes_enabled:cell.chemistry.advance(cell,dt,0.15+acidity.sample(cell.position)*0.1)
@@ -1672,7 +1673,7 @@ func _emit_and_attack(cell, dt: float) -> void:
 			# Query only on a scheduled secretion attempt, rather than every tick.
 			if not _secretion_needed(cell,organ,kind): continue
 			cell.biomass -= 0.06
-			if cell.biomass<maxf(0,energy_cost-cell.energy):
+			if cell.biomass<maxf(0,energy_cost-cell.energy)/Cell.Chemistry.RESERVE_ATP:
 				cell.biomass+=.06;break
 			cell.spend_energy(energy_cost,organ,"secretion")
 			var direction: Vector2 = cell.organ_normal(organ).rotated(cell.angle)
@@ -1701,12 +1702,13 @@ func _emit_and_attack(cell, dt: float) -> void:
 			if detected.is_empty() or detected.expires_at<=time or not detected.report.hostile:continue
 			aim=Medium.offset(cell.organ_position(organ),detected.report.at).normalized()
 		else:
+			if Behavior.sated(cell):continue
 			var cue: Dictionary=cell.behavior.get("weapon_cue",{})
 			var receptor: Dictionary=cell.organ_by_id(int(cue.get("organ_id",-1)))
 			if cue.is_empty() or cue.expires_at<=time or receptor.is_empty() or receptor.hp<=0 or cue.lineage==cell.lineage_id():continue
 			aim=Medium.offset(cell.organ_position(organ),cue.at).normalized()
 		if organ.burst_clock>0 or aim.length_squared()<.01:continue
-		if cell.biomass < 0.18*burst+maxf(0,2*burst*Genes.inefficiency(organ)-cell.energy): continue
+		if cell.biomass < 0.18*burst+maxf(0,2*burst*Genes.inefficiency(organ)-cell.energy)/Cell.Chemistry.RESERVE_ATP: continue
 		cell.spend_energy(2*burst*Genes.inefficiency(organ),organ,"combat")
 		var source: int=_attack_owner(cell,organ.kind=="counterattack")
 		if organ.kind == "poreforming":

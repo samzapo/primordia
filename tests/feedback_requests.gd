@@ -18,7 +18,7 @@ func run() -> void:
  cell.energy=0;cell.biomass=10;cell.update_power_state()
  check(cell.work_capacity(2)==1,"Biomass reserves keep ordinary organs at full capacity")
  var mass=cell.organic_mass()
- check(cell.spend_energy(2)==2 and cell.energy==0 and cell.biomass==8 and cell.reserve_used==2,"Full work pays its real ATP deficit from finite biomass")
+ check(cell.spend_energy(2)==2 and cell.energy==0 and is_equal_approx(cell.biomass,9.95) and is_equal_approx(cell.reserve_used,.05),"Full work pays its real ATP deficit from finite biomass")
  check(is_equal_approx(cell.organic_mass(),mass) and is_equal_approx(cell.chemistry.heat,13),"Combustion retains nonfuel products and explicit heat")
  sim._flush_reserve_products(cell,true)
  check(cell.behavior.get("reserve_products",0)==0 and sim.particle_count()==2,"Combustion products flush once as carbon and waste")
@@ -54,7 +54,7 @@ func run() -> void:
     if particle.alive:preload("res://scripts/particle_transport.gd").advance(particle,sim.fluid,1.0/60,i,sim.rng)
    sim.grid.rebuild(sim.particles);sim._feed(cell);sim._metabolize(cell,1.0/60)
   print("MEAL ",role," eaten=",cell.eaten," processed=",cell.processed," ATP=",cell.energy," biomass=",cell.biomass," food=",cell.substrate," oxygen=",cell.oxygen)
-  check(cell.eaten>10 and cell.processed>8 and cell.energy>3 and cell.biomass>0,role+" recovers from a finite nearby meal instead of starving beside it")
+  check(cell.eaten>10 and cell.processed>0 and cell.substrate>1 and cell.energy>3 and cell.biomass>0,role+" recovers from a finite nearby meal instead of starving beside it")
  # Actual contact transfer cannot create mass/fuel, reach remotely or overdraw.
  sim=fixture();cell=sim.player;cell.energy=10;cell.biomass=30;cell.position=Vector2(400,400)
  cell.add_organ("proboscis",0,"graze",false)
@@ -63,7 +63,7 @@ func run() -> void:
  var total=cell.organic_mass()+donor.organic_mass();var fuel=cell.raw_fuel
  Proboscis.step(sim,cell,.5)
  check(donor.biomass==19 and cell.substrate==1 and cell.energy==9.5,"Proboscis spends ATP and transfers exactly one real biomass at contact")
- check(is_equal_approx(total,cell.organic_mass()+donor.organic_mass()) and is_equal_approx(cell.raw_fuel-fuel,7.5),"Contact feeding preserves finite material and tissue fuel")
+ check(is_equal_approx(total,cell.organic_mass()+donor.organic_mass()) and is_equal_approx(cell.raw_fuel-fuel,Sim.Cell.Chemistry.TISSUE_FUEL),"Contact feeding preserves finite material and tissue fuel")
  donor.position+=Vector2(500,0);var eaten=cell.eaten;Proboscis.step(sim,cell,1)
  check(cell.eaten==eaten and not organ.feeding,"Proboscis cannot feed across open water")
  donor.position-=Vector2(500,0);donor.unattended_protected=true;Proboscis.step(sim,cell,1)
@@ -107,7 +107,7 @@ func photosynthesis() -> void:
   cell.chemistry.emit("carbon",3,cell.local_point(0)*.72,-1,-1,0)
   var food=cell.substrate
   var share: float=cell.chemistry.food_share(sim,cell)
-  check(share==(.5 if surplus else .25),"Producer shares half after reserves, retaining extra food during recovery")
+  check(share==1.0,"Producer continuously exports all food in recovery and surplus")
   var cpu=Sim.Cell.clone_state(cell)
   var gpu=null
   if RenderingServer.get_rendering_device()!=null:
@@ -115,7 +115,7 @@ func photosynthesis() -> void:
    check(preload("res://scripts/resident_cytoplasm.gd").new().attach(gpu,cell.chemistry,cell),"Focused sharing check uses actual resident chemistry")
   cell.chemistry.photosynthesize(sim,cell,cell.organs[0],1)
   var exterior: float=sim.particles.reduce(func(total,p):return total+p.amount,0.0)
-  check(is_equal_approx(cell.substrate-food,cell.fixed_carbon*.65*(1-share)) and is_equal_approx(exterior,cell.fixed_carbon*.65*share),"Internal/external food split uses real consumed carbon")
+  check(is_equal_approx(cell.substrate-food,cell.fixed_carbon*Sim.Cell.Chemistry.LEAF_FOOD*(1-share)) and is_equal_approx(exterior,cell.fixed_carbon*Sim.Cell.Chemistry.LEAF_FOOD*share),"Internal/external food split uses real consumed carbon")
   if gpu!=null:
    cpu.chemistry.photosynthesize(sim,cpu,cpu.organs[0],1)
    check(is_equal_approx(cell.substrate,cpu.substrate) and is_equal_approx(cell.energy,cpu.energy),"Resident and CPU food/ATP match for both sharing fractions")

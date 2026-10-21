@@ -47,7 +47,7 @@ static func quote(sim,parent,mode: String) -> Dictionary:
 	if parent.dead or parent.health<=0:q.reason="Only a living cell can reproduce."
 	elif q.cooldown>0:q.reason="Resting: %ds until reproduction." % ceili(q.cooldown)
 	elif sim.cells.filter(func(c):return not c.dead).size()>=sim.MAX_LIVE_CELLS and sim.FamilyMerging.living_families(sim).get(parent.lineage_id(),[]).size()<12:q.reason="The pond's population safety limit is reached."
-	elif not parent.working("feeding") and not parent.working("photosynthesis"):q.reason="Build an oral groove or leaf first."
+	elif not parent.working("feeding") and not parent.working("photosynthesis") and not parent.working("proboscis"):q.reason="Build an oral groove, proboscis or leaf first."
 	elif parent.biomass<q.material or parent.energy<q.energy:q.reason="%s needs %.0f biomass and %.0f ATP, including survival reserves." % [mode.capitalize(),q.material,q.energy]
 	else:q.ready=true;q.reason="%s ready. No clear water is required." % mode.capitalize()
 	return q

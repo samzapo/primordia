@@ -51,6 +51,7 @@ double near_consume(int s,double q,vec2 at,float reach){
  }
  return used;
 }
+float carrier_radius(double q){return clamp(6.0+sqrt(float(max(0.0,q))/p[4])*.6,7.0,max(7.0,min(14.0,p[0]*.28)));}
 void summarize(){
  uint kept=0u;for(uint i=0u;i<n();i++)if(live(i)){if(kept!=i)a[kept]=a[i];kept++;}c[0]=double(kept);c[68]=double(kept);
  for(int s=0;s<SPECIES;s++)c[32+s]=0.0;
@@ -67,26 +68,26 @@ void summarize(){
   double food=0.0,waste=0.0;
   for(uint j=0u;j<n();j++)if(live(j)&&same_comp(i,j)){if(a[j].facts.x==FOOD)food+=a[j].q.x;else waste+=a[j].q.x;}
   c[base]=double(uint(a[i].facts.z));c[base+7]=double(a[i].identity.w);
-  c[base+1]=double(a[i].pose.x);c[base+2]=double(a[i].pose.y);c[base+3]=7.0;
+  c[base+1]=double(a[i].pose.x);c[base+2]=double(a[i].pose.y);c[base+3]=double(carrier_radius(food+waste));
   c[base+4]=waste/max(EPS,food+waste);c[base+5]=food+waste;c[base+6]=a[i].clock.x;
  }
 }
 void advance(){
- double dt=op[1],budget=dt*1.8*double(p[1]);uint original=n();
+ double dt=op[1],budget=dt*op[23];uint original=n();
  for(uint i=0u;i<original;i++)if(live(i)){
   a[i].pose.zw=a[i].pose.xy;
   if(a[i].facts.x==FOOD&&budget>0.0){
    Packet meal=a[i];
-   double duration=max(dt,10.0-meal.clock.x),used=min(budget,meal.q.x*min(1.0,dt/duration)),fuel=meal.q.y*used/max(EPS,meal.q.x);
+   double used=min(budget,meal.q.x),fuel=meal.q.y*used/max(EPS,meal.q.x);
    double aerobic=near_consume(OXYGEN,used,meal.pose.xy,20.0),anaerobic=used-aerobic;
-   double fueled=min(used,fuel/7.5),tissue=fueled*(.7*aerobic+.3*anaerobic)/max(0.00000001,used);
-   double work=min(max(0.0,fuel-tissue*7.5),fueled*(2.25*aerobic+1.0*anaerobic)/max(0.00000001,used));
+   double fueled=min(used,fuel/TISSUE_FUEL),tissue=fueled*(.7*aerobic+.3*anaerobic)/max(0.00000001,used);
+   double work=min(max(0.0,fuel-tissue*TISSUE_FUEL),fueled*(AEROBIC_ATP*aerobic+FERMENT_ATP*anaerobic)/max(0.00000001,used));
    double bonus=clamp(meal.clock.y/max(EPS,meal.q.x),0.0,NUTRIENT_BONUS_LIMIT);
    double mitochondrial_extra=work*max(0.0,op[20]-1.0)*aerobic/max(0.00000001,used);
    if(bonus>0.0){double extra=min(work*bonus,max(0.0,fuel-work));double recovered_heat=max(0.0,fuel-tissue*TISSUE_FUEL-work);tissue-=max(0.0,extra-recovered_heat)/TISSUE_FUEL;work+=extra;}
    work+=min(mitochondrial_extra+work*op[21],max(0.0,fuel-tissue*TISSUE_FUEL-work));
    budget-=used;consume(i,used);c[80]+=tissue;c[82]+=work;c[83]+=used;c[84]+=anaerobic;
-   c[20]+=max(0.0,fuel-tissue*7.5-work);
+   c[20]+=max(0.0,fuel-tissue*TISSUE_FUEL-work);
    emit_packet(CARBON,used*.1,meal.pose.xy,-1,0xffffffffu,-1,0xffffffffu,0.0,0.0);
    emit_packet(WASTE,used-tissue-used*.1,meal.pose.xy,meal.facts.y,meal.identity.z,meal.facts.z,meal.identity.w,0.0,0.0);
   }
@@ -101,7 +102,7 @@ void advance(){
    if(dot(a[i].motion.xy,a[i].motion.xy)<.001){float angle=float(uint(a[i].facts.z))*2.399963+.8;a[i].motion.xy=vec2(cos(angle),sin(angle))*max(6.0,p[0]*.22);}
    int steps=clamp(int(ceil(float(dt)/.05)),1,64);
    for(int step=0;step<steps;step++){
-    vec2 trial=a[i].pose.xy+a[i].motion.xy*float(dt/double(steps)),bounded=constrain(trial,a[i].facts.x==OXYGEN||a[i].facts.x==CARBON?1.4:7.0);
+    vec2 trial=a[i].pose.xy+a[i].motion.xy*float(dt/double(steps)),bounded=constrain(trial,a[i].facts.x==OXYGEN||a[i].facts.x==CARBON?1.4:carrier_radius(a[i].q.x));
     if(dot(trial-bounded,trial-bounded)>.000001)a[i].motion.xy=reflect(a[i].motion.xy,normalize(trial-bounded));
     a[i].pose.xy=bounded;
    }
@@ -121,7 +122,7 @@ void main(){
    pose=vec4(a[i].pose.xy,0.0,0.0);
    if(a[i].facts.x==OXYGEN||a[i].facts.x==CARBON){pose.z=a[i].motion.z;pose.w=a[i].facts.x==OXYGEN?1.0:2.0;contents=vec4(1.4,0,0,0);}
    else
-   contents=vec4(7.0,float(food/max(EPS,food+waste)),clamp(ceil(float(food+waste)/.3),1.0,7.0),clamp(sqrt(float(food+waste)/clamp(ceil(float(food+waste)/.3),1.0,7.0)/.3),.8,1.7));
+   contents=vec4(carrier_radius(food+waste),float(food/max(EPS,food+waste)),clamp(ceil(float(food+waste)/.3),1.0,7.0),clamp(sqrt(float(food+waste)/clamp(ceil(float(food+waste)/.3),1.0,7.0)/.3),.8,1.7));
   }
   imageStore(presentation,ivec2(int(i)*2,0),pose);imageStore(presentation,ivec2(int(i)*2+1,0),contents);return;
  }
@@ -133,12 +134,13 @@ void main(){
  else if(code==1)emit_packet(s,op[1],at,int(uint(op[13])),uint(op[14]),int(uint(op[15])),uint(op[16]),op[8]<0.0?(s==FOOD?op[1]*FOOD_FUEL:0.0):op[8],op[1]*op[19]);
  else if(code==6){double total=0.0;for(uint j=0u;j<n();j++)if(live(j)&&a[j].facts.x==s)total+=a[j].q.x;double difference=op[1]-total;if(difference>0.0)emit_packet(s,difference,at,-1,0xffffffffu,-1,0xffffffffu,s==FOOD?difference*FOOD_FUEL:0.0,0.0);else for(uint j=0u;j<n()&&difference<0.0;j++)if(live(j)&&a[j].facts.x==s){double used=min(a[j].q.x,-difference);consume(j,used);difference+=used;}}
  else if(code==7){double total=0.0;for(uint j=0u;j<n();j++)if(live(j)&&a[j].facts.x==FOOD)total+=a[j].q.x;for(uint j=0u;j<n();j++)if(live(j)&&a[j].facts.x==FOOD)a[j].q.y=max(0.0,op[1])*a[j].q.x/max(EPS,total);}
+ else if(code==8){c[70]=near_consume(OXYGEN,op[1],at,float(op[4]));}
  else if(code==10){
   double used=near_consume(CARBON,op[1],at,float(op[4]));c[70]=used;
   if(used>0.0){
-   emit_packet(FOOD,used*.65*(1.0-op[22]),at,-1,0xffffffffu,-1,0xffffffffu,used*.65*(1.0-op[22])*FOOD_FUEL,0.0);
+   emit_packet(FOOD,used*LEAF_FOOD*(1.0-op[22]),at,-1,0xffffffffu,-1,0xffffffffu,used*LEAF_FOOD*(1.0-op[22])*FOOD_FUEL,0.0);
    emit_packet(OXYGEN,used*2.5,at,-1,0xffffffffu,-1,0xffffffffu,0.0,0.0);
-   c[80]+=used*.35;c[82]+=used*LEAF_ATP_YIELD;c[20]+=used*(4.0-LEAF_ATP_YIELD);c[21]+=used*LEAF_SOLAR_WORK;
+   c[80]+=used*LEAF_BIOMASS;c[82]+=used*LEAF_ATP_YIELD;c[20]+=used*(4.0-LEAF_ATP_YIELD);c[21]+=used*LEAF_SOLAR_WORK;
   }
  }
  else if(code==13){
