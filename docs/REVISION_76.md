@@ -253,8 +253,8 @@ persistence: it cannot connect to or modify either live pond.
 
 ## October21 Parasite and Balanced investment
 Parasite is a separate anatomical role: a working proboscis, flagellum,
-hunting receptor and flight receptor, with no installed mouth or other offensive
-organs (pore/toxin/counterattack/acid). Other support is allowed. It uses a
+hunting receptor and flight receptor, with no installed leaves, mouth or other
+offensive organs (pore/toxin/counterattack/acid). Other support is allowed. It uses a
 smooth, area-preserving short-worm membrane whose front follows the proboscis;
 the same physical outline supplies live art, collisions and family portraits.
 Its two free receptors remain outside ordinary construction tiers.

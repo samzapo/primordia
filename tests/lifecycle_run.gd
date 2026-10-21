@@ -431,6 +431,11 @@ func synergy_anatomy() -> void:
 	cell.organs.clear()
 	for kind in ["proboscis","propulsion","hunting","sensing"]:cell.add_organ(kind,0,"graze",false)
 	check(cell.synergy()=="parasite","A mouthless Parasite keeps its distinct synergy")
+	cell.add_organ("photosynthesis",1,"graze",false)
+	for hp in [1.0,0.0]:
+		cell.organs[-1].hp=hp
+		check(cell.synergy()!="parasite" and policy.synergy_blocker(cell,"parasite").get("id",-1)==cell.organs[-1].id,"Any installed leaf blocks Parasite and is reabsorbed before its core, including damaged leaves")
+	cell.organs.pop_back()
 	cell.add_organ("feeding",1,"graze",false)
 	for hp in [1.0,0.0]:
 		cell.organs[-1].hp=hp
@@ -530,7 +535,7 @@ func parasite_balanced() -> void:
 	check(policy.strategy(restored,restored.player)=="manual" and restored.investment.lineages[sim.player.lineage_id()]=="balanced","Checkpointing preserves explicit Manual and Balanced choices")
 	var parasite=parasite_fixture()
 	check(parasite.synergy()=="parasite" and not is_finite(parasite.membrane.hunter_angle),"A mouthless proboscis/flagellum/Hunt/Flight build is Parasite rather than Hunter")
-	for kind in ["feeding","poreforming","toxin","counterattack","acidifying"]:
+	for kind in ["feeding","photosynthesis","poreforming","toxin","counterattack","acidifying"]:
 		var incompatible=Sim.Cell.clone_state(parasite);incompatible.add_organ(kind,2,"graze",false)
 		check(incompatible.synergy()!="parasite","Installed "+kind+" excludes the Parasite role")
 	for kind in ["proboscis","propulsion","hunting","sensing"]:

@@ -61,7 +61,7 @@ static func hunter_weapons(cell) -> int:
 static func synergy_blocker(cell,policy: String) -> Dictionary:
  if cell.unattended_protected:return {}
  for organ in cell.organs:
-  if policy=="parasite" and organ.kind in ["feeding","poreforming","toxin","counterattack","acidifying"]:return {"action":"remove","id":organ.id}
+  if policy=="parasite" and organ.kind in ["feeding","photosynthesis","poreforming","toxin","counterattack","acidifying"]:return {"action":"remove","id":organ.id}
   if (policy in ["hunter","grazer"] and organ.kind=="photosynthesis") or (policy in ["producer","grazer"] and organ.kind in WEAPONS) or (policy=="producer" and organ.kind=="feeding"):
    return {"action":"remove","id":organ.id}
  return {}

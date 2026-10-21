@@ -847,3 +847,10 @@ Draw proboscis shafts outside small-cell body rasters with no independent
 emission displacement/scale bounce, sharing the exact cue geometry. Keep cell
 layering, cached bodies, physical tip/range, feeding transactions and donor
 health/biomass rules unchanged. Experimental retained; cumulative notice.
+
+
+October21 owner correction: Parasites cannot have leaves. Any installed
+photosynthesis organ, including a damaged leaf, blocks Parasite synergy.
+Assigned Parasites reabsorb leaves before completing their core, using ordinary
+investment costs/cadence and selected/favorite protection. Retain experimental;
+update its cumulative notice and guide, with no main promotion.
