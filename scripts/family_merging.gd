@@ -89,10 +89,6 @@ static func older(a,b) -> bool:
  if a.age!=b.age:return a.age>b.age
  return a.id<b.id
 
-static func fold_newborn(sim,parent,child) -> bool:
- # A paid birth is recorded first. Only its excess daughter folds into its parent.
- return commit(sim,parent,child,false,true)
-
 static func enforce_limit(sim) -> void:
  if sim.remote_client:return
  for family in living_families(sim).values():

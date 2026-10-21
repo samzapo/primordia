@@ -38,7 +38,16 @@ static func retire_objectives(progression) -> void:
 	progression.viable_seconds=0;progression.offspring_id=-1
 	progression.arrival_budget=0;progression.counter_budget=0;progression.resistance="";progression.resistance_clock=0
 
-static func quote(sim,parent,mode: String) -> Dictionary:
+static func population(sim) -> Dictionary:
+	var census: Dictionary={"living":0,"families":{}}
+	for cell in sim.cells:
+		if cell.dead or cell.health<=0:continue
+		census.living+=1
+		var root: int=cell.lineage_id()
+		census.families[root]=int(census.families.get(root,0))+1
+	return census
+
+static func quote(sim,parent,mode: String,census: Dictionary={}) -> Dictionary:
 	var q={"cell":parent.id,"mode":mode,"ready":false,"progress":0.0,"automatic":parent.automatic_division,"automatic_budding":parent.automatic_budding,"queued":false,"reason":"","cooldown":maxf(0,parent.reproduction_retry_at-sim.time)}
 	if mode not in ["mitosis","budding"]:q.reason="Choose Mitosis or Budding.";return q
 	q.material=84.0 if mode=="mitosis" else 50.0
@@ -47,9 +56,11 @@ static func quote(sim,parent,mode: String) -> Dictionary:
 	q.child_biomass=q.donation-30.0
 	q.child_atp=(parent.energy-20.0)*.5 if mode=="mitosis" else 40.0
 	q.progress=minf(clampf(parent.biomass/q.material,0,1),minf(clampf(parent.energy/q.energy,0,1),clampf(1-q.cooldown/COOLDOWN,0,1)))
+	if census.is_empty():census=population(sim)
 	if parent.dead or parent.health<=0:q.reason="Only a living cell can reproduce."
 	elif q.cooldown>0:q.reason="Resting: %ds until reproduction." % ceili(q.cooldown)
-	elif sim.cells.filter(func(c):return not c.dead).size()>=sim.MAX_LIVE_CELLS and sim.FamilyMerging.living_families(sim).get(parent.lineage_id(),[]).size()<12:q.reason="The pond's population safety limit is reached."
+	elif int(census.families.get(parent.lineage_id(),0))>=sim.FamilyMerging.MAX_FAMILY_CELLS:q.reason="Family full: %d living cells. Division waits for room." % sim.FamilyMerging.MAX_FAMILY_CELLS
+	elif census.living>=sim.MAX_LIVE_CELLS:q.reason="Pond full: %d living cells. Division waits for room." % sim.MAX_LIVE_CELLS
 	elif not parent.working("feeding") and not parent.working("photosynthesis") and not parent.working("proboscis"):q.reason="Build an oral groove, proboscis or leaf first."
 	elif parent.biomass<q.material or parent.energy<q.energy:q.reason="%s needs %.0f biomass and %.0f ATP, including survival reserves." % [mode.capitalize(),q.material,q.energy]
 	else:q.ready=true;q.reason="%s ready. No clear water is required." % mode.capitalize()
@@ -79,16 +90,16 @@ static func reproduce(sim,parent,ledger,mode: String,follow: bool=false) -> bool
 	sim.cells.append(child);sim._record_sound("division",parent.position,parent.id)
 	sim.events.append({"type":"division","id":child.id,"parent":parent.id,"mode":mode,"time":sim.time})
 	if sim.events.size()>128:sim.events.pop_front()
-	var folded=sim.FamilyMerging.fold_newborn(sim,parent,child)
-	if follow and not folded:sim.player=child
-	ledger.notify(mode.capitalize()+": daughter reabsorbed at the family limit." if folded else mode.capitalize()+": a daughter joined the family.")
+	if follow:sim.player=child
+	ledger.notify(mode.capitalize()+": a daughter joined the family.")
 	return true
 
 static func step(sim) -> void:
 	if sim.remote_client:return
-	sim.FamilyMerging.enforce_limit(sim)
 	if sim.time<sim.lifecycle_due:return
+	sim.FamilyMerging.enforce_limit(sim)
 	sim.lifecycle_due+=floor((sim.time-sim.lifecycle_due)/PERIOD+1)*PERIOD
+	var census:=population(sim)
 	for cell in sim.cells.duplicate():
 		if cell.dead or cell.health<=0:continue
 		crowding(sim,cell)
@@ -96,8 +107,10 @@ static func step(sim) -> void:
 		var hostile=not cell.behavior.get("weapon_cue",{}).is_empty() or cell.threat.length_squared()>.01
 		var mode="budding" if hostile and cell.automatic_budding else "mitosis" if cell.automatic_division else "budding"
 		if (mode=="budding" and not cell.automatic_budding) or (mode=="mitosis" and not cell.automatic_division):continue
-		if not quote(sim,cell,mode).ready:continue
-		if sim.ecology_rng.randf()<(.1 if hostile else .05):reproduce(sim,cell,sim._family_ledger(cell),mode)
+		if not quote(sim,cell,mode,census).ready:continue
+		if sim.ecology_rng.randf()<(.1 if hostile else .05) and reproduce(sim,cell,sim._family_ledger(cell),mode):
+			census.living+=1
+			census.families[cell.lineage_id()]=int(census.families.get(cell.lineage_id(),0))+1
 
 static func crowding(sim,cell) -> void:
 	if cell.unattended_protected or sim.FamilyMerging.managed(sim,cell) or cell.behavior.has("autolysis_at"):return

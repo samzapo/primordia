@@ -47,7 +47,7 @@
       {
         "id": "offspring",
         "title": "Cell division",
-        "text": "Open Divide and choose Mitosis or Budding. Mitosis leaves your organelles with the parent and uses half your available biomass to grow a basic daughter. Budding funds a small daughter directly. Neither needs clear water. Each cell can reproduce once per minute. Both automatic modes start on and let instincts choose suitable moments. At 12 family members, an extra daughter is immediately reabsorbed. Family investment settings show each automatic mode as On or Off; This cell changes only the selected relative.",
+        "text": "Open Divide and choose Mitosis or Budding. Mitosis leaves your organelles with the parent and uses half your available biomass to grow a basic daughter. Budding funds a small daughter directly. Neither needs clear water. Each cell can reproduce once per minute. Both automatic modes start on and let instincts choose suitable moments. Division waits when your family has 12 living cells or the pond has 64. No daughter is created or paid for until there is room. Family investment settings show each automatic mode as On or Off; This cell changes only the selected relative.",
         "sources": []
       },
       {
@@ -702,7 +702,7 @@
             {
               "title": "Cell division",
               "url": "https://www.ncbi.nlm.nih.gov/books/NBK26831/",
-              "text": "Open Divide and choose Mitosis or Budding. Mitosis leaves your organelles with the parent and uses half your available biomass to grow a basic daughter. Budding funds a small daughter directly. Neither needs clear water. Each cell can reproduce once per minute. Both automatic modes start on and let instincts choose suitable moments. At 12 family members, an extra daughter is immediately reabsorbed."
+              "text": "Open Divide and choose Mitosis or Budding. Mitosis leaves your organelles with the parent and uses half your available biomass to grow a basic daughter. Budding funds a small daughter directly. Neither needs clear water. Each cell can reproduce once per minute. Both automatic modes start on and let instincts choose suitable moments. Division waits when your family has 12 living cells or the pond has 64. No daughter is created or paid for until there is room."
             }
           ]
         },
@@ -714,7 +714,7 @@
             {
               "title": "Cell division",
               "url": "https://www.ncbi.nlm.nih.gov/books/NBK26831/",
-              "text": "Open Divide and choose Mitosis or Budding. Mitosis leaves your organelles with the parent and uses half your available biomass to grow a basic daughter. Budding funds a small daughter directly. Neither needs clear water. Each cell can reproduce once per minute. Both automatic modes start on and let instincts choose suitable moments. At 12 family members, an extra daughter is immediately reabsorbed."
+              "text": "Open Divide and choose Mitosis or Budding. Mitosis leaves your organelles with the parent and uses half your available biomass to grow a basic daughter. Budding funds a small daughter directly. Neither needs clear water. Each cell can reproduce once per minute. Both automatic modes start on and let instincts choose suitable moments. Division waits when your family has 12 living cells or the pond has 64. No daughter is created or paid for until there is room."
             }
           ]
         },

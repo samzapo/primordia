@@ -182,3 +182,19 @@ This changes an investment policy, not biological synergy qualifications,
 self-pore immunity, particle transport or runtime physics. Reuse the existing
 science references; focused strategy progression/accounting checks and a
 retained experimental rollout, with one cumulative player notice.
+
+
+## October21 division waits at capacity
+The owner supersedes the excess-newborn folding rule: both manual and automatic
+Mitosis/Budding refuse to start at12 living family members or64 living pond
+cells. Quote and final commit check current capacity before identity allocation,
+starter tissue, chemistry partition, resource spending, timers, birth history
+or animation. Automatic checks reuse a per-second live/family census and update
+it after a successful birth; final commit rechecks against the live world.
+No capacity-blocked opportunity consumes a reproductive random draw.
+Remove the newborn-fold path. Existing oversized saved families keep their
+finite protected-donor reconciliation until within12; run that work at the
+original anchored one-second lifecycle cadence, not every body tick.
+Manual merges, below-cap paid births and one-minute successful birth cooldown
+remain. Preserve both ponds and balance beyond the requested cap policy.
+This update addresses birth/merge churn; it is not proof of40FPS on a phone.

@@ -431,7 +431,7 @@ jobs:
           for index in range(6):
               sample={"wall_unix":time.time()}
               try:
-                  with opener.open("http://127.0.0.1:8768/metrics",timeout=5) as response:metrics=json.load(response)
+                  with opener.open("http://127.0.0.1:8768/health",timeout=5) as response:metrics=json.load(response)
                   sample.update({key:metrics.get(key) for key in sample_fields})
                   if isinstance(sample.get("updated_unix"),(int,float)):sample["health_age_seconds"]=sample["wall_unix"]-sample["updated_unix"]
               except Exception as error:sample["error"]=type(error).__name__
