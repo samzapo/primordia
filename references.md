@@ -602,3 +602,25 @@ for organic material returning to the environment. The500threshold,1%surplus
 rate,70/30nutrient/waste split and pink opening are explicit game choices.
 Release reallocates actual tissue mass and finite potential; the source does
 not validate those numbers or a literal reversed digestive reaction.
+
+## Local pH indicator and neutralization (October21)
+[IUPAC's definition of pH](https://goldbook.iupac.org/terms/view/P04524)
+uses the negative base-ten logarithm of hydrogen-ion activity.
+[University of Illinois aqueous-equilibrium notes](https://www.chem.uiuc.edu/rogers/Text12/Tx129/tx129.html)
+describe neutral water at25C with H=OH=1e-7M and Kw=1e-14.
+The game uses ideal dilute activities and an authored1mmol/L-per-field-unit
+calibration, solving charge balance before taking the logarithm. It transports
+linear equivalents, never averages pH. One acid species, passive neutralization,
+constant temperature, the diffusion/half-life and pinker-than-indicator palette
+are game simplifications; this is not a calibrated natural-water buffer model.
+This supersedes the earlier statement that the water tint has no pH scale.
+Buffers remain finite acid neutralizers; alkaline colors are supported by the
+display but no new base source is added.
+
+## Mobile client artwork caching (October21)
+[Godot CPU optimization](https://docs.godotengine.org/en/stable/tutorials/performance/cpu_optimization.html)
+and [MDN WebGL best practices](https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_best_practices)
+motivate measuring real frames, reusing static data and reducing draw work.
+Runtime glyph textures come from the existing procedural vector source. CSS-pixel
+detail thresholds do not change physical geometry or cell behavior. Desktop
+hardware WebGL replay establishes a controlled comparison, not phone FPS.

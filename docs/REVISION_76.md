@@ -198,3 +198,29 @@ original anchored one-second lifecycle cadence, not every body tick.
 Manual merges, below-cap paid births and one-minute successful birth cooldown
 remain. Preserve both ponds and balance beyond the requested cap policy.
 This update addresses birth/merge churn; it is not proof of40FPS on a phone.
+
+## October21 mobile presentation and local pH
+Client-only snapshot restoration can omit starter anatomy/inventory that a
+complete graph immediately replaces. Ordinary construction/checkpoint restoration
+retain their defaults. A cached allowlisted property list avoids per-cell
+reflection while preserving identity and all fields. Radial triangle indices/UVs
+are reused; each vertex/color still comes from the current real outline.
+An unchanged outline does not need a new ArrayMesh. Web detail thresholds are
+measured in CSS pixels rather than physical high-DPI pixels. Tiny idle organs use
+a mipmapped atlas generated at runtime from the same Visuals drawing functions;
+moving organs, the membrane-following mouth, active/depleted art, internal/build
+views and all hit testing keep their existing paths.
+
+The acid field remains acid equivalents with linear advection/mixing, not an
+average of logarithmic pH. Display pH uses an ideal-water charge balance at25C:
+H-OH=0.001*field, H*OH=1e-14, pH=-log10(H). The concentration calibration is a
+game abstraction, not measured pond chemistry; preexisting field values are not
+rewritten. Native/reference local diffusion changes0.5→0.12/s and neutralization
+0.012→0.08/s (half-life~8.7s) to reduce lasting whole-pond exposure. No reset or
+particle deletion occurs. Buffer packets retain finite acid neutralization down
+to neutral; no new alkaline source or toxicity rule is introduced. The display
+palette supports alkaline values too. Tint reads the actual bilinear field
+without the old nine-sample oversized footprint. Low pH is deliberately pinker
+than the owner's universal-indicator reference; pH within0.25of7 is invisible.
+Local pH appears in the performance overlay and acid/buffer particle inspection.
+The experimental HTML badge moves from top left to safe-area bottom left.

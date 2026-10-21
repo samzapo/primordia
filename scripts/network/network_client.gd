@@ -507,7 +507,7 @@ func _snapshot(message: Dictionary) -> void:
 	if message.get("warming",false):
 		loading_world=true;connection_stage="preparing"
 		_show_connection("Signed in. Preparing detailed water for your camera…")
-		var initial=Codec.new().restore(message.graph)
+		var initial=Codec.new().restore(message.graph,true)
 		if initial is Dictionary:
 			world.player=_copy_cell(initial.player)
 			world.cells=[];_snapshot_focus(initial)
@@ -517,7 +517,9 @@ func _snapshot(message: Dictionary) -> void:
 	if login.visible:
 		status.text="Connected to the shared pond.";login.hide();loading_world=false;connection_stage="ready"
 		_publish_login_geometry.call_deferred()
-	var data=Codec.new().restore(message.graph)
+	var restore_mark:=Time.get_ticks_usec() if frame_trace!=null else 0
+	var data=Codec.new().restore(message.graph,true)
+	if frame_trace!=null:frame_trace.work("snapshot_restore",Time.get_ticks_usec()-restore_mark)
 	if not data is Dictionary: return
 	if not camera_initialized:
 		if camera_seen_world:_ease_camera()
@@ -608,6 +610,14 @@ static func population_text(server_census: Dictionary,local_count: int) -> Strin
 	if server_census.is_empty():return "\nCamera region: %d particles\nHabitat total: waiting for server" % local_count
 	return "\nCamera region: %d particles\nHabitat total: %d living cells / %d particles\nExterior: %d · Inside cells: %d\nGPU resident: %d · Offscreen: %d · Queued: %d" % [server_census.get("camera_particles",local_count),server_census.get("living_cells",0),server_census.get("total",server_census.get("external",0)),server_census.get("external",0),server_census.get("internal",0),server_census.get("gpu",0),server_census.get("cold",0),server_census.get("pending",0)]
 
+static var cell_copy_fields: Array[String]=[]
+static func _cell_copy_fields(incoming) -> Array[String]:
+	if cell_copy_fields.is_empty():
+		for property in incoming.get_property_list():
+			if property.usage & PROPERTY_USAGE_SCRIPT_VARIABLE and property.name not in Codec.DERIVED_CELL:
+				cell_copy_fields.append(property.name)
+	return cell_copy_fields
+
 func _copy_cell(incoming):
 	var cell=cells_by_id.get(incoming.id)
 	if cell==null: cell=incoming;cells_by_id[cell.id]=cell
@@ -616,9 +626,7 @@ func _copy_cell(incoming):
 		for packet in cell.chemistry.particles:
 			origins[packet.id]={"p":packet.p,"angle":packet.angle}
 		var previous: Vector2=cell.position;var heading: float=cell.angle
-		for property in incoming.get_property_list():
-			if not (property.usage & PROPERTY_USAGE_SCRIPT_VARIABLE) or property.name in Codec.DERIVED_CELL: continue
-			cell.set(property.name,incoming.get(property.name))
+		for key in _cell_copy_fields(incoming):cell.set(key,incoming.get(key))
 		cell.previous_position=previous;cell.previous_angle=heading
 		cell.chemistry.owner=weakref(cell)
 		cell.chemistry.render_origins=origins

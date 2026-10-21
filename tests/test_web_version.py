@@ -59,6 +59,9 @@ class WebVersion(unittest.TestCase):
             config=json.loads(CONFIG.search(page.read_text()).group(1))
             self.assertEqual(config["persistentPaths"],["/userfs/primordia-experimental"])
             self.assertEqual(page.read_text().count('id="primordia-instance"'),1)
+            self.assertIn('bottom:calc(8px + env(safe-area-inset-bottom, 0px))',page.read_text())
+            self.assertNotIn('position:fixed;top:',page.read_text())
+            self.assertIn('pointer-events:none',page.read_text())
             version(root,"experimental")
             self.assertEqual(page.read_text().count('id="primordia-instance"'),1)
 

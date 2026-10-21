@@ -372,7 +372,7 @@
         {
           "id": "acid_buffer",
           "title": "Acid + buffer → spent charge",
-          "text": "Acid raises local acidity; buffers reduce it. Opposite charges neutralize each other, and exhausted parcels become waste. Pink water shows acidity; the colors are an aid, not a real pH scale.",
+          "text": "Acid raises local acidity; buffers reduce it. Opposite charges neutralize each other, and exhausted parcels become waste. Water color follows pH: acid is pink, then orange/yellow; alkaline water is green, cyan or violet. Around pH 7 the tint disappears. Acid patches fade back toward neutral instead of lingering across the pond. Inspect an acid or buffer particle to see the local pH.",
           "sources": [
             {
               "title": "Acid protease activity",

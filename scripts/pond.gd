@@ -136,6 +136,7 @@ var perf_sim_seconds := 0.0
 var simulation_rate := 1.0
 var ui_time := 0.0
 var hud_clock := 0.0
+var detail_pixel_ratio:=1.0
 var zoom := 1.0
 var manual_zoom := 1.0
 # Explicit test harness switch for historical stress fixtures; no gameplay control.
@@ -157,6 +158,7 @@ var notice := "Build, feed and grow your family. Your first two organelles are f
 var notice_timer := 12.0
 
 func _ready() -> void:
+	if OS.has_feature("web"):detail_pixel_ratio=maxf(1,float(JavaScriptBridge.eval("window.devicePixelRatio || 1")))
 	world.enable_ambient_carbon()
 	world.enable_perception_domains()
 	if manage_catchup: Engine.max_physics_steps_per_frame = 2
@@ -997,7 +999,7 @@ func _update_hud() -> void:
 	debug_label.visible = show_debug and not settings_panel.visible
 	var backend := "Resident GPU + native cells" if world.resident != null and world.kernels != null else "Resident GPU + SCRIPT cells" if world.resident != null else "GPU experiment" if world.gpu_transport != null else "Native CPU" if world.kernels != null else "GDScript"
 	debug_label.text = "%s · %d FPS · frame %.1f ms\n%d ticks/frame · simulation %.1f ms/frame · tick %.2f ms\nSimulation/wall %.2f× · view sync %.2f ms" % [backend,Engine.get_frames_per_second(),last_frame_ms,last_frame_ticks,last_frame_sim_ms,simulation_ms,simulation_rate,render_ms]
-	if show_debug:debug_label.text += _debug_population_lines()
+	if show_debug:debug_label.text += _debug_population_lines()+"\nLocal water: pH %.1f" % world.acidity.ph_at(_follow_cell().position)
 	if show_debug:
 		var census: Dictionary = world.visible_particle_census()
 		debug_label.text += "\nOn screen: %d material packets · %d chemical packets · %d signals\nCytoplasm (this cell): %d particles" % [census.material,census.chemicals,census.signals,world.player.chemistry.particle_count()]

@@ -83,13 +83,19 @@ func _encode(value):
 		return result
 	return value
 
-func restore(document: Dictionary):
+func restore(document: Dictionary, client_projection: bool = false):
 	if document.get("format",0) != 1 or not document.get("objects",[]) is Array: return null
 	objects.clear();migration_audit.clear()
 	for record in document.objects:
 		if not record is Dictionary or not TYPES.has(record.get("kind","")): return null
 		var object
 		if record.kind == "simulation": object = TYPES.simulation.new(0,0,false)
+		elif client_projection and record.kind=="cell" and record.fields.has("membrane") and record.fields.has("chemistry"):
+			# A complete wire graph immediately supplies both objects. Avoid creating
+			# starter inventory and seeded anatomy just to discard them below.
+			object=TYPES.cell.new(0,Vector2.ZERO,false)
+		elif client_projection and record.kind=="membrane" and ["points","previous","normals","rest_points","rest_lengths","gradients","arcs","skeleton"].all(func(key):return record.fields.has(key)):
+			object=TYPES.membrane.new(47,-1,false)
 		else: object = TYPES[record.kind].new()
 		objects.append({"source":object,"kind":record.kind})
 	for i in objects.size():

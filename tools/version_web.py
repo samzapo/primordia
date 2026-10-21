@@ -36,7 +36,7 @@ def version(web_root: Path, instance: str = "stable") -> dict:
     sizes[name] = destination.stat().st_size
     html = html[:match.start(1)] + json.dumps(config, separators=(",", ":")) + html[match.end(1):]
     if instance == "experimental" and 'id="primordia-instance"' not in html:
-        html = html.replace("</body>", '<aside id="primordia-instance" style="position:fixed;top:8px;left:8px;z-index:5000;pointer-events:none;padding:4px 8px;border-radius:6px;background:#35234bd9;color:#f2ddff;font:14px sans-serif">Experimental pond</aside></body>')
+        html = html.replace("</body>", '<aside id="primordia-instance" style="position:fixed;bottom:calc(8px + env(safe-area-inset-bottom, 0px));left:8px;z-index:5000;pointer-events:none;padding:4px 8px;border-radius:6px;background:#35234bd9;color:#f2ddff;font:14px sans-serif">Experimental pond</aside></body>')
     pending = page.with_name("index.html.versioning")
     pending.write_text(html)
     pending.replace(page)

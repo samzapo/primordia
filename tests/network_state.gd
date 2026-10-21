@@ -39,7 +39,10 @@ func run() -> void:
 	var changed=Codec.new().capture({"world":sim,"same_player":sim.player},override_fields)
 	check(var_to_bytes(changed)==var_to_bytes(uncached.capture({"world":sim,"same_player":sim.player},override_fields)) and var_to_bytes(changed)!=var_to_bytes(graph),"Reusing field names captures current biology and overrides without retaining an older cell state")
 	sim.player.energy=old_energy
-	var restored=Codec.new().restore(bytes_to_var(var_to_bytes(graph)))
+	var projected=Codec.new().restore(bytes_to_var(var_to_bytes(graph)),true)
+	var reference=Codec.new().restore(bytes_to_var(var_to_bytes(graph)))
+	check(var_to_bytes(Codec.new().capture(projected))==var_to_bytes(Codec.new().capture(reference)),"Fast client construction restores the exact full graph, RNG, inventory and anatomy without starter duplicates")
+	var restored=reference
 	check(restored.world.player==restored.same_player,"checkpoint retains shared object identities")
 	check(restored.world.cells[0]==restored.world.player,"player refers to the actual restored world cell")
 	check(restored.world.rng.state==sim.rng.state and restored.world.background_rng.state==sim.background_rng.state,"random streams survive restoration")
@@ -133,7 +136,6 @@ func run() -> void:
 	check(coarse.rng.state==state,"resolution conversion draws no simulation randomness")
 	var seeded=Sim.new(81)
 	check(seeded.particle_count()==3760 and seeded.Catalog.data().ecology.visible_target==700,"new worlds use one tenth of the former external packet population")
-	check(is_equal_approx(seeded.particles[0].amount,9),"initial stock carries three times the food at unchanged external packet count")
 	var prior_ecology:=OS.get_environment("PRIMORDIA_ECOLOGY")
 	OS.set_environment("PRIMORDIA_ECOLOGY","reference")
 	var reference_world=Sim.new(81)

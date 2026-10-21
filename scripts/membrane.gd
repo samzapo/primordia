@@ -25,7 +25,8 @@ var cached_outline := PackedVector2Array()
 var geometry_dirty := true
 var outline_dirty := true
 
-func _init(radius: float = 47.0, anatomy_seed: int = -1) -> void:
+func _init(radius: float = 47.0, anatomy_seed: int = -1, initialize_ring: bool = true) -> void:
+	if not initialize_ring:return
 	maximum_radius = radius
 	for i in COUNT:
 		normals.append(Vector2.from_angle(TAU*i/COUNT))

@@ -25,6 +25,7 @@ var surface := MeshInstance2D.new()
 var interior_backing:=MeshInstance2D.new()
 var water_wake := MeshInstance2D.new()
 var surface_revision := -1
+var surface_outline:=PackedVector2Array()
 var depth_style := false
 var sound_waves := Node2D.new()
 var nucleus_center := Vector2.ZERO
@@ -52,6 +53,7 @@ func _ready() -> void:
 	label.add_theme_color_override("font_outline_color",Color("21375d"))
 	label.add_theme_constant_override("outline_size",4)
 	add_child(label)
+	appendages.texture_filter=CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	appendages.z_index = 0 # Keep each body and all its organs in one cell-local drawing order.
 	add_child(appendages)
 	appendages.draw.connect(_draw_organs)
@@ -88,7 +90,7 @@ func sync(render_position: Vector2, render_angle: float, zoom: float, alpha: flo
 	if internal:cytoplasm.sync(cell.chemistry,alpha,game.perception_mask.viewport.get_texture(),maxf(1,cell.extent()*1.05))
 	if internal!=was_internal or (internal and last_internal_tick!=cell.chemistry.tick):
 		queue_redraw();last_internal_tick=cell.chemistry.tick;was_internal=internal
-	var reduced: bool = detail_lod and cell.radius*zoom < 18 and not game.build_open and not internal
+	var reduced: bool = detail_lod and cell.radius*zoom < 18*game.detail_pixel_ratio and not game.build_open and not internal
 	var detail_changed: bool = reduced != simple_view
 	simple_view = reduced
 	if (seen_revision != cell.render_revision and (not reduced or game.world.revision-last_draw_tick >= 2)) or detail_changed or game.show_senses != get_meta("senses",false) or game.build_open != get_meta("assembly",false):
@@ -124,8 +126,11 @@ func _sync_surface(render_angle: float, changed: bool) -> void:
 			var reduced := PackedVector2Array()
 			for i in range(0,outline.size(),4): reduced.append(outline[i])
 			outline = reduced
-		surface.mesh = Surface.mesh(outline,game.native_geometry)
-		water_wake.mesh = surface.mesh
+		# A biological revision can change reserves/status without moving a point.
+		# Preserve exact geometry; skip only byte-identical outlines.
+		if surface.mesh==null or outline!=surface_outline:
+			surface.mesh = Surface.mesh(outline,game.native_geometry)
+			water_wake.mesh = surface.mesh;surface_outline=outline
 		if game.frame_trace != null:
 			game.frame_trace.work("geometry",Time.get_ticks_usec()-mark)
 			game.frame_trace.count("mesh_updates")
@@ -244,7 +249,9 @@ func _draw_organs() -> void:
 		if organ.kind=="feeding":
 			Visuals.oral_groove(appendages,cell,organ,cell.age,not simple_view)
 		else:
-			Visuals.icon(appendages,at,organ.kind,heading,drawn_scale,cell.age,organ.mode,organ.consume_flash,not simple_view,charge,readiness.depleted,preload("res://scripts/toxin_sac.gd").fraction(organ) if organ.kind=="toxin_sac" else 0,preload("res://scripts/proboscis.gd").reach(cell,organ)/organ.scale if organ.kind=="proboscis" else 27)
+			var cached_icon: bool=game.zoom*organ.scale<=.8*game.detail_pixel_ratio and not game.internal_visible(cell) and not game.build_open and organ.consume_flash<.001 and charge<.001 and not readiness.depleted
+			if not cached_icon or not preload("res://scripts/organ_atlas.gd").draw(appendages,at,organ.kind,heading,drawn_scale):
+				Visuals.icon(appendages,at,organ.kind,heading,drawn_scale,cell.age,organ.mode,organ.consume_flash,not simple_view,charge,readiness.depleted,preload("res://scripts/toxin_sac.gd").fraction(organ) if organ.kind=="toxin_sac" else 0,preload("res://scripts/proboscis.gd").reach(cell,organ)/organ.scale if organ.kind=="proboscis" else 27)
 		if readiness.progress>=0:
 			appendages.draw_arc(at,19*organ.scale,-PI/2,-PI/2+TAU*maxf(.001,readiness.progress),28,Color("fff0ac") if not readiness.depleted else Color("8c969f"),1.8*organ.scale,true)
 		if organ.get("mutation","") != "": appendages.draw_circle(at,3.5*organ.scale,Color("fff2a3"))

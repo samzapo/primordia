@@ -733,3 +733,18 @@ October21 motion/vent correction: keep body velocity continuous through bounded 
 October21 investment correction: assigned Hunter/Producer/Grazer roles first remove incompatible anatomy and complete their actual synergy before optional support. Hunter receptor and flagellum precede its first weapon; the pore-forming variant mounts the gland last so self-pore immunity and secretion become available together. Core parts remain essential even when another weapon/cilia exists. Preserve Manual/custom intent, selected-cell/favorite protections, normal paid pricing/accounting and one-action-per-minute cooldown. Same retained experimental pond, cumulative notice, main unchanged.
 
 October21 owner FPS investigation authorizes focused rendering/cadence research and before/after measurements, superseding the earlier temporary FPS-check deferral for this task. Preserve the accepted balance. Owner steering replaces automatic excess-newborn folding: do not start either birth mode at12 living relatives or64 living pond cells. Block before all resource/identity/events/chemistry changes, skip capped reproductive RNG, retain normal cooldowns and existing oversized-family reconciliation, paced on the anchored lifecycle second. Same experimental pond and cumulative notice. Native/headless/desktop viewport data do not establish phone FPS.
+
+October21 mobile rendering and pH: owner reports15–18FPS after the no-birth-at-cap
+fix, so the >40FPS target remains unverified on a physical phone. Use the actual
+WebGL client replay and primary performance documentation; desktop timings are
+comparisons only. Preserve exact snapshot values, cell identities, cue/input
+rules and interpolation. Cache static wire schemas/topology and tiny organ art
+derived from Visuals; resolve detail against CSS pixels on high-DPI web displays,
+never by weakening chemistry or hiding usable organs. Move the experimental-only
+badge to safe-area bottom left. Acidity keeps transported equivalents, with
+ideal-water logarithmic pH display (one field unit=1mmol/L excess acid), local
+diffusion0.12/s and neutralization0.08/s on both script/native paths. The corrected
+owner palette is pink acid, orange/yellow, invisible near7, green/cyan/violet
+alkaline; buffers still neutralize rather than inventing a new alkaline source.
+Remove the oversized shader tint halo. Retain the experimental pond and publish
+one new cumulative notice; main unchanged.

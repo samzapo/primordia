@@ -46,18 +46,11 @@ void fragment() {
 	vec2 p = camera + vec2(c*delta.x+s*delta.y,-s*delta.x+c*delta.y);
 	vec2 habitat_uv = fract(p/vec2(4096.0,2560.0));
 	float light = texture(light_map,habitat_uv).r;
-	// A bounded nine-tap display footprint makes real acid patches readable
-	// beyond one grid square. This does not change chemistry or transport.
-	vec2 texel = vec2(1.5/64.0,1.5/40.0);
-	float acid = texture(acidity_map,habitat_uv).r*0.28;
-	acid += (texture(acidity_map,habitat_uv+vec2(texel.x,0.0)).r+
-		texture(acidity_map,habitat_uv-vec2(texel.x,0.0)).r+
-		texture(acidity_map,habitat_uv+vec2(0.0,texel.y)).r+
-		texture(acidity_map,habitat_uv-vec2(0.0,texel.y)).r)*0.12;
-	acid += (texture(acidity_map,habitat_uv+texel).r+
-		texture(acidity_map,habitat_uv-texel).r+
-		texture(acidity_map,habitat_uv+vec2(texel.x,-texel.y)).r+
-		texture(acidity_map,habitat_uv+vec2(-texel.x,texel.y)).r)*0.06;
+	// Display only the actual bilinear field: no oversized color halo.
+	float acid = texture(acidity_map,habitat_uv).r;
+	float excess = abs(acid)*0.001;
+	float major = (excess+sqrt(excess*excess+4e-14))*0.5;
+	float ph = clamp(-log(acid>=0.0 ? major : 1e-14/major)/log(10.0),0.0,14.0);
 	vec2 phase = habitat_uv*6.283185;
 	float local_light = clamp(light/max(illumination_scale,0.06),0.0,1.0);
 	float sunlit = smoothstep(0.18,0.78,local_light);
@@ -72,9 +65,21 @@ void fragment() {
 	if (water_ripples) {
 		water += vec3(0.22,0.33,0.27)*caustics(phase,clock)*sunlit*sunlit*daylight;
 	}
-	vec3 acidic_water = mix(vec3(0.32,0.045,0.32),vec3(0.62,0.07,0.36),smoothstep(0.05,0.45,acid));
-	acidic_water *= 0.85+light*0.15;
-	// Buffers remove actual acid, visibly restoring the original blue water.
-	water = mix(water,acidic_water,(1.0-exp(-acid*24.0))*0.94);
+	vec3 tint;
+	// Universal-indicator-inspired player palette; low pH deliberately pinker.
+	if (ph<2.0) tint=mix(vec3(0.937,0.220,0.635),vec3(0.961,0.184,0.510),clamp(ph-1.0,0.0,1.0));
+	else if (ph<3.0) tint=mix(vec3(0.961,0.184,0.510),vec3(0.980,0.333,0.486),ph-2.0);
+	else if (ph<4.0) tint=mix(vec3(0.980,0.333,0.486),vec3(1.0,0.588,0.227),ph-3.0);
+	else if (ph<5.0) tint=mix(vec3(1.0,0.588,0.227),vec3(1.0,0.886,0.471),ph-4.0);
+	else if (ph<6.0) tint=mix(vec3(1.0,0.886,0.471),vec3(0.875,0.914,0.612),ph-5.0);
+	else if (ph<7.0) tint=mix(vec3(0.875,0.914,0.612),vec3(0.910,0.929,0.737),ph-6.0);
+	else if (ph<8.0) tint=mix(vec3(0.910,0.929,0.737),vec3(0.749,0.851,0.267),ph-7.0);
+	else if (ph<9.0) tint=mix(vec3(0.749,0.851,0.267),vec3(0.090,0.710,0.271),ph-8.0);
+	else if (ph<10.0) tint=mix(vec3(0.090,0.710,0.271),vec3(0.188,0.655,0.561),ph-9.0);
+	else if (ph<11.0) tint=mix(vec3(0.188,0.655,0.561),vec3(0.459,0.847,0.922),ph-10.0);
+	else if (ph<12.0) tint=mix(vec3(0.459,0.847,0.922),vec3(0.141,0.663,0.776),ph-11.0);
+	else if (ph<13.0) tint=mix(vec3(0.141,0.663,0.776),vec3(0.471,0.380,0.710),ph-12.0);
+	else tint=mix(vec3(0.471,0.380,0.710),vec3(0.455,0.169,0.816),clamp(ph-13.0,0.0,1.0));
+	water = mix(water,tint*(0.65+0.2*light),smoothstep(0.25,2.0,abs(ph-7.0))*0.82);
 	COLOR = vec4(water,1.0);
 }

@@ -266,6 +266,8 @@ func update_lens(dt: float, screen: Vector2, alpha: float, allowed: bool) -> voi
 			value+="\nBinding: +%d%% ATP yield" % roundi(bonus*100)
 		if hovered.get("internal",false) and not hovered.get("gas",false):
 			value=("Food vacuole\nLocal oxygen supports respiration; otherwise food ferments. Both produce ATP, biomass, CO2 and waste." if hovered.kind==0 else "Waste vacuole\nTravels to the cytoproct, then releases waste into the water.")+"\nFood %.2f · Waste %.2f\nResidence %.1f s" % [hovered.food,hovered.waste,hovered.age]
+		if not hovered.get("internal",false) and hovered.kind in [game.world.ACID,game.world.BUFFER]:
+			value+="\nLocal water pH %.1f" % game.world.acidity.ph_at(hovered.packet.p)
 		if hovered.kind == game.world.PHEROMONE:
 			var packet: Dictionary = hovered.packet
 			var report: Dictionary = packet.get("report",{})

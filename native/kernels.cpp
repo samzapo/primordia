@@ -2394,9 +2394,10 @@ public:
       double neighbors = (v[node(x - 1, y)] + v[node(x + 1, y)] +
                           v[node(x, y - 1)] + v[node(x, y + 1)]) *
                          .25;
-      double blend = std::min(1., t * .5);
+      // Match Acidity: local diffusion and an 8.7 s neutralization half-life.
+      double blend = std::min(1., t * .12);
       w[i] = std::clamp((upstream * (1 - blend) + neighbors * blend) *
-                            std::exp(-t * .012),
+                            std::exp(-t * .08),
                         0., 1.);
     }
     return out;

@@ -115,7 +115,7 @@ var radius := 47.0
 var mass := 100.0
 var inertia := 100000.0
 var aspect := 1.0
-var membrane = Membrane.new()
+var membrane
 var organs: Array = []
 var lost_organs: Array = []
 var brood_mass := 0.0
@@ -156,13 +156,13 @@ var coarse_elapsed := 0.0
 var coarse_due := 1.0
 var coarse_handling := 0.0
 
-func _init(identity: int = 0, at: Vector2 = Vector2.ZERO) -> void:
+func _init(identity: int = 0, at: Vector2 = Vector2.ZERO, initialize_anatomy: bool = true) -> void:
 	coarse_due = 0.25+fposmod(identity*0.61803398875,0.75)
 	id = identity
-	membrane = Membrane.new(radius,maxi(0,identity))
+	if initialize_anatomy:membrane = Membrane.new(radius,maxi(0,identity))
 	position = at
 	previous_position = at
-	chemistry.setup(self)
+	if initialize_anatomy:chemistry.setup(self)
 
 func count(kind: String) -> int:
 	var n = 0
