@@ -51,6 +51,7 @@ const BROWSER_SOCKET_ADDRESS := """
 """
 var socket := WebSocketPeer.new()
 var login := PanelContainer.new()
+var logout_menu_button: Button
 var url_input := LineEdit.new()
 var invite_input := LineEdit.new()
 var status := Label.new()
@@ -101,12 +102,7 @@ func _ready() -> void:
 	if OS.has_feature("web"):
 		visibility_callback=JavaScriptBridge.create_callback(_visibility_changed)
 		JavaScriptBridge.get_interface("document").addEventListener("visibilitychange",visibility_callback)
-	world = Simulation.new(0,0,false)
-	world.server_mode=true;world.remote_client=true;world.evolution.sandbox=true
-	world.command_sink=_queue_command
-	world.player.dead=true;world.cells=[]
-	world.habitat_geometry=Simulation.Habitat.new(0,[])
-	world.native_render=false;world.native_particle_render_cache=false
+	_empty_remote_world()
 	if OS.has_feature("web"):
 		server_url = str(JavaScriptBridge.eval("(location.protocol==='https:'?'wss://':'ws://')+location.host+new URL('./ws',location.href).pathname"))
 	for arg in OS.get_cmdline_user_args():
@@ -133,6 +129,49 @@ func _ready() -> void:
 		_layout_login()
 	if token!="" or invitation!="": _connect()
 	_publish_login_geometry.call_deferred()
+
+func _empty_remote_world() -> void:
+	world = Simulation.new(0,0,false)
+	world.server_mode=true;world.remote_client=true;world.evolution.sandbox=true
+	world.command_sink=_queue_command
+	world.player.dead=true;world.cells=[]
+	world.habitat_geometry=Simulation.Habitat.new(0,[])
+	world.native_render=false;world.native_particle_render_cache=false
+
+func _build_ui() -> void:
+	super()
+	var options:=profile_menu_button.get_parent()
+	logout_menu_button=_button(options,"Log out",_logout)
+	options.move_child(logout_menu_button,profile_menu_button.get_index()+1)
+
+func _logout() -> void:
+	# Only this browser's login is forgotten. The authority keeps the account,
+	# its current cell, lineage, reports and access key.
+	if connected:_send({"op":"presence","state":"paused"})
+	socket.close(1000,"Logged out")
+	socket=WebSocketPeer.new() # No old welcome/result can restore the old login.
+	token="";invitation="";invite_input.clear();_save_identity()
+	connected=false;connecting=false;loading_world=false;attempted=false;retry_enabled=false
+	hello_sent=false;transport_failures=0;reconnect_due=0
+	commands.clear();inflight.clear();cell_ui.pending_mutation.clear()
+	command_sequence=0;edit_revision=0;epoch=0;view_announced=false;received_usec=0
+	update_popup.close();pending_release_updates.clear();defer_release_updates=false
+	player_help.close();feedback.close();profile.close();palette.close()
+	feedback.pending=false;feedback.title.clear();feedback.details.clear();feedback.report_id="";feedback.content_hash=""
+	profile.pending=false;palette.pending=false
+	cell_ui.close_context();build_open=false;selected=-1;moving_id=-1;tube_start.clear()
+	settings_panel.hide();lineage_confirmation.hide();lineage_confirming=false
+	user_paused=false;paused_snapshot={};touch_zoom.cancel()
+	playback.reset();playback_domain="";playback_after_tick=-1
+	cells_by_id.clear();packet_ids.clear();family_portraits.clear();family_recovery.clear();server_census.clear()
+	focus_cell=null;player_name="";favorite_name="";last_presence=""
+	camera_initialized=false;camera_seen_world=false
+	death_tombstones.clear();merge_tombstones.clear()
+	music.reset();_empty_remote_world()
+	death_view.reset(world);merge_view.reset(world)
+	if network_particles!=null:network_particles.prepare([],[])
+	connection_stage="sign_in"
+	_show_connection("Logged out. Paste another player’s access key to sign in.",true)
 
 func _layout_login() -> void:
 	if not OS.has_feature("web"): return

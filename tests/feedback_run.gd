@@ -6,6 +6,10 @@ class Client:
 	extends "res://scripts/network/network_client.gd"
 	func _load_identity() -> void:pass
 	func _save_identity() -> void:pass
+class SwitchClient:
+	extends "res://scripts/network/network_client.gd"
+	var identity_path: String
+	func _identity_path() -> String:return identity_path
 var assertions:=0
 var failures:=0
 func check(ok: bool,text: String) -> void:
@@ -19,6 +23,10 @@ func until(predicate: Callable) -> bool:
 		await process_frame
 	return false
 func run() -> void:
+	if "--logout-only" in OS.get_cmdline_user_args():
+		await logout_session()
+		print("LOGOUT: %d assertions, %d failures" % [assertions,failures]);quit(0 if failures==0 else 1)
+		return
 	var directory: String=ProjectSettings.globalize_path("res://build/feedback-fixture-"+str(OS.get_process_id()))
 	var store=Store.new();store.directory=directory.path_join("unit")
 	var original={"id":"a".repeat(32),"category":"bug","title":"Keyboard café 🦠","description":"M, I and P should remain typed text."}
@@ -80,3 +88,57 @@ func run() -> void:
 	host.running=false;host.listener.stop();host.queue_free();await process_frame
 	OS.set_environment("PRIMORDIA_INVITE",old_invite)
 	print("FEEDBACK: %d assertions, %d failures" % [assertions,failures]);quit(0 if failures==0 else 1)
+
+func logout_session() -> void:
+	var directory:=ProjectSettings.globalize_path("res://build/logout-fixture-"+str(OS.get_process_id()))
+	DirAccess.make_dir_recursive_absolute(directory)
+	check(preload("res://scripts/player_guide.gd").gameplay(true).contains("Log out") and preload("res://scripts/player_guide.gd").gameplay(false).contains("Log out"),"Both platform guides explain switching players")
+	var first_key:="logout-first-player-fixture"
+	var second_key:="logout-second-player-fixture"
+	var registry:=directory.path_join("keys.json")
+	var file:=FileAccess.open(registry,FileAccess.WRITE)
+	file.store_string(JSON.stringify({"hashes":[first_key.sha256_text(),second_key.sha256_text()]}));file.close()
+	var old_keys:=OS.get_environment("PRIMORDIA_ACCESS_KEYS_FILE")
+	OS.set_environment("PRIMORDIA_ACCESS_KEYS_FILE",registry)
+	var host=Host.new();host.cpu=true;host.port=18000+OS.get_process_id()%20000;host.store.directory=directory.path_join("world")
+	host.world=Sim.new(82,0,false)
+	host.world.cells=[host.world.player,Sim.Cell.new(1,host.world.player.position+Vector2(300,0))]
+	host.world.next_id=2;host.world.habitat_geometry=Sim.Habitat.new(82,host.world.cells)
+	for cell in host.world.cells:
+		cell.automatic_division=false;cell.automatic_budding=false;cell.investment_retry_at=1e9
+	root.add_child(host)
+	var client=SwitchClient.new();client.identity_path=directory.path_join("browser.identity")
+	client.server_url="ws://127.0.0.1:"+str(host.port);client.invitation=first_key
+	root.add_child(client);client.music.enabled=false;client.music.player.stop()
+	check(await until(func():return client.connected and not client.loading_world and client.world.revision>0),"First access key signs in to a real local authority")
+	var first_token: String=client.token
+	var first_cell: int=client.world.player.id
+	check(not first_token.is_empty() and FileAccess.get_file_as_string(client.identity_path)==first_token,"Real identity storage remembers this player's login")
+	client.update_popup.close();client.pending_release_updates.clear()
+	root.content_scale_size=Vector2i.ZERO;root.size=Vector2i(360,640)
+	client._mobile_pause_menu();await process_frame;await process_frame
+	check(client.logout_menu_button.text=="Log out" and client.logout_menu_button.is_visible_in_tree(),"Pause exposes Log out on a phone-size viewport")
+	client.feedback.details.text="Private unfinished draft"
+	client.commands.append({"op":"command","sequence":99})
+	client.logout_menu_button.pressed.emit()
+	check(not client.connected and not client.connecting and not client.retry_enabled and not client.attempted,"Logout disables automatic reconnection")
+	check(client.token=="" and client.invitation=="" and client.invite_input.text=="" and FileAccess.get_file_as_string(client.identity_path)=="","Logout forgets the browser token and clears the access key field")
+	check(client.login.visible and client.invite_input.visible and client.join_button.visible and not client.settings_panel.visible,"Logout returns directly to usable sign-in")
+	check(client.commands.is_empty() and client.inflight.is_empty() and client.feedback.details.text=="" and client.world.cells.is_empty(),"Old commands, private draft and old world presentation cannot carry into the next player")
+	check(await until(func():return host.peers.is_empty()),"Old authenticated socket disconnects")
+	check(host.accounts.size()==1 and host.world.cells.any(func(cell):return cell.id==first_cell and not cell.dead),"Logout preserves the original account and its living cell")
+	client.invite_input.text=second_key;client._connect()
+	check(await until(func():return client.connected and not client.loading_world and client.world.revision>0),"Second access key signs in without reloading")
+	check(client.token!=first_token and client.world.player.id!=first_cell and host.accounts.size()==2,"Switching reaches the other player's cell with both accounts retained")
+	check(FileAccess.get_file_as_string(client.identity_path)==client.token and host.accounts.values().all(func(account):return account.sequence==0),"Only the new login is remembered and old queued commands are not replayed")
+	root.size=Vector2i(1280,720);client.update_popup.close();client.pending_release_updates.clear()
+	client._mobile_pause_menu();await process_frame
+	check(client.logout_menu_button.is_visible_in_tree(),"Desktop Pause exposes the same Log out action")
+	client.logout_menu_button.pressed.emit()
+	check(await until(func():return host.peers.is_empty()),"Second logout also disconnects cleanly")
+	client.invite_input.text=first_key;client._connect()
+	check(await until(func():return client.connected and not client.loading_world and client.world.revision>0),"Original access key can sign back in")
+	check(client.world.player.id==first_cell and host.accounts.size()==2,"Returning to the first player resumes the same cell without creating another account")
+	client._logout();client.queue_free()
+	host.running=false;host.listener.stop();host.queue_free();await process_frame
+	OS.set_environment("PRIMORDIA_ACCESS_KEYS_FILE",old_keys)

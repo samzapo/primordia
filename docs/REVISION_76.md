@@ -155,3 +155,6 @@ so missed iterations lead to one current notice. Main's queue is unchanged.
 There are no biology, movement, resources or save-schema changes in this patch.
 
 October21 standing release workflow: every experimental update pools all pending changes into one cumulative gameplay notice, using the intended next-main wording and a fresh acknowledgement ID. Replace superseded details, cover earlier experimental/shared iterations only for experimental, preserve historical IDs and main, and start a new pool after main lands.
+
+
+October21 player switching: Pause → Log out disconnects only this browser, clears its saved server-scoped login and private drafts, and returns to the access-key sign-in screen. A different personal key opens that player's existing account. Accounts, cells, progress, keys and submitted feedback remain on the authority. Desktop and mobile use the same Pause action.
