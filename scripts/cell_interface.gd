@@ -404,7 +404,7 @@ func describe(target: Dictionary) -> String:
 			var upkeep: float = sim.Cell.organ_upkeep(organ)
 			var whole: float = cell.operating_budget().steady
 			var recent: float = rates.organs.get(organ.id,0.0)
-			result += "\nSteady ATP %.2f/s · %.0f%% of cell estimate\nRecent actual %.2f/s · %.0f%% of spending\nCell production surplus %+.2f ATP/s" % [upkeep,100*upkeep/maxf(0.000001,whole),recent,100*recent/maxf(0.000001,rates.spent),rates.net]
+			result += "\nWorking ATP estimate %.2f/s · %.0f%% of cell estimate\nRecent actual %.2f/s · %.0f%% of spending\nCell production surplus %+.2f ATP/s" % [upkeep,100*upkeep/maxf(0.000001,whole),recent,100*recent/maxf(0.000001,rates.spent),rates.net]
 			if organ.blocked > 0.05: result += "\nReceptors blocked · cleaning in progress."
 			if organ.get("mutation","") != "": result += "\n"+sim.Genes.DATA[organ.mutation].title
 			if organ.kind=="toxin_sac":result+="\nStored toxin %.2f / %.2f" % [float(organ.get("stored_toxin",0)),preload("res://scripts/toxin_sac.gd").capacity(organ)]
@@ -575,7 +575,7 @@ func sync(_dt: float) -> void:
 			var future: float = game.Simulation.Cell.organ_upkeep(model)
 			var existing: Dictionary = game.world.player.organ_by_id(model.get("id",-1))
 			var current: float = game.Simulation.Cell.organ_upkeep(existing) if not existing.is_empty() else 0.0
-			_tooltip(inspected_choice.caption+"\n"+inspected_choice.description+"\nSteady ATP %.2f/s · change %+.2f/s\nSteady estimate; pursuit/repair/combat extra." % [future,future-current],inspected_choice.position+Vector2(inspected_choice.size.x,0))
+			_tooltip(inspected_choice.caption+"\n"+inspected_choice.description+"\nWorking ATP estimate %.2f/s · change %+.2f/s\nIdle organs cost no ATP; actual work varies." % [future,future-current],inspected_choice.position+Vector2(inspected_choice.size.x,0))
 		if inspected_choice.tissue_cost >= 0:
 			hovered_price = {"tissue":inspected_choice.tissue_cost,"ap":inspected_choice.ap_cost,"rate_model":inspected_choice.rate_model}
 	else:

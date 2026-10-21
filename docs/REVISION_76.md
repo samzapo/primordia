@@ -60,3 +60,49 @@ Hunting aligns the proboscis, or the oral groove when no proboscis is installed,
 The36-cell trial exposed a missing coarse-physiology call: offscreen bodies never executed proboscis feeding. advance_body now invokes the same actual-tip contact transfer before metabolism, including resident-server coarse bodies. A hidden-cell finite donor fixture covers it. This is a feeding omission fix, not a remote encounter bonus.
 
 Storage volume has a minimum geometric footprint for already equipped organs. Compressing reserves must not shrink a saved membrane below its installed layout and cause ordinary overflow handling to discard player organs. New builds still pass the ordinary post-payment fit and Fibonacci quote.
+
+## October20 foraging-only oral pumping
+
+The current valid foraging intention activates its healthy oral groove's pump.
+No pump operates for a different intention, an expired/absent target, a different
+selected organ, or a full gut. This starts on detected food before ingestion,
+avoiding a requirement to eat before suction can start. Passive contact feeding
+continues. Idle mouths spend no pumping ATP. Cilia keep their independent water
+motion and paid work.
+
+One read-only Cell.oral_pumping predicate gates descriptor generation, the
+authoritative pumping debit, and both CPU and resident/coarse intake estimates.
+Passive swept capture and gas exchange remain in coarse biology. Only eligible
+mouths add descriptors; changing intentions removes their field at the next
+ordinary update without particle ownership transfers.
+
+Pheromones (kind3) bypass oral attraction entirely in script, native dictionaries,
+native pool, native resident reference, staged GPU and resident GPU transport.
+They retain the same real-water advection, diffusion and random draw schedule.
+Food still receives full pull and other material20%; range, strongest-mouth
+selection and physical water/body motion are unchanged. The timing and tracer
+exemption are game rules, not a claim about selective molecular suction.
+
+Focused checks exercise intention changes, ATP debit, coarse pump capture,
+expired/full states, same-random-draw signal transport against plain water,
+native parity and actual resident GPU motion. No broad ecological or rendering
+performance test is required for this control change. Experimental first.
+
+## October20 activity-based organelle upkeep
+Idle organs no longer pay an installed-organ ATP tax. The cell's basal maintenance
+and ATP turnover remain. Actual work pays the previous work-rate overhead plus
+its existing action price: moving motors, active oral/ciliary pumps, received-cue
+navigation, successful secretions/bursts, toxin-sac filling, contact extraction,
+repair and protective hits. Secretion/burst overhead is charged per product or
+assembly cycle, never merely while waiting for a target. Cilia pay their shared
+overhead once through pumping, not again for simultaneous swimming.
+Leaves pay for actual carbon fixation; mitochondria pay in proportion to actual
+aerobic throughput, including reserve respiration. CPU and resident cytoplasm use
+the same compact processed/fermented receipt; no extra packet export. A reaction
+can spend only its actual ATP yield on mitochondrial work, so this cannot recurse
+through reserve burning. No idle-work flags, visual timers, RNG changes or new
+saved activity debt. Quarter-power and finite reserve rules remain.
+Working ATP estimates describe capacity; recent actual spending remains the
+authoritative display. This is an explicit gameplay energy-cost abstraction,
+not a claim that real dormant organelles have zero maintenance.
+Experimental only, focused work/idle and CPU/resident correctness checks.

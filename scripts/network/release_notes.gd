@@ -577,6 +577,18 @@ const RELEASES=[
 	"footer":"Try these changes in the experimental pond.",
 	"button":"Back to the pond",
 },
+{
+ "id":"2026-10-20-feeding-only-suction",
+ "audience":"experimental",
+ "title":"What’s new in the pond",
+ "items":[
+  "Mouth suction switches on while feeding and rests when your cell changes its intention.",
+  "Pheromones drift with the water without being pulled toward mouths.",
+  "Organelles spend ATP while doing their jobs. Idle glands and other resting organs no longer drain ATP."
+ ],
+ "footer":"Try these changes in the experimental pond.",
+ "button":"Back to the pond"
+},
 ]
 const CURRENT=RELEASES[-1]
 static func seen_index(account: Dictionary) -> int:

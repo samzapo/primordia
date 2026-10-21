@@ -781,3 +781,7 @@ October20 experimental feeding correction: see the final Revision76 section for 
 October20 oral attraction follow-up: shorten suction to a cell-scaled neighborhood, pull food at full strength and other particles at20%, and choose one mouth per particle sample so competing mouths do not create an artificial stall. This is a gameplay particle attractor; water and cell motion remain unchanged. See final Revision76 section.
 
 October20 meal storage: Hunters keep compact food vacuoles and digest to ATP demand; Grazers digest faster into larger biomass reserves. All resources remain finite. Longer survival comes from denser food/tissue energy, not duplicated material. Sated hunters rest and spare prey. Producers continuously export all new food while retaining direct ATP and modest biomass growth. See Revision76 for the explicit game-scale rates, size/mobility tradeoff and36-cell ecology fixture. These mechanisms and investment/navigation policy must stay aligned when anatomy expands.
+
+October20 oral pumping control: a mouth pumps only during its current valid foraging intention and with gut space, paying ATP only while active. Pheromones bypass the oral attractor on every transport backend. They retain water advection and diffusion. See Revision76 for shared CPU/coarse/resident gates and focused checks.
+
+October20: Installed organs have no idle ATP tax; charge work at its real source. Basal cell maintenance/ATP turnover remain. Share actual aerobic receipts for mitochondrial billing and keep observation/presentation out of physics. See Revision76.

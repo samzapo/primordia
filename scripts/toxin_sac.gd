@@ -14,6 +14,7 @@ static func fill(cell,dt: float) -> void:
 		if amount<=0:continue
 		cell.biomass-=amount;organ["stored_toxin"]=float(organ.get("stored_toxin",0))+amount
 		cell.spend_energy(amount*float(rule.atp_per_unit),organ,"secretion")
+		cell.spend_work(amount/(float(rule.fill_rate)*organ.scale*organ.scale),organ,"secretion")
 		organ.charge_flash=1
 static func release(sim,cell) -> float:
 	var total:=0.0

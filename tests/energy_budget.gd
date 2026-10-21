@@ -23,7 +23,7 @@ static func run(check: Callable) -> void:
 	check.call(cell.energy == energy and cell.organic_mass() == material and cell.energy_budget.rates(cell.age) == rates,"Reading paused ATP rates neither decays them nor changes resources")
 
 	var empty = Cell.new()
-	empty.energy = 0
+	empty.biomass=0 # Exhaust reserves as well as ATP for the limited-payment case.
 	empty.energy=0.4
 	empty.age = 1
 	empty.spend_energy(10,{},"combat",{2:1.0,3:3.0})

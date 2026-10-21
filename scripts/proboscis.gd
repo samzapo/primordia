@@ -34,9 +34,10 @@ static func step(sim,cell,dt: float) -> void:
    if chosen==null or d<distance or (d==distance and donor.id<chosen.id):chosen=donor;distance=d
   if chosen==null:continue
   var amount: float=minf(chosen.biomass,minf(maxf(0,cell.gut_capacity()-cell.substrate),RATE*organ.scale*organ.scale*organ.hp/organ.max_hp*dt*cell.work_capacity()))
-  amount=minf(amount,(cell.energy+cell.biomass*cell.Chemistry.RESERVE_ATP)/ATP_PER_UNIT) # A meal never funds its own capture.
+  var unit_cost: float=ATP_PER_UNIT+cell.metabolic_upkeep(organ)/(RATE*organ.scale*organ.scale)
+  amount=minf(amount,(cell.energy+cell.biomass*cell.Chemistry.RESERVE_ATP)/unit_cost) # A meal never funds its own capture.
   if amount<=0:continue
-  cell.spend_energy(amount*ATP_PER_UNIT,organ,"contact feeding")
+  cell.spend_energy(amount*unit_cost,organ,"contact feeding")
   chosen.biomass-=amount
   cell.chemistry.emit("food",amount,cell.chemistry.constrain(cell,cell.organ_local_position(organ)*.8,7),organ.id,-1,amount*cell.Chemistry.TISSUE_FUEL)
   cell.eaten+=amount

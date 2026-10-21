@@ -31,6 +31,7 @@ func run() -> void:
    cell.add_organ("hunting",PI,"graze",false);cell.add_organ("propulsion",PI/2,"graze",false);cell.add_organ("toxin",3*PI/2,"graze",false)
   else:cell.add_organ("cilia",PI,"graze",false)
   var mouth=cell.organs.filter(func(o):return o.kind=="feeding")[0]
+  cell.drive_active=true;cell.target_mode="graze";cell.target_memory=30;cell.target_organ_id=mouth.id
   var at: Vector2=cell.pore_center(mouth);var water=sim.fluid.velocity.duplicate()
   cell.velocity=Vector2(3,4);var velocity=cell.velocity
   sim._suction_cell(cell,.1);sim.fluid.prepare_attractors(sim.cells)
@@ -125,6 +126,7 @@ func resident_attractor() -> void:
  if RenderingServer.get_rendering_device()==null:return
  print("FOCUSED_GPU ",RenderingServer.get_video_adapter_name())
  var sim=fixture();var cell=sim.player;cell.add_organ("feeding",0,"graze",false)
+ cell.drive_active=true;cell.target_mode="graze";cell.target_memory=1;cell.target_organ_id=cell.organs[0].id
  var at: Vector2=cell.pore_center(cell.organs[0]);sim.fluid.prepare_attractors(sim.cells)
  var start: Vector2=at+cell.organ_normal(cell.organs[0]).rotated(cell.angle)*cell.oral_reach(cell.organs[0])*.8
  var data:=PackedFloat32Array([start.x,start.y,0,0,0,0,0,0,8,.3,.3,0])

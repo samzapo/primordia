@@ -173,7 +173,14 @@ func consume_oxygen(quantity: float, at: Vector2, reach: float) -> float:
 func advance(cell, dt: float, _external_osmolarity: float=.15) -> void:
 	if dt<=0 or cell.dead or particle_count()==0:return
 	var mitochondrial_gain: float=cell.mitochondrial_gain(dt)
-	if accelerator!=null:accelerator.advance(dt,.15,mitochondrial_gain);return
+	if accelerator!=null:
+		var before: float=cell.processed-cell.fermented
+		var energy_before: float=cell.energy
+		accelerator.advance(dt,.15,mitochondrial_gain)
+		cell.respiration_upkeep(maxf(0,cell.processed-cell.fermented-before),maxf(0,cell.energy-energy_before))
+		return
+	var aerobic_total:=0.0
+	var produced_total:=0.0
 	frame_dt=dt;tick+=1
 	var budget: float=digestion_rate(cell)*dt
 	var original:=particles.duplicate();batching=true
@@ -199,10 +206,12 @@ func advance(cell, dt: float, _external_osmolarity: float=.15) -> void:
 		work+=minf(mitochondrial_extra+work*(.15 if cell.synergy()=="grazer" else 0.0),maxf(0,fuel-tissue*TISSUE_FUEL-work))
 		cell.biomass+=tissue;cell.gain_energy(work);cell.processed+=used
 		cell.fermented+=anaerobic
+		aerobic_total+=aerobic;produced_total+=work
 		if anaerobic>0:cell.fermentation_activity=2
 		heat+=maxf(0,fuel-tissue*TISSUE_FUEL-work)
 		emit("carbon",used*.1,packet.p,-1,-1,0)
 		emit("waste",used-tissue-used*.1,packet.p,packet.source,packet.compartment,0)
+	cell.respiration_upkeep(aerobic_total,produced_total)
 	batching=false;particles=particles.filter(func(packet):return packet.alive)
 	var food_by_compartment: Dictionary={}
 	for packet in particles:
@@ -358,6 +367,7 @@ func photosynthesize(sim,cell,organ: Dictionary,dt: float) -> void:
 		sim.spawn_particle(0,cell.organ_position(organ)+normal*12,normal*12,used*LEAF_FOOD*share,cell.id)
 		cell.spend_energy(maxf(0,used-baseline_budget)*extra_cost,organ,"photosynthesis")
 		cell.gain_energy(used*LEAF_ATP_YIELD,organ)
+		cell.spend_work(dt*used/maxf(.00000001,budget),organ,"photosynthesis")
 		cell.fixed_carbon+=used;cell.oxygen_produced+=used*2.5
 		light_flux+=used/maxf(dt,.00000001)
 		cell.consumed(organ,used);cell.emitted(organ)

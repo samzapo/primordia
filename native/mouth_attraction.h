@@ -5,6 +5,7 @@
 namespace primordia_mouth {
 // First2560 entries are real water. Remaining pairs: mouth xy, reach/power.
 inline godot::Vector2 pull(const godot::Vector2 *field,int count,godot::Vector2 at,int kind) {
+ if(kind==3)return godot::Vector2(); // Signals follow only real water and diffusion.
  godot::Vector2 best;double strongest=-1;
  for(int i=2560;i+1<count;i+=2) {
   double x=double(field[i].x)-at.x,y=double(field[i].y)-at.y;

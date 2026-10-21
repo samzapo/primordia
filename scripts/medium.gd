@@ -79,12 +79,13 @@ func prepare_attractors(cells: Array) -> void:
 	for cell in ordered:
 		if cell.dead or cell.substrate>=cell.gut_capacity()-.000001:continue
 		for organ in cell.organs:
-			if organ.kind!="feeding" or organ.hp<=0:continue
+			if not cell.oral_pumping(organ):continue
 			var power: float=minf(300,cell.ORAL_FLOW*organ.scale*organ.hp/organ.max_hp*cell.Genes.factor(organ,"suction")*cell.work_capacity())
 			particle_velocity.append(cell.pore_center(organ))
 			particle_velocity.append(Vector2(cell.oral_reach(organ),power))
 
 func transport_sample(p: Vector2,kind: int=0) -> Vector2:
+	if kind==3:return sample(p) # Chemical signals never enter the mouth attractor.
 	var field:=particle_flow()
 	var pull:=Vector2.ZERO
 	var strongest:=-1.0

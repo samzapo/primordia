@@ -152,7 +152,7 @@ static func _swim(cell) -> float:
 static func feeding_margin(cell) -> float:
 	var reach:=FEED_MARGIN
 	for organ in cell.organs:
-		if organ.kind=="feeding" and organ.hp>0:reach=maxf(reach,cell.oral_reach(organ))
+		if cell.oral_pumping(organ):reach=maxf(reach,cell.oral_reach(organ))
 	return reach
 
 static func feeding_request(sim, cell, dt: float, period: float) -> Dictionary:
@@ -163,7 +163,7 @@ static func feeding_request(sim, cell, dt: float, period: float) -> Dictionary:
 	var radius: float=cell.extent()+feeding_margin(cell)+minf(60,relative*period)
 	for organ in cell.organs:
 		if organ.kind!="feeding" or organ.hp<=0: continue
-		var pump: float=(cell.ORAL_FLOW*.375)*organ.scale*organ.hp/organ.max_hp*Genes.factor(organ,"suction")*cell.work_capacity()
+		var pump: float=(cell.ORAL_FLOW*.375)*organ.scale*organ.hp/organ.max_hp*Genes.factor(organ,"suction")*cell.work_capacity() if cell.oral_pumping(organ) else 0.0
 		var center: Vector2=cell.pore_center(organ)
 		var arm: Vector2=Medium.offset(cell.position,center)
 		var local_flow: float=(cell.velocity+Vector2(-arm.y,arm.x)*cell.angular_velocity-sim.fluid.sample(center)).length()
@@ -182,7 +182,7 @@ func _feed(sim, cell, dt: float) -> void:
 	for organ in cell.organs:
 		if organ.kind != "feeding" or organ.hp <= 0: continue
 		if mouth.is_empty(): mouth = organ
-		var pump: float = (cell.ORAL_FLOW*.375)*organ.scale*organ.hp/organ.max_hp*Genes.factor(organ,"suction")*cell.work_capacity()
+		var pump: float = (cell.ORAL_FLOW*.375)*organ.scale*organ.hp/organ.max_hp*Genes.factor(organ,"suction")*cell.work_capacity() if cell.oral_pumping(organ) else 0.0
 		var center: Vector2 = cell.pore_center(organ)
 		var arm: Vector2 = Medium.offset(cell.position,center)
 		var local_flow: float = (cell.velocity+Vector2(-arm.y,arm.x)*cell.angular_velocity-sim.fluid.sample(center)).length()

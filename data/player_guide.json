@@ -286,7 +286,7 @@
         {
           "id": "low_power",
           "title": "Low ATP: quarter capacity",
-          "text": "Spare biomass can fuel organelles at normal power when ATP is low. This consumes real biomass. When both ATP and reserves run out, movement, feeding currents, glands and repair fall to quarter capacity. Digestion, photosynthesis and passive protection keep working.",
+          "text": "Organelles spend ATP while doing their jobs; idle organs do not have a separate upkeep charge. The cell still needs basic maintenance. Spare biomass powers organs normally when ATP is low, consuming real reserves. When both run out, movement, feeding currents, glands and repair fall to quarter capacity. Digestion, photosynthesis and passive protection keep working.",
           "sources": []
         }
       ]
@@ -439,7 +439,7 @@
         {
           "id": "signals",
           "title": "Pheromones carry old reports",
-          "text": "Hunting and flight receptors read drifting reports of nearby cells. Reports age and expire; they do not reveal another cell’s live location. Family signatures help relatives recognize one another. Hunters still choose non-family targets, but stray toxin, pores and decoys can affect relatives.",
+          "text": "Hunting and flight receptors read drifting reports of nearby cells. Reports age and expire; they do not reveal another cell’s live location. Family signatures help relatives recognize one another. Hunters still choose non-family targets, but stray toxin, pores and decoys can affect relatives. Mouth suction never pulls pheromones; they follow the water and diffuse.",
           "sources": [
             {
               "title": "Chemical signals in flowing habitats",
@@ -499,7 +499,7 @@
         {
           "id": "organ_feeding",
           "title": "Oral groove",
-          "text": "An optional mouth on the membrane, built in Assembly. It draws surrounding water toward its opening, takes in food and releases digestive enzymes. A taut internal strand connects the mouth to the center of the cell. Reabsorb it to remove the mouth and strand; leaves and gas uptake still work without it. A strong local attractor draws nutrients toward the mouth. Its reach scales with cell size. Other particles, including hazards, feel only one fifth of the pull. Food follows one mouth at a time, and a full gut leaves food for other cells. It does not push cells or change the pond current. Hazardous particles are drawn in too.",
+          "text": "An optional mouth built in Assembly. While foraging, it spends ATP to pull nearby food strongly and other material gently. Pheromones ignore the pull. Suction stops with other intentions or a full gut; food touching the mouth can still be eaten. Reach scales with cell size. A strand connects the mouth to the cell center; reabsorbing the mouth removes that strand.",
           "sources": [
             {
               "title": "Food-vacuole formation",
@@ -669,7 +669,7 @@
         {
           "id": "organ_proboscis",
           "title": "Feeding proboscis",
-          "text": "Its tip must touch a living cell. It draws up to 2 biomass per second as food, costing 0.5 ATP per unit. Food still needs digestion. It cannot drain protected unattended favorites. These rates, the fixed tube and ATP cost are game choices inspired by protists that extract other cells’ contents.",
+          "text": "Its tip must touch a living cell. It draws up to 2 biomass per second as food, paying ATP for the food it actually extracts. Food still needs digestion. It cannot drain protected unattended favorites. These rates, the fixed tube and ATP cost are game choices inspired by protists that extract other cells’ contents.",
           "sources": [
             {
               "title": "Experimental study of protoplast feeding",
@@ -776,7 +776,7 @@
         {
           "id": "currents",
           "title": "Currents and plants",
-          "text": "Broad currents carry cells and chemical parcels through the pond. Swimming adds movement relative to the local water; leftover cell motion quickly settles back into that current. Feeding stirs the water locally. Plants damp flow; cells meet plant branches while chemistry can pass through. This is a stylized fluid world, not a calibrated microscopic-water model.",
+          "text": "Broad currents carry cells and chemical parcels through the pond. Swimming adds movement relative to the local water; leftover cell motion quickly settles back into that current. Cilia stir the water locally. Plants damp flow; cells meet plant branches while chemistry can pass through. This is a stylized fluid world, not a calibrated microscopic-water model.",
           "sources": [
             {
               "title": "Life at low Reynolds number",

@@ -46,6 +46,8 @@ static func state(sim,cell,organ: Dictionary) -> Dictionary:
     if cue.is_empty() or cue.expires_at<=sim.time or receptor.is_empty() or receptor.hp<=0:result.label="No eligible chemical target";return result
   result.label="Low ATP · 25% capacity" if capacity<1 else "Ready"
   result.progress=1
+ if kind=="feeding" and not cell.oral_pumping(organ):
+  result.label="Suction off";return result
  elif kind in ["feeding","acidifying","neutralizing","regenerative","propulsion","cilia"]:
   var capacity: float=cell.work_capacity()
   result.capacity=capacity;result.depleted=capacity<1

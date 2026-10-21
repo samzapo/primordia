@@ -1197,12 +1197,13 @@ func _suction_cell(cell, dt: float) -> void:
 	for organ in cell.organs:
 		if organ.kind not in ["feeding","cilia"] or organ.hp <= 0: continue
 		var ciliary: bool = organ.kind == "cilia"
-		if not ciliary and cell.substrate>=cell.gut_capacity()-.000001:continue
+		if not ciliary and not cell.oral_pumping(organ):continue
 		var cost: float = dt*(Cell.CILIA_PUMP if ciliary else Cell.PUMP_UPKEEP)*organ.scale*organ.scale*Genes.output_cost(organ)
 		var health: float = organ.hp/organ.max_hp
 		var power: float = (Cell.CILIA_FLOW if ciliary else Cell.ORAL_FLOW)*organ.scale*health*Genes.factor(organ,"suction")
 		var capacity: float=cell.work_capacity(cost)
 		cell.spend_energy(cost*capacity,organ,"pumping")
+		cell.spend_work(dt*capacity,organ,"pumping")
 		power *= capacity
 		var at: Vector2 = cell.organ_position(organ)+cell.organ_normal(organ).rotated(cell.angle)*8 if ciliary else cell.pore_center(organ)
 		if not ciliary:continue # Oral groove uses a particle attractor, not water momentum.
@@ -1609,7 +1610,6 @@ func _metabolize(cell, dt: float) -> void:
 	if cell.behavior.get("burn_reserves",false):
 		# Fund actual maintenance while crossing a food gap; do not regenerate food.
 		var maintenance: float=Cell.BASAL_UPKEEP*cell.growth_scale()
-		for organ in cell.organs:maintenance+=Cell.metabolic_upkeep(organ)
 		var rate: float=maxf(.5*cell.growth_scale(),maintenance+.25*cell.growth_scale())
 		cell.behavior["reserve_elapsed"]=float(cell.behavior.get("reserve_elapsed",0))+dt
 		if cell.behavior.reserve_elapsed>=.5:
@@ -1623,7 +1623,10 @@ func _metabolize(cell, dt: float) -> void:
 	cell.Surface.advance(cell,dt,self)
 	cell.decay_energy(dt)
 	cell.spend_energy(dt*Cell.BASAL_UPKEEP*cell.growth_scale())
-	for organ in cell.organs: cell.spend_energy(dt*Cell.metabolic_upkeep(organ),organ)
+	# Receptors pay while using a live intention; waiting for a cue is idle.
+	var receptor: Dictionary=cell.organ_by_id(cell.target_organ_id)
+	if not receptor.is_empty() and receptor.kind in ["sensing","hunting","family_toward","family_away"] and receptor.hp>0 and cell.drive_active and cell.target_memory>0:
+		cell.spend_work(dt,receptor,"sensing")
 	if cell.energy <= 0:
 		var before: float=cell.starvation_seconds
 		cell.starvation_seconds+=dt
@@ -1665,9 +1668,9 @@ func _emit_and_attack(cell, dt: float) -> void:
 		_emit_pheromone(cell,maxf(0,coarse_event_at+cell.emission_clock-1.0/PHEROMONE_RATE) if coarse_mode else time)
 	for organ in cell.organs:
 		var kind: int = {"feeding":ENZYME,"neutralizing":ANTITOXIN,"acidifying":ACID,"regenerative":BUFFER}.get(organ.kind,-1)
-		var energy_cost := Cell.SECRETION_COST*Genes.factor(organ,"secretion_cost")
-		if kind < 0 or organ.hp<=0 or cell.biomass < 0.06: continue
 		var rate := 0.35 if kind == ENZYME else 2.0
+		var energy_cost: float = Cell.SECRETION_COST*Genes.factor(organ,"secretion_cost")+Cell.metabolic_upkeep(organ)/(rate*organ.scale*organ.scale*Genes.factor(organ,"secretion"))
+		if kind < 0 or organ.hp<=0 or cell.biomass < 0.06: continue
 		for event in _event_count(rate*organ.scale*organ.scale*Genes.factor(organ,"secretion")*cell.work_capacity(energy_cost),dt):
 			if cell.biomass < 0.06: break
 			# Query only on a scheduled secretion attempt, rather than every tick.
@@ -1694,7 +1697,8 @@ func _emit_and_attack(cell, dt: float) -> void:
 	for organ in cell.organs:
 		if organ.kind not in ["toxin","poreforming","counterattack"] or organ.hp<=0: continue
 		var burst: float = organ.scale*organ.scale*Genes.factor(organ,"burst")
-		var capacity: float=cell.work_capacity(2*burst*Genes.inefficiency(organ))
+		var energy_cost: float=2*burst*Genes.inefficiency(organ)+.75*Genes.factor(organ,"cooldown")*Cell.metabolic_upkeep(organ)
+		var capacity: float=cell.work_capacity(energy_cost)
 		organ["burst_clock"] = maxf(0,float(organ.get("burst_clock",0))-dt*capacity)
 		var aim: Vector2 = cell.threat if cell.target_mode == "flee" else Medium.offset(cell.position,cell.target_position).normalized()
 		if organ.kind=="counterattack":
@@ -1708,8 +1712,8 @@ func _emit_and_attack(cell, dt: float) -> void:
 			if cue.is_empty() or cue.expires_at<=time or receptor.is_empty() or receptor.hp<=0 or cue.lineage==cell.lineage_id():continue
 			aim=Medium.offset(cell.organ_position(organ),cue.at).normalized()
 		if organ.burst_clock>0 or aim.length_squared()<.01:continue
-		if cell.biomass < 0.18*burst+maxf(0,2*burst*Genes.inefficiency(organ)-cell.energy)/Cell.Chemistry.RESERVE_ATP: continue
-		cell.spend_energy(2*burst*Genes.inefficiency(organ),organ,"combat")
+		if cell.biomass < 0.18*burst+maxf(0,energy_cost-cell.energy)/Cell.Chemistry.RESERVE_ATP: continue
+		cell.spend_energy(energy_cost,organ,"combat")
 		var source: int=_attack_owner(cell,organ.kind=="counterattack")
 		if organ.kind == "poreforming":
 			_emit_aimed(TAG,cell.organ_position(organ),aim,155,0.03*burst,source)
@@ -1749,6 +1753,9 @@ func _motion_cell(cell, local_dt: float) -> void:
 		desired_drift+=thrust*power/cell.fluid_drag()
 		steering_power+=power
 		cell.spend_energy(energy_cost*capacity,organ,"movement")
+		# Cilia already pay their shared work rate while pumping; a hunting
+		# receptor pays while sensing. Only the motor adds this work rate here.
+		if organ.kind=="propulsion":cell.spend_work(local_dt*capacity,organ,"movement")
 	# Viscous gameplay: velocity relative to local water decays directly. This
 	# body-only relaxation is not an impulse on the finite-mass fluid grid.
 	var response: float=1-exp(-local_dt/.03)

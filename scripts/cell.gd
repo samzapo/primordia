@@ -316,6 +316,7 @@ func burn_biomass(quantity: float) -> void:
 	var aerobic: float=chemistry.consume_oxygen(used,Vector2.ZERO,radius*2) if efficiency>1 else 0.0
 	var work: float=Chemistry.RESERVE_ATP*(used+aerobic*(efficiency-1))
 	biomass-=used;gain_energy(work);reserve_used+=used;reserve_activity=2
+	respiration_upkeep(aerobic,work)
 	chemistry.heat+=used*Chemistry.TISSUE_FUEL-work
 	behavior["reserve_products"]=float(behavior.get("reserve_products",0))+used
 
@@ -504,6 +505,11 @@ func add_organ(kind: String, a: float, mode: String = "graze", paid: bool = true
 func sensory_output(_organ: Dictionary,_paid: bool=false) -> float:
 	return 1.0 # All receptors use their ordinary reach; no output/ATP multiplier.
 
+func oral_pumping(organ: Dictionary) -> bool:
+	# The authoritative foraging intention opens the pump before food arrives.
+	# Physical intake on contact stays independent of this active attractor.
+	return not dead and organ.kind=="feeding" and organ.hp>0 and drive_active and target_memory>0 and target_mode=="graze" and target_organ_id==organ.id and substrate<gut_capacity()-.000001
+
 func oral_reach(organ: Dictionary) -> float:
 	return clampf(ORAL_REACH*radius/47.0,48.0,192.0)*sqrt(organ.scale)
 
@@ -554,7 +560,22 @@ func report_energy_gain(amount: float, organ: Dictionary = {}) -> void:
 func receive_particle(kind: int, amount: float, capacity: float, at: Vector2) -> void:
 	chemistry.receive(kind,amount,capacity,at)
 
+func spend_work(seconds: float, organ: Dictionary, category: String="organelle work") -> void:
+	# Work sites supply actual duration/throughput, never presentation timers.
+	if seconds>0:spend_energy(seconds*metabolic_upkeep(organ),organ,category)
+
+func respiration_upkeep(aerobic: float, produced: float) -> void:
+	if aerobic<=0 or produced<=0:return
+	var seconds: float=aerobic/(Chemistry.DIGESTION_RATE*growth_scale())
+	# Pay from this reaction's real yield, avoiding recursive reserve burning.
+	var remaining: float=minf(energy,produced)
+	for organ in organs:
+		if organ.kind!="mitochondrion" or organ.hp<=0:continue
+		var cost: float=minf(remaining,seconds*metabolic_upkeep(organ))
+		spend_energy(cost,organ,"respiration");remaining-=cost
+
 static func metabolic_upkeep(organ: Dictionary) -> float:
+	# Active-work rate only. Installation itself carries no idle ATP charge.
 	if float(organ.get("hp",1))<=0:return 0.0
 	var base: float=0.0 if organ.kind=="feeding" else LEAF_UPKEEP if organ.kind=="photosynthesis" else MITOCHONDRION_UPKEEP if organ.kind=="mitochondrion" else ORGAN_UPKEEP
 	return (base+Genes.factor(organ,"upkeep",0.0))*float(organ.get("scale",1.0))*float(organ.get("scale",1.0))
@@ -644,6 +665,7 @@ func damage(amount: float, world_angle: float, source: int=-1) -> float:
 		if demand > energy:
 			output = 1.0; absorbed = minf(amount,organ.hp); demand = 0.0
 		if demand > 0: spend_energy(demand,organ,"protection")
+		if organ.kind=="protection":spend_work(absorbed/organ.max_hp,organ,"protection")
 		var tissue_damage: float = absorbed/output
 		var lost: float = organ.material * tissue_damage / organ.hp
 		organ["paid_material"]=float(organ.get("paid_material",organ.material))*maxf(0,1-tissue_damage/organ.hp)
@@ -676,6 +698,7 @@ func heal(dt: float) -> float:
 	var leaked = 0.0
 	var repair := 1.0
 	var repair_cost := 1.0
+	var repaired:=false
 	for organ in organs:
 		if organ.kind == "regenerative" and organ.hp>0:
 			repair += 2.0*organ.scale*organ.scale*Genes.factor(organ,"repair")
@@ -685,11 +708,13 @@ func heal(dt: float) -> float:
 		var loss: float = drain(hole.size * 7.0 * dt)
 		leaked += loss
 		if loss > 0: leaks.append({"a":hole.a,"amount":loss})
+		if hole.size>0 and dt>0:repaired=true
 		hole.size = maxf(0,hole.size-dt*1.1*(1+(repair-1)*capacity))
 	holes = holes.filter(func(h): return h.size > 0)
 	if energy > 0 or repair>1:
 		var healed = minf(100-health,minf(8.0*repair*dt*capacity,biomass/0.05))
 		health += healed
+		repaired=repaired or healed>0
 		# Repaired membrane incorporates mass into structure rather than deleting it.
 		biomass -= healed*0.05
 		body += healed*0.05
@@ -703,11 +728,15 @@ func heal(dt: float) -> float:
 			var restore = minf(organ.max_hp-organ.hp,dt*1.3*repair*capacity)
 			if unit>0: restore=minf(restore,biomass/unit)
 			organ.hp += restore
+			repaired=repaired or restore>0
 			organ.material += restore*unit
 			organ["paid_material"]=float(organ.get("paid_material",0))+restore*unit
 			biomass -= restore*unit
 			spend_energy(restore*0.15*repair_cost,organ,"repair")
 			if restore > 0: resource_effect("repair",organ.a,restore*unit,organ.id)
+	if repaired:
+		for organ in organs:
+			if organ.kind=="regenerative" and organ.hp>0:spend_work(dt*capacity,organ,"repair")
 	return leaked
 
 func punctured_at(world_angle: float) -> bool:

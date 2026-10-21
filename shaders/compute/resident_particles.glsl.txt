@@ -9,6 +9,7 @@ const vec2 WORLD=vec2(4096,2560);
 int node(ivec2 p) { p=ivec2(mod(vec2(p),vec2(64,40))); return p.y*64+p.x; }
 vec2 sample_flow(vec2 p) { vec2 q=mod(p,WORLD)/64.-.5; ivec2 lo=ivec2(floor(q)); vec2 f=fract(q); return mix(mix(flow[node(lo)],flow[node(lo+ivec2(1,0))],f.x),mix(flow[node(lo+ivec2(0,1))],flow[node(lo+ivec2(1,1))],f.x),f.y); }
 vec2 transport_flow(vec2 p,int kind) {
+ if(kind==3)return sample_flow(p);
  vec2 pull=vec2(0);float strongest=-1.;
  for(uint j=0u;j<params.mouths;j++){
   vec2 d=mod(flow[2560u+j*2u]-p+WORLD*.5,WORLD)-WORLD*.5;
