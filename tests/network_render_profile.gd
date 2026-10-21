@@ -6,6 +6,8 @@ class Client:
 	extends "res://scripts/network/network_client.gd"
 	func _load_identity() -> void:pass
 	func _save_identity() -> void:pass
+	func _poll_network() -> void:pass
+	func _send(_value: Dictionary) -> void:pass
 var game
 var wire: Array=[]
 var elapsed:=0.0
@@ -16,6 +18,9 @@ var started:=false
 var finished:=false
 var trace
 var settings: Dictionary={}
+var cache_checks: Array=[]
+var check_phase:=0
+var cached_view_refs: Array=[]
 func option(key: String,fallback: String) -> String:
 	if OS.has_feature("web"):
 		var value=JavaScriptBridge.eval("new URLSearchParams(location.search).get("+JSON.stringify(key)+")")
@@ -30,6 +35,7 @@ func _ready() -> void:
 	game.preferences.persist=false;game.archive.persist=false
 	game.music.enabled=option("music","off")=="on"
 	game.touch_zoom.enabled=true
+	if settings.case=="controls-check":game.connected=true
 	game.epoch=1;game.camera_seen_world=true;game.camera_initialized=true
 	game.manual_zoom=settings.zoom;game.camera_zoom=settings.zoom;game.camera_locked=true
 	if settings.case=="no-flow":game.flow_streamers=false;game.flow_wakes=false
@@ -77,11 +83,29 @@ func _process(dt: float) -> void:
 		game._receive_snapshot(message)
 		if trace!=null:trace.work("wire_decode",Time.get_ticks_usec()-at)
 		next_snapshot+=floor((elapsed-next_snapshot)/.1+1)*.1
+	if settings.case=="no-raster":
+		for view in game.views.values():view.raster_enabled=false
+	if settings.case=="raster-check":
+		if elapsed>4 and check_phase==0:
+			cache_checks.append(game.views.values().any(func(view):return view.raster_active))
+			cached_view_refs=game.views.values().map(func(view):return weakref(view))
+			game.manual_zoom=4;check_phase=1
+		elif elapsed>5 and check_phase==1:
+			cache_checks.append(game.views.values().all(func(view):return not view.raster_active and view.body_ink.get_parent()==view) and cached_view_refs.filter(func(ref):return is_instance_valid(ref.get_ref())).size()<=game.views.size())
+			game.manual_zoom=.8;check_phase=2
+		elif elapsed>6 and check_phase==2:
+			cache_checks.append(game.views.values().any(func(view):return view.raster_active))
+			game.perception="interoception";check_phase=3
+		elif elapsed>7 and check_phase==3:
+			var selected=game.views.get(game.world.player.id)
+			cache_checks.append(selected!=null and not selected.raster_active and selected.body_ink.get_parent()==selected and selected.cytoplasm.visible)
+			game.perception="exteroception";check_phase=4
 	if elapsed>=3 and not started:
 		started=true;measure_start=elapsed;trace=preload("res://scripts/frame_trace.gd").new();game.frame_trace=trace;trace.start(game)
 	if started and elapsed-measure_start>=settings.seconds:
 		finished=true;trace.stop();game.frame_trace=null
-		var result={"settings":settings,"adapter":RenderingServer.get_video_adapter_name(),"device":RenderingServer.get_video_adapter_vendor(),"rows":trace.rows}
+		if settings.case=="raster-check":assert(cache_checks.size()==4 and cache_checks.all(func(ok):return ok),"Small-cell cache must exit cleanly for zoom/internal views")
+		var result={"settings":settings,"adapter":RenderingServer.get_video_adapter_name(),"device":RenderingServer.get_video_adapter_vendor(),"cache_checks":cache_checks,"viewport":str(game.get_viewport_rect().size),"canvas_scale":game.detail_canvas_scale,"dpr":game.detail_pixel_ratio,"views":game.views.values().map(func(view):return {"radius":view.cell.radius,"css_radius":view.cell.radius*game.zoom*game.detail_canvas_scale/game.detail_pixel_ratio,"small":view.simple_view,"raster":view.raster_active}),"rows":trace.rows}
 		if OS.has_feature("web"):JavaScriptBridge.eval("window.primordiaRenderProfile="+JSON.stringify(result))
 		else:
 			var file:=FileAccess.open(option("output","res://build/network-render.json"),FileAccess.WRITE)

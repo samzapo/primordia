@@ -224,3 +224,28 @@ without the old nine-sample oversized footprint. Low pH is deliberately pinker
 than the owner's universal-indicator reference; pH within0.25of7 is invisible.
 Local pH appears in the performance overlay and acid/buffer particle inspection.
 The experimental HTML badge moves from top left to safe-area bottom left.
+
+## Small-cell render targets and touch backbuffer follow-up
+The owner measured15–21FPS on6062980and approved the pH appearance. No pH,
+simulation, particle or ecology changes follow from this presentation pass.
+
+CSS detail uses logical zoom multiplied by the final viewport canvas scale,
+divided by the effective rendered device-pixel ratio. Tiny external remote
+bodies under28CSS-pixel radius cache their existing membrane/nucleus/organ
+drawing in96–256pixel transparent viewports. Names, wakes and sound waves stay
+outside. Position/heading interpolation, actual anatomy, hit tests, snapshots,
+resources and physics remain live. A weak FIFO coalesces pending art to newest
+state and refreshes at most six existing textures/frame; first appearances draw
+immediately. Closing/offscreen views free their cache with the view. Selected,
+close, internal, build, merge and sense views restore direct vector rendering
+immediately; old queued weak references cannot recreate deleted cells. Resume
+marks textures dirty, including a paused view.
+
+The HTML sets app-owned canvas sizing only for a coarse-pointer touch device:
+min(nativeDPR,2) pixels per CSS pixel, with resize/fullscreen listeners and an
+explicit effective-ratio value for GDScript detail selection. Desktop keeps
+Godot's default resize behavior. Logical layout and public input coordinates
+remain unchanged. Focused browser checks use actual touch taps for Internal/
+External and Pause/Resume, then rotate portrait/landscape and restore the canvas.
+The offline replay explicitly overrides socket polling/sending and identity
+persistence: it cannot connect to or modify either live pond.

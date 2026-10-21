@@ -37,6 +37,9 @@ def version(web_root: Path, instance: str = "stable") -> dict:
     html = html[:match.start(1)] + json.dumps(config, separators=(",", ":")) + html[match.end(1):]
     if instance == "experimental" and 'id="primordia-instance"' not in html:
         html = html.replace("</body>", '<aside id="primordia-instance" style="position:fixed;bottom:calc(8px + env(safe-area-inset-bottom, 0px));left:8px;z-index:5000;pointer-events:none;padding:4px 8px;border-radius:6px;background:#35234bd9;color:#f2ddff;font:14px sans-serif">Experimental pond</aside></body>')
+    if "// primordia-touch-canvas:" not in html and "const engine = new Engine(GODOT_CONFIG);" in html:
+        setup = (Path(__file__).resolve().parents[1] / "web/primordia_viewport.js").read_text()
+        html = html.replace("const engine = new Engine(GODOT_CONFIG);", setup + "\nconst engine = new Engine(GODOT_CONFIG);", 1)
     pending = page.with_name("index.html.versioning")
     pending.write_text(html)
     pending.replace(page)

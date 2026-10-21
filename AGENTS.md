@@ -748,3 +748,17 @@ owner palette is pink acid, orange/yellow, invisible near7, green/cyan/violet
 alkaline; buffers still neutralize rather than inventing a new alkaline source.
 Remove the oversized shader tint halo. Retain the experimental pond and publish
 one new cumulative notice; main unchanged.
+
+October21 further phone FPS correction:15–21FPS on6062980remains below target.
+Owner approves the pH colors as perfect; retain them. Use final viewport-to-pixel
+transform as well as device pixel ratio for CSS detail thresholds. Small external
+remote cells (under28CSS-pixel radius, excluding selected/build/internal/merge/
+sense views) may reuse their existing layered art in96–256pixel transparent
+render targets. Cache updates coalesce newest anatomy in a weak FIFO with six
+refreshes/frame; positions/heading/input/physics stay live, and close/internal
+views immediately restore original vector hierarchy. Keep wakes/names/audio
+outside the cache and repaint on resume. Touch web canvases use app-owned resize
+at min(nativeDPR,2), preserving logical layout and actual touch-coordinate mapping.
+Desktop remains engine-sized. Verify real browser taps, resize, cache exits/
+cleanup and rendered wall FPS; desktop hardware is still not physical-phone
+acceptance. Keep cumulative notices and the retained experimental pond.

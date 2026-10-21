@@ -204,6 +204,7 @@ func _toggle_user_pause() -> void:
 	else:
 		settings_panel.hide()
 		merge_view.reset(world,received_merge_serial);world.merge_bursts.clear()
+		for view in views.values():view.raster_dirty=true
 		playback.reset();playback_domain="";playback_after_tick=-1
 		var latest:=paused_snapshot;paused_snapshot={}
 		if not latest.is_empty():
@@ -286,6 +287,8 @@ func _update_world(_alpha: float) -> void:
 func _visibility_changed(_args: Array) -> void:
 	# Browser events still run when rendering is throttled in a background tab.
 	var hidden: bool=bool(JavaScriptBridge.eval("document.hidden"))
+	if not hidden:
+		for view in views.values():view.raster_dirty=true
 	_publish_presence(hidden)
 
 func _publish_presence(hidden: bool) -> void:

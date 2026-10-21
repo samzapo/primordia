@@ -137,6 +137,8 @@ var simulation_rate := 1.0
 var ui_time := 0.0
 var hud_clock := 0.0
 var detail_pixel_ratio:=1.0
+var detail_canvas_scale:=1.0
+var pending_cell_rasters: Dictionary={}
 var zoom := 1.0
 var manual_zoom := 1.0
 # Explicit test harness switch for historical stress fixtures; no gameplay control.
@@ -158,7 +160,7 @@ var notice := "Build, feed and grow your family. Your first two organelles are f
 var notice_timer := 12.0
 
 func _ready() -> void:
-	if OS.has_feature("web"):detail_pixel_ratio=maxf(1,float(JavaScriptBridge.eval("window.devicePixelRatio || 1")))
+	if OS.has_feature("web"):detail_pixel_ratio=maxf(1,float(JavaScriptBridge.eval("window.primordiaRenderPixelRatio || window.devicePixelRatio || 1")))
 	world.enable_ambient_carbon()
 	world.enable_perception_domains()
 	if manage_catchup: Engine.max_physics_steps_per_frame = 2
@@ -438,6 +440,8 @@ func _cell_render_alpha(cell,alpha: float) -> float:
 	return alpha if cell.activity>0 or world.remote_client else 1.0
 
 func _update_world(alpha: float) -> void:
+	var canvas_scale:=get_viewport().get_final_transform().get_scale().abs()
+	detail_canvas_scale=maxf(.001,minf(canvas_scale.x,canvas_scale.y))
 	var sync_start := Time.get_ticks_usec() if frame_trace != null else 0
 	var size := get_viewport_rect().size
 	var base_zoom := minf(size.x/Simulation.VIEW.x,size.y/Simulation.VIEW.y)
@@ -543,12 +547,25 @@ func _update_world(alpha: float) -> void:
 		if not alive_ids.has(identity):
 			views[identity].queue_free()
 			views.erase(identity)
+	_flush_cell_rasters()
 	# Local factories remain above membrane attachments in either perception.
 	cell_ui.interior.z_index=8
 	cell_ui.interior.sync()
 	perception_mask.sync()
 	nameplates.sync(alpha)
 	if frame_trace != null: frame_trace.work("cell_sync",Time.get_ticks_usec()-cells_start)
+
+func _flush_cell_rasters() -> void:
+	# Coalesce changing anatomy to its newest appearance and spread texture work.
+	# Body transforms, input, masks and authoritative state never wait here.
+	var budget:=6
+	for identity in pending_cell_rasters.keys():
+		var view=pending_cell_rasters[identity].get_ref()
+		pending_cell_rasters.erase(identity)
+		if not is_instance_valid(view) or view.is_queued_for_deletion() or not view.raster_active:continue
+		view.refresh_raster()
+		budget-=1
+		if budget==0:break
 
 func _sync_particles(alpha: float = 1.0) -> void:
 	if perception=="interoception":

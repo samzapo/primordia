@@ -65,6 +65,22 @@ class WebVersion(unittest.TestCase):
             version(root,"experimental")
             self.assertEqual(page.read_text().count('id="primordia-instance"'),1)
 
+    def test_touch_resolution_setup_precedes_engine_and_is_idempotent(self):
+        with tempfile.TemporaryDirectory(prefix="primordia-touch-web-") as directory:
+            root=Path(directory)
+            self.export(root,b"touch client")
+            page=root/"index.html"
+            page.write_text(page.read_text()+"\nconst engine = new Engine(GODOT_CONFIG);")
+            version(root)
+            first=page.read_bytes()
+            html=first.decode()
+            self.assertLess(html.index("// primordia-touch-canvas:"),html.index("const engine ="))
+            self.assertIn("Math.min(2, window.devicePixelRatio || 1)",html)
+            self.assertIn("GODOT_CONFIG.canvasResizePolicy = 0",html)
+            self.assertIn("navigator.maxTouchPoints",html)
+            version(root)
+            self.assertEqual(page.read_bytes(),first)
+
     def test_invalid_manifest_preserves_existing_inputs(self):
         with tempfile.TemporaryDirectory(prefix="primordia-web-version-") as directory:
             root = Path(directory)
