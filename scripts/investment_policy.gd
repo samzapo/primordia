@@ -18,7 +18,7 @@ static func balanced_path(sim,cell) -> String:
 const OPERATING_BIOMASS:=12.0
 const STRATEGIES:=["manual","balanced","hunter","parasite","producer","grazer","custom"]
 const PRIORITIES:={
- "hunter":["hunting","propulsion","poreforming","toxin","cilia","mitochondrion","protection"],
+ "hunter":["hunting","propulsion","feeding","poreforming","toxin","cilia","mitochondrion","protection"],
  "parasite":["hunting","sensing","propulsion","proboscis","mitochondrion","regenerative","protection"],
  "producer":["photosynthesis","protection","mitochondrion","regenerative","neutralizing"],
  "grazer":["cilia","protection","propulsion","regenerative","mitochondrion","sensing"],
@@ -40,8 +40,8 @@ static func inherit_strategy(sim,parent,child) -> void:
 
 # Variants are deterministic preferences, never free organs or hidden ecology knowledge.
 const VARIANTS:={
- "hunter":[["hunting","propulsion","poreforming","toxin","sensing","protection","mitochondrion","regenerative"],
-           ["hunting","propulsion","poreforming","cilia","counterattack","protection","neutralizing","mitochondrion","regenerative","toxin_sac","family_toward"]],
+ "hunter":[["hunting","propulsion","feeding","poreforming","toxin","sensing","protection","mitochondrion","regenerative"],
+           ["hunting","propulsion","feeding","poreforming","cilia","counterattack","protection","neutralizing","mitochondrion","regenerative","toxin_sac","family_toward"]],
  "parasite":[["hunting","sensing","propulsion","proboscis","mitochondrion","regenerative","protection","family_away"],
              ["hunting","sensing","propulsion","proboscis","neutralizing","mitochondrion","protection","regenerative","toxin_sac"]],
  "producer":[["photosynthesis","protection","regenerative","mitochondrion","neutralizing","cilia","sensing","family_away","toxin_sac"],
@@ -62,7 +62,6 @@ static func synergy_blocker(cell,policy: String) -> Dictionary:
  if cell.unattended_protected:return {}
  for organ in cell.organs:
   if policy=="parasite" and organ.kind in ["feeding","poreforming","toxin","counterattack","acidifying"]:return {"action":"remove","id":organ.id}
-  if policy=="hunter" and organ.kind=="proboscis":return {"action":"remove","id":organ.id}
   if (policy in ["hunter","grazer"] and organ.kind=="photosynthesis") or (policy in ["producer","grazer"] and organ.kind in WEAPONS) or (policy=="producer" and organ.kind=="feeding"):
    return {"action":"remove","id":organ.id}
  return {}
@@ -71,6 +70,7 @@ static func missing_synergy_part(sim,cell,policy: String) -> String:
  if policy=="hunter":
   if working(cell,"hunting")==0:return "hunting"
   if working(cell,"propulsion")==0:return "propulsion"
+  if working(cell,"feeding")==0:return "feeding"
   # The first weapon comes last: mounting a pore gland also grants the
   # ordinary Hunter synergy's self-pore immunity in that same transaction.
   if hunter_weapons(cell)==0 and cell.count("photosynthesis")==0:return "poreforming"
@@ -118,7 +118,7 @@ static func candidate(sim,cell) -> Dictionary:
   # Establish a complete working role before duplicating its headline organ.
   if index>0 and count==0:value+=12
   if policy=="hunter" and working(cell,"hunting")>0:
-   if working(cell,"toxin")+working(cell,"poreforming")+working(cell,"counterattack")+working(cell,"proboscis")==0 and kind in ["toxin","poreforming","proboscis"]:value+=70
+   if hunter_weapons(cell)==0 and kind in ["toxin","poreforming","counterattack"]:value+=70
    if working(cell,"propulsion")+working(cell,"cilia")==0 and kind in ["propulsion","cilia"]:value+=50
   if cell.health<70 or cell.acid_stress>.25:
    if kind=="regenerative" and count==0:value+=40
@@ -156,11 +156,11 @@ static func decision(sim,cell) -> Dictionary:
   if organ.hp>0 and organ.kind in ["feeding","photosynthesis","mitochondrion"] and working(cell,organ.kind)<=1:continue
   if organ.hp>0 and organ.kind in ["protection","regenerative","neutralizing"] and working(cell,organ.kind)<=1:continue
   if organ.hp>0 and policy=="parasite" and organ.kind in ["hunting","sensing","propulsion","proboscis"] and working(cell,organ.kind)<=1:continue
-  if organ.hp>0 and policy=="hunter" and ((organ.kind in WEAPONS and weapons(cell)<=1) or (organ.kind=="propulsion" and working(cell,"propulsion")<=1)):continue
+  if organ.hp>0 and policy=="hunter" and ((organ.kind in WEAPONS and organ.kind!="proboscis" and hunter_weapons(cell)<=1) or (organ.kind=="propulsion" and working(cell,"propulsion")<=1)):continue
   if organ.hp>0 and policy=="grazer" and organ.kind=="cilia" and working(cell,"cilia")<=1:continue
   var limit: int=4 if organ.kind=="photosynthesis" else 2 if organ.kind in ["feeding","cilia","protection","mitochondrion"] else 1
   var excess: bool=working(cell,organ.kind)>limit
-  var unsuitable: bool=missing_core and organ.kind not in priorities
+  var unsuitable: bool=missing_core and organ.kind not in priorities and not (policy=="hunter" and organ.kind=="proboscis")
   if organ.hp<=0 or excess or unsuitable:
    return {"action":"remove","id":organ.id}
  return {}
@@ -170,7 +170,7 @@ static func decision(sim,cell) -> Dictionary:
 static func essential(cell,policy: String,kind: String) -> bool:
  if kind=="photosynthesis":return working(cell,kind)<2 or (policy=="producer" and cell.energy<18)
  if kind=="mitochondrion":return working(cell,kind)==0 or (policy=="producer" and cell.energy<18 and working(cell,kind)<2)
- if kind=="feeding":return working(cell,"feeding")==0 and (policy=="grazer" or working(cell,"photosynthesis")==0)
+ if kind=="feeding":return working(cell,"feeding")==0 and (policy in ["grazer","hunter"] or working(cell,"photosynthesis")==0)
  if kind=="regenerative" and cell.health<70:return working(cell,kind)==0
  if policy=="parasite" and kind in ["hunting","sensing","propulsion","proboscis"]:return working(cell,kind)==0
  if policy=="hunter":
@@ -204,7 +204,7 @@ static func shed_support(cell,policy: String) -> Dictionary:
    if organ.kind in ["feeding","photosynthesis","mitochondrion"] or cell.receptor(organ.kind):continue
    if organ.kind=="regenerative" and cell.health<70:continue
    if policy=="parasite" and organ.kind in ["hunting","sensing","propulsion","proboscis"] and working(cell,organ.kind)<=1:continue
-   if policy=="hunter" and organ.kind in WEAPONS and weapons(cell)<=1:continue
+   if policy=="hunter" and organ.kind in WEAPONS and organ.kind!="proboscis" and hunter_weapons(cell)<=1:continue
    if policy=="hunter" and organ.kind=="propulsion" and working(cell,"propulsion")<=1:continue
    if policy=="grazer" and organ.kind=="cilia" and working(cell,"cilia")<=1:continue
   var upkeep: float=cell.organ_upkeep(organ)

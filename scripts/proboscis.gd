@@ -58,6 +58,7 @@ static func step(sim,cell,dt: float) -> void:
   amount=minf(amount,(cell.energy+cell.biomass*cell.Chemistry.RESERVE_ATP)/unit_cost) # A meal never funds its own capture.
   if amount<=0:continue
   cell.spend_energy(amount*unit_cost,organ,"contact feeding")
+  # Drain stored biomass only. Never debit structural body/health or create a wound.
   chosen.biomass-=amount
   cell.chemistry.emit("food",amount,cell.chemistry.constrain(cell,cell.organ_local_position(organ)*.8,7),organ.id,-1,amount*cell.Chemistry.TISSUE_FUEL)
   cell.eaten+=amount

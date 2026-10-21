@@ -26,6 +26,7 @@ func run() -> void:
 		if "--gpu" in OS.get_cmdline_user_args():await parasite_gpu()
 		print("PARASITE_BALANCED: %d assertions, %d failures" % [checks,failures]);quit(0 if failures==0 else 1);return
 	if "--synergy-priority" in OS.get_cmdline_user_args():
+		synergy_anatomy()
 		synergy_investment()
 		print("SYNERGY_INVESTMENT: %d assertions, %d failures" % [checks,failures]);quit(0 if failures==0 else 1);return
 	if "--smooth-motion" in OS.get_cmdline_user_args():
@@ -69,7 +70,7 @@ func run() -> void:
 	cell.unattended_protected=true;cell.health=1
 	check(cell.damage(100,0)==0 and cell.health==1,"Protected favorite rejects combat damage")
 	var hunter=Sim.Cell.new(902);hunter.biomass=100;hunter.energy=0
-	for kind in ["hunting","propulsion","poreforming"]:hunter.add_organ(kind,0,"graze",false)
+	for kind in ["feeding","hunting","propulsion","poreforming"]:hunter.add_organ(kind,0,"graze",false)
 	for i in 120:sim._metabolize(hunter,.25)
 	check(hunter.energy>0 and hunter.biomass<100 and hunter.health==100,"Leafless Hunter can pay maintenance from reserves during a food gap")
 	check(not sim.evolution.terminal() and not sim.evolution.forecast().contains("crisis"),"Persistent progression has no crisis ending")
@@ -94,7 +95,7 @@ func roles_and_presence() -> void:
 	cell.add_organ("feeding",0,"graze",false);cell.add_organ("cilia",1,"graze",false)
 	check(cell.synergy()=="grazer","Groove and cilia automatically form a Grazer")
 	cell.organs.clear()
-	for kind in ["hunting","propulsion","poreforming"]:cell.add_organ(kind,0,"graze",false)
+	for kind in ["feeding","hunting","propulsion","poreforming"]:cell.add_organ(kind,0,"graze",false)
 	check(cell.synergy()=="hunter" and not cell.accept_surface(sim.TAG,.03,0,cell.id),"Hunter anatomy rejects its own pore particles")
 	check(cell.accept_surface(sim.TAG,.03,0,991),"Hunter still receives another cell's pore particles")
 	cell.organs.clear()
@@ -309,8 +310,7 @@ func synergy_shapes() -> void:
 		var model=Portrait.capture(hunter)
 		check(model.synergy.role=="hunter" and model.synergy.spine.size()==12 and model.synergy.spine[-1].length()>hunter.radius,"Live portraits include all six center-to-tip support strands")
 		hunter.recycle(hunter.organs.find(mouth))
-		var receptor=hunter.organs.filter(func(organ):return organ.kind=="hunting")[0]
-		check(hunter.synergy()=="hunter" and hunter.membrane.hunter_angle==receptor.a,"Mouthless Hunter uses its receptor as the anatomical front")
+		check(hunter.synergy()=="" and not is_finite(hunter.membrane.hunter_angle),"Removing the required oral groove ends Hunter synergy and its shape scaffold")
 		hunter.organs.filter(func(organ):return organ.kind=="toxin")[0].hp=0;hunter.update_geometry()
 		check(not is_finite(hunter.membrane.hunter_angle),"Losing Hunter eligibility removes the shape scaffold")
 	var sim=fixture();var grazer=sim.player
@@ -404,6 +404,38 @@ func smooth_motion_and_venting() -> void:
 	delayed.Lifecycle.physiology(delayed,delayed.player,10000)
 	check(delayed.player.biomass>=500 and is_finite(delayed.player.biomass),"A delayed vent cannot overshoot below its biomass threshold")
 
+func synergy_anatomy() -> void:
+	var sim=fixture();var cell=sim.player;var policy=sim.Investment
+	for kind in ["feeding","hunting","propulsion","poreforming","proboscis"]:cell.add_organ(kind,cell.organs.size(),"graze",false)
+	check(cell.synergy()=="hunter" and policy.synergy_blocker(cell,"hunter").is_empty(),"A Hunter may keep a proboscis alongside its required mouth and gland")
+	var mouth: Dictionary=cell.organs.filter(func(organ):return organ.kind=="feeding")[0]
+	mouth.hp=0;cell.update_geometry()
+	check(cell.synergy()=="" and policy.missing_synergy_part(sim,cell,"hunter")=="feeding","A proboscis cannot substitute for a damaged Hunter mouth")
+	mouth.hp=mouth.max_hp
+	var gland: Dictionary=cell.organs.filter(func(organ):return organ.kind=="poreforming")[0]
+	gland.hp=0
+	check(cell.synergy()=="","A mouth and proboscis cannot substitute for a Hunter offensive gland")
+	gland.hp=gland.max_hp;cell.energy=0
+	var shed: Dictionary=policy.shed_support(cell,"hunter")
+	check(not shed.has("id") or int(shed.id)!=int(gland.id),"A spare proboscis never makes the sole Hunter gland disposable")
+	cell.organs.erase(mouth);cell.energy=100;cell.biomass=400;sim.investment.cells[cell.id]="hunter"
+	check(policy.decision(sim,cell).get("kind","")=="feeding" and cell.count("proboscis")==1,"A mouthless Hunter strategy repairs its mouth without discarding a compatible proboscis")
+	for role in ["grazer","producer"]:
+		cell.organs.clear()
+		for kind in (["feeding","cilia"] if role=="grazer" else ["photosynthesis","photosynthesis","mitochondrion"]):cell.add_organ(kind,0,"graze",false)
+		check(cell.synergy()==role,"The minimal "+role+" retains its ordinary synergy")
+		cell.add_organ("proboscis",1,"graze",false);var probe: Dictionary=cell.organs[-1]
+		for hp in [1.0,0.0]:
+			probe.hp=hp
+			check(cell.synergy()=="" and policy.synergy_blocker(cell,role).get("id",-1)==probe.id,"Any installed proboscis blocks "+role+", including damaged organs")
+	cell.organs.clear()
+	for kind in ["proboscis","propulsion","hunting","sensing"]:cell.add_organ(kind,0,"graze",false)
+	check(cell.synergy()=="parasite","A mouthless Parasite keeps its distinct synergy")
+	cell.add_organ("feeding",1,"graze",false)
+	for hp in [1.0,0.0]:
+		cell.organs[-1].hp=hp
+		check(cell.synergy()!="parasite" and policy.synergy_blocker(cell,"parasite").get("id",-1)==cell.organs[-1].id,"Any installed oral groove blocks Parasite, including a damaged mouth")
+
 func synergy_investment() -> void:
 	for role in ["hunter","producer","grazer","parasite"]:
 		for seed_value in [28,29]:
@@ -417,7 +449,7 @@ func synergy_investment() -> void:
 				check(not choice.is_empty(),"An assigned "+role+" keeps progressing toward its synergy")
 				if choice.is_empty():break
 				var pore: bool=choice.get("kind","")=="poreforming"
-				if pore:check(cell.working("hunting") and cell.working("propulsion") and cell.count("photosynthesis")==0,"Pore gland waits for receptor, flagellum and no leaves")
+				if pore:check(cell.working("feeding") and cell.working("hunting") and cell.working("propulsion") and cell.count("photosynthesis")==0,"Pore gland waits for mouth, receptor, flagellum and no leaves")
 				var before: Array=cell.organs.duplicate(true);var input: float=sim.external_input;var mass: float=cell.organic_mass()
 				for packet in sim.particles:
 					if packet.alive:mass+=packet.amount*Sim.Catalog.material(packet.kind)
@@ -438,7 +470,7 @@ func synergy_investment() -> void:
 	old.step_autonomous_builds()
 	check(cell.synergy()=="hunter" and cell.count("photosynthesis")==0,"Existing leaf-blocked Hunter reabsorbs its last leaf at its next investment opportunity")
 	var protected_cell=fixture();cell=protected_cell.player;protected_cell.investment.cells[cell.id]="hunter"
-	for kind in ["photosynthesis","hunting","propulsion"]:cell.add_organ(kind,cell.organs.size(),"graze",false)
+	for kind in ["feeding","photosynthesis","hunting","propulsion"]:cell.add_organ(kind,cell.organs.size(),"graze",false)
 	cell.unattended_protected=true;cell.biomass=200;cell.energy=100
 	check(protected_cell.Investment.decision(protected_cell,cell).is_empty(),"Protected favorite neither loses its leaf nor installs an unsafe pore gland")
 	cell.unattended_protected=false;protected_cell.managed_cells=[cell.id]
@@ -446,7 +478,7 @@ func synergy_investment() -> void:
 	protected_cell.managed_cells=[];protected_cell.investment.cells[cell.id]="manual"
 	check(protected_cell.Investment.decision(protected_cell,cell).is_empty(),"Explicit Manual remains untouched")
 	cell.organs.clear()
-	for kind in ["hunting","poreforming","cilia"]:cell.add_organ(kind,cell.organs.size(),"graze",false)
+	for kind in ["feeding","hunting","poreforming","cilia"]:cell.add_organ(kind,cell.organs.size(),"graze",false)
 	protected_cell.investment.cells[cell.id]="hunter";cell.biomass=23;cell.energy=100
 	check(protected_cell.Investment.decision(protected_cell,cell).get("kind","")=="propulsion","Existing weapon/cilia cannot make the missing Hunter flagellum discretionary")
 	cell.add_organ("propulsion",3,"graze",false);cell.energy=0
@@ -531,7 +563,7 @@ func parasite_balanced() -> void:
 	parasite.biomass=200;parasite.update_geometry()
 	check(sim.Behavior.sated(parasite) and sim.Behavior.priority(parasite,"hunt")==0,"A parasite rests on its own biomass reserves")
 	var hunter=Sim.Cell.new(901);hunter.body=parasite.body;hunter.biomass=200
-	for kind in ["hunting","propulsion","poreforming"]:hunter.add_organ(kind,0,"graze",false)
+	for kind in ["feeding","hunting","propulsion","poreforming"]:hunter.add_organ(kind,0,"graze",false)
 	hunter.update_geometry()
 	check(parasite.storage_volume()>hunter.storage_volume(),"Parasite biomass occupies the same bulkier storage tier as Grazer reserves")
 	var contact=parasite_fixture();var donor=Sim.Cell.new(902,preload("res://scripts/proboscis.gd").tip(contact,contact.organs[0]))

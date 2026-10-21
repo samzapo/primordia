@@ -51,7 +51,12 @@ func run() -> void:
  check(Colors.family(game,991).is_equal_approx(stock),"Uncustomized pheromones exactly match seeded family body color")
  check(Colors.root({"owner":1,"report":{"lineage":2}})==2,"Signal color uses the immutable family report, not the current source")
  check(Colors.packed(Color(1,0,1))==16711935,"Web tint packs RGB exactly in an unused float channel")
- donor.biomass=0;Probe.step(sim,feeder,.1);cue.sync()
+ donor.biomass=1;feeder.energy=100
+ var body: float=donor.body;var mass: float=donor.organic_mass()+feeder.organic_mass()
+ Probe.step(sim,feeder,10)
+ check(donor.biomass==0 and donor.body==body and donor.health==health and not donor.dead and donor.holes==holes,"Exhausting donor reserves never kills, damages structural body or opens a real wound")
+ check(absf(donor.organic_mass()+feeder.organic_mass()-mass)<.00001,"Nonlethal extraction conserves donor and feeder material")
+ Probe.step(sim,feeder,.1);cue.sync()
  check(not organ.feeding and not organ.has("proboscis_contact") and cue.contacts.is_empty(),"Stopping intake clears both the puncture and transfer cue")
  for kind in ["propulsion","hunting","sensing"]:feeder.add_organ(kind,feeder.organs.size(),"graze",false)
  feeder.biomass=200;organ.feeding=true;organ.proboscis_contact={"cell":2,"edge":0,"t":.5}

@@ -115,7 +115,7 @@ static func investment(check: Callable) -> void:
 			else:check.call(choice.kind!=policy.PRIORITIES[role][0],"The next purchase complements the core instead of blindly duplicating it")
 			# Diversity belongs to support after the actual role is complete.
 			cell.organs.clear();cell.biomass=2000
-			for kind in {"hunter":["hunting","propulsion","poreforming"],"parasite":["hunting","sensing","propulsion","proboscis"],"producer":["photosynthesis","photosynthesis","mitochondrion"],"grazer":["feeding","cilia"]}[role]:
+			for kind in {"hunter":["feeding","hunting","propulsion","poreforming"],"parasite":["hunting","sensing","propulsion","proboscis"],"producer":["photosynthesis","photosynthesis","mitochondrion"],"grazer":["feeding","cilia"]}[role]:
 				cell.add_organ(kind,cell.organs.size()*1.1,"graze",false)
 			check.call(cell.synergy()==role,"Supporting variants start from a complete anatomical synergy")
 			choice=policy.candidate(sim,cell)

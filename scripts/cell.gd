@@ -193,9 +193,9 @@ func synergy() -> String:
 	var attack=int(working("poreforming"))+int(working("toxin"))+int(working("counterattack"))+int(working("proboscis"))
 	var other_offense:=count("poreforming")+count("toxin")+count("counterattack")+count("acidifying")
 	if working("proboscis") and working("propulsion") and working("hunting") and working("sensing") and count("feeding")==0 and other_offense==0:return "parasite"
-	if working("hunting") and working("propulsion") and attack-int(working("proboscis"))>0 and count("photosynthesis")==0:return "hunter"
-	if working("photosynthesis",2) and working("mitochondrion") and attack==0 and count("feeding")==0:return "producer"
-	if working("feeding") and working("cilia") and count("photosynthesis")==0 and attack==0:return "grazer"
+	if working("feeding") and working("hunting") and working("propulsion") and attack-int(working("proboscis"))>0 and count("photosynthesis")==0:return "hunter"
+	if working("photosynthesis",2) and working("mitochondrion") and attack==0 and count("proboscis")==0 and count("feeding")==0:return "producer"
+	if working("feeding") and working("cilia") and count("photosynthesis")==0 and attack==0 and count("proboscis")==0:return "grazer"
 	return ""
 
 func working(kind: String, minimum: int=1) -> bool:

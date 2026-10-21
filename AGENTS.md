@@ -816,3 +816,21 @@ Keep32-byte records/handles; flag the reused pheromone-only unused diameter fiel
 Script/native/WebGL/resident art agree, without source-cell perception lookup,
 extra physical state, steady-state GPU pass or pose download. Retain the pond,
 main and all accepted biology; focused visual/metadata checks, no FPS campaign.
+
+
+## October21 mouth and proboscis role clarification
+Hunter requires a working oral groove, hunting receptor, flagellum and at least
+one working pore-forming/toxin/counterattack gland, with no installed leaves.
+A proboscis is compatible but substitutes for neither mouth nor offensive gland.
+Hunter investment retains compatible proboscises, builds its mouth before its
+first pore gland, and protects its last real gland even when a proboscis exists.
+Producer and Grazer exclude any installed proboscis, including damaged ones.
+Parasite still excludes any installed oral groove or other offensive organ.
+No new organs, free construction, reserve rules or investment cadence changes.
+
+Proboscis extraction already debits stored biomass only, never structural body,
+health or real membrane holes. Keep that behavior. A completely drained donor
+remains alive immediately, but can subsequently starve if it cannot replenish
+its reserves; there is no starvation immunity or hidden biomass grant.
+Retain the experimental pond, keep main unchanged and publish one cumulative
+player notice. Focused anatomy/investment/contact checks only.

@@ -77,7 +77,7 @@
       {
         "id": "investment",
         "title": "Choose unattended investments",
-        "text": "Open the nucleus or Divide, then Invest. Balanced is the default; choose Manual to stop automatic building. Choose Balanced, Hunter, Parasite, Producer or Grazer, or save a relative’s current build as an example. Unattended cells use their own biomass and make at most one build or reabsorption per minute. Strategies first reabsorb organs that block their role and build toward their synergy. Hunters grow their hunting receptor and flagellum before their first weapon; a pore-forming gland comes last so its self-protection is ready too. Once the synergy is complete, optional upgrades leave resources for reproduction. Family settings and individual exceptions are separate. The family controls also switch automatic mitosis and budding. Balanced gives each relative a stable role, with more Producers and Grazers than Hunters and Parasites.",
+        "text": "Open the nucleus or Divide, then Invest. Balanced is the default; choose Manual to stop automatic building. Choose Balanced, Hunter, Parasite, Producer or Grazer, or save a relative’s current build as an example. Unattended cells use their own biomass and make at most one build or reabsorption per minute. Strategies first reabsorb organs that block their role and build toward their synergy. Hunters grow their hunting receptor, flagellum and oral groove before their first weapon; a pore-forming gland comes last so its self-protection is ready too. Once the synergy is complete, optional upgrades leave resources for reproduction. Family settings and individual exceptions are separate. The family controls also switch automatic mitosis and budding. Balanced gives each relative a stable role, with more Producers and Grazers than Hunters and Parasites.",
         "sources": []
       },
       {
@@ -675,7 +675,7 @@
         {
           "id": "organ_proboscis",
           "title": "Feeding proboscis",
-          "text": "Its tip must touch a living cell. It draws up to 2 biomass per second as food, paying ATP for the food it actually extracts. Food still needs digestion. It cannot drain protected unattended favorites. These rates, the fixed tube and ATP cost are game choices inspired by protists that extract other cells’ contents. While it feeds, a puncture appears on the other cell’s membrane and a round particle travels back to the proboscis base.",
+          "text": "Its tip must touch a living cell. It draws up to 2 biomass per second as food, paying ATP for the food it actually extracts. Food still needs digestion. It drains stored biomass, never health or structural body, and the visible puncture does not leak. Depleted reserves can still lead to starvation if the cell cannot refuel. It cannot drain protected unattended favorites. These rates, the fixed tube and ATP cost are game choices inspired by protists that extract other cells’ contents. While it feeds, a puncture appears on the other cell’s membrane and a round particle travels back to the proboscis base.",
           "sources": [
             {
               "title": "Experimental study of protoplast feeding",
@@ -897,7 +897,7 @@
         {
           "id": "anatomy-synergies",
           "title": "Roles come from anatomy",
-          "text": "A leafless cell with a hunting receptor, flagellum and an offensive gland becomes a six-pointed Hunter. A Parasite has a proboscis, flagellum, hunting receptor and flight receptor, with no mouth or other offensive organs. Hunters keep compact meals. Short, wormlike Parasites face their proboscis forward and promptly turn food into biomass reserves, growing bulkier like Grazers. Both rest when well fed. Two working leaves and a mitochondrion, with no weapons or mouth, make a Producer with stronger photosynthesis and a firm, boxy wall. An oral groove and cilia without leaves or weapons make a hairy Grazer that turns meals into bulkier biomass reserves. These are simplified game roles.",
+          "text": "A leafless cell with an oral groove, hunting receptor, flagellum and an offensive gland becomes a six-pointed Hunter. It may also have a proboscis, but a proboscis cannot replace its mouth or gland. A Parasite has a proboscis, flagellum, hunting receptor and flight receptor, with no mouth or other offensive organs. Hunters keep compact meals. Short, wormlike Parasites face their proboscis forward and promptly turn food into biomass reserves, growing bulkier like Grazers. Both rest when well fed. Two working leaves and a mitochondrion, with no weapons, proboscis or mouth, make a Producer with stronger photosynthesis and a firm, boxy wall. An oral groove and cilia without leaves, weapons or a proboscis make a hairy Grazer that turns meals into bulkier biomass reserves. These are simplified game roles.",
           "sources": [
             {
               "title": "Growth and maintenance energy",
