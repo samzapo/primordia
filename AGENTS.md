@@ -779,3 +779,15 @@ pH shader/palette and full-resolution foreground. Body-grid broad phase retains
 swept periodic bounds, all64body bits and sequential contact order, refreshing
 candidates after projections; preserve the shader reference switch. Phone load
 evidence is52cells/~3800camera packets, not the earlier700packet replay.
+
+October21 startup/presentation follow-up: custom web shell is authored at
+web/primordia_shell.html with the shared authored Primordia SVG icon embedded by
+version_web.py. No checked-in generated splash bitmap. Suppress the built-in
+Godot boot image, match its background, keep actual download progress, readable
+failure/retry and reduced-motion behavior, and uncover only after a real game
+frame. Preserve the existing pre-engine touch-canvas injection and per-instance
+storage/badge rules. Sparse authority updates must not trigger the old1.5s
+playback reset; keep captured endpoints, bounded adaptive delay and monotonic
+edit receipts. Give publication a chance between single late physics steps,
+and resume publication on its original100ms schedule without catch-up bursts.
+This does not itself establish real-time authority or40FPS phone rendering.

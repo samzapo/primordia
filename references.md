@@ -630,3 +630,8 @@ hardware WebGL replay establishes a controlled comparison, not phone FPS.
   documents local vertex animation and time uniforms. Primordia uses a continuous
   pause-aware presentation clock for appendage artwork; this is rendering, not a
   new biological mechanic or client simulation.
+
+- [Godot Web export custom HTML shell](https://docs.godotengine.org/en/stable/classes/class_editorexportplatformweb.html#class-editorexportplatformweb-property-html-custom-html-shell)
+  supports an authored loading page. Primordia preserves real download progress
+  and waits for an actual game frame before removing its HTML overlay. This is
+  interface presentation, with no biological or physical modeling claim.

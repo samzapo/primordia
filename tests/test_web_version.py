@@ -81,6 +81,19 @@ class WebVersion(unittest.TestCase):
             version(root)
             self.assertEqual(page.read_bytes(),first)
 
+    def test_custom_splash_is_embedded_and_stays_idempotent(self):
+        with tempfile.TemporaryDirectory(prefix="primordia-splash-") as directory:
+            root=Path(directory)
+            self.export(root,b"pond client")
+            page=root/"index.html"
+            page.write_text(page.read_text()+"\n$PRIMORDIA_SPLASH")
+            version(root)
+            first=page.read_bytes()
+            self.assertIn(b"<svg",first)
+            self.assertNotIn(b"$PRIMORDIA_SPLASH",first)
+            version(root)
+            self.assertEqual(page.read_bytes(),first)
+
     def test_invalid_manifest_preserves_existing_inputs(self):
         with tempfile.TemporaryDirectory(prefix="primordia-web-version-") as directory:
             root = Path(directory)

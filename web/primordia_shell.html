@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#051124">
+<title>$GODOT_PROJECT_NAME</title>
+$GODOT_HEAD_INCLUDE
+<style>
+:root{color-scheme:dark;font-family:"Trebuchet MS",system-ui,sans-serif;background:#051124;color:#e5fff8}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;touch-action:none}
+#canvas{display:block;outline:none}
+#status{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:24px;background:radial-gradient(ellipse at 50% 38%,#12354b 0%,#091c32 43%,#051124 76%);transition:opacity .22s ease}
+#status.is-ready{opacity:0;pointer-events:none}
+.loading-card{width:min(100%,320px);text-align:center}
+.cell-mark{width:clamp(112px,26vh,192px);margin:0 auto 14px;animation:breathe 4s ease-in-out infinite}
+.cell-mark svg{display:block;width:100%;height:auto}
+h1{font-size:clamp(30px,7vw,40px);font-weight:500;letter-spacing:.09em;margin:0 0 10px}
+.tagline{font-size:14px;line-height:1.5;color:#a9c7d0;margin:0 0 32px}
+#loading-label{font-size:15px;min-height:1.5em;margin:0 0 12px;color:#cff2e7}
+progress{display:block;appearance:none;width:100%;height:5px;border:0;border-radius:10px;overflow:hidden;background:#1d3f54;accent-color:#70e6c2}
+progress::-webkit-progress-bar{background:#1d3f54;border-radius:10px}
+progress::-webkit-progress-value{background:#70e6c2;border-radius:10px;transition:width .2s ease}
+progress::-moz-progress-bar{background:#70e6c2}
+#load-error{font-size:15px;line-height:1.5;color:#ffd6d9}
+button{min-height:46px;padding:10px 24px;border:1px solid #7fddca;border-radius:10px;background:#224960;color:#edfff8;font:inherit;cursor:pointer}
+button:focus-visible{outline:3px solid #fff1ab;outline-offset:4px}
+[hidden]{display:none!important}
+@keyframes breathe{50%{transform:translateY(-4px) scale(1.025)}}
+@media(max-height:440px){.cell-mark{width:100px;margin-bottom:4px}.tagline{margin-bottom:16px}h1{font-size:28px;margin-bottom:6px}}
+@media(prefers-reduced-motion:reduce){.cell-mark{animation:none}#status,progress::-webkit-progress-value{transition:none}}
+</style>
+</head>
+<body>
+<canvas id="canvas" tabindex="0" aria-label="Primordia pond">Your browser needs canvas support to enter the pond.</canvas>
+<main id="status" aria-label="Loading Primordia">
+ <div class="loading-card">
+  <div class="cell-mark" aria-hidden="true">$PRIMORDIA_SPLASH</div>
+  <h1>Primordia</h1>
+  <p class="tagline">A small world, always growing.</p>
+  <p id="loading-label" role="status" aria-live="polite">Preparing the pond…</p>
+  <progress id="loading-progress" aria-label="Loading the pond"></progress>
+  <p id="load-error" role="alert" hidden>Couldn't load the pond. Check your connection and try again.</p>
+  <button id="retry" type="button" hidden>Try again</button>
+  <noscript><p>Turn on JavaScript to enter the pond.</p></noscript>
+ </div>
+</main>
+<script src="$GODOT_URL"></script>
+<script>
+const GODOT_CONFIG = $GODOT_CONFIG;
+const GODOT_THREADS_ENABLED = $GODOT_THREADS_ENABLED;
+const overlay = document.getElementById('status');
+const progress = document.getElementById('loading-progress');
+const label = document.getElementById('loading-label');
+const retry = document.getElementById('retry');
+const loading = window.primordiaLoadingState = {stage:'download',sceneReady:false,engineReady:false};
+let startupTimer;
+retry.addEventListener('click',()=>location.reload());
+function fail(error){
+ if(loading.stage==='ready' || loading.stage==='failed')return;
+ clearTimeout(startupTimer);
+ console.error('Primordia could not start:',error);
+ loading.stage='failed';
+ label.hidden=true;progress.hidden=true;
+ document.getElementById('load-error').hidden=false;retry.hidden=false;
+}
+function watchProgress(){
+ clearTimeout(startupTimer);
+ startupTimer=setTimeout(()=>fail(new Error('Loading made no progress')),30000);
+}
+function loadingError(event){if(event.error)fail(event.error);}
+function loadingRejection(event){fail(event.reason);}
+window.addEventListener('error',loadingError);
+window.addEventListener('unhandledrejection',loadingRejection);
+function finish(){
+ if(!loading.sceneReady || !loading.engineReady || loading.stage==='failed')return;
+ clearTimeout(startupTimer);loading.stage='ready';
+ window.removeEventListener('error',loadingError);window.removeEventListener('unhandledrejection',loadingRejection);
+ overlay.classList.add('is-ready');
+ setTimeout(()=>overlay.remove(),matchMedia('(prefers-reduced-motion: reduce)').matches?0:240);
+}
+window.primordiaLoadingReady=()=>{loading.sceneReady=true;finish();};
+if(typeof Engine==='undefined'){
+ fail(new Error('Engine download failed'));
+}else{
+ const engine = new Engine(GODOT_CONFIG);
+ const missing=Engine.getMissingFeatures({threads:GODOT_THREADS_ENABLED});
+ if(missing.length){
+  fail(new Error(missing.join(', ')));
+ }else{
+  watchProgress();
+  engine.startGame({onProgress(current,total){
+   watchProgress();
+   if(current>0 && total>0){
+    progress.max=total;progress.value=current;
+    label.textContent='Loading the pond… '+Math.min(100,Math.floor(current/total*100))+'%';
+   }else{
+    progress.removeAttribute('value');progress.removeAttribute('max');
+   }
+  }}).then(()=>{
+   loading.engineReady=true;loading.stage='opening';label.textContent='Opening the pond…';
+   if(!loading.sceneReady)watchProgress();
+   finish();
+  }).catch(fail);
+ }
+}
+</script>
+</body>
+</html>

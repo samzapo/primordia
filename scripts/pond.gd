@@ -270,6 +270,11 @@ func _ready() -> void:
 		cell_ui.open_context({"kind":"assembly"})
 	add_child(music)
 	music.initialize(self)
+	if OS.has_feature("web"):_finish_web_startup.call_deferred()
+
+func _finish_web_startup() -> void:
+	await RenderingServer.frame_post_draw
+	JavaScriptBridge.eval("window.primordiaLoadingReady?.()")
 
 static func catchup_limit(tick_ms: float, current: int) -> int:
 	# When one tick already exhausts the 60 Hz budget, extra catch-up steps

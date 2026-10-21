@@ -2,6 +2,9 @@ config_version=5
 
 [application]
 config/name="Primordia"
+config/icon="res://assets/ui/primordia-cell.svg"
+boot_splash/show_image=false
+boot_splash/bg_color=Color(0.0196,0.0667,0.1412,1)
 config/description="An organelle-driven cellular ecosystem."
 run/main_scene="res://scenes/boot.tscn"
 config/features=PackedStringArray("4.7", "Mobile")

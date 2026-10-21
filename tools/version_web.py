@@ -40,6 +40,9 @@ def version(web_root: Path, instance: str = "stable") -> dict:
     if "// primordia-touch-canvas:" not in html and "const engine = new Engine(GODOT_CONFIG);" in html:
         setup = (Path(__file__).resolve().parents[1] / "web/primordia_viewport.js").read_text()
         html = html.replace("const engine = new Engine(GODOT_CONFIG);", setup + "\nconst engine = new Engine(GODOT_CONFIG);", 1)
+    if "$PRIMORDIA_SPLASH" in html:
+        splash = (Path(__file__).resolve().parents[1] / "assets/ui/primordia-cell.svg").read_text()
+        html = html.replace("$PRIMORDIA_SPLASH", splash)
     pending = page.with_name("index.html.versioning")
     pending.write_text(html)
     pending.replace(page)
