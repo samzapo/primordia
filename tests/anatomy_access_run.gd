@@ -12,7 +12,7 @@ func run() -> void:
 	root.add_child(game)
 	game.set_process(false); game.set_physics_process(false)
 	game.music.enabled = false; game.music.player.stop()
-	game.touch_zoom.enabled = true; game.touch_zoom.pixels = 3
+	game.controls.touch_enabled = true; game.controls.pixels = 3
 	var cell = game.world.player
 	var family = game.Simulation.Cell.clone_state(cell)
 	family.id = 901; family.lineage = cell.lineage_id()
@@ -60,9 +60,9 @@ func run() -> void:
 	var at: Vector2 = game.views[family.id].get_global_transform_with_canvas().origin
 	var clock: float = game.world.time
 	var random: int = game.world.rng.state
-	game.touch_zoom._tap(at)
+	game.controls._tap(at)
 	check(game.world.player == cell,"A single tap does not transfer control")
-	game.touch_zoom._tap(at)
+	game.controls._tap(at)
 	check(game.world.player == family and game.camera_locked,"Double tap adopts the existing living family member and follows it")
 	check(game.world.time == clock and game.world.rng.state == random and game.world.cells.size() == 3,"Family switching advances no world time and creates no cell")
 	check(not game._switch_family(foreign.id),"Family gestures cannot select another player's or uncontrolled lineage")

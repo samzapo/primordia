@@ -183,7 +183,7 @@ fi
 if grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"; then exit 1; fi
 grep -Eq 'ENVIRONMENT CYCLE: [0-9]+ assertions, 0 failures' "$report_file"
 
-"$godot_bin" --headless --path "$project_dir" --script tests/touch_zoom_run.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"
+"$godot_bin" --headless --path "$project_dir" --script tests/controls_run.gd -- --particle-backend=cpu 2>&1 | tee "$report_file"
 if grep -Eq 'SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:' "$report_file"; then exit 1; fi
 grep -Eq 'TOUCH CONTROLS: [0-9]+ assertions, 0 failures' "$report_file"
 

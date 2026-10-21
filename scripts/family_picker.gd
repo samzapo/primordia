@@ -64,7 +64,8 @@ func sync() -> void:
  var viewport: Vector2=owner_ui.get_viewport_rect().size
  title.text="Choose a build to remember" if owner_ui.context.get("choose_template",false) else "Choose a relative to merge" if owner_ui.context.get("kind","")=="merge_family" else "Family"
  merge_button.visible=not owner_ui.context.get("choose_template",false) and owner_ui.context.get("kind","")!="merge_family"
- var s: float=minf(owner_ui.ui_scale(),minf(viewport.x/220.0,viewport.y/170.0))
+ # Keep the heading, arrows and at least one portrait visible in short windows.
+ var s: float=minf(owner_ui.ui_scale(),minf(viewport.x/220.0,viewport.y/400.0))
  var count: int=owner_ui.choices.size()
  var tile: float=80*s
  var gap: float=6*s
@@ -134,6 +135,13 @@ func _touch_button_at(at: Vector2) -> Button:
 
 func handle_touch(event: InputEvent) -> bool:
  if not is_visible_in_tree():return false
+ # Mouse dragging uses the same captured list gesture and tap action as touch.
+ if event is InputEventMouseButton and event.device!=-1 and event.button_index==MOUSE_BUTTON_LEFT:
+  var pointer:=InputEventScreenTouch.new();pointer.index=65535;pointer.position=event.position;pointer.pressed=event.pressed
+  return handle_touch(pointer)
+ if event is InputEventMouseMotion and event.device!=-1 and touch_index==65535:
+  var pointer:=InputEventScreenDrag.new();pointer.index=65535;pointer.position=event.position;pointer.relative=event.relative
+  return handle_touch(pointer)
  # Capture the whole panel before GUI buttons can swallow a finger drag.
  if (event is InputEventMouseButton or event is InputEventMouseMotion) and event.device==-1:
   return Time.get_ticks_msec()-last_touch_at<250 and get_global_rect().has_point(event.position)

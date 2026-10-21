@@ -2,7 +2,7 @@ extends SceneTree
 const Guide=preload("res://scripts/player_guide.gd")
 const Help=preload("res://scripts/player_help.gd")
 class TouchStub extends RefCounted:
-	var enabled:=false
+	var touch_enabled:=false
 	var pixels:=1.0
 	func cancel() -> void:pass
 var checks:=0
@@ -13,10 +13,11 @@ func check(ok: bool,message: String) -> void:
 func _initialize() -> void:run.call_deferred()
 func run() -> void:
 	var touch: String=Guide.gameplay(true);var desktop: String=Guide.gameplay(false)
+	check(Guide.data().gameplay.touch.size()==1 and Guide.data().gameplay.desktop.size()==1 and Guide.data().gameplay.touch[0].id=="camera" and Guide.data().gameplay.desktop[0].id=="camera","Only camera instructions vary by input; gameplay interactions have one shared guide")
 	check(touch.contains("Two") or touch.contains("two fingers"),"Touch guide explains combined camera gestures")
 	for word in ["Right-click","Double-click","mouse","keyboard","F11","Enter","Alt","Space","M opens"]:
 		check(not touch.contains(word),"Touch guide excludes desktop control "+word)
-	check(desktop.contains("mouse wheel") and desktop.contains("Double-click") and desktop.contains("F11"),"Desktop guide retains the actual desktop interactions")
+	check(desktop.contains("mouse wheel") and desktop.contains("Click and drag"),"Only desktop camera controls differ from the shared interaction guide")
 	var refs:=FileAccess.get_file_as_string("res://references.md")
 	var urls: Dictionary={};var ids: Dictionary={}
 	for group in Guide.data().mechanics:
@@ -30,10 +31,10 @@ func run() -> void:
 	for url in ["javascript:alert(1)","file:///etc/passwd","https://example.com/","https://github.com/Eka-Robotics/eka-robotics"]:
 		check(not Guide.allowed_url(url),"Only authored scientific links can open")
 	var ui:=Control.new();root.add_child(ui);ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	var fake: Dictionary={"ui":ui,"preferences":{"hud_scale":1.0},"touch_zoom":TouchStub.new()}
+	var fake: Dictionary={"ui":ui,"preferences":{"hud_scale":1.0},"controls":TouchStub.new()}
 	var help=Help.new();help.initialize(fake)
 	for mobile in [true,false]:
-		fake.touch_zoom.enabled=mobile
+		fake.controls.touch_enabled=mobile
 		root.content_scale_size=Vector2i.ZERO;root.size=Vector2i(360,640) if mobile else Vector2i(1280,720)
 		help.open("gameplay");await process_frame;await process_frame
 		var area: Rect2=help.panel.get_global_rect()

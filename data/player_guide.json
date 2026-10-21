@@ -3,6 +3,54 @@
   "gameplay": {
     "common": [
       {
+        "id": "controls_view",
+        "title": "Follow and look inside",
+        "text": "Select Follow to center on your cell. Select Internal to look inside, or External to return to the pond. Inside, the view stays relative to your cell and you can zoom much closer.",
+        "sources": []
+      },
+      {
+        "id": "controls_select",
+        "title": "Open cell controls",
+        "text": "Select a factory, nucleus, division bud, ATP store or installed organelle. Choices appear along the top. Select × or empty water to close choices.",
+        "sources": []
+      },
+      {
+        "id": "controls_cancel",
+        "title": "Cancel placement",
+        "text": "Select the circular icon of the held organelle at the top left to cancel placing it.",
+        "sources": []
+      },
+      {
+        "id": "controls_switch",
+        "title": "Switch family member",
+        "text": "Select a living relative twice quickly, or choose it from Family. Your previous cell stays in the pond.",
+        "sources": []
+      },
+      {
+        "id": "controls_inspect",
+        "title": "Inspect particles",
+        "text": "Select a particle or vacuole to see its name and details along the bottom.",
+        "sources": []
+      },
+      {
+        "id": "controls_resources",
+        "title": "Show resources",
+        "text": "Biomass and ATP appear along the bottom. Select − to hide them and Resources to bring them back.",
+        "sources": []
+      },
+      {
+        "id": "controls_pause",
+        "title": "Pause, resume and music",
+        "text": "Select Pause for the menu and Resume to return to the live view. Enable music when shown, then use Music to mute or resume; the slider changes volume.",
+        "sources": []
+      },
+      {
+        "id": "controls_family_tools",
+        "title": "Family and growth",
+        "text": "Open Family to manage relatives. Drag the list or use its arrows to scroll. Merge zooms to nearby water: select a bright relative to merge immediately. Relatives remain selectable for five seconds after a family signal; others are dim. Cancel merge returns to your cell. Divide offers Mitosis or Budding and their automatic modes. Investment shows Balanced and all four specializations.",
+        "sources": []
+      },
+      {
         "id": "anatomy",
         "title": "Your cell chooses where to swim",
         "text": "Build organs to shape what your cell can sense and do. It chooses when to feed, hunt, escape or seek light; you do not steer it directly.",
@@ -110,108 +158,14 @@
         "title": "Move, turn and zoom",
         "text": "Use two fingers together: drag to move the view, twist to rotate, and pinch to zoom. The touched places stay under your fingers. The + and − buttons also zoom.",
         "sources": []
-      },
-      {
-        "id": "follow",
-        "title": "Follow and look inside",
-        "text": "Tap Follow to center on your cell. Tap Internal to look inside, or External to return to the pond. Inside, gestures stay relative to your cell and you can zoom much closer. Returning outside keeps your zoom within the pond view limits.",
-        "sources": []
-      },
-      {
-        "id": "select",
-        "title": "Open cell controls",
-        "text": "Tap a factory, nucleus, growing bud, ATP store or installed organelle. Choices appear along the top. Tap × or empty water to close choices.",
-        "sources": []
-      },
-      {
-        "id": "cancel",
-        "title": "Cancel placement",
-        "text": "Tap the circular icon of the held organelle at the top left to cancel placing it.",
-        "sources": []
-      },
-      {
-        "id": "switch",
-        "title": "Switch family member",
-        "text": "Double-tap a living cell in your lineage to manage it. Your previous cell stays in the pond.",
-        "sources": []
-      },
-      {
-        "id": "inspect",
-        "title": "Inspect particles",
-        "text": "Tap a particle or vacuole to see its name and details at the bottom.",
-        "sources": []
-      },
-      {
-        "id": "resources",
-        "title": "Show resources",
-        "text": "Biomass and ATP appear along the bottom. Tap − to hide them and Resources to bring them back.",
-        "sources": []
-      },
-      {
-        "id": "pause",
-        "title": "Pause, resume and music",
-        "text": "Tap Pause for the menu and Resume to return to the live view. Tap Enable music when shown, then Music to mute or resume; the slider changes volume.",
-        "sources": []
-      },
-      {
-        "id": "family_tools",
-        "title": "Family and growth",
-        "text": "Tap Family to switch relatives. Merge zooms to nearby water: tap a bright relative to merge it into your current cell immediately. You do not need to travel to it. Only unattended relatives whose pheromones your cell received within the past five seconds are selectable; other cells are dim. Tap Cancel merge to leave. Swipe through long families, or use the up/down arrows. Open the division bud, then Divide for continuous Auto divide or a single queued birth. Investment shows all three strategies and whether this cell uses Family or an individual setting."
       }
     ],
     "desktop": [
       {
         "id": "camera",
         "title": "Move and zoom",
-        "text": "Scroll the mouse wheel to zoom. Drag with the middle mouse button to pan in Free view or inside a cell. In Free view, dragging empty water with the left button also pans.",
+        "text": "Click and drag the view with the left mouse button. Scroll the mouse wheel to zoom around the pointer. The + and − buttons also zoom.",
         "sources": []
-      },
-      {
-        "id": "follow",
-        "title": "Follow and look inside",
-        "text": "Space toggles Follow / Free view outside the cell and recenters the cell frame inside. I switches Internal / External.",
-        "sources": []
-      },
-      {
-        "id": "select",
-        "title": "Open cell controls",
-        "text": "Click a factory, nucleus, growing bud, ATP store or organelle. Tab enters or leaves cell editing.",
-        "sources": []
-      },
-      {
-        "id": "cancel",
-        "title": "Cancel placement",
-        "text": "Right-click cancels a held organelle or closes choices. Clicking the held icon also cancels.",
-        "sources": []
-      },
-      {
-        "id": "keyboard",
-        "title": "Build with the keyboard",
-        "text": "[ and ] cycle cell targets; Enter opens the selected target or places the held organelle. Arrow keys adjust choices or membrane placement. Number keys and F / C / V select organelle types. R opens the new-lineage confirmation.",
-        "sources": []
-      },
-      {
-        "id": "switch",
-        "title": "Switch family member",
-        "text": "Double-click a living cell in your lineage, or choose it from the family menu. Your previous cell stays in the pond.",
-        "sources": []
-      },
-      {
-        "id": "inspect",
-        "title": "Inspect and inspect more",
-        "text": "Hover over a particle for its name and magnified shape. Hold Alt for expanded cell and organelle details.",
-        "sources": []
-      },
-      {
-        "id": "pause",
-        "title": "Pause, settings and display",
-        "text": "P pauses or resumes your view. M opens or closes settings. F11 toggles fullscreen. S toggles sensed signals; F3 toggles the information overlay. Music and resource controls are in the cell and Pause menu.",
-        "sources": []
-      },
-      {
-        "id": "family_tools",
-        "title": "Family and growth",
-        "text": "Click Family to switch relatives. Merge zooms to nearby water: click a bright relative to merge it into your current cell immediately. You do not need to travel to it. Only unattended relatives whose pheromones your cell received within the past five seconds are selectable; other cells are dim. Right-click or use Cancel merge to leave. Use the up/down arrows to scroll long families. Open the division bud, then Divide for continuous Auto divide or a single queued birth. Investment shows all three strategies and whether this cell uses Family or an individual setting."
       }
     ]
   },

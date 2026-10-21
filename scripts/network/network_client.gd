@@ -160,7 +160,7 @@ func _logout() -> void:
 	profile.pending=false;palette.pending=false
 	cell_ui.close_context();build_open=false;selected=-1;moving_id=-1;tube_start.clear()
 	settings_panel.hide();lineage_confirmation.hide();lineage_confirming=false
-	user_paused=false;paused_snapshot={};touch_zoom.cancel()
+	user_paused=false;paused_snapshot={};controls.cancel()
 	playback.reset();playback_domain="";playback_after_tick=-1
 	cells_by_id.clear();packet_ids.clear();family_portraits.clear();family_recovery.clear();server_census.clear()
 	focus_cell=null;player_name="";favorite_name="";last_presence=""
@@ -197,7 +197,7 @@ func _toggle_user_pause() -> void:
 	if settings_panel.visible and not user_paused:user_paused=true
 	if not user_paused:_freeze_network_pose()
 	user_paused=not user_paused
-	touch_zoom.cancel()
+	controls.cancel()
 	if user_paused:
 		build_open=false;selected=-1;moving_id=-1;tube_start.clear();cell_ui.close_context()
 	else:
@@ -214,7 +214,7 @@ func _toggle_user_pause() -> void:
 		for packet in world.particles:packet.previous=packet.p;packet.previous_angle=packet.angle
 		if network_particles!=null:network_particles.prepare(world.particles,world.cells)
 		received_usec=0
-	touch_zoom.layout()
+	controls.layout()
 
 func _freeze_network_pose() -> void:
 	# Pause holds precisely the visible presentation, not the newer buffered target.
@@ -357,7 +357,7 @@ func _connect(manual: bool=true) -> void:
 	hello_sent=false;connected=false;connecting=true;attempted=true;retry_enabled=true;reconnect_due=3;inflight.clear();commands.clear();cell_ui.pending_mutation.clear();placement_feedback.clear()
 	view_announced=false;view_clock=0;keepalive_clock=0;received_usec=0
 	update_popup.close();pending_release_updates=[]
-	playback.reset();playback_domain="";playback_after_tick=-1;user_paused=false;paused_snapshot={};touch_zoom.cancel();camera_initialized=false
+	playback.reset();playback_domain="";playback_after_tick=-1;user_paused=false;paused_snapshot={};controls.cancel();camera_initialized=false
 	connect_started_usec=Time.get_ticks_usec()
 	if OS.has_feature("web"):
 		JavaScriptBridge.eval(BROWSER_SOCKET_ADDRESS % JSON.stringify(server_url))
@@ -563,7 +563,7 @@ func _snapshot(message: Dictionary) -> void:
 	if not camera_initialized or previous_player!=world.player.id:
 		merge_selection.clear();merge_candidates.clear()
 		cell_ui.close_context();build_open=false;moving_id=-1;selected=-1
-		touch_zoom.cancel()
+		controls.cancel()
 		camera_offset=Vector2.ZERO;free_camera=_follow_cell().position;camera_locked=can_follow();camera_rotation=0
 		camera_initialized=true;camera_seen_world=true
 	elif camera_locked and not can_follow():
@@ -608,7 +608,7 @@ func _show_next_update() -> void:
 	if player_help.opened or feedback.opened or profile.opened or palette.opened or settings_panel.visible:return
 	var notes: Dictionary=pending_release_updates[0].duplicate(true)
 	if pending_release_updates.size()>1:notes.button="Next update"
-	touch_zoom.cancel();update_popup.open(notes)
+	controls.cancel();update_popup.open(notes)
 func _release_result(message: Dictionary) -> void:
 	var current: bool=message.get("id","")==update_popup.release_id
 	update_popup.result(message)

@@ -31,7 +31,7 @@ func initialize(owner_game) -> void:
  get_viewport().size_changed.connect(_layout);hide();set_process(false)
 func _layout() -> void:
  var size:=get_viewport_rect().size
- var s: float=game.preferences.hud_scale*(game.touch_zoom.pixels if game.touch_zoom.enabled else 1.0)
+ var s: float=game.preferences.hud_scale*game.controls.pixels
  var width:=minf(350*s,size.x-24*s)
  var theme:=Theme.new();theme.default_font=preload("res://assets/fonts/ComicNeue-Regular.ttf");theme.default_font_size=roundi(18*s);panel.theme=theme
  title.add_theme_font_size_override("font_size",roundi(22*s))

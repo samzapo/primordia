@@ -176,6 +176,7 @@ def main():
             if re.search(r"SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:",result,re.M) or not re.search(marker+r": \d+ assertions, 0 failures",result):
                 raise RuntimeError("Experimental feedback correctness fixture failed")
         call("python3",str(candidate/"tests/test_experimental_snapshot.py"),env=environment)
+    call("python3",str(candidate/"tools/check_interface.py"),"--godot",str(godot),env=environment)
     call("bash",str(candidate/"tools/build_web.sh"),env=environment)
     if full_checks:
         # Small real-GPU protocol fixture, with no stable outage or frame benchmark.

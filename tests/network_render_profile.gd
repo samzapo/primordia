@@ -38,7 +38,7 @@ func _ready() -> void:
 	game=Client.new();add_child(game);game.login.hide()
 	game.preferences.persist=false;game.archive.persist=false
 	game.music.enabled=option("music","off")=="on"
-	game.touch_zoom.enabled=true
+	game.controls.touch_enabled=true
 	if settings.case in ["controls-check","placement-check"]:game.connected=true
 	game.epoch=1;game.camera_seen_world=true;game.camera_initialized=true
 	game.manual_zoom=settings.zoom;game.camera_zoom=settings.zoom;game.camera_locked=true

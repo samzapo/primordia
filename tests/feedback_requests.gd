@@ -83,7 +83,7 @@ func controls() -> void:
  var picker=game.cell_ui.investment_picker;game.build_open=true
  var relative=Sim.Cell.new(992);relative.lineage=game.world.player.lineage_id();game.world.cells.append(relative)
  for mobile in [false,true]:
-  game.touch_zoom.enabled=mobile
+  game.controls.touch_enabled=mobile
   picker.open()
   for pair in [[picker.auto_mitosis,"mitosis"],[picker.auto_bud,"budding"]]:
    var button: Button=pair[0];button.pressed.emit();picker.sync()
@@ -95,7 +95,7 @@ func controls() -> void:
   check(picker.auto_bud.text.ends_with("Off") and relative.automatic_budding,"This-cell choice leaves relatives unchanged")
   picker.auto_bud.pressed.emit();picker.sync()
  if RenderingServer.get_rendering_device()!=null:
-  root.size=Vector2i(576,900);game.touch_zoom.enabled=true;picker.open()
+  root.size=Vector2i(576,900);game.controls.touch_enabled=true;picker.open()
   await process_frame;await process_frame;await RenderingServer.frame_post_draw
   var destination:=OS.get_environment("PRIMORDIA_TEST_CAPTURE")
   if destination!="":root.get_texture().get_image().save_png(destination)

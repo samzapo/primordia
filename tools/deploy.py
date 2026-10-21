@@ -212,6 +212,7 @@ def main():
     run(str(godot), "--headless", "--path", str(candidate), "--editor", "--import", "--quit", env=environment)
     if any((root / "state" / name).exists() for name in ("world-0.pworld", "world-1.pworld")):
         environment["PRIMORDIA_VERIFY_CHECKPOINT_DIR"] = str(root / "state")
+    run("python3",str(candidate/"tools/check_interface.py"),"--godot",str(godot),env=environment)
     inspect()
     run("bash", str(candidate / "tools/build_web.sh"), env=environment)
     state = root / "state"

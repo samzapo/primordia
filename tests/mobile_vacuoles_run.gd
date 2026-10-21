@@ -23,7 +23,7 @@ func run() -> void:
 	root.size=Vector2i(1170,2100)
 	var game=load("res://scenes/pond.tscn").instantiate();game.use_particle_pool=false
 	root.add_child(game);game.set_process(false);game.set_physics_process(false);game.music.enabled=false;game.music.player.stop()
-	game.touch_zoom.enabled=true;game.touch_zoom.pixels=3
+	game.controls.touch_enabled=true;game.controls.pixels=3
 	game.world.player.angle=.7;game.world.player.previous_angle=.7
 	game._toggle_perception()
 	check(game.camera_locked and absf(game.camera_rotation+.7)<.001,"Interoception follows both the position and orientation of the rendered cell")
@@ -43,14 +43,14 @@ func run() -> void:
 	game.world.player.angle=0;game.world.player.previous_angle=0
 	game.manual_zoom=game.MIN_ZOOM;game.intero_rotation=0;game.camera_offset=Vector2(0,900);game._update_world(1)
 	var upper: Vector2=game.camera_screen-Vector2(0,600);var lower: Vector2=game.camera_screen+Vector2(0,600)
-	game.touch_zoom.fingers={0:upper,1:lower};game.touch_zoom._anchor_pair()
+	game.controls.fingers={0:upper,1:lower};game.controls._anchor_pair()
 	check(is_equal_approx(game.manual_zoom,game.MIN_ZOOM) and game.camera_offset.distance_to(Vector2(0,900))<.01,"A wide internal gesture crossing the torus seam retains its unwrapped cell-frame anchors")
-	game.touch_zoom.cancel()
+	game.controls.cancel()
 	game._toggle_build();game.cell_ui.open_context({"kind":"assembly"})
 	await process_frame
 	game.cell_ui.sync(0)
 	check(game.cell_ui.choices.size()==7 and game.cell_ui.choices.all(func(choice):return choice.get_parent()==game.cell_ui.mobile_flow),"Mobile Assembly exposes its complete non-receptor set in the top tray")
-	check(game.touch_zoom.pause_button.get_global_rect().position.y>=game.cell_ui.mobile_menu_height,"Opening a top tray moves the utility controls below it immediately")
+	check(game.controls.pause_button.get_global_rect().position.y>=game.cell_ui.mobile_menu_height,"Opening a top tray moves the utility controls below it immediately")
 	check(game.cell_ui.mobile_menu_height>0 and game.cell_ui.mobile_tray.position.y<30,"Mobile action menus are attached to the top of the screen")
 	check(game.cell_ui.mobile_resources.visible and game.cell_ui.mobile_stocks.text.contains("Biomass") and game.cell_ui.mobile_stocks.text.contains("ATP"),"Mobile stock display is visible without hovering")
 	game.cell_ui.mobile_hide.pressed.emit();game.cell_ui.sync(0)
@@ -75,11 +75,11 @@ func run() -> void:
 	check(game.cell_ui.cancel_icon.visible and game.cell_ui.cancel_icon.kind=="photosynthesis" and game.cell_ui.cancel_icon.position.x<30,"Selected organ remains as a circular top-left cancel action")
 	game.cell_ui.cancel_icon.pressed.emit();game.cell_ui.sync(0)
 	check(game.selected<0 and game.moving_id<0 and not game.cell_ui.cancel_icon.visible,"Tapping the selected icon cancels placement")
-	game.touch_zoom.pause_button.pressed.emit()
+	game.controls.pause_button.pressed.emit()
 	check(game.user_paused and game.settings_panel.visible,"Mobile Pause opens settings and freezes only this displayed view")
 	check(game.settings_panel.theme.default_font_size>=54 and game.settings_panel.size.x>1000,"Mobile settings use readable CSS-sized text and the available width")
-	check(not game.settings_panel.get_global_rect().intersects(game.touch_zoom.pause_button.get_global_rect()) and not game.touch_zoom.follow_button.visible,"Settings scrolling cannot capture Resume taps or overlap duplicate controls")
-	game.touch_zoom.pause_button.pressed.emit()
+	check(not game.settings_panel.get_global_rect().intersects(game.controls.pause_button.get_global_rect()) and not game.controls.follow_button.visible,"Settings scrolling cannot capture Resume taps or overlap duplicate controls")
+	game.controls.pause_button.pressed.emit()
 	check(not game.user_paused and not game.settings_panel.visible,"Mobile Resume closes settings and returns to the world")
 	game.cell_ui.close_context()
 	var retained_zoom: float=clampf(game.manual_zoom,game.MIN_ZOOM,game.MAX_ZOOM)

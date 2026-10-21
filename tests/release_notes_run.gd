@@ -48,7 +48,7 @@ func run() -> void:
 		for update in Notes.pending_all(migrated,instance):
 			check(Notes.acknowledge(migrated,update.id,instance),"Each pond clears every applicable notice oldest first")
 		check(Notes.pending_all(migrated,instance).is_empty(),"Hidden notices cannot leave either pond queue stuck")
-	check(Notes.CURRENT.id==stable_current.id and stable_current.items==experimental_current.items,"Main promotes the tested final-feature roundup with its own stable identity")
+	check(stable_current.id!=experimental_current.id and Notes.applies(stable_current,"stable"),"New experimental pools retain their own identity after a main promotion")
 	var stable_history: Array=Notes.RELEASES.filter(func(update):return Notes.applies(update,"stable"))
 	var previous: Dictionary={"seen_release":stable_history[-2].id}
 	check(Notes.pending_all(previous,"stable").size()==1 and Notes.pending(previous,"stable").id==stable_current.id,"An up-to-date main player receives one consolidated release notice")
