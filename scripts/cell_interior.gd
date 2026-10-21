@@ -1,33 +1,45 @@
 extends Node2D
 ## Intracellular resource parcels and anatomy; the outside can pause independently.
+const Layout=preload("res://scripts/factory_layout.gd")
 const Visuals=preload("res://scripts/visuals.gd")
 var game
 var anchors: Dictionary = {}
+var slots: Dictionary={}
+var slot_speeds: Dictionary={}
+var slot_cell:=-1
+var slot_clock:=-1.0
 var atp_size := 0.0
 var bud_material := 0.0
 var bud_energy := 0.0
 
-static func layout(cell) -> Dictionary:
-	var radius: float = cell.radius
-	for point in cell.membrane.points: radius = minf(radius,point.length())
-	return {"radius":radius,"nucleus":Vector2(-0.12,-0.10)*radius,
-		"assembly":Vector2(-0.38,0.29)*radius,"chemistry":Vector2(0.39,0.16)*radius,
-		"atp":Vector2(0.32,-0.39)*radius,"receptors":Vector2(.02,.60)*radius,
-		"bud":Vector2(-0.43,-0.44)*radius}
+static func layout(cell) -> Dictionary:return Layout.layout(cell)
 
 func sync() -> void:
 	var cell = game.world.player
-	anchors = layout(cell)
+	var planned:=layout(cell)
+	var elapsed: float=maxf(0,game.ui_time-slot_clock)
+	if slot_cell!=cell.id or slot_clock<0 or elapsed>1 or game.ui_time<slot_clock:
+		slots=planned.duplicate();slot_speeds.clear();slot_cell=cell.id
+	for key in Layout.KEYS:
+		var current: Vector2=slots.get(key,planned[key])
+		var velocity: Vector2=slot_speeds.get(key,Vector2.ZERO)
+		for axis in 2:
+			var state:=preload("res://scripts/cell_motion.gd").spring(current[axis],planned[key][axis],velocity[axis],elapsed)
+			current[axis]=state.x;velocity[axis]=state.y
+		slots[key]=current;slot_speeds[key]=velocity
+	slot_clock=game.ui_time
+	anchors=slots.duplicate()
 	if game.views.has(cell.id):
 		var view = game.views[cell.id]
 		position = view.position
 		rotation = view.rotation
-		anchors.nucleus += view.nucleus_lag
+		for key in Layout.KEYS:anchors[key]=view.visible_point(anchors[key])
+		anchors.nucleus=view.nucleus_center
 	else:
 		position = game.Simulation.Medium.offset(game.render_camera,cell.position)
 		rotation = cell.angle
 	# A full, elastic sac changes size rather than filling a fixed tank.
-	atp_size = anchors.radius*0.13*sqrt(log(1+maxf(0,cell.energy)/cell.energy_reference()*3))
+	atp_size = minf(18,Layout.REFERENCE*0.13*sqrt(log(1+maxf(0,cell.energy)/cell.energy_reference()*3)))
 	bud_material = game.world.division_status().get("progress",0.0)
 	bud_energy = bud_material
 	visible = not cell.dead and game.views.has(cell.id)
@@ -78,17 +90,18 @@ func _draw() -> void:
 	# A raised chamber plate and a build badge identify the click point without labels.
 	at = anchors.chemistry
 	var active: bool=game.cell_ui.hovered.get("kind","")=="chemistry" or game.cell_ui.context.get("kind","")=="chemistry"
-	preload("res://scripts/visuals.gd").internal_factory(self,at,r*.21,active)
+	preload("res://scripts/visuals.gd").internal_factory(self,at,Layout.FACTORY,active,false)
 
-	Visuals.receptor_factory(self,anchors.receptors,r*.19)
+	Visuals.receptor_factory(self,anchors.receptors,Layout.FACTORY,false)
 
 	at = anchors.bud
 	Visuals.offspring_store(self,at,r,bud_material,bud_energy)
 	if game.build_open and (not game.world.evolution.division_offers.is_empty()):
 		draw_circle(anchors.nucleus+Vector2(0.22,-0.20)*r,r*(0.04+0.008*sin(game.ui_time*2)),Color("fff19c"))
+	for key in Layout.KEYS:
+		var highlighted: bool=game.cell_ui.hovered.get("kind","")==key or game.cell_ui.context.get("kind","")==key
+		Visuals.factory_control(self,anchors[key],Layout.radius(key)*.77,key,highlighted)
 	if game.build_open:
-		for key in ["assembly","chemistry","receptors","nucleus","bud"]:
-			draw_arc(anchors[key],r*(0.34 if key == "nucleus" else 0.20),0,TAU,28,Color(0.75,1,0.91,0.18),1.2/game.zoom,true)
 		for scar in cell.lost_organs:
 			var p: Vector2 = cell.local_point(scar.a)
 			draw_arc(p,10*scar.scale,0,TAU,20,Color("ffb6ca"),1.8/game.zoom,true)

@@ -7,6 +7,7 @@ static func set_clock(clock: float) -> void:
  if ink!=null:ink.set_shader_parameter("clock",clock)
 var revision:=-1
 var detail:=false
+var mounts: Array=[]
 func _ready() -> void:
  if strip==null:
   strip=ArrayMesh.new()
@@ -24,8 +25,9 @@ func _ready() -> void:
  material=ink
  multimesh=MultiMesh.new();multimesh.transform_format=MultiMesh.TRANSFORM_2D
  multimesh.use_custom_data=true;multimesh.mesh=strip
-func sync(cell,full_detail: bool,_clock: float,world) -> void:
- if revision==cell.render_revision and detail==full_detail:return
+func sync(cell,full_detail: bool,_clock: float,world,motion=null) -> void:
+ if revision==cell.render_revision and detail==full_detail:
+  _mount(motion);return
  revision=cell.render_revision;detail=full_detail
  var strokes: Array=[]
  for organ in cell.organs:
@@ -51,7 +53,18 @@ func sync(cell,full_detail: bool,_clock: float,world) -> void:
     strokes.append([Transform2D(heading,lip[i]),Color(2,fposmod(i+cell.id*.731,TAU),reach,width)])
  var bound: float=cell.extent()+100
  multimesh.custom_aabb=AABB(Vector3(-bound,-bound,-1),Vector3(bound*2,bound*2,2))
+ mounts.clear()
  multimesh.instance_count=strokes.size()
  for i in strokes.size():
+  mounts.append(strokes[i][0])
   multimesh.set_instance_transform_2d(i,strokes[i][0])
   multimesh.set_instance_custom_data(i,strokes[i][1])
+
+ _mount(motion)
+func _mount(motion) -> void:
+ if motion==null:return
+ for i in mounts.size():
+  var base: Transform2D=mounts[i]
+  var at: Vector2=motion.point(base.origin)
+  var direction: Vector2=motion.normal(base.origin,base.x.normalized())
+  multimesh.set_instance_transform_2d(i,Transform2D(direction.angle(),base.get_scale(),0,at))

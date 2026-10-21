@@ -9,6 +9,11 @@ class ViewStub extends Node2D:
  var cell
  var raster_active:=false
  var raster_outline:=PackedVector2Array()
+ var motion
+ func visible_point(at: Vector2) -> Vector2:return at if motion==null else motion.point(at)
+ func visible_outline() -> PackedVector2Array:
+  var outline: PackedVector2Array=raster_outline if raster_active else cell.membrane.outline()
+  return outline if motion==null else motion.outline(outline,raster_active)
 class GameStub extends RefCounted:
  var world
  var views: Dictionary={}
@@ -67,6 +72,18 @@ func run() -> void:
  var cached:=Cue.geometry(game,first,organ)
  check(cached.hole.is_finite() and cached.hole.distance_to(cue.contacts[0].hole)<.0001,"Cached donor bodies use their displayed membrane outline")
  second.raster_active=false
+ second.motion=preload("res://scripts/cell_motion.gd").new()
+ second.motion.sync(donor,0,second.global_transform)
+ second.motion.sync(donor,.2,second.global_transform)
+ var animated:=Cue.geometry(game,first,organ)
+ var displayed: PackedVector2Array=second.visible_outline()
+ var nearest_display:=INF
+ if animated.hole.is_finite():
+  var local: Vector2=second.transform.affine_inverse()*animated.hole
+  for i in displayed.size():nearest_display=minf(nearest_display,local.distance_to(Geometry2D.get_closest_point_to_segment(local,displayed[i],displayed[(i+1)%displayed.size()])))
+ check(animated.hole.is_finite() and nearest_display<.0001,"The puncture stays on the client-animated donor membrane")
+ check(animated.hole.distance_to(Geometry2D.get_closest_point_to_segment(animated.hole,animated.base,animated.tip))<.0001,"The locally animated contact remains on the same straight visible proboscis")
+ second.motion=null
  var tint:=Colors.family(game,2)
  check(tint.is_equal_approx(Color("ed386e")*Color(1,1,1,.65)),"Pheromones use the chosen family color with slight transparency")
  var stock: Color=preload("res://scripts/cell_art.gd").make(sim.seed_value,991).colors[1];stock.a=.65

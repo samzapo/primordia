@@ -967,3 +967,24 @@ notices or retired crisis goals. Ignore pointer/touch input across these panes.
 Preserve biology, authority receipts, optimistic placement/ripple and camera
 controls. Update guide and one final-feature cumulative experimental preview;
 retain the pond, main unchanged. Focused client UI/queue/layout checks only.
+
+
+## October21 local cell gel and fixed factories
+Owner requests one combined update. Animate membrane shape on the pause-aware
+local cosmetic clock with bounded analytic damped springs; do not step biology,
+change collision shapes, consume RNG or increase server publication. Retarget
+from the currently displayed radius/velocity. Keep per-frame deformation on
+cached GPU artwork, including small-cell rasters; reuse one tessellated quad.
+Nucleus lag advances from local elapsed time. Wall-bearing Producers stay firm,
+while Hunter points and Parasite worm shapes remain recognizable.
+
+Nucleus and internal factory art have fixed world sizes independent of minimum
+membrane radius. Fit distinct positions throughout actual cytoplasm, smooth
+layout changes and preserve overlap selection plus mobile minimum touch areas.
+Use an inset circle and tiny vector lower-left badge, without new screen labels
+or an external panel hiding organic outlines. Keep all clickable positions,
+membrane organs, optimistic placement and proboscis holes on the visible shape.
+ATP stock may change its sac fill/size within the fixed control footprint.
+No saved-state migration or physics/material/feeding change. Retain experimental,
+main unchanged; one cumulative final-feature notice. Actual phone FPS is separate
+from local animation cadence; do not claim60FPS from workstation rendering.

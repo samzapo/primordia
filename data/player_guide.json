@@ -15,6 +15,12 @@
         "sources": []
       },
       {
+        "id": "factories",
+        "title": "Find your cell’s controls",
+        "text": "The nucleus and internal factories keep their size as your cell grows or changes shape. They spread through the cytoplasm. An inset circle with a tiny lower-left symbol marks each control; tap it to open its choices. Zoom in if the controls are too small, or choose from the pictures when tap areas overlap.",
+        "sources": []
+      },
+      {
         "id": "build",
         "title": "Build and restore",
         "text": "Open Assembly for movement, oral grooves, armor and glands, Chemistry for internal organs and leaves, or Receptors for free chemical senses. The first two non-receptor organelles on each cell are free. After those, prices follow Fibonacci ×10: 10, 10, 20, 30, 50, 80… biomass. Reabsorbing one moves the next build back one step. Free receptors do not advance the sequence. Both starter organelles can be replaced. Placing an organelle shows an outward ripple and a preview while it is confirmed. Refused placements have a red-bordered notice. Brief notices fade after a second; a little amoeba at the bottom right shows waiting.",
@@ -71,7 +77,7 @@
       {
         "id": "camera_transitions",
         "title": "Smooth camera changes",
-        "text": "Following, recentering, changing views and switching family members glide into place. Pause holds the camera; direct camera gestures stay responsive. Nearby water is prepared ahead of your view to reduce empty patches while exploring.",
+        "text": "Following, recentering, changing views and switching family members glide into place. Pause holds the camera; direct camera gestures stay responsive. Nearby water is prepared ahead of your view to reduce empty patches while exploring. Cell bodies wobble and settle smoothly between pond updates; Pause holds that animation too.",
         "sources": []
       },
       {

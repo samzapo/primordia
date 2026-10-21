@@ -86,17 +86,18 @@ static func nucleus_art(c,at: Vector2,extent: float,core: PackedVector2Array,pal
 	c.draw_colored_polygon(Transform2D(0,Vector2.ONE*extent*.74,0,at-Vector2.ONE*extent*.08)*core,palette[5])
 	if detail:c.draw_colored_polygon(Transform2D(-.3,Vector2(.30,.38)*extent,0,at-Vector2.ONE*extent*.22)*core,palette[6])
 
-static func receptor_factory(c,at: Vector2,r: float) -> void:
+static func receptor_factory(c,at: Vector2,r: float,badge: bool=true) -> void:
 	c.draw_circle(at,r,Color("332349"));c.draw_arc(at,r,0,TAU,28,Color("c997ef"),r*.10,true)
 	for side in [-1,1]:
 		c.draw_line(at+Vector2(-.55,side*.3)*r,at+Vector2(.20,side*.3)*r,Color("c997ef"),r*.12,true)
 		for direction in [-1,1]:
 			c.draw_line(at+Vector2(.15,side*.3)*r,at+Vector2(.55,side*.3+direction*.23)*r,Color("edbfff"),r*.10,true)
-	c.draw_circle(at+Vector2(.72,.72)*r,r*.30,Color("204954"))
-	c.draw_line(at+Vector2(.55,.72)*r,at+Vector2(.89,.72)*r,Color("ccffe8"),r*.08,true)
-	c.draw_line(at+Vector2(.72,.55)*r,at+Vector2(.72,.89)*r,Color("ccffe8"),r*.08,true)
+	if badge:
+		c.draw_circle(at+Vector2(.72,.72)*r,r*.30,Color("204954"))
+		c.draw_line(at+Vector2(.55,.72)*r,at+Vector2(.89,.72)*r,Color("ccffe8"),r*.08,true)
+		c.draw_line(at+Vector2(.72,.55)*r,at+Vector2(.72,.89)*r,Color("ccffe8"),r*.08,true)
 
-static func internal_factory(c,at: Vector2,radius: float,active: bool=false) -> void:
+static func internal_factory(c,at: Vector2,radius: float,active: bool=false,badge: bool=true) -> void:
 	# Shared factory/overlap-menu artwork. This is a build affordance, not an organ.
 	c.draw_circle(at+Vector2(0,radius*.12),radius,Color("122d51"))
 	c.draw_circle(at,radius,Color("276c83"))
@@ -109,11 +110,12 @@ static func internal_factory(c,at: Vector2,radius: float,active: bool=false) -> 
 		for step in 24:outline.append(center+Vector2(cos(step*TAU/24)*.20,sin(step*TAU/24)*.46)*radius)
 		c.draw_colored_polygon(outline,Color("42dfc6"))
 		c.draw_circle(center-Vector2(0,radius*.20),radius*.11,Color("d3ffe9"))
-	var badge: Vector2=at+Vector2(.69,.63)*radius
-	c.draw_circle(badge,radius*.34,Color("174a66"))
-	c.draw_circle(badge,radius*.27,Color("b8f2bd"))
-	for direction in [Vector2.RIGHT,Vector2.DOWN]:
-		c.draw_line(badge-direction*radius*.16,badge+direction*radius*.16,Color("20576b"),radius*.10,true)
+	if badge:
+		var badge_at: Vector2=at+Vector2(.69,.63)*radius
+		c.draw_circle(badge_at,radius*.34,Color("174a66"))
+		c.draw_circle(badge_at,radius*.27,Color("b8f2bd"))
+		for direction in [Vector2.RIGHT,Vector2.DOWN]:
+			c.draw_line(badge_at-direction*radius*.16,badge_at+direction*radius*.16,Color("20576b"),radius*.10,true)
 
 class DimmedInk extends RefCounted:
 	var canvas: Node2D
@@ -273,3 +275,22 @@ static func icon(c, p: Vector2, kind: String, rotation: float, scale: float, ani
 			c.draw_line(Vector2.ZERO,Vector2(13,-25),Color("b7d9e8"),3,true)
 			for point in [Vector2(-22,-16),Vector2(25,18),Vector2.ZERO,Vector2(13,-25)]: c.draw_circle(point,5,MINT)
 	c.draw_set_transform(Vector2.ZERO)
+
+
+static func factory_control(c,at: Vector2,r: float,kind: String,active: bool=false) -> void:
+	var color:=Color("d6ffeb") if active else Color(.68,.94,.87,.68)
+	c.draw_arc(at,r,0,TAU,32,color,1.1,true)
+	var badge:=at+Vector2(-.70,.70)*r
+	var b:=r*.25
+	c.draw_circle(badge,b*1.16,Color("173d50"))
+	c.draw_circle(badge,b,Color("a6ead0"))
+	var ink:=Color("245267")
+	if kind=="nucleus":
+		for i in 3:c.draw_circle(badge+Vector2((i-1)*b*.52,0),b*.18,ink)
+	elif kind=="bud":
+		c.draw_circle(badge+Vector2(-b*.30,0),b*.33,ink)
+		c.draw_circle(badge+Vector2(b*.30,0),b*.33,ink)
+	elif kind=="atp":
+		c.draw_polyline(PackedVector2Array([badge+Vector2(.3,-.65)*b,badge+Vector2(-.25,.05)*b,badge+Vector2(.25,-.05)*b,badge+Vector2(-.3,.65)*b]),ink,b*.28,true)
+	else:
+		for direction in [Vector2.RIGHT,Vector2.DOWN]:c.draw_line(badge-direction*b*.52,badge+direction*b*.52,ink,b*.26,true)

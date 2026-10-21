@@ -5,7 +5,10 @@ const Surface = preload("res://scripts/membrane_art.gd")
 const Visuals = preload("res://scripts/visuals.gd")
 var body_ink:=Node2D.new()
 var raster: SubViewport
-var raster_sprite:=Sprite2D.new()
+var raster_sprite:=MeshInstance2D.new()
+const Layout=preload("res://scripts/factory_layout.gd")
+var motion=preload("res://scripts/cell_motion.gd").new()
+var nucleus_ink:=Node2D.new()
 var raster_active:=false
 var raster_outline:=PackedVector2Array()
 var raster_dirty:=true
@@ -16,7 +19,6 @@ var art: Dictionary = {}
 var art_lineage := -2147483648
 var art_color:=""
 var nucleus_lag := Vector2.ZERO
-var last_age := 0.0
 var game
 var cytoplasm=preload("res://scripts/cytoplasm_view.gd").new()
 var seen_revision := -1
@@ -44,6 +46,11 @@ var membrane_warning:=false
 
 func _ready() -> void:
 	add_child(body_ink);body_ink.draw.connect(_draw_body)
+	body_ink.material=ShaderMaterial.new();body_ink.material.shader=preload("res://shaders/cell_motion.gdshader")
+	motion.bind(body_ink.material)
+	raster_sprite.mesh=Layout.grid()
+	raster_sprite.material=ShaderMaterial.new();raster_sprite.material.shader=preload("res://shaders/cell_motion.gdshader")
+	motion.bind(raster_sprite.material,true)
 	raster_sprite.texture_filter=CanvasItem.TEXTURE_FILTER_LINEAR
 	add_child(raster_sprite);raster_sprite.hide()
 	# Keep each shaded body immediately behind its own contents, so another
@@ -54,6 +61,7 @@ func _ready() -> void:
 	interior_backing.show_behind_parent=true
 	interior_backing.material=ShaderMaterial.new()
 	interior_backing.material.shader=preload("res://shaders/interior_backing.gdshader")
+	motion.bind(surface.material);motion.bind(interior_backing.material)
 	body_ink.add_child(interior_backing)
 	body_ink.add_child(surface)
 	body_ink.add_child(cytoplasm)
@@ -65,6 +73,7 @@ func _ready() -> void:
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	label.add_theme_color_override("font_outline_color",Color("21375d"))
 	label.add_theme_constant_override("outline_size",4)
+	add_child(nucleus_ink);nucleus_ink.draw.connect(_draw_nucleus)
 	add_child(motile_art)
 	add_child(proboscis_art)
 	add_child(label)
@@ -72,6 +81,7 @@ func _ready() -> void:
 	appendages.z_index = 0 # Keep each body and all its organs in one cell-local drawing order.
 	body_ink.add_child(appendages)
 	appendages.draw.connect(_draw_organs)
+	appendages.use_parent_material=true
 	add_child(sound_waves)
 	sound_waves.draw.connect(_draw_sound_waves)
 
@@ -81,15 +91,18 @@ func sync(render_position: Vector2, render_angle: float, zoom: float, alpha: flo
 		art_lineage = cell.lineage_id();art_color=paint;surface_revision=-1
 		art = Art.make(game.world.seed_value,art_lineage,paint)
 		art["core"] = Art.nucleus_outline(art.nucleus,art.phase)
+		nucleus_ink.queue_redraw()
 		seen_revision = -1
-	# Bounded presentation lag follows existing acceleration/turns, never physics.
-	var elapsed := clampf(cell.age-last_age,0,0.1)
-	last_age = cell.age
-	var drift: Vector2 = (-cell.shape_acceleration.rotated(-render_angle)*0.002+Vector2(0,-cell.angular_velocity)*cell.radius*0.025).limit_length(cell.radius*0.055)
-	nucleus_lag = nucleus_lag.lerp(drift,1-exp(-elapsed*6))
-	sound_waves.queue_redraw()
 	position = render_position
 	rotation = render_angle
+	motion.sync(cell,game.ui_time,global_transform)
+	nucleus_lag=motion.nucleus_lag
+	var nucleus_anchor: Vector2=Layout.layout(cell).nucleus if cell==game.world.player else Vector2(-6,-4)
+	nucleus_center=motion.point(nucleus_anchor)+nucleus_lag
+	nucleus_size=Layout.NUCLEUS
+	nucleus_ink.position=nucleus_center
+	if seen_revision!=cell.render_revision:nucleus_ink.queue_redraw()
+	sound_waves.queue_redraw()
 	if depth_style != game.membrane_depth:
 		depth_style = game.membrane_depth
 		seen_revision = -1
@@ -108,7 +121,7 @@ func sync(render_position: Vector2, render_angle: float, zoom: float, alpha: flo
 	var reduced: bool = detail_lod and cell.radius*zoom*game.detail_canvas_scale < 18*game.detail_pixel_ratio and not game.build_open and not internal
 	var detail_changed: bool = reduced != simple_view
 	simple_view = reduced
-	motile_art.sync(cell,not simple_view,game.ui_time,game.world)
+	motile_art.sync(cell,not simple_view,game.ui_time,game.world,motion)
 	proboscis_art.sync(self,not simple_view)
 	if (seen_revision != cell.render_revision and (not reduced or game.world.revision-last_draw_tick >= 2)) or detail_changed or game.show_senses != get_meta("senses",false) or game.build_open != get_meta("assembly",false):
 		seen_revision = cell.render_revision
@@ -122,6 +135,7 @@ func sync(render_position: Vector2, render_angle: float, zoom: float, alpha: flo
 	if depth_style and not raster_active:
 		_sync_surface(render_angle,detail_changed)
 	_sync_raster(detail_lod and cell.radius*zoom*game.detail_canvas_scale<28*game.detail_pixel_ratio and raster_enabled and game.world.remote_client and cell!=game.world.player and not internal and not game.build_open and not game.show_senses and not game.merge_selecting())
+	_gel_enabled(not raster_active)
 	label.visible = cell.rival_name != "" and (game.show_senses or get_global_mouse_position().distance_to(global_position) < cell.extent()*zoom+20)
 	if label.visible:
 		label.text = cell.rival_name
@@ -139,7 +153,7 @@ func _sync_raster(enabled: bool) -> void:
 			body_ink.reparent(self,false);move_child(body_ink,0);body_ink.position=Vector2.ZERO;body_ink.scale=Vector2.ONE
 			if depth_style:_sync_surface(rotation,true)
 			raster.render_target_update_mode=SubViewport.UPDATE_DISABLED
-			raster_sprite.hide();raster_active=false;_queue_body_redraw();appendages.queue_redraw()
+			raster_sprite.hide();raster_active=false;_queue_body_redraw();appendages.queue_redraw();_gel_enabled(true)
 		return
 	if raster_zoom==0 or absf(log(game.zoom/raster_zoom))>.18:raster_dirty=true;raster_zoom=game.zoom
 	if raster==null:
@@ -154,6 +168,8 @@ func _sync_raster(enabled: bool) -> void:
 func refresh_raster() -> void:
 	if not raster_active or not raster_dirty:return
 	raster_outline=cell.membrane.outline()
+	motion.capture_raster(raster_outline)
+	_gel_enabled(false)
 	if depth_style:_sync_surface(rotation,false)
 	body_ink.queue_redraw();appendages.queue_redraw()
 	var extent: float=cell.extent()*1.25
@@ -165,7 +181,7 @@ func refresh_raster() -> void:
 	raster.size=Vector2i(pixels,pixels)
 	var scale_value: float=pixels/(extent*2)
 	body_ink.position=Vector2.ONE*pixels*.5;body_ink.scale=Vector2.ONE*scale_value
-	raster_sprite.scale=Vector2.ONE/scale_value
+	raster_sprite.scale=Vector2.ONE*extent
 	raster.render_target_update_mode=SubViewport.UPDATE_ONCE;raster_dirty=false
 	if game.frame_trace!=null:game.frame_trace.count("cell_raster_updates")
 
@@ -205,6 +221,19 @@ func _sync_surface(render_angle: float, changed: bool) -> void:
 	water_wake.material.set_shader_parameter("relative_flow",relative_flow(cell,game.world.fluid,render_angle))
 	water_wake.material.set_shader_parameter("clock",game.world.time)
 
+
+func _gel_enabled(detailed: bool) -> void:
+	for item in [body_ink,surface,interior_backing]:item.material.set_shader_parameter("gel_enabled",detailed)
+	raster_sprite.material.set_shader_parameter("gel_enabled",true)
+
+func visible_point(at: Vector2) -> Vector2:return motion.point(at)
+func visible_normal(at: Vector2,direction: Vector2) -> Vector2:return motion.normal(at,direction)
+func visible_outline() -> PackedVector2Array:
+	return motion.outline(raster_outline,true) if raster_active else motion.outline(cell.membrane.outline())
+
+func _draw_nucleus() -> void:
+	if art.is_empty():return
+	Visuals.nucleus_art(nucleus_ink,Vector2.ZERO,Layout.NUCLEUS,art.core,art.colors,not simple_view)
 
 func _draw_body() -> void:
 	var mark := Time.get_ticks_usec() if game.frame_trace != null else 0
@@ -253,18 +282,6 @@ func _draw_body() -> void:
 	if not simple_view and cell != game.world.player and game.internal_visible(cell):
 		for vacuole in cell.chemistry.vacuoles:
 			body_ink.draw_arc(vacuole.p,vacuole.radius,0,TAU,16,Color("8fe3bf").lerp(Color("f497c4"),vacuole.acid),0.8,true)
-	var safe_radius: float = cell.radius
-	for point in outline: safe_radius = minf(safe_radius,point.length())
-	var nucleus: Vector2 = Vector2(-0.12,-0.10)*safe_radius+nucleus_lag
-	var core: PackedVector2Array = art.core
-	if simple_view:
-		var reduced_core := PackedVector2Array()
-		for i in range(0,core.size(),2): reduced_core.append(core[i])
-		core = reduced_core
-	var size := safe_radius*0.28
-	nucleus_center = nucleus
-	nucleus_size = size
-	Visuals.nucleus_art(body_ink,nucleus,size,core,palette,not simple_view)
 	for packet in (cell.signals if game.internal_visible(cell) else []): body_ink.draw_circle(packet.p,3*Visuals.INTERNAL_PARTICLE_SCALE,Color("fc8c90") if packet.fear else Color("b5a3f4"))
 	for hole in cell.holes:
 		var at: Vector2 = cell.local_point(hole.a)

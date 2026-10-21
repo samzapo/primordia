@@ -453,6 +453,7 @@ func _cell_render_alpha(cell,alpha: float) -> float:
 
 func _update_world(alpha: float) -> void:
 	preload("res://scripts/motile_art.gd").set_clock(ui_time)
+	RenderingServer.global_shader_parameter_set("primordia_cosmetic_clock",ui_time)
 	var canvas_scale:=get_viewport().get_final_transform().get_scale().abs()
 	detail_canvas_scale=maxf(.001,minf(canvas_scale.x,canvas_scale.y))
 	var sync_start := Time.get_ticks_usec() if frame_trace != null else 0
@@ -690,12 +691,16 @@ func _draw_preview() -> void:
 	var size: float = organ.scale if not organ.is_empty() else 1.0
 	var kind: String = organ.kind if not organ.is_empty() else Simulation.KINDS[selected]
 	var normal: Vector2 = cell.local_normal(a)
-	var point: Vector2 = cell.organ_local_position({"kind":kind,"a":a,"scale":size}).rotated(heading)
+	var source_point: Vector2=cell.organ_local_position({"kind":kind,"a":a,"scale":size})
+	if views.has(cell.id):
+		normal=views[cell.id].visible_normal(source_point,normal)
+		source_point=views[cell.id].visible_point(source_point)
+	var point: Vector2=source_point.rotated(heading)
 	var fits: bool = moving_id >= 0 or (cell.can_fit(kind,a,1,false) and world.player.biomass >= cell.construction_price(kind))
 	Visuals.icon(preview,point,kind,normal.angle()+heading,size,ui_time)
 	preview.draw_arc(point,22*size,0,TAU,32,MINT if fits else Color("fc8c90"),2/zoom,true)
 	if selected >= 0:
-		var outline: PackedVector2Array = cell.membrane.outline()
+		var outline: PackedVector2Array = views[cell.id].visible_outline() if views.has(cell.id) else cell.membrane.outline()
 		var contour := PackedVector2Array()
 		for vertex in outline: contour.append(vertex.rotated(heading))
 		contour.append(contour[0])

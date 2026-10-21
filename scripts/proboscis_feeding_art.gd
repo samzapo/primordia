@@ -17,8 +17,8 @@ static func geometry(game,view,organ: Dictionary) -> Dictionary:
  # Reproject the actual visible shaft onto the current rendered donor. The
  # authority's old edge/fraction is not a visual anchor between snapshots.
  var segment:=Probe.local_segment(view.cell,organ)
- var base: Vector2=view.transform*segment[0]
- var tip: Vector2=view.transform*segment[1]
+ var base: Vector2=view.transform*view.visible_point(segment[0])
+ var tip: Vector2=view.transform*view.visible_point(segment[1])
  var result: Dictionary={"base":base,"tip":tip,"hole":Vector2.INF}
  var contact: Dictionary=organ.get("proboscis_contact",{})
  if game==null or organ.hp<=0 or not organ.feeding or not game.views.has(int(contact.get("cell",-1))):return result
@@ -28,8 +28,8 @@ static func geometry(game,view,organ: Dictionary) -> Dictionary:
  pose.origin=base+Medium.offset(base,pose.origin)
  var inverse:=pose.affine_inverse()
  var start: Vector2=inverse*base
- var end: Vector2=inverse*(view.transform*(segment[1]+view.cell.organ_normal(organ)*6*organ.scale))
- var outline: PackedVector2Array=donor.raster_outline if donor.raster_active else donor.cell.membrane.outline()
+ var end: Vector2=inverse*(view.transform*view.visible_point(segment[1]+view.cell.organ_normal(organ)*6*organ.scale))
+ var outline: PackedVector2Array=donor.visible_outline()
  var hit:=Vector2.INF;var distance:=INF
  for i in outline.size():
   var crossing=Geometry2D.segment_intersects_segment(start,end,outline[i],outline[(i+1)%outline.size()])

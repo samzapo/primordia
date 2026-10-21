@@ -14,7 +14,7 @@ func _draw() -> void:
  for organ in view.cell.organs:
   if organ.kind!="proboscis":continue
   var path:=Cue.geometry(view.game,view,organ)
-  var base: Vector2=Probe.local_segment(view.cell,organ)[0]
+  var base: Vector2=view.visible_point(Probe.local_segment(view.cell,organ)[0])
   var tip: Vector2=view.transform.affine_inverse()*path.tip
   var depleted: bool=preload("res://scripts/organelle_status.gd").state(view.game.world,view.cell,organ).depleted
   Visuals.icon(self,base,"proboscis",(tip-base).angle(),organ.scale,view.game.ui_time,organ.mode,organ.consume_flash,detail,0,depleted,0,(tip-base).length()/organ.scale)

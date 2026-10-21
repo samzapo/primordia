@@ -1045,6 +1045,30 @@ const RELEASES=[
  "footer": "Your cell and its progress carry on in this pond.",
  "button": "Back to the pond"
 },
+{
+ "id": "2026-10-21-experimental-local-cell-gel",
+ "audience": "experimental",
+ "supersedes_experimental": true,
+ "supersedes_shared_for_experimental": true,
+ "title": "What’s new in the pond",
+ "items": [
+  "Create a leafless, six-pointed Hunter with an oral groove, flagellum, hunting receptor and offensive gland. Grazers grow hairs; Producers grow firm, boxy cell walls.",
+  "Try the Parasite: a short, wormlike cell with a proboscis, flagellum, hunting receptor and flight receptor, without leaves, an oral groove or other weapons.",
+  "Balanced investment is the default. It develops a mix of all four specializations across your family, completing each cell’s core build before adding extras.",
+  "Feed through a proboscis to draw stored biomass from a living cell. A puncture and a moving food particle show the transfer along the tube.",
+  "Hunters store dense meals, while Grazers and Parasites build biomass reserves. Producers grow steadily and share food with the pond.",
+  "Build with biomass. Your first two organelles are free; later organs cost more. Fixed-size factories spread through your cell, with small tap symbols, placement previews and outward ripples.",
+  "Instinct has its own pane. Brief bordered notices fade away, red marks starvation and refused placements, and a little amoeba shows waiting.",
+  "Choose Mitosis to split biomass or Budding for a small daughter. Automatic reproduction waits when your family or the pond is full.",
+  "Organelles use ATP while doing their jobs. Mouth suction runs while feeding, leaving pheromones to drift with the water.",
+  "Biomass above 500 gradually returns to the pond as nutrient and waste particles.",
+  "Water shows pH through color: pink for acid and clear near neutral. Pheromones carry their family’s color.",
+  "Cells, flagella, cilia and mouth hairs keep moving smoothly between pond updates. Cell bodies squash and settle with a gentle, gelatinous wobble.",
+  "Enter through Primordia’s loading screen, and use Log out in Pause to change players."
+ ],
+ "footer": "Your cell and its progress carry on in this pond.",
+ "button": "Back to the pond"
+},
 
 
 ]

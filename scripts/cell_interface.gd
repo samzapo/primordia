@@ -129,6 +129,7 @@ func screen_at(target: Dictionary) -> Vector2:
 				p = preload("res://scripts/visuals.gd").oral_path(cell,record.a)[12]
 			else:
 				p = cell.organ_local_position(record)
+		if game.views.has(cell.id):p=game.views[cell.id].visible_point(p)
 	else: p = interior.anchors.get("nucleus" if target.kind in ["lineage","archive","past","investment"] else "bud" if target.kind=="division" else target.kind,Vector2.ZERO)
 	return game.world_layer.to_global(interior.position+p.rotated(interior.rotation))
 
@@ -143,8 +144,7 @@ func _hit_candidates(screen: Vector2) -> Array:
 	if interior.anchors.is_empty() or not interior.visible: return []
 	var found: Array = []
 	for target in targets():
-		var radius := maxf(18*game.preferences.hud_scale,interior.anchors.radius*game.zoom*(0.28 if target.kind == "nucleus" else 0.16))
-		if target.kind=="chemistry":radius=maxf(20*ui_scale(),interior.anchors.radius*game.zoom*.24)
+		var radius := maxf(18*game.preferences.hud_scale,preload("res://scripts/factory_layout.gd").radius(target.kind)*game.zoom)
 		if target.kind in ["organ","scar"]: radius = maxf(17*game.preferences.hud_scale,14*game.zoom)
 		radius=maxf(radius*1.15,(22 if mobile() else 20)*ui_scale())
 		var distance := screen.distance_to(screen_at(target))
