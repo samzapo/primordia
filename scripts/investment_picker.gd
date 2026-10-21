@@ -31,10 +31,12 @@ func initialize(owner_game) -> void:
   button.expand_icon=true;button.icon_alignment=HORIZONTAL_ALIGNMENT_RIGHT
  family.text="Family";body.text="This cell"
  family.pressed.connect(_scope.bind("lineage"));body.pressed.connect(_scope.bind("cell"))
- var row:=HBoxContainer.new();box.add_child(row)
- for kind in ["hunter","producer","grazer"]:
+ var row:=GridContainer.new();row.columns=2;box.add_child(row)
+ for kind in ["hunter","producer","grazer","parasite","balanced"]:
   var card=Choice.new();card.strategy=kind;card.size_flags_horizontal=Control.SIZE_EXPAND_FILL
-  row.add_child(card);cards.append(card);card.pressed.connect(choose.bind(kind))
+  if kind=="balanced":box.add_child(card)
+  else:row.add_child(card)
+  cards.append(card);card.pressed.connect(choose.bind(kind))
  var controls:=HBoxContainer.new();box.add_child(controls)
  for button in [manual,inherit,back]:controls.add_child(button);button.size_flags_horizontal=Control.SIZE_EXPAND_FILL
  manual.pressed.connect(choose.bind("manual"));inherit.pressed.connect(choose.bind("inherit"))
@@ -45,7 +47,7 @@ func initialize(owner_game) -> void:
   sync())
  back.text="Back";back.pressed.connect(func():game.cell_ui.open_context({"kind":"nucleus"}))
  status.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;box.add_child(status)
- note.text="Producer by default. Unattended: one action/min; save for reproduction."
+ note.text="Balanced by default. Unattended: one action/min; save for reproduction."
  note.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;box.add_child(note)
  box.add_child(exemplar);exemplar.text="Copy a relative’s build"
  exemplar.pressed.connect(func():
@@ -87,8 +89,8 @@ func choose(kind: String) -> void:
  sync()
 func sync() -> void:
  var viewport: Vector2=game.get_viewport_rect().size
- # Keep the three choices together even with large UI text on a short phone.
- var s: float=minf(game.cell_ui.ui_scale(),minf(viewport.x/330.0,viewport.y/510.0))
+ # Keep every illustrated path visible on a short phone.
+ var s: float=minf(game.cell_ui.ui_scale(),minf(viewport.x/330.0,viewport.y/740.0))
  var width:=minf(540*s,viewport.x-16*s)
  family.text="Family";body.text="This cell"
  family.icon=SELECTION_MARK if scope=="lineage" else null
@@ -132,7 +134,7 @@ func sync() -> void:
   for side in ["left","top","right","bottom"]:margin.add_theme_constant_override("margin_"+side,roundi(8*s))
   box.add_theme_constant_override("separation",roundi(6*s))
   for card in cards:
-   card.text_scale=s;card.custom_minimum_size=Vector2(88,126)*s;card.queue_redraw()
+   card.text_scale=s;card.custom_minimum_size=Vector2(88,100 if card.strategy=="balanced" else 126)*s;card.queue_redraw()
   for button in [family,body,manual,inherit,back,adopt,exemplar,auto_mitosis,auto_bud]:
    button.custom_minimum_size.y=30*s
    button.add_theme_constant_override("icon_max_width",roundi(16*s))

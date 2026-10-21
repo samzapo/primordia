@@ -99,7 +99,7 @@ static func investment(check: Callable) -> void:
 	for kind in Sim.Cell.KINDS:
 		check.call(kind in covered,"Every organ has an explicit investment role or a deliberate manual-only decision")
 	check.call(policy.MANUAL_ONLY.is_empty() and "sanctuary" not in covered,"The removed Sanctuary has no active investment role")
-	for role in ["hunter","producer","grazer"]:
+	for role in ["hunter","producer","grazer","parasite"]:
 		var variants: Dictionary={}
 		for id in range(200,210):
 			var cell=Sim.Cell.new(id);cell.lineage=id;cell.add_organ("feeding",0,"graze",false)
@@ -115,7 +115,7 @@ static func investment(check: Callable) -> void:
 			else:check.call(choice.kind!=policy.PRIORITIES[role][0],"The next purchase complements the core instead of blindly duplicating it")
 			# Diversity belongs to support after the actual role is complete.
 			cell.organs.clear();cell.biomass=2000
-			for kind in {"hunter":["hunting","propulsion","proboscis"],"producer":["photosynthesis","photosynthesis","mitochondrion"],"grazer":["feeding","cilia"]}[role]:
+			for kind in {"hunter":["hunting","propulsion","poreforming"],"parasite":["hunting","sensing","propulsion","proboscis"],"producer":["photosynthesis","photosynthesis","mitochondrion"],"grazer":["feeding","cilia"]}[role]:
 				cell.add_organ(kind,cell.organs.size()*1.1,"graze",false)
 			check.call(cell.synergy()==role,"Supporting variants start from a complete anatomical synergy")
 			choice=policy.candidate(sim,cell)

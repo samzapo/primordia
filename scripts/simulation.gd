@@ -446,7 +446,7 @@ func step_autonomous_builds() -> void:
 			for index in cell.organs.size():
 				if cell.organs[index].id==choice.id:applied=_recycle_for(cell,progression,index);break
 		else:
-			applied=_install_for(cell,progression,choice.kind,fposmod(cell.id*2.399963+cell.organs.size(),TAU))
+			applied=_install_for(cell,progression,choice.kind,Investment.placement_angle(self,cell,choice.kind))
 			if applied and choice.has("mutation"):cell.specialize(cell.organs[-1].id,choice.mutation)
 		if applied:cell.investment_retry_at=time+60.0
 
@@ -1748,8 +1748,8 @@ func _motion_cell(cell, local_dt: float) -> void:
 		var power: float = (13000.0 if organ.kind == "propulsion" else Cell.CILIA_THRUST if organ.kind == "cilia" else 1100.0)*organ.scale*organ.scale*(organ.hp/organ.max_hp)*Genes.factor(organ,"thrust")
 		var energy_cost: float = local_dt*(Cell.CILIA_MOTION if organ.kind == "cilia" else Cell.MOTION_UPKEEP)*organ.scale*organ.scale*Genes.factor(organ,"motion_cost")
 		var capacity: float=cell.work_capacity(energy_cost)
-		power *= capacity*(1.15 if cell.synergy()=="hunter" else 1.0)
-		energy_cost *= .75 if cell.synergy()=="hunter" else 1.0
+		power *= capacity*(1.15 if cell.synergy() in ["hunter","parasite"] else 1.0)
+		energy_cost *= .75 if cell.synergy() in ["hunter","parasite"] else 1.0
 		var thrust: Vector2 = cell.organ_normal(organ).rotated(cell.angle)
 		# Flagella can reverse their stroke, but force follows their mounted axis.
 		if organ.kind in ["propulsion","cilia"] and thrust.dot(cell.target) < 0: thrust = -thrust

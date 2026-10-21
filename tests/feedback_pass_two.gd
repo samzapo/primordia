@@ -15,7 +15,7 @@ static func run(check: Callable) -> void:
  sim.Investment.npc_assignments(sim)
  check.call(sim.investment.npc.is_empty(),"No NPC is automatically assigned an investment policy")
  for cell in bodies:
-  check.call(sim.Investment.strategy(sim,cell)=="producer" and sim.Investment.candidate(sim,cell).kind=="photosynthesis","Unchosen NPCs follow Producer without a saved quota assignment")
+  check.call(sim.Investment.strategy(sim,cell)==sim.Investment.balanced_path(sim,cell),"Unchosen NPCs follow the stable Balanced mix without a saved quota assignment")
  sim.investment.cells[bodies[0].id]="grazer"
  for body in bodies:body.ap=0
  var ledger=sim._family_ledger(bodies[0]);bodies[0].ap=1

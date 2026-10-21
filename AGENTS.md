@@ -791,3 +791,18 @@ playback reset; keep captured endpoints, bounded adaptive delay and monotonic
 edit receipts. Give publication a chance between single late physics steps,
 and resume publication on its original100ms schedule without catch-up bursts.
 This does not itself establish real-time authority or40FPS phone rendering.
+
+October21 Parasite/Balanced direction supersedes the three-role/Producer-default
+rules. Read the final Revision76 section. Parasite requires working proboscis,
+flagellum,Hunting,Flight; no mouth or other offensive organ. Use an area-preserving
+short-worm profile with the proboscis in front, shared by live/family/investment
+art. Prompt finite digestion stores biomass with Grazer volume, not Hunter raw
+food. Preserve existing Hunter meal storage and six points, physical particle
+transport, saved points, ordinary payments and favorite/selected protection.
+Balanced is the new default; preserve explicit saved choices. Use the shared
+2Hunter/4Parasite/10Grazer/20Producer lottery for NPC/default/Balanced family
+members and custom fallback; stable per-cell paths, no extra ecology random
+draws or population quotas. Balanced daughters retain mixed policy. Update the
+36-cell fixture's proboscis Hunters to Parasites. Show the four role portraits
+and all-four Balanced icon on mobile/desktop. Experimental retained, cumulative
+notice, focused correctness/UI only.

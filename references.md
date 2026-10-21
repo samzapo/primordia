@@ -635,3 +635,15 @@ hardware WebGL replay establishes a controlled comparison, not phone FPS.
   supports an authored loading page. Primordia preserves real download progress
   and waits for an actual game frame before removing its HTML overlay. This is
   interface presentation, with no biological or physical modeling claim.
+
+## Parasite specialization and mixed investment (October21)
+[Moye, Schenk and Hess (2022), contact feeding between predation and parasitism](https://link.springer.com/article/10.1186/s12915-022-01478-x)
+describes protists perforating another cell wall to take up its contents.
+This motivates the existing finite contact proboscis, not a literal worm
+organelle, universal parasite anatomy or nondamaging host interaction.
+The short-worm outline is an authored visual analogy to the owner's reference,
+not a claim that these protists are flatworms. Area preservation, anatomy gates,
+biomass storage/rapid digestion, the inherited swimming bonus and the authored
+2:4:10:20 investment mix are gameplay choices. The existing metabolism/storage
+sources motivate finite resource conversion; no extra material/fuel, new
+chemistry reaction, remote host sensing or fixed population ratio is added.

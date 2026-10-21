@@ -191,7 +191,9 @@ func construction_refund(organ: Dictionary) -> float:
 
 func synergy() -> String:
 	var attack=int(working("poreforming"))+int(working("toxin"))+int(working("counterattack"))+int(working("proboscis"))
-	if working("hunting") and working("propulsion") and attack>0 and count("photosynthesis")==0:return "hunter"
+	var other_offense:=count("poreforming")+count("toxin")+count("counterattack")+count("acidifying")
+	if working("proboscis") and working("propulsion") and working("hunting") and working("sensing") and count("feeding")==0 and other_offense==0:return "parasite"
+	if working("hunting") and working("propulsion") and attack-int(working("proboscis"))>0 and count("photosynthesis")==0:return "hunter"
 	if working("photosynthesis",2) and working("mitochondrion") and attack==0 and count("feeding")==0:return "producer"
 	if working("feeding") and working("cilia") and count("photosynthesis")==0 and attack==0:return "grazer"
 	return ""
@@ -243,6 +245,10 @@ func sync_membrane_anatomy() -> void:
 	var role:=synergy()
 	membrane.cell_wall=role=="producer"
 	membrane.hunter_angle=NAN
+	membrane.parasite_angle=NAN
+	if role=="parasite":
+		for organ in organs:
+			if organ.kind=="proboscis" and organ.hp>0:membrane.parasite_angle=float(organ.a);break
 	if role!="hunter":return
 	for organ in organs:
 		if organ.kind=="feeding":
@@ -389,7 +395,7 @@ func perimeter() -> float:
 
 func storage_volume(spent_biomass: float=0.0) -> float:
 	var role:=synergy()
-	var tissue:=maxf(0,biomass-spent_biomass)*(.4 if role=="grazer" else .12)
+	var tissue:=maxf(0,biomass-spent_biomass)*(.4 if role in ["grazer","parasite"] else .12)
 	var food:=substrate*(.025 if role=="hunter" else .15)
 	# Reserve compression must never eject an existing saved organ layout.
 	var fitted:=78*pow(occupied()*1.1/(TAU*47),2)
@@ -399,7 +405,7 @@ func growth_scale() -> float:
 	return pow(maxf(1.0,storage_volume()/78.0),2.0/3.0)
 
 func gut_capacity() -> float:
-	return maxf(0,(480.0 if synergy()=="hunter" else 120.0 if synergy()=="grazer" else 72.0)*growth_scale()-chemistry.storage_used())
+	return maxf(0,(480.0 if synergy()=="hunter" else 120.0 if synergy() in ["grazer","parasite"] else 72.0)*growth_scale()-chemistry.storage_used())
 
 func oxygen_capacity() -> float:
 	return 56.0*growth_scale()

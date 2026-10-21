@@ -786,6 +786,37 @@ const RELEASES=[
  "footer":"Your cell and its progress carry on in this pond.",
  "button":"Back to the pond"
 },
+{
+ "id":"2026-10-21-experimental-parasite-balanced",
+ "audience":"experimental",
+ "supersedes_experimental":true,
+ "supersedes_shared_for_experimental":true,
+ "title":"What’s new in the pond",
+ "items":[
+  "Parasites use a proboscis, flagellum, hunting receptor and flight receptor, with no mouth or other weapons.",
+  "Parasites have a short, wormlike body and turn food straight into biomass reserves.",
+  "Balanced investment is the new default. It develops a mix of Hunters, Parasites, Grazers and Producers across your family; saved choices stay as you left them.",
+  "Primordia has its own loading screen, with progress before you enter the pond.",
+  "Particles move more smoothly when updates from the pond arrive slowly.",
+  "Improved smoothness when many cells are nearby.",
+  "Flagella, cilia and mouth hairs keep moving smoothly between updates from the pond.",
+  "Building responds straight away with an outward ripple and an organelle preview while placement is confirmed.",
+  "Cell controls are easier to tap. Auto mitosis and Auto budding keep their checkmarks without staying lit.",
+  "Acid patches stay more local. Water now shows pH colors, with pink acid and no tint near neutral pH 7.",
+  "The experimental pond badge is now in the bottom left, clear of the performance display.",
+  "Build with biomass. Your first two organelles are free, and the oral groove is optional.",
+  "Choose Mitosis or Budding. Division waits when the family or pond is full, instead of making a daughter and immediately merging her back. Your favorite cell stays protected while you’re away, paused or in a hidden tab.",
+  "Hunters store longer-lasting meals, Grazers build biomass reserves, and Producers keep sharing food. Well-fed Hunters rest between hunts.",
+  "Try the feeding proboscis to draw food directly from another cell. Hunters keep their sharp shape, while Parasites feed through a proboscis without a mouth.",
+  "Organelles spend ATP while working. Mouth suction runs while feeding and leaves pheromones drifting freely.",
+  "Swimming is a little faster, with smoother starts, stops and turns.",
+  "Investment strategies complete their Hunter, Parasite, Producer or Grazer synergy before adding extras. Hunters reabsorb blocking leaves and grow their pore-forming gland only when self-protection is ready.",
+  "Log out is now at the bottom of Pause with Close game, so you can sign in as another player. Your cells and progress stay in the pond.",
+  "Food stores no longer cause venting. Biomass above 500 gradually returns to the pond as nutrient and waste particles."
+ ],
+ "footer":"Your cell and its progress carry on in this pond.",
+ "button":"Back to the pond"
+},
 
 ]
 const CURRENT=RELEASES[-1]

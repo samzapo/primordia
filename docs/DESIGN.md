@@ -867,3 +867,33 @@ remain unchanged. Focused browser checks use actual touch taps for Internal/
 External and Pause/Resume, then rotate portrait/landscape and restore the canvas.
 The offline replay explicitly overrides socket polling/sending and identity
 persistence: it cannot connect to or modify either live pond.
+
+
+## October21 Parasite and Balanced investment
+Parasite is a separate anatomical role: a working proboscis, flagellum,
+hunting receptor and flight receptor, with no installed mouth or other offensive
+organs (pore/toxin/counterattack/acid). Other support is allowed. It uses a
+smooth, area-preserving short-worm membrane whose front follows the proboscis;
+the same physical outline supplies live art, collisions and family portraits.
+Its two free receptors remain outside ordinary construction tiers.
+Parasites promptly digest incoming food into finite biomass/ATP/products,
+rather than retaining raw meals. Their biomass uses the Grazer storage-volume
+tier; Hunters retain their dense food reserves and six-pointed outline.
+Parasites retain the former proboscis build's swimming efficiency, without
+Hunter pore immunity. Satiated Parasites rest once biomass reaches the ordinary
+mitosis survival budget (or75% of larger structural body mass).
+Balanced becomes the default for unchosen investment. Explicit saved choices
+are preserved. One shared weighted lottery has2Hunter/4Parasite/10Grazer/
+20Producer slots, matching the36-cell reference fixture with the former four
+proboscis Hunters now Parasites. A seed/cell-ID lottery resolves a stable role
+without drawing from simulation RNG or enforcing population quotas. Balanced
+family daughters retain Balanced, resolving their own path; explicit roles and
+Manual still inherit. Custom-template optional fallback uses this same mix.
+Assigned Parasites first reabsorb mouths/other offensive organs, build receptors
+and flagellum before proboscis, and never buy another weapon. Hunter investment
+no longer chooses the proboscis path. Core/favorite/selected protections,
+ordinary finite payments and one-action-per-minute remain.
+The investment picker shows all four role portraits plus a Balanced card with
+all four miniatures. Mobile and desktop use the same direct choices.
+Retain the experimental pond; main is unchanged. No new long balance or FPS
+campaign is implied by updating the reference fixture.

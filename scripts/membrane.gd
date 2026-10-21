@@ -12,6 +12,7 @@ var maximum_radius := 47.0
 var oral_angle := NAN
 var cell_wall := false # Derived from working, mouthless Producer anatomy.
 var hunter_angle := NAN # Derived anatomical axis; no new durable save field.
+var parasite_angle := NAN # Derived proboscis-facing short-worm axis.
 var points := PackedVector2Array()
 var previous := PackedVector2Array()
 var edge_lambda := PackedFloat32Array()
@@ -53,6 +54,10 @@ static func hunter_profile(angle: float) -> float:
 	var u: float=2*tangent*forward/(side+sqrt(maxf(0,side*side-4*tangent*tangent*curve*forward)))
 	return Vector2(forward+curve*u*u,side*u).length()
 
+static func parasite_profile(angle: float) -> float:
+	# Smooth short-worm silhouette, with a slightly fuller proboscis-facing end.
+	return pow(pow(absf(cos(angle))/1.65,2.6)+pow(absf(sin(angle))/.68,2.6),-1.0/2.6)*(1+.05*cos(angle))
+
 static func hunter_node_angle(index: int,axis: float) -> float:
 	var nominal:=TAU*index/COUNT
 	var tip: float=axis+roundi((nominal-axis)/(TAU/6))*(TAU/6)
@@ -72,11 +77,12 @@ func step(dt: float, radius: float, acceleration: Vector2, time: float, _aspect:
 		if is_finite(hunter_angle):
 			var polar:=hunter_node_angle(i,hunter_angle)
 			rest_points[i]=Vector2.from_angle(polar)*radius*hunter_profile(polar-hunter_angle)
+		if is_finite(parasite_angle):rest_points[i]=normals[i]*radius*parasite_profile(a-parasite_angle)
 		if cell_wall:
 			# Rounded square, normalized below to the same represented tissue area.
 			var axis:=normals[i].abs()
 			rest_points[i]=normals[i]*radius/pow(pow(axis.x,8)+pow(axis.y,8),1.0/8)
-	if cell_wall or is_finite(hunter_angle):
+	if cell_wall or is_finite(hunter_angle) or is_finite(parasite_angle):
 		var area:=0.0
 		for i in COUNT:area+=rest_points[i].cross(rest_points[(i+1)%COUNT])*.5
 		var scale:=sqrt(COUNT*radius*radius*sin(TAU/COUNT)*.5/area)
@@ -136,7 +142,7 @@ func step(dt: float, radius: float, acceleration: Vector2, time: float, _aspect:
 		var point := points[i]
 		if not point.is_finite(): point = rest_points[i]
 		var angle := nominal+clampf(wrapf(point.angle()-nominal,-PI,PI),-TAU/COUNT*0.38,TAU/COUNT*0.38)
-		var safe := Vector2.from_angle(angle)*clampf(point.length(),radius*0.58,radius*(2.1 if is_finite(hunter_angle) else 1.48))
+		var safe := Vector2.from_angle(angle)*clampf(point.length(),radius*0.58,radius*(2.1 if is_finite(hunter_angle) or is_finite(parasite_angle) else 1.48))
 		previous[i] += safe-points[i] if points[i].is_finite() else Vector2.ZERO
 		if not previous[i].is_finite(): previous[i] = safe
 		points[i] = safe
@@ -152,6 +158,10 @@ func step(dt: float, radius: float, acceleration: Vector2, time: float, _aspect:
 	if cell_wall:
 		for i in COUNT:
 			var corrected:=normals[i]*clampf(points[i].length(),rest_points[i].length()*.98,rest_points[i].length()*1.02)
+			previous[i]+=corrected-points[i];points[i]=corrected
+	if is_finite(parasite_angle):
+		for i in COUNT:
+			var corrected:=normals[i]*clampf(points[i].length(),rest_points[i].length()*.94,rest_points[i].length()*1.06)
 			previous[i]+=corrected-points[i];points[i]=corrected
 	if is_finite(hunter_angle):
 		# Six radial supports preserve sharp tips and inward-bowed spans.

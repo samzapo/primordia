@@ -7,7 +7,7 @@ var strategy:="hunter"
 var active:=false
 var text_scale:=1.0
 var picture:=Node2D.new()
-const DETAILS={"hunter":"Offense + movement","producer":"Sunlight + defense","grazer":"Feeding + movement"}
+const DETAILS={"hunter":"Offense + movement","parasite":"Contact feeding + escape","producer":"Sunlight + defense","grazer":"Feeding + movement","balanced":"A mix across the family"}
 func _ready() -> void:
  add_child(picture);picture.draw.connect(_picture)
  for state in ["normal","hover","pressed","focus","disabled"]:add_theme_stylebox_override(state,StyleBoxEmpty.new())
@@ -24,24 +24,31 @@ func _draw() -> void:
  draw_string(FONT,Vector2(4*text_scale,size.y-12*text_scale),DETAILS[strategy],HORIZONTAL_ALIGNMENT_CENTER,size.x-8*text_scale,roundi(11*text_scale),Color("c3d8e4"))
  picture.position=Vector2(size.x*.5,(size.y-43*text_scale)*.5);picture.queue_redraw()
 func _picture() -> void:
- var scale:=minf((size.x-14*text_scale)/110.0,(size.y-46*text_scale)/100.0)
- picture.draw_set_transform(Vector2.ZERO,0,Vector2.ONE*scale)
- var color: Color={"hunter":Color("e64491"),"producer":Color("487dd9"),"grazer":Color("a77ce2")}[strategy]
+ if strategy=="balanced":
+  var roles=["hunter","parasite","grazer","producer"]
+  var scale:=minf((size.x-20*text_scale)/480.0,(size.y-46*text_scale)/100.0)
+  for i in roles.size():_role_picture(roles[i],Vector2((i-1.5)*size.x*.24,0),scale)
+ else:
+  _role_picture(strategy,Vector2.ZERO,minf((size.x-14*text_scale)/110.0,(size.y-46*text_scale)/100.0))
+func _role_picture(role: String,center: Vector2,scale: float) -> void:
+ picture.draw_set_transform(center,0,Vector2.ONE*scale)
+ var color: Color={"hunter":Color("e64491"),"producer":Color("487dd9"),"grazer":Color("a77ce2"),"parasite":Color("de9d43")}[role]
  var outline:=PackedVector2Array()
- var axis:=-.35;var mouth:=axis-PI/2 if strategy=="hunter" else 0.0
- var model: Dictionary={"role":strategy,"spine":PackedVector2Array(),"roots":PackedVector2Array(),"normals":PackedVector2Array()}
+ var axis:=-.35;var mouth:=axis-PI/2 if role=="hunter" else 0.0
+ var model: Dictionary={"role":role,"spine":PackedVector2Array(),"roots":PackedVector2Array(),"normals":PackedVector2Array()}
  for i in 80:
   var angle:=i*TAU/80
   var reach:=32.0*(1+.06*sin(angle*3+.4))
-  if strategy=="hunter":reach=26*preload("res://scripts/membrane.gd").hunter_profile(angle-axis)
-  elif strategy=="producer":
+  if role=="hunter":reach=26*preload("res://scripts/membrane.gd").hunter_profile(angle-axis)
+  elif role=="parasite":reach=28*preload("res://scripts/membrane.gd").parasite_profile(angle)
+  elif role=="producer":
    var normal:=Vector2.from_angle(angle).abs()
    reach=28/pow(pow(normal.x,8)+pow(normal.y,8),1.0/8)
   outline.append(Vector2.from_angle(angle)*reach)
- if strategy=="hunter":
+ if role=="hunter":
   for i in 6:
    model.spine.append(Vector2.ZERO);model.spine.append(Vector2.from_angle(axis+i*TAU/6)*44)
- elif strategy=="grazer":
+ elif role=="grazer":
   for i in 10:
    var a:=.62+(TAU-1.24)*(i+.5)/10
    model.roots.append(Vector2.from_angle(a)*32*(1+.06*sin(a*3+.4)));model.normals.append(Vector2.from_angle(a))
@@ -51,14 +58,15 @@ func _picture() -> void:
  picture.draw_circle(Vector2(-6,-4),9,Color("803f65"));picture.draw_circle(Vector2(-7,-5),6,Color("ffc452"))
  var organs: Array={"hunter":[["hunting",axis],["toxin",.9],["poreforming",2.0],["propulsion",axis+PI]],
  "producer":[["photosynthesis",-.8],["photosynthesis",.7],["mitochondrion",2.6]],
- "grazer":[["cilia",PI],["protection",-.8],["cilia",1.7]]}[strategy]
+ "grazer":[["cilia",PI],["protection",-.8],["cilia",1.7]],
+ "parasite":[["proboscis",0],["propulsion",PI],["hunting",-.9],["sensing",1.0]]}[role]
  for organ in organs:
   var angle: float=organ[1]
   var point: Vector2=outline[posmod(roundi(angle/TAU*outline.size()),outline.size())]
   if organ[0]=="mitochondrion":point=Vector2(8,9)
-  Art.icon(picture,point*scale,organ[0],angle,.43*scale)
- picture.draw_set_transform(Vector2.ZERO,0,Vector2.ONE*scale)
- if strategy!="producer":
+  Art.icon(picture,center+point*scale,organ[0],angle,.43*scale)
+ picture.draw_set_transform(center,0,Vector2.ONE*scale)
+ if role in ["hunter","grazer"]:
   var phase:=fposmod(mouth-.3,TAU)/TAU*outline.size();var oral:=PackedVector2Array()
   for i in 9:oral.append(outline[posmod(roundi(phase+i*.65/TAU*outline.size()/8),outline.size())]*.96)
   picture.draw_polyline(oral,Color("b8ffcf"),3,true)

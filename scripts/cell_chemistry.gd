@@ -156,7 +156,9 @@ func carrier_radius(quantity: float) -> float:
 	var density:=4.0 if cell.synergy()=="hunter" else 1.0
 	return clampf(6+sqrt(maxf(0,quantity)/density)*.6,7,maxf(7,minf(14,cell.radius*.28)))
 
-func digestion_rate(cell) -> float:
+func digestion_rate(cell,dt: float=1.0) -> float:
+	# Parasites promptly convert their actual intake, never build a raw-food reserve.
+	if cell.synergy()=="parasite":return amount("food")/maxf(.000001,dt)
 	if cell.synergy()=="grazer":return .2*cell.growth_scale()
 	# Keep fuel in the vacuole instead of filling a quickly decaying ATP pool.
 	var aerobic:=clampf(amount("oxygen")/maxf(.001,amount("food")),0,1)
@@ -182,7 +184,7 @@ func advance(cell, dt: float, _external_osmolarity: float=.15) -> void:
 	var aerobic_total:=0.0
 	var produced_total:=0.0
 	frame_dt=dt;tick+=1
-	var budget: float=digestion_rate(cell)*dt
+	var budget: float=digestion_rate(cell,dt)*dt
 	var original:=particles.duplicate();batching=true
 	for packet in original:
 		packet.previous=packet.p

@@ -20,6 +20,11 @@ func fixture():
 	sim.Lifecycle.migrate(sim);sim.player.reproduction_retry_at=0
 	return sim
 func run() -> void:
+	if "--parasite-balanced" in OS.get_cmdline_user_args():
+		parasite_balanced()
+		await parasite_picker()
+		if "--gpu" in OS.get_cmdline_user_args():await parasite_gpu()
+		print("PARASITE_BALANCED: %d assertions, %d failures" % [checks,failures]);quit(0 if failures==0 else 1);return
 	if "--synergy-priority" in OS.get_cmdline_user_args():
 		synergy_investment()
 		print("SYNERGY_INVESTMENT: %d assertions, %d failures" % [checks,failures]);quit(0 if failures==0 else 1);return
@@ -182,7 +187,7 @@ func investment_growth() -> void:
 		check(sim.cells.all(func(c):return c.health>0 and is_finite(c.biomass) and is_finite(c.energy) and sim.Investment.strategy(sim,c)==role),"Growing "+role+" family retains finite living cells")
 		check(sim.cells.size()<=12 and sim.cells.all(func(c):return c.reproduction_retry_at<=sim.time+60),"Growth preserves family cap and bounded birth cooldown")
 	var defaults=fixture()
-	check(defaults.Investment.strategy(defaults,defaults.player)=="producer","An unchosen player family defaults to Producer")
+	check(defaults.Investment.DEFAULT=="balanced" and defaults.Investment.strategy(defaults,defaults.player)==defaults.Investment.balanced_path(defaults,defaults.player),"An unchosen player family defaults to the stable Balanced mix")
 	defaults.Investment.set_strategy(defaults,"lineage","manual")
 	var saved=Codec.new().restore(Codec.new().capture(defaults))
 	check(saved.Investment.strategy(saved,saved.player)=="manual" and saved.Investment.owned_settings(saved,saved.player.lineage_id()).lineages.values()==["manual"],"Explicit Manual survives checkpoint and owner settings")
@@ -400,7 +405,7 @@ func smooth_motion_and_venting() -> void:
 	check(delayed.player.biomass>=500 and is_finite(delayed.player.biomass),"A delayed vent cannot overshoot below its biomass threshold")
 
 func synergy_investment() -> void:
-	for role in ["hunter","producer","grazer"]:
+	for role in ["hunter","producer","grazer","parasite"]:
 		for seed_value in [28,29]:
 			var sim=fixture();sim.seed_value=seed_value;var cell=sim.player
 			sim.investment.lineages[cell.lineage_id()]=role;cell.biomass=2000;cell.energy=200
@@ -426,7 +431,7 @@ func synergy_investment() -> void:
 				before=cell.organs.duplicate(true);sim.step_autonomous_builds()
 				check(cell.organs==before,"No second action runs in the same minute")
 				sim.time+=60
-			check(cell.synergy()==role and steps<=6,"Hunter, Producer and Grazer reach their synergy before optional support")
+			check(cell.synergy()==role and steps<=7,"Every assigned role reaches its synergy before optional support")
 	var old=fixture();var cell=old.player;old.investment.cells[cell.id]="hunter"
 	for kind in ["feeding","photosynthesis","hunting","propulsion","poreforming"]:cell.add_organ(kind,cell.organs.size(),"graze",false)
 	cell.energy=100;cell.biomass=60
@@ -441,15 +446,142 @@ func synergy_investment() -> void:
 	protected_cell.managed_cells=[];protected_cell.investment.cells[cell.id]="manual"
 	check(protected_cell.Investment.decision(protected_cell,cell).is_empty(),"Explicit Manual remains untouched")
 	cell.organs.clear()
-	for kind in ["hunting","proboscis","cilia"]:cell.add_organ(kind,cell.organs.size(),"graze",false)
+	for kind in ["hunting","poreforming","cilia"]:cell.add_organ(kind,cell.organs.size(),"graze",false)
 	protected_cell.investment.cells[cell.id]="hunter";cell.biomass=23;cell.energy=100
 	check(protected_cell.Investment.decision(protected_cell,cell).get("kind","")=="propulsion","Existing weapon/cilia cannot make the missing Hunter flagellum discretionary")
 	cell.add_organ("propulsion",3,"graze",false);cell.energy=0
 	var shed: Dictionary=protected_cell.Investment.shed_support(cell,"hunter")
-	check(not shed.has("id") or cell.organ_by_id(shed.id).kind not in ["propulsion","proboscis"],"Recovery preserves the actual last Hunter weapon and required flagellum")
+	check(not shed.has("id") or cell.organ_by_id(shed.id).kind not in ["propulsion","poreforming"],"Recovery preserves the actual last Hunter weapon and required flagellum")
 	var custom=fixture();cell=custom.player
 	for kind in ["photosynthesis","hunting","propulsion","proboscis"]:cell.add_organ(kind,cell.organs.size(),"graze",false)
 	check(custom.Investment.save_template(custom,"cell",cell.id),"An explicit mixed custom build can still be saved")
 	var chosen: Dictionary=custom.Investment.decision(custom,cell)
 	check(chosen.get("action","")!="remove","Completed custom example is not dismantled by a randomly different role fallback")
 	preload("res://tests/behavior_tree.gd").investment(check)
+
+
+class PickerUI extends RefCounted:
+	func ui_scale() -> float:return 1.0
+	func mobile() -> bool:return true
+	func open_context(_context: Dictionary) -> void:pass
+class PickerGame extends Control:
+	var world
+	var cell_ui=PickerUI.new()
+	func _message(_text: String) -> void:pass
+
+func parasite_fixture():
+	var cell=Sim.Cell.new(900)
+	cell.body=60;cell.biomass=40;cell.energy=72;cell.update_geometry()
+	for pair in [["proboscis",0.0],["propulsion",PI],["hunting",.85],["sensing",-.85]]:
+		cell.add_organ(pair[0],pair[1],"graze",false)
+	cell.update_geometry()
+	return cell
+
+func parasite_balanced() -> void:
+	var sim=fixture();var policy=sim.Investment
+	var counts={}
+	for ticket in policy.MIX_TOTAL:
+		var path: String=policy.path_at(ticket);counts[path]=int(counts.get(path,0))+1
+	check(counts==policy.MIX,"The weighted lottery is exactly2 Hunter/4 Parasite/10 Grazer/20 Producer slots")
+	var state: int=sim.rng.state
+	var before: String=policy.strategy(sim,sim.player)
+	sim.cells.append(Sim.Cell.new(501))
+	policy.npc_assignments(sim)
+	check(policy.DEFAULT=="balanced" and policy.strategy(sim,sim.player)==before and sim.rng.state==state,"Balanced defaults are stable and do not consume physics/ecology randomness")
+	check(policy.set_strategy(sim,"lineage","balanced") and policy.set_strategy(sim,"cell","parasite") and policy.strategy(sim,sim.player)=="parasite","An explicit role overrides a Balanced family")
+	policy.set_strategy(sim,"cell","balanced")
+	var child=Sim.Cell.new(44);child.lineage=sim.player.lineage_id()
+	policy.inherit_strategy(sim,sim.player,child)
+	check(sim.investment.cells[child.id]=="balanced" and policy.strategy(sim,child)==policy.balanced_path(sim,child),"Balanced daughters keep the mixed policy, not their parent's resolved role")
+	policy.set_strategy(sim,"cell","manual")
+	var restored=Codec.new().restore(Codec.new().capture(sim))
+	check(policy.strategy(restored,restored.player)=="manual" and restored.investment.lineages[sim.player.lineage_id()]=="balanced","Checkpointing preserves explicit Manual and Balanced choices")
+	var parasite=parasite_fixture()
+	check(parasite.synergy()=="parasite" and not is_finite(parasite.membrane.hunter_angle),"A mouthless proboscis/flagellum/Hunt/Flight build is Parasite rather than Hunter")
+	for kind in ["feeding","poreforming","toxin","counterattack","acidifying"]:
+		var incompatible=Sim.Cell.clone_state(parasite);incompatible.add_organ(kind,2,"graze",false)
+		check(incompatible.synergy()!="parasite","Installed "+kind+" excludes the Parasite role")
+	for kind in ["proboscis","propulsion","hunting","sensing"]:
+		var damaged=Sim.Cell.clone_state(parasite)
+		for organ in damaged.organs:
+			if organ.kind==kind:organ.hp=0
+		check(damaged.synergy()!="parasite","Parasite requires a working "+kind)
+	for axis in [0.0,.41,1.6]:
+		var body=Sim.Cell.clone_state(parasite)
+		body.organs[0].a=axis;body.update_geometry()
+		for i in 60:body.membrane.step(1.0/60,body.radius,Vector2.ZERO,i/60.0)
+		var front: float=body.visible_support(axis);var side: float=body.visible_support(axis+PI/2)
+		check(front>side*2.0 and body.membrane.parasite_angle==axis,"The smooth short-worm profile faces its proboscis at arbitrary mounting angles")
+		var area:=0.0
+		for i in body.membrane.COUNT:area+=body.membrane.points[i].cross(body.membrane.points[(i+1)%body.membrane.COUNT])*.5
+		check(absf(area-body.membrane.COUNT*body.radius*body.radius*sin(TAU/body.membrane.COUNT)*.5)<.05,"The elongated physical ring preserves tissue area")
+		var portrait=preload("res://scripts/cell_portrait.gd").capture(body)
+		check(portrait.outline==body.membrane.outline() and portrait.synergy.role=="parasite","Family art captures the actual parasite outline")
+		var codec=Codec.new();var saved_points=body.membrane.points.duplicate()
+		var recovered=codec.restore(codec.capture(body))
+		check(recovered.membrane.points==saved_points and recovered.membrane.parasite_angle==axis,"Checkpoint derives the parasite axis without rewriting saved cell points")
+	parasite.chemistry.emit("food",8,Vector2.ZERO,-1,-1,8*parasite.Chemistry.TISSUE_FUEL)
+	parasite.chemistry.emit("oxygen",8,Vector2.ZERO)
+	var matter: float=parasite.organic_mass()
+	var potential: float=parasite.biomass*parasite.Chemistry.TISSUE_FUEL+parasite.energy+parasite.chemistry.potential()+parasite.chemistry.heat
+	var biomass: float=parasite.biomass
+	parasite.chemistry.advance(parasite,1.0/30)
+	check(parasite.substrate<.000001 and parasite.biomass>biomass,"Parasite food converts promptly to biomass instead of remaining in food vacuoles")
+	check(absf(parasite.organic_mass()-matter)<.000001 and absf(parasite.biomass*parasite.Chemistry.TISSUE_FUEL+parasite.energy+parasite.chemistry.potential()+parasite.chemistry.heat-potential)<.00001,"Prompt digestion conserves actual material and finite fuel")
+	parasite.biomass=200;parasite.update_geometry()
+	check(sim.Behavior.sated(parasite) and sim.Behavior.priority(parasite,"hunt")==0,"A parasite rests on its own biomass reserves")
+	var hunter=Sim.Cell.new(901);hunter.body=parasite.body;hunter.biomass=200
+	for kind in ["hunting","propulsion","poreforming"]:hunter.add_organ(kind,0,"graze",false)
+	hunter.update_geometry()
+	check(parasite.storage_volume()>hunter.storage_volume(),"Parasite biomass occupies the same bulkier storage tier as Grazer reserves")
+	var contact=parasite_fixture();var donor=Sim.Cell.new(902,preload("res://scripts/proboscis.gd").tip(contact,contact.organs[0]))
+	donor.biomass=40;sim.cells=[contact,donor];sim.player=contact;sim.spatial_queries=false
+	var total: float=contact.organic_mass()+donor.organic_mass()
+	preload("res://scripts/proboscis.gd").step(sim,contact,.1)
+	contact.chemistry.advance(contact,.1)
+	check(contact.eaten>0 and donor.biomass<40 and contact.substrate<.000001 and absf(contact.organic_mass()+donor.organic_mass()-total)<.00001,"Real proboscis contact feeds biomass storage without creating food or donor material")
+	var fixture_world=preload("res://tests/ecology_balance.gd").new()
+	var pond=fixture_world.fixture(9601)
+	var phenotypes={}
+	for body in pond.cells:
+		var role: String=body.synergy();phenotypes[role]=int(phenotypes.get(role,0))+1
+	check(phenotypes==policy.MIX,"The minimal36-cell reference pond replaces its four proboscis hunters with four true Parasites")
+	pond.disable_particle_pool();fixture_world.free()
+
+func parasite_picker() -> void:
+	var fake=PickerGame.new();fake.world=fixture();root.add_child(fake)
+	fake.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var panel=preload("res://scripts/investment_picker.gd").new();fake.add_child(panel);panel.initialize(fake)
+	for viewport in [Vector2i(320,568),Vector2i(393,740),Vector2i(740,393),Vector2i(1280,720)]:
+		root.content_scale_size=Vector2i.ZERO;root.size=viewport
+		panel.open();await process_frame;await process_frame;panel.sync();await process_frame
+		check(Rect2(Vector2.ZERO,Vector2(viewport)).encloses(panel.get_global_rect()),"All five investment choices fit "+str(viewport))
+		for card in panel.cards:check(panel.get_global_rect().encloses(card.get_global_rect()),card.strategy+" portrait stays within its menu")
+		var balanced=panel.cards[-1]
+		balanced.pressed.emit()
+		check(fake.world.investment.lineages[fake.world.player.lineage_id()]=="balanced" and balanced.active,"Balanced portrait selects the actual family setting")
+		if not DisplayServer.get_name()=="headless" and viewport==Vector2i(393,740):
+			await RenderingServer.frame_post_draw
+			for arg in OS.get_cmdline_user_args():
+				if arg.begins_with("--capture="):root.get_texture().get_image().save_png(arg.substr(10))
+	fake.queue_free();await process_frame
+
+func parasite_gpu() -> void:
+	var beacon=ColorRect.new();beacon.size=Vector2(8,8);root.add_child(beacon)
+	await process_frame;await process_frame
+	var gpu=preload("res://scripts/resident_particles.gd").new()
+	gpu.rd=RenderingServer.get_rendering_device()
+	check(gpu.rd!=null,"Parasite digestion hardware rendering device exists")
+	if gpu.rd==null:beacon.queue_free();return
+	for dt in [1.0/30,.25]:
+		var cpu=parasite_fixture()
+		cpu.chemistry.emit("food",8,Vector2.ZERO,-1,-1,8*cpu.Chemistry.TISSUE_FUEL)
+		cpu.chemistry.emit("oxygen",8,Vector2.ZERO)
+		var resident=Sim.Cell.clone_state(cpu)
+		var component=preload("res://scripts/resident_cytoplasm.gd").new()
+		check(component.attach(gpu,resident.chemistry,resident),"Parasite attaches to real resident cytoplasm")
+		resident.chemistry.advance(resident,dt);cpu.chemistry.advance(cpu,dt)
+		check(resident.substrate<.000001 and absf(resident.biomass-cpu.biomass)<.00001 and absf(resident.energy-cpu.energy)<.00001,"CPU/resident prompt digestion agrees at "+str(dt))
+		check(component.exports==0,"Prompt digestion does not download a particle pose mirror")
+		resident.chemistry.ensure_cpu()
+	gpu.close();beacon.queue_free();await process_frame

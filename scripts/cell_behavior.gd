@@ -1,7 +1,7 @@
 extends RefCounted
 ## Shared priority selector. Only own physiology and received local cues enter it.
 ## This policy proposes intentions; organs, ATP and physical contact do the work.
-const DESCRIPTION:="Escape harmful acid or an attack first. Use only locally received chemical, light and acidity cues. With low ATP, find food or useful light; rest if food is already digesting. With little biomass, forage or follow prey traces. Hunters with a stored meal rest rather than pursuing another kill; otherwise seek food, useful light or explore. Under attack, nearby family traces help the cell spread out. Family receptors can follow relatives or spread away from their received chemical trails; survival needs take priority. Organs determine the senses and movement available."
+const DESCRIPTION:="Escape harmful acid or an attack first. Use only locally received chemical, light and acidity cues. With low ATP, find food or useful light; rest if food is already digesting. With little biomass, forage or follow prey traces. Hunters with a stored meal and parasites with biomass reserves rest rather than pursuing another kill; otherwise seek food, useful light or explore. Under attack, nearby family traces help the cell spread out. Family receptors can follow relatives or spread away from their received chemical trails; survival needs take priority. Organs determine the senses and movement available."
 static func update(cell) -> void:
 	var scale: float=cell.growth_scale()
 	var low_energy: bool=cell.behavior.get("low_energy",false)
@@ -34,6 +34,7 @@ static func priority(cell, mode: String) -> int:
 
 static func sated(cell) -> bool:
 	# Own reserves only; no lookup of prey positions or population.
+	if cell.synergy()=="parasite":return cell.biomass>=maxf(84,cell.body*.75)
 	return cell.synergy()=="hunter" and cell.substrate>=20*cell.growth_scale() and cell.biomass>=8
 
 static func digesting(cell) -> bool:

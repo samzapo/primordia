@@ -270,7 +270,7 @@ func open_context(target: Dictionary) -> void:
 			var readiness: Dictionary=sim.division_status()
 			_choice("Divide",readiness.reason,open_context.bind({"kind":"division"}),"","Divide")
 			choices[-1].set_meta("division_entry",true)
-			_choice("Investment","Choose Hunter, Producer or Grazer for unattended cells.",open_context.bind({"kind":"investment"}),"","Invest")
+			_choice("Investment","Choose Balanced, Hunter, Parasite, Producer or Grazer for unattended cells.",open_context.bind({"kind":"investment"}),"","Invest")
 			_choice("Family",sim.lineage.summary(sim),open_context.bind({"kind":"lineage"}),"","Family")
 		"division":
 			for mode in ["mitosis","budding"]:

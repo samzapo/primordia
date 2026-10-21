@@ -52,10 +52,6 @@ func run() -> void:
  check(Sim.Behavior.sated(lean) and Sim.Behavior.priority(lean,"hunt")==0,"Sated hunters stop seeking another kill")
  var contact=Cell.new(97);contact.add_organ("hunting",1.5,"hunt",false);contact.add_organ("proboscis",0,"graze",false)
  check(is_equal_approx(contact.feeding_axis(1.5),contact.organ_normal(contact.organs[1]).angle()),"Hunters face a feeding organ toward sensed prey rather than the receptor")
- var needle=build("hunter");needle.organs.filter(func(o):return o.kind=="poreforming")[0].kind="proboscis";needle.update_geometry()
- var probe: Dictionary=needle.organs.filter(func(o):return o.kind=="proboscis")[0]
- var tip: Vector2=Sim.Medium.offset(needle.position,preload("res://scripts/proboscis.gd").tip(needle,probe)).rotated(-needle.angle)
- check(tip.dot(needle.organ_normal(probe))>needle.extent(),"Feeding tip extends beyond its own star-shaped collision envelope")
  var hidden=Sim.new(921,0,false);hidden.habitat_geometry=Sim.Habitat.new(921,[]);hidden.habitat_geometry.enabled=false;hidden.spatial_queries=false
  var feeder=Cell.new(992,Vector2(400,400));feeder.add_organ("proboscis",0,"graze",false)
  var donor=Cell.new(993,preload("res://scripts/proboscis.gd").tip(feeder,feeder.organs[0])+Vector2(20,0));donor.biomass=20

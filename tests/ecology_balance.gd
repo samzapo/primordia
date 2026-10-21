@@ -15,12 +15,12 @@ func fixture(seed_value: int):
  sim.enable_ambient_carbon();sim.particle_limit=5000
  var kinds_by_role={
   "pore_hunter":["hunting","propulsion","feeding","poreforming"],
-  "proboscis_hunter":["hunting","propulsion","proboscis"],
+  "parasite":["hunting","sensing","propulsion","proboscis"],
   "grazer":["feeding","cilia"],
   "producer":["photosynthesis","photosynthesis","mitochondrion"]}
  var roles: Array=[]
- for pair in [["pore_hunter",2],["proboscis_hunter",4],["grazer",10],["producer",20]]:
-  for i in pair[1]:roles.append(pair[0])
+ for role in Sim.Investment.MIX:
+  for i in Sim.Investment.MIX[role]:roles.append("pore_hunter" if role=="hunter" else role)
  # Interleave roles spatially, using a deterministic shuffle.
  var order: Array=range(36)
  var rng:=RandomNumberGenerator.new();rng.seed=seed_value

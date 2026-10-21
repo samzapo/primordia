@@ -1,11 +1,25 @@
 extends RefCounted
 ## Saved purchase intent; anatomy, biomass and feeding use the ordinary rules.
 const MANUAL_ONLY:=[] # Every currently available organ has an explicit strategy role.
-const DEFAULT:="producer"
+const DEFAULT:="balanced"
+# One shared weighted distribution for NPCs, Balanced families and the ecology fixture.
+const MIX:={"hunter":2,"parasite":4,"grazer":10,"producer":20}
+const MIX_TOTAL:=36
+static func path_at(ticket: int) -> String:
+ var slot:=posmod(ticket,MIX_TOTAL)
+ for role in MIX:
+  if slot<int(MIX[role]):return role
+  slot-=int(MIX[role])
+ return "producer"
+
+static func balanced_path(sim,cell) -> String:
+ # Stable per-cell lottery: no ecology RNG draw, no changing role as relatives die.
+ return path_at(cell.id*19349663 ^ sim.seed_value*83492791)
 const OPERATING_BIOMASS:=12.0
-const STRATEGIES:=["manual","hunter","producer","grazer","custom"]
+const STRATEGIES:=["manual","balanced","hunter","parasite","producer","grazer","custom"]
 const PRIORITIES:={
- "hunter":["hunting","proboscis","toxin","propulsion","poreforming","cilia","mitochondrion","protection"],
+ "hunter":["hunting","propulsion","poreforming","toxin","cilia","mitochondrion","protection"],
+ "parasite":["hunting","sensing","propulsion","proboscis","mitochondrion","regenerative","protection"],
  "producer":["photosynthesis","protection","mitochondrion","regenerative","neutralizing"],
  "grazer":["cilia","protection","propulsion","regenerative","mitochondrion","sensing"],
 }
@@ -14,20 +28,22 @@ static func npc_assignments(sim) -> void:
  sim.investment.npc.clear()
 
 static func strategy(sim,cell) -> String:
- if sim.investment.cells.has(cell.id):return sim.investment.cells[cell.id]
- return sim.investment.lineages.get(cell.lineage_id(),DEFAULT)
+ var chosen: String=sim.investment.cells.get(cell.id,sim.investment.lineages.get(cell.lineage_id(),DEFAULT))
+ return balanced_path(sim,cell) if chosen=="balanced" else chosen
 
 static func inherit_strategy(sim,parent,child) -> void:
  # Explicit choices, including Manual, are inherited without random reassignment.
- if sim.investment.cells.has(parent.id):sim.investment.cells[child.id]=strategy(sim,parent)
+ if sim.investment.cells.has(parent.id):sim.investment.cells[child.id]=sim.investment.cells[parent.id]
  var root=parent.lineage_id()
  var templates=sim.investment.get("cell_templates",{}).get(root,{})
  if templates.has(parent.id):templates[child.id]=templates[parent.id].duplicate(true)
 
 # Variants are deterministic preferences, never free organs or hidden ecology knowledge.
 const VARIANTS:={
- "hunter":[["hunting","proboscis","propulsion","toxin","sensing","protection","mitochondrion","regenerative"],
-           ["hunting","poreforming","proboscis","cilia","counterattack","protection","neutralizing","mitochondrion","regenerative","toxin_sac","family_toward"]],
+ "hunter":[["hunting","propulsion","poreforming","toxin","sensing","protection","mitochondrion","regenerative"],
+           ["hunting","propulsion","poreforming","cilia","counterattack","protection","neutralizing","mitochondrion","regenerative","toxin_sac","family_toward"]],
+ "parasite":[["hunting","sensing","propulsion","proboscis","mitochondrion","regenerative","protection","family_away"],
+             ["hunting","sensing","propulsion","proboscis","neutralizing","mitochondrion","protection","regenerative","toxin_sac"]],
  "producer":[["photosynthesis","protection","regenerative","mitochondrion","neutralizing","cilia","sensing","family_away","toxin_sac"],
              ["photosynthesis","cilia","neutralizing","mitochondrion","regenerative","protection","sensing","family_toward","toxin_sac"]],
  "grazer":[["cilia","mitochondrion","regenerative","sensing","feeding","protection","neutralizing","family_toward"],
@@ -39,9 +55,14 @@ static func weapons(cell) -> int:
  for kind in WEAPONS:count+=working(cell,kind)
  return count
 
+static func hunter_weapons(cell) -> int:
+ return weapons(cell)-working(cell,"proboscis")
+
 static func synergy_blocker(cell,policy: String) -> Dictionary:
  if cell.unattended_protected:return {}
  for organ in cell.organs:
+  if policy=="parasite" and organ.kind in ["feeding","poreforming","toxin","counterattack","acidifying"]:return {"action":"remove","id":organ.id}
+  if policy=="hunter" and organ.kind=="proboscis":return {"action":"remove","id":organ.id}
   if (policy in ["hunter","grazer"] and organ.kind=="photosynthesis") or (policy in ["producer","grazer"] and organ.kind in WEAPONS) or (policy=="producer" and organ.kind=="feeding"):
    return {"action":"remove","id":organ.id}
  return {}
@@ -52,7 +73,10 @@ static func missing_synergy_part(sim,cell,policy: String) -> String:
   if working(cell,"propulsion")==0:return "propulsion"
   # The first weapon comes last: mounting a pore gland also grants the
   # ordinary Hunter synergy's self-pore immunity in that same transaction.
-  if weapons(cell)==0 and cell.count("photosynthesis")==0:return "proboscis" if posmod(cell.id*19349663 ^ sim.seed_value*83492791,2)==0 else "poreforming"
+  if hunter_weapons(cell)==0 and cell.count("photosynthesis")==0:return "poreforming"
+ elif policy=="parasite":
+  for kind in ["hunting","sensing","propulsion","proboscis"]:
+   if working(cell,kind)==0:return kind
  elif policy=="producer":
   if working(cell,"mitochondrion")==0 and cell.energy<18 and cell.substrate>.1 and cell.oxygen>.1:return "mitochondrion"
   if working(cell,"photosynthesis")<2:return "photosynthesis"
@@ -131,6 +155,7 @@ static func decision(sim,cell) -> Dictionary:
   if cell.inherent(organ):continue
   if organ.hp>0 and organ.kind in ["feeding","photosynthesis","mitochondrion"] and working(cell,organ.kind)<=1:continue
   if organ.hp>0 and organ.kind in ["protection","regenerative","neutralizing"] and working(cell,organ.kind)<=1:continue
+  if organ.hp>0 and policy=="parasite" and organ.kind in ["hunting","sensing","propulsion","proboscis"] and working(cell,organ.kind)<=1:continue
   if organ.hp>0 and policy=="hunter" and ((organ.kind in WEAPONS and weapons(cell)<=1) or (organ.kind=="propulsion" and working(cell,"propulsion")<=1)):continue
   if organ.hp>0 and policy=="grazer" and organ.kind=="cilia" and working(cell,"cilia")<=1:continue
   var limit: int=4 if organ.kind=="photosynthesis" else 2 if organ.kind in ["feeding","cilia","protection","mitochondrion"] else 1
@@ -147,9 +172,10 @@ static func essential(cell,policy: String,kind: String) -> bool:
  if kind=="mitochondrion":return working(cell,kind)==0 or (policy=="producer" and cell.energy<18 and working(cell,kind)<2)
  if kind=="feeding":return working(cell,"feeding")==0 and (policy=="grazer" or working(cell,"photosynthesis")==0)
  if kind=="regenerative" and cell.health<70:return working(cell,kind)==0
+ if policy=="parasite" and kind in ["hunting","sensing","propulsion","proboscis"]:return working(cell,kind)==0
  if policy=="hunter":
   if kind in ["hunting","propulsion"]:return working(cell,kind)==0
-  if kind in WEAPONS:return weapons(cell)==0
+  if kind in WEAPONS and kind!="proboscis":return hunter_weapons(cell)==0
  return policy=="grazer" and kind in ["feeding","cilia"] and working(cell,kind)==0
 
 static func can_purchase(sim,cell,kind: String) -> bool:
@@ -177,6 +203,7 @@ static func shed_support(cell,policy: String) -> Dictionary:
   if organ.hp>0:
    if organ.kind in ["feeding","photosynthesis","mitochondrion"] or cell.receptor(organ.kind):continue
    if organ.kind=="regenerative" and cell.health<70:continue
+   if policy=="parasite" and organ.kind in ["hunting","sensing","propulsion","proboscis"] and working(cell,organ.kind)<=1:continue
    if policy=="hunter" and organ.kind in WEAPONS and weapons(cell)<=1:continue
    if policy=="hunter" and organ.kind=="propulsion" and working(cell,"propulsion")<=1:continue
    if policy=="grazer" and organ.kind=="cilia" and working(cell,"cilia")<=1:continue
@@ -253,8 +280,7 @@ static func template_decision(sim,cell) -> Dictionary:
 
 static func fallback_decision(sim,cell) -> Dictionary:
  # Once the frozen build is complete, expansion is never undone next minute.
- var bucket=posmod(cell.id*19349663 ^ sim.seed_value,100)
- var fallback="hunter" if bucket<10 else "producer" if bucket<55 else "grazer"
+ var fallback=balanced_path(sim,cell)
  var saved=sim.investment.cells.get(cell.id,null);sim.investment.cells[cell.id]=fallback
  var result=decision(sim,cell)
  # A completed player-chosen example is not an order to dismantle its core
@@ -267,6 +293,15 @@ static func fallback_decision(sim,cell) -> Dictionary:
  if saved==null:sim.investment.cells.erase(cell.id)
  else:sim.investment.cells[cell.id]=saved
  return result
+
+static func placement_angle(sim,cell,kind: String) -> float:
+ if strategy(sim,cell)!="parasite":return fposmod(cell.id*2.399963+cell.organs.size(),TAU)
+ var front:=fposmod(cell.id*2.399963,TAU)
+ for organ in cell.organs:
+  if organ.kind=="propulsion" and organ.hp>0:front=wrapf(float(organ.a)-PI,-PI,PI);break
+ for organ in cell.organs:
+  if organ.kind=="proboscis" and organ.hp>0:front=float(organ.a);break
+ return front+PI if kind=="propulsion" else front if kind=="proboscis" else front+.85 if kind=="hunting" else front-.85 if kind=="sensing" else fposmod(cell.id*2.399963+cell.organs.size(),TAU)
 
 static func retire(sim,cell) -> void:
  sim.investment.cells.erase(cell.id);sim.investment.npc.erase(cell.id)
