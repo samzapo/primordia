@@ -159,6 +159,14 @@ def main():
             raise RuntimeError("Native Dictionary lifetime fixture failed")
 
     call(str(godot),"--headless","--path",str(candidate),"--editor","--import","--quit",env=environment)
+    # Keep the owner's single cumulative next-main preview rule in quick CD.
+    notice_log=root/"release-notes-fixture.log"
+    with notice_log.open("w") as output:
+        call(str(godot),"--headless","--path",str(candidate),"--script","tests/release_notes_run.gd",
+             env=environment,stdout=output,stderr=subprocess.STDOUT)
+    notice_result=notice_log.read_text();print(notice_result,flush=True)
+    if re.search(r"SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:",notice_result,re.M) or not re.search(r"RELEASE NOTES: [0-9]+ assertions, 0 failures",notice_result):
+        raise RuntimeError("Experimental cumulative release preview failed")
     if full_checks:
         for script,marker in [("curve_layout_run","CURVE LAYOUT"),("merge_memory_run","MERGE MEMORY"),("lifecycle_run","LIFECYCLE"),("family_cap_run","FAMILY CAP"),("normal_output_run","NORMAL OUTPUT"),("toxin_storage_run","TOXIN STORAGE")]:
             path=root/(script+"-fixture.log")

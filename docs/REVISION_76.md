@@ -153,3 +153,5 @@ The roundup preserves every historical notice ID and saved acknowledgement.
 For experimental only, it covers older shared and experimental announcements,
 so missed iterations lead to one current notice. Main's queue is unchanged.
 There are no biology, movement, resources or save-schema changes in this patch.
+
+October21 standing release workflow: every experimental update pools all pending changes into one cumulative gameplay notice, using the intended next-main wording and a fresh acknowledgement ID. Replace superseded details, cover earlier experimental/shared iterations only for experimental, preserve historical IDs and main, and start a new pool after main lands.

@@ -1,6 +1,9 @@
 extends RefCounted
 ## Append releases in publication order with an explicit shared/stable/experimental audience.
 ## Preserve historical IDs so filtering cannot invalidate saved acknowledgements.
+## Every experimental update is a fresh-ID cumulative preview of the next main
+## release, with both consolidation flags; pool final gameplay changes in one
+## message. Main promotion closes that pool and starts the next baseline.
 const RELEASES=[
 {
 	"id":"2026-10-16-clearer-pond",
@@ -608,7 +611,8 @@ const RELEASES=[
  "supersedes_shared_for_experimental":true,
  "title":"What’s new in the pond",
  "items":[
-  "Build with biomass. Your first two organelles are free; choose Mitosis or Budding to grow your family.",
+  "Build with biomass. Your first two organelles are free, and the oral groove is optional.",
+  "Choose Mitosis or Budding. Your favorite cell stays protected while you’re away, paused or in a hidden tab.",
   "Hunters store longer-lasting meals, Grazers build biomass reserves, and Producers keep sharing food. Well-fed Hunters rest between hunts.",
   "Try the feeding proboscis to draw food directly from another cell. Hunter, Producer and Grazer builds have their own shapes.",
   "Organelles spend ATP while working. Mouth suction runs while feeding and leaves pheromones drifting freely.",

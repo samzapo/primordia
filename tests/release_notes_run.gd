@@ -35,6 +35,7 @@ func run() -> void:
 		if Notes.RELEASES[i].get("supersedes_experimental",false):consolidated=i
 	var expected:=Notes.RELEASES.slice(consolidated).filter(func(update):return update.audience=="experimental").map(func(update):return update.id)
 	check(Notes.pending_all({},"experimental").filter(func(update):return update.audience=="experimental").map(func(update):return update.id)==expected,"Consolidation replaces earlier notices while later updates remain in order")
+	check(Notes.CURRENT.get("supersedes_experimental",false) and Notes.CURRENT.get("supersedes_shared_for_experimental",false),"Every experimental update previews one cumulative next-main release message")
 	check(Notes.pending_all({},"experimental").size()==1 and Notes.pending({},"experimental").id==Notes.CURRENT.id,"Experimental starts with one roundup, including missed shared updates")
 	for seen in [Notes.RELEASES[0].id,"2026-10-19-experimental-cell-lifecycle","2026-10-21-smoother-swimming-and-surplus-release"]:
 		var existing: Dictionary={"seen_release":seen}
