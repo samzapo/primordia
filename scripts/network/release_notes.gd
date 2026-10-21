@@ -601,6 +601,24 @@ const RELEASES=[
  "button":"Back to the pond"
 },
 
+{
+ "id":"2026-10-21-experimental-roundup",
+ "audience":"experimental",
+ "supersedes_experimental":true,
+ "supersedes_shared_for_experimental":true,
+ "title":"What’s new in the pond",
+ "items":[
+  "Build with biomass. Your first two organelles are free; choose Mitosis or Budding to grow your family.",
+  "Hunters store longer-lasting meals, Grazers build biomass reserves, and Producers keep sharing food. Well-fed Hunters rest between hunts.",
+  "Try the feeding proboscis to draw food directly from another cell. Hunter, Producer and Grazer builds have their own shapes.",
+  "Organelles spend ATP while working. Mouth suction runs while feeding and leaves pheromones drifting freely.",
+  "Swimming is a little faster, with smoother starts, stops and turns.",
+  "Food stores no longer cause venting. Biomass above 500 gradually returns to the pond as nutrient and waste particles."
+ ],
+ "footer":"Your cell and its progress carry on in this pond.",
+ "button":"Back to the pond"
+},
+
 ]
 const CURRENT=RELEASES[-1]
 static func seen_index(account: Dictionary) -> int:
@@ -619,9 +637,9 @@ static func pending_all(account: Dictionary,instance: String="stable") -> Array:
 			if RELEASES[i].get("audience","")=="experimental" and RELEASES[i].get("supersedes_experimental",false):consolidated=i
 	for release_index in range(first,RELEASES.size()):
 		var update: Dictionary=RELEASES[release_index]
-		# Consolidation replaces earlier experimental notices only. Later updates
-		# must still appear in publication order and be acknowledged normally.
-		if release_index<consolidated and update.get("audience","")=="experimental":continue
+		# Experimental roundups may also cover earlier shared notices for this
+		# pond only. Main keeps its original queue and acknowledgement order.
+		if release_index<consolidated and (update.get("audience","")=="experimental" or RELEASES[consolidated].get("supersedes_shared_for_experimental",false)):continue
 		if applies(update,instance):
 			var visible: Dictionary=update.duplicate(true)
 			var items: Array=[]

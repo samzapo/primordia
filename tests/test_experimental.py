@@ -5,9 +5,9 @@ from urllib.request import build_opener,ProxyHandler,Request
 from urllib.error import HTTPError
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"tools"))
 from experimental_routing import experimental_route,with_experimental,scope,caddyfile
-from experimental_instance import feedback_identity, isolated_root,unit_text
+from experimental_instance import feedback_identity, isolated_root,unit_text,pond_policy,retained_generations_unchanged
 from web_gateway import create
-from verify_experimental import music_manifest
+from verify_experimental import music_manifest,pond_source
 import run_service
 from unittest.mock import patch,Mock
 
@@ -30,6 +30,40 @@ class ExperimentalTests(unittest.TestCase):
         self.assertEqual(edited.count('handle_path /experimental/*'),1)
         self.assertEqual(caddyfile(edited),edited)
         with self.assertRaises(RuntimeError):caddyfile('https://example.org { reverse_proxy localhost:8766 }\n')
+    def test_retained_pond_is_the_default_and_refresh_requires_explicit_choice(self):
+        with patch.dict(os.environ,{},clear=True):
+            self.assertEqual(pond_policy(),"retain")
+        with patch.dict(os.environ,{"PRIMORDIA_EXPERIMENTAL_POND_POLICY":"copy-main"}):
+            self.assertEqual(pond_policy(),"copy-main")
+        with patch.dict(os.environ,{"PRIMORDIA_EXPERIMENTAL_POND_POLICY":"reset"}):
+            with self.assertRaises(ValueError):pond_policy()
+
+    def test_retained_world_generations_are_verified_without_replacement(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);state=root/"state";backup=root/"backup";state.mkdir();backup.mkdir()
+            saved=state/"world-0.pworld";saved.write_bytes(b"owned stopped experimental checkpoint")
+            before=saved.read_bytes();manifest={"world-0.pworld":hashlib.sha256(before).hexdigest()}
+            (backup/"manifest.json").write_text(json.dumps(manifest))
+            self.assertEqual(retained_generations_unchanged(state,backup),manifest)
+            self.assertEqual(saved.read_bytes(),before)
+            saved.write_bytes(b"unexpected replacement")
+            with self.assertRaises(RuntimeError):retained_generations_unchanged(state,backup)
+            self.assertEqual(saved.read_bytes(),b"unexpected replacement")
+
+    def test_same_pond_verification_rejects_new_identity_and_retains_copy_compatibility(self):
+        retained={"world_id":"experimental","source_tick":50,"cells_digest":"retained","previous_epoch":4,"generations_unchanged_before_start":True}
+        record={"pond_policy":"retain","pond_copy":None,"pond_retention":retained,"feedback_retained":True,
+                "initial":{"world_id":"experimental","epoch":5,"cell_retention":{"ok":True,"before_digest":"retained"}}}
+        self.assertEqual(pond_source(record,"main"),retained)
+        changed=copy.deepcopy(record);changed["initial"]["world_id"]="replacement"
+        with self.assertRaises(AssertionError):pond_source(changed,"main")
+        changed=copy.deepcopy(record);changed["initial"]["epoch"]=4
+        with self.assertRaises(AssertionError):pond_source(changed,"main")
+        copied={"graph_unchanged":True,"source_world_id":"main","world_id":"independent","cells_digest":"copied"}
+        legacy={"pond_copy":copied,"feedback_retained":True,"initial":{"cell_retention":{"ok":True,"before_digest":"copied"}}}
+        self.assertEqual(pond_source(legacy,"main"),copied)
+
     def test_feedback_stays_read_only(self):
         with tempfile.TemporaryDirectory() as name:
             root=Path(name);feedback=root/"feedback";feedback.mkdir()

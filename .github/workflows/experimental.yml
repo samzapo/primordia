@@ -10,6 +10,11 @@ name: Primordia experimental instance
         type: choice
         options: [deploy, standby, network-check, saved-world-check]
         default: deploy
+      pond_policy:
+        description: Retain experimental progress, or explicitly refresh it from main
+        type: choice
+        options: [retain, copy-main]
+        default: retain
       stable_revision:
         description: Optional exact deployed stable SHA for a standby-only repair
         type: string
@@ -65,6 +70,7 @@ jobs:
         env:
           PRIMORDIA_DEPLOY_FULL_CHECKS: ${{ inputs.full_validation == true && '1' || '0' }}
           PRIMORDIA_PERFORMANCE_WARNINGS: "1"
+          PRIMORDIA_EXPERIMENTAL_POND_POLICY: ${{ inputs.pond_policy || 'retain' }}
           PRIMORDIA_SOURCE_DIRECTORY: ${{ steps.source.outputs.path }}
         run: |
           cd "$GITHUB_WORKSPACE/$PRIMORDIA_SOURCE_DIRECTORY"

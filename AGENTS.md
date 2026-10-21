@@ -4,6 +4,18 @@
 
 Use focused checks for the changed behavior, then build, start and confirm the game connects. Do not rerun the full local suite or the broad GPU/gameplay fixture catalog for every update. Routine CD keeps storage/instance isolation, save/account/key/feedback preservation, actual startup health and public delivery checks; it skips soak tests and redundant restarts. Broad rollout validation is opt-in through full_validation or PRIMORDIA_DEPLOY_FULL_CHECKS=1. Run a targeted diagnostic only when an actual failure needs it. This supersedes older blanket test/performance-check instructions for routine updates.
 
+## October21 explicit experimental preservation correction
+The owner requests consolidated experimental messages without resetting the pond.
+This supersedes the October18 fresh-main-copy default and its repeated historical
+references below. Experimental deployment now defaults to pond_policy=retain.
+Stop/checkpoint/restart the same experimental world, verify unchanged stopped
+checkpoint generations before startup and exact retained cells/accounts/keys/
+feedback. Preserve main unchanged. A new main copy requires the explicit
+copy-main workflow choice; never use it as a silent recovery fallback.
+The new experimental roundup supersedes older experimental and shared notices
+for experimental players only; retain historical IDs/acknowledgements and main's
+queue. No gameplay changes or full catalog/FPS/extra-restart checks.
+
 
 ## Project isolation
 

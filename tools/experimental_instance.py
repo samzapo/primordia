@@ -91,6 +91,19 @@ def feedback_identity(state):
     return {str(path.relative_to(directory)):hashlib.sha256(path.read_bytes()).hexdigest()
             for path in sorted(directory.rglob("*")) if path.is_file()}
 
+def pond_policy():
+    value=os.environ.get("PRIMORDIA_EXPERIMENTAL_POND_POLICY","retain")
+    if value not in {"retain","copy-main"}:raise ValueError("Unknown experimental pond policy")
+    return value
+
+def retained_generations_unchanged(state,backup):
+    expected=json.loads((backup/"manifest.json").read_text())
+    if not expected:raise RuntimeError("No experimental checkpoint to retain")
+    actual={name:hashlib.sha256((state/name).read_bytes()).hexdigest()
+            for name in ("world-0.pworld","world-1.pworld") if (state/name).is_file()}
+    if actual!=expected:raise RuntimeError("Experimental checkpoints changed before retained-world startup")
+    return expected
+
 def main():
     if os.environ.get("RUNNER_NAME")!="samzapo-desktop" or os.uname().nodename!="samzapo-desktop":
         raise RuntimeError("Experimental deployment requires samzapo-desktop")
@@ -100,6 +113,7 @@ def main():
     root=Path.home()/".local/share/primordia-experimental"
     isolated_root(root,stable)
     baseline=stable_identity(stable)
+    policy=pond_policy()
     if subprocess.check_output(["loginctl","show-user",str(os.getuid()),"-p","Linger","--value"],text=True).strip()!="yes":
         raise RuntimeError("Existing user service boot persistence must be enabled")
     ownership=root/"OWNERSHIP.json"
@@ -222,6 +236,14 @@ def main():
     if validation.returncode:raise RuntimeError("Experimental systemd unit is invalid: "+validation.stderr)
     backup=None
     copy_report=None
+    retention_report=None
+    previous=None
+    if policy=="retain":
+        if old is None:raise RuntimeError("No existing experimental release to retain; explicitly choose copy-main to seed it")
+        previous=json.loads((state/"health.json").read_text()) if was_standby else get_json("http://127.0.0.1:8768/health")
+        if previous.get("backend")!="gpu" or previous.get("backend_error") or previous.get("checkpoint_error"):
+            raise RuntimeError("Experimental pond must be healthy before a retained update")
+        if previous["world_id"]==baseline["world_id"]:raise RuntimeError("Experimental pond identity is not independent")
     # A competing stable cutover must fail before interrupting experimental.
     stable_lock=(stable/"deploy.lock").open("a+")
     try:
@@ -235,46 +257,58 @@ def main():
         if old:backup=retain_model_boundary(state,root,"before-experimental-update-")
         protected_feedback=feedback_identity(state)
         protected_keys=hashlib.sha256(registry.read_bytes()).hexdigest()
-        # Serialize against stable CD, while stable's authority keeps running.
-        stable_lock=(stable/"deploy.lock").open("a+")
-        fcntl.flock(stable_lock,fcntl.LOCK_SH|fcntl.LOCK_NB)
-        guard(stable,baseline)
-        snapshot,source_generations=capture(stable/"state",root)
-        path=root/"stable-pond-copy.log"
-        try:
-            with path.open("w") as output:
-                call(str(godot),"--headless","--path",str(candidate),"--script","tools/copy_stable_pond.gd","--",
-                     "--state-dir="+str(state),"--snapshot-dir="+str(snapshot),
-                     "--source-world="+baseline["world_id"],"--confirm-sha="+sha,
-                     env={**environment,"PRIMORDIA_BUILD_SHA":sha},stdout=output,stderr=subprocess.STDOUT)
-        finally:
-            # Keep the actual copy error visible even when call() raises.
-            # Bound diagnostics independently of any repeating engine output.
+        if policy=="retain":
+            generations=retained_generations_unchanged(state,backup)
+        else:
+            # Serialize against stable CD, while stable's authority keeps running.
+            stable_lock=(stable/"deploy.lock").open("a+")
+            fcntl.flock(stable_lock,fcntl.LOCK_SH|fcntl.LOCK_NB)
+            guard(stable,baseline)
+            snapshot,source_generations=capture(stable/"state",root)
+            path=root/"stable-pond-copy.log"
             try:
-                with path.open("rb") as output:
-                    output.seek(0,os.SEEK_END)
-                    output.seek(max(0,output.tell()-32768))
-                    result=output.read(32768).decode(errors="replace")
-            except OSError as error:
-                result="Experimental copy log unavailable: "+type(error).__name__
-            print(result,flush=True)
-        if re.search(r"SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:",result,re.M):
-            raise RuntimeError("Stable pond copy failed")
-        copy_report=json.loads(next(line.removeprefix("POND_COPY ") for line in result.splitlines() if line.startswith("POND_COPY ")))
-        assert copy_report["graph_unchanged"] and copy_report["source_world_id"]==baseline["world_id"]
-        assert copy_report["world_id"]!=baseline["world_id"]
-        copy_report["source_generations"]=source_generations
-        copy_report["source_snapshot"]=str(snapshot)
+                with path.open("w") as output:
+                    call(str(godot),"--headless","--path",str(candidate),"--script","tools/copy_stable_pond.gd","--",
+                         "--state-dir="+str(state),"--snapshot-dir="+str(snapshot),
+                         "--source-world="+baseline["world_id"],"--confirm-sha="+sha,
+                         env={**environment,"PRIMORDIA_BUILD_SHA":sha},stdout=output,stderr=subprocess.STDOUT)
+            finally:
+                # Keep the actual copy error visible even when call() raises.
+                # Bound diagnostics independently of any repeating engine output.
+                try:
+                    with path.open("rb") as output:
+                        output.seek(0,os.SEEK_END)
+                        output.seek(max(0,output.tell()-32768))
+                        result=output.read(32768).decode(errors="replace")
+                except OSError as error:
+                    result="Experimental copy log unavailable: "+type(error).__name__
+                print(result,flush=True)
+            if re.search(r"SCRIPT ERROR:|^ERROR:|Parse Error:|Compile Error:",result,re.M):
+                raise RuntimeError("Stable pond copy failed")
+            copy_report=json.loads(next(line.removeprefix("POND_COPY ") for line in result.splitlines() if line.startswith("POND_COPY ")))
+            assert copy_report["graph_unchanged"] and copy_report["source_world_id"]==baseline["world_id"]
+            assert copy_report["world_id"]!=baseline["world_id"]
+            copy_report["source_generations"]=source_generations
+            copy_report["source_snapshot"]=str(snapshot)
         if feedback_identity(state)!=protected_feedback or hashlib.sha256(registry.read_bytes()).hexdigest()!=protected_keys:
             raise RuntimeError("Private feedback or access registry changed during pond preparation")
         unit.write_text(text);switch(current,candidate)
         call("systemctl","--user","daemon-reload")
         call("systemctl","--user","enable","--now",UNIT)
-        report=health(sha,baseline["world_id"])
-        assert report["world_id"]==copy_report["world_id"] and report["accounts"]==copy_report["accounts"]
+        report=health(sha,baseline["world_id"],previous)
         retention=report["cell_retention"]
-        assert retention["ok"] and retention["before_digest"]==copy_report["cells_digest"]
-        assert retention["before_cells"]==copy_report["cells"] and report["tick"]>=copy_report["source_tick"]
+        if policy=="retain":
+            assert report["world_id"]==previous["world_id"] and report["accounts"]>=previous["accounts"]
+            assert retention["world_id"]==previous["world_id"] and retention["tick"]>=previous.get("checkpoint_tick",0)
+            assert retention["ok"] and retention["before_cells"]==retention["after_cells"]
+            assert not retention["changed"] and not retention["missing"]
+            retention_report={"world_id":report["world_id"],"source_tick":retention["tick"],"cells":retention["before_cells"],
+                "cells_digest":retention["before_digest"],"accounts_before":previous["accounts"],
+                "previous_epoch":previous["epoch"],"checkpoint_generations":generations,"generations_unchanged_before_start":True}
+        else:
+            assert report["world_id"]==copy_report["world_id"] and report["accounts"]==copy_report["accounts"]
+            assert retention["ok"] and retention["before_digest"]==copy_report["cells_digest"]
+            assert retention["before_cells"]==copy_report["cells"] and report["tick"]>=copy_report["source_tick"]
         restarted=report
         if full_checks:
             call("systemctl","--user","restart",UNIT)
@@ -282,7 +316,7 @@ def main():
         route=prepare_and_apply(root)
         after=guard(stable,baseline)
         if after["tick"]<=baseline["tick"]:raise RuntimeError("Stable world did not advance")
-        record={"revision":sha,"full_validation":full_checks,"restart_tested":full_checks,"experimental":restarted,"initial":report,"routing":route,"pond_copy":copy_report,"predecessor_archive":str(backup) if backup else None,"feedback_retained":all(feedback_identity(state).get(name)==digest for name,digest in protected_feedback.items()),
+        record={"revision":sha,"full_validation":full_checks,"restart_tested":full_checks,"experimental":restarted,"initial":report,"routing":route,"pond_policy":policy,"pond_copy":copy_report,"pond_retention":retention_report,"predecessor_archive":str(backup) if backup else None,"feedback_retained":all(feedback_identity(state).get(name)==digest for name,digest in protected_feedback.items()),
                 "stable_before":baseline,"stable_after":after,"stable_unit_restarted":False,
                 "separate_state":str(state),"key_registry_sha256":hashlib.sha256(registry.read_bytes()).hexdigest()}
         (root/"last-deploy.json").write_text(json.dumps(record,indent=2))

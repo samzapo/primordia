@@ -787,3 +787,5 @@ October20 oral pumping control: a mouth pumps only during its current valid fora
 October20: Installed organs have no idle ATP tax; charge work at its real source. Basal cell maintenance/ATP turnover remain. Share actual aerobic receipts for mitochondrial billing and keep observation/presentation out of physics. See Revision76.
 
 October21: smooth body swimming/turning uses shared finite acceleration limits for ordinary and coarse motion, including contact velocity corrections; swim slip+12%, water/particles unchanged. Surplus release depends only on biomass above500 and returns70%nutrient/30%waste with finite tissue fuel. Full food vacuoles never trigger it. See Revision76.
+
+October21 owner correction: experimental updates retain their own living pond by default. The workflow has an explicit copy-main choice for deliberate refreshes. Retained updates verify the same world identity and exact stopped checkpoints/cell retention, preserving accounts, keys and private feedback. The experimental roundup covers older shared/experimental notices in that pond only. Main's queue and game remain unchanged.

@@ -140,3 +140,16 @@ free material, new particle contents or inventory refill. The allocation is a
 game recycling rule inspired by the existing digestion/respiration references.
 Favorite protection remains. Guide and experimental-only notice describe the
 new threshold and output; main remains unchanged.
+
+## October21 experimental roundup and same-pond updates
+The owner explicitly requests one consolidated experimental announcement and no
+pond reset. This overrides the prior fresh-main-copy default. The normal
+experimental workflow uses pond_policy=retain: archive stopped generations,
+verify they are unchanged before startup, and require the same world identity,
+advancing epoch/time, intact cells and retained accounts/keys/private feedback.
+Failed upgrades roll back from that experimental archive. copy-main remains an
+explicit alternative; it is never an automatic missing-state recovery path.
+The roundup preserves every historical notice ID and saved acknowledgement.
+For experimental only, it covers older shared and experimental announcements,
+so missed iterations lead to one current notice. Main's queue is unchanged.
+There are no biology, movement, resources or save-schema changes in this patch.

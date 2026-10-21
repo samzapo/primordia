@@ -35,6 +35,11 @@ func run() -> void:
 		if Notes.RELEASES[i].get("supersedes_experimental",false):consolidated=i
 	var expected:=Notes.RELEASES.slice(consolidated).filter(func(update):return update.audience=="experimental").map(func(update):return update.id)
 	check(Notes.pending_all({},"experimental").filter(func(update):return update.audience=="experimental").map(func(update):return update.id)==expected,"Consolidation replaces earlier notices while later updates remain in order")
+	check(Notes.pending_all({},"experimental").size()==1 and Notes.pending({},"experimental").id==Notes.CURRENT.id,"Experimental starts with one roundup, including missed shared updates")
+	for seen in [Notes.RELEASES[0].id,"2026-10-19-experimental-cell-lifecycle","2026-10-21-smoother-swimming-and-surplus-release"]:
+		var existing: Dictionary={"seen_release":seen}
+		check(Notes.pending_all(existing,"experimental").size()==1 and Notes.pending(existing,"experimental").id==Notes.CURRENT.id,"Existing acknowledgement reaches the same single roundup")
+		check(Notes.acknowledge(existing,Notes.CURRENT.id,"experimental") and Notes.pending_all(existing,"experimental").is_empty(),"Clearing the roundup clears its covered experimental history")
 	check(not Notes.acknowledge({},"unknown","experimental"),"Unrecognized notice cannot skip the queue")
 	for instance in ["stable","experimental"]:
 		var migrated: Dictionary={}

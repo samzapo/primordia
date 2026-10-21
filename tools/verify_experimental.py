@@ -20,6 +20,24 @@ def music_manifest(value):
     if not isinstance(filename,str) or not re.fullmatch(r"music-bank-[a-f0-9]{24}[.]bin",filename) or type(size) is not int or not 0<size<4*1024*1024:
         raise ValueError("Invalid music asset manifest")
     return filename,size
+def pond_source(record,stable_world):
+    copy=record.get("pond_copy")
+    policy=record.get("pond_policy","copy-main")
+    retained=record.get("pond_retention")
+    assert record["feedback_retained"] and record["initial"]["cell_retention"]["ok"]
+    if policy=="retain":
+        assert copy is None and retained["generations_unchanged_before_start"]
+        assert record["initial"]["world_id"]==retained["world_id"]!=stable_world
+        assert record["initial"]["epoch"]>retained["previous_epoch"]
+        assert record["initial"]["cell_retention"]["before_digest"]==retained["cells_digest"]
+        source=retained
+    else:
+        assert policy=="copy-main" and copy["graph_unchanged"] and copy["source_world_id"]==stable_world
+        assert copy["world_id"]!=stable_world
+        assert record["initial"]["cell_retention"]["before_digest"]==copy["cells_digest"]
+        source=copy
+    return source
+
 def main(restart=False):
     if os.environ.get("RUNNER_NAME")!="samzapo-desktop":raise RuntimeError("Wrong target")
     os.environ.setdefault("XDG_RUNTIME_DIR",f"/run/user/{os.getuid()}")
@@ -29,13 +47,12 @@ def main(restart=False):
     record=json.loads((root/"last-deploy.json").read_text())
     expected=os.environ.get("GITHUB_SHA",record["revision"])
     assert expected==record["revision"]
-    copy=record["pond_copy"]
-    assert copy["graph_unchanged"] and copy["source_world_id"]==baseline["world_id"]
-    assert copy["world_id"]!=baseline["world_id"] and record["feedback_retained"]
-    assert record["initial"]["cell_retention"]["ok"]
-    assert record["initial"]["cell_retention"]["before_digest"]==copy["cells_digest"]
+    copy=record.get("pond_copy")
+    policy=record.get("pond_policy","copy-main")
+    retained=record.get("pond_retention")
+    source=pond_source(record,baseline["world_id"])
     before=health(expected,baseline["world_id"])
-    assert before["world_id"]==copy["world_id"] and before["tick"]>=copy["source_tick"]
+    assert before["world_id"]==source["world_id"] and before["tick"]>=source["source_tick"]
     if restart:
         subprocess.run(["systemctl","--user","restart",UNIT],check=True)
         after=health(expected,baseline["world_id"],before)
@@ -96,7 +113,7 @@ def main(restart=False):
     installed=hashlib_sha(Path("/etc/caddy/Caddyfile"))==manifest["candidate_sha256"]
     persistence="installed" if installed else record["routing"]["persistence"]
     report={"revision":expected,"experimental":after,"stable_before":baseline,"stable_after":final,
-        "public_delivery":deliveries,"pond_copy":copy,"restart_tested":restart,"stable_unit_restarted":False,
+        "public_delivery":deliveries,"pond_policy":policy,"pond_copy":copy,"pond_retention":retained,"restart_tested":restart,"stable_unit_restarted":False,
         "routing_persistence":persistence,"operator_command":None if installed else record["routing"]["operator_command"],
         "scope":"Server-origin trusted HTTPS/WSS, no physical-phone claim or synthetic production sign-in/report"}
     (root/"last-verify.json").write_text(json.dumps(report,indent=2))
