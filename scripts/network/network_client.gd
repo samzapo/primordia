@@ -257,7 +257,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func _configure_backend() -> void: pass
 func _start_new_lineage() -> void:
 	if not connected:_message("Reconnect before starting a new lineage.");return
-	if not commands.is_empty() or not inflight.is_empty():_message("Wait for the current edit to finish.");return
+	if not commands.is_empty() or not inflight.is_empty():return
 	if user_paused:_toggle_user_pause()
 	settings_panel.hide()
 	_queue_command("start_lineage",{"confirmed":true})
@@ -321,8 +321,16 @@ func _process(dt: float) -> void:
 		if reconnect_due<=0: reconnect_due=3;_connect(false)
 	_send_next()
 
+func waiting_for_world() -> bool:
+	if connection_stage in ["sign_in","error"]:return false
+	if connecting or loading_world or (attempted and retry_enabled and not connected):return true
+	if not commands.is_empty() or not inflight.is_empty() or not cell_ui.pending_mutation.is_empty():return true
+	return placement_feedback.entries.any(func(item):return item.pending)
+
 func _show_connection(text: String,credentials: bool=false,retry: bool=false) -> void:
-	status.text=text;login.show()
+	var progress: bool=not credentials and not retry and connection_stage in ["connecting","preparing","disconnected"]
+	status.text="" if progress else text
+	login.visible=not progress
 	invite_input.visible=credentials;url_input.visible=credentials and not OS.has_feature("web")
 	join_button.visible=credentials or retry;join_button.disabled=not (credentials or retry)
 	join_button.text="Sign in" if credentials else "Reconnect"
@@ -410,18 +418,20 @@ func _poll_network() -> void:
 					break # Bound burst decoding to one potentially large snapshot per frame.
 				"snapshot_error":
 					connection_stage="error";_show_connection(message.message)
-				"result":
-					if int(message.sequence)==int(inflight.get("sequence",-2)):
-						edit_revision=message.get("edit",edit_revision)
-						command_sequence=message.get("server_sequence",message.sequence)
-						cell_ui.command_result(inflight,message)
-						if inflight.has("local_placement"):placement_feedback.result(inflight.local_placement,message.get("ok",false),int(message.get("edit",-1)))
-						inflight.clear()
-						_message(message.message)
-						if cell_ui.pathways.visible: cell_ui.pathways._rebuild()
+				"result":_command_result(message)
 	else:
 		if socket.get_ready_state()==WebSocketPeer.STATE_CLOSED and (connected or connecting):
 			_connection_closed(socket.get_close_code(),socket.get_close_reason())
+
+func _command_result(message: Dictionary) -> void:
+	if int(message.sequence)!=int(inflight.get("sequence",-2)):return
+	edit_revision=message.get("edit",edit_revision)
+	command_sequence=message.get("server_sequence",message.sequence)
+	cell_ui.command_result(inflight,message)
+	if inflight.has("local_placement"):placement_feedback.result(inflight.local_placement,message.get("ok",false),int(message.get("edit",-1)))
+	inflight.clear()
+	if not message.get("ok",false):_message(str(message.message),"error")
+	if cell_ui.pathways.visible:cell_ui.pathways._rebuild()
 
 func _welcome(message: Dictionary) -> void:
 	defer_release_updates=false;update_popup.close()
@@ -444,7 +454,7 @@ func _welcome(message: Dictionary) -> void:
 	_save_identity();light_factor_shown=-1
 	invitation="";invite_input.text=""
 	_show_connection("Signed in. Preparing the world for your camera…")
-	music.reset();_message("Connected · editing and chemistry remain live.")
+	music.reset()
 
 func _ack_snapshot(message: Dictionary) -> void:
 	if message.get("serial",0)>0:_send({"op":"snapshot_ack","serial":message.serial,"epoch":epoch})
@@ -560,8 +570,6 @@ func _snapshot(message: Dictionary) -> void:
 		camera_locked=false;free_camera=render_camera
 	elif camera_locked and previous_focus!=_follow_cell().id:
 		camera_offset=Vector2.ZERO
-	if world.player.dead and can_follow():
-		notice="Your lineage has ended · following a living cell for observation.";notice_timer=12
 	server_census=message.get("census",{}).duplicate()
 	world.time=message.time;world.revision=message.tick
 	world.death_serial=maxi(world.death_serial,message.get("death_serial",world.death_serial))
@@ -655,13 +663,12 @@ func _submit_feedback(report: Dictionary) -> String:
 	return ""
 
 func _queue_command(action: String,args: Dictionary) -> bool:
-	if user_paused:_message("Resume the view before editing this cell.");return false
-	if not connected or world.player.dead: _message("Reconnect before editing.");return false
-	if commands.size()>=16: _message("Waiting for pending edits.");return false
+	if user_paused:_message("Resume the view before editing this cell.","error");return false
+	if not connected or world.player.dead: _message("Reconnect before editing.","error");return false
+	if commands.size()>=16:return false
 	var command: Dictionary={"action":action,"args":_json_value(args),"cell":world.player.id}
 	if action=="install":command.local_placement=placement_feedback.begin(world.player,str(args.kind),float(args.angle))
 	commands.append(command)
-	_message("Edit queued · the world continues.")
 	_send_next() # Send on the input frame; never wait for a physics update.
 	return true
 

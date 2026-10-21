@@ -951,3 +951,19 @@ Draw proboscis shafts outside small-cell body rasters with no independent
 emission displacement/scale bounce, sharing the exact cue geometry. Keep cell
 layering, cached bodies, physical tip/range, feeding transactions and donor
 health/biomass rules unchanged. Experimental retained; cumulative notice.
+
+
+## October21 quiet client status
+Routine queued/applied/selection/build-complete chatter is silent. Keep real
+command failures as individual compact bordered notices, red for rejections,
+bounded to three, deduplicated without extending their one-second fade.
+Separate persistent Instinct and red starvation panes from tooltips/notices;
+starvation presentation reads empty ATP and reserve biomass, without changing
+physiology. Notices expire through menus. A locally animated amoeba at the
+bottom right shows actual pending commands/placements/mutations and connection
+loading/retry, instead of progress prose. Actionable sign-in errors stay readable.
+Cell selection establishes a family-event baseline rather than replaying old
+notices or retired crisis goals. Ignore pointer/touch input across these panes.
+Preserve biology, authority receipts, optimistic placement/ripple and camera
+controls. Update guide and one final-feature cumulative experimental preview;
+retain the pond, main unchanged. Focused client UI/queue/layout checks only.

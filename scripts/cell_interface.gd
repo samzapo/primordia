@@ -29,7 +29,7 @@ var hovered: Dictionary = {}
 var hovered_price: Dictionary = {}
 var tip_box := PanelContainer.new()
 var tip := Label.new()
-var message := Label.new()
+var status_feed:=preload("res://scripts/status_feed.gd").new()
 var edit_hint := Label.new()
 var menu_center := Vector2.ZERO
 var menu_radius := 100.0
@@ -40,6 +40,8 @@ var last_resistance := ""
 var last_ending := ""
 var last_lineage := 0
 var last_goal := ""
+var event_cell:=-1
+var event_root:=-1
 var pending_mutation: Dictionary={}
 
 func initialize(owner_game) -> void:
@@ -62,8 +64,7 @@ func initialize(owner_game) -> void:
 	cancel_icon.pressed.connect(func():
 		if game.merge_selecting():game._end_merge_selection()
 		else:game._cancel_placement())
-	message.z_index=100
-	message.add_theme_font_override("font",COMIC)
+	status_feed.z_index=100;add_child(status_feed)
 	add_child(pathways)
 	pathways.initialize(game)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -80,7 +81,7 @@ func initialize(owner_game) -> void:
 	tip_box.add_child(tip)
 	tip.add_theme_font_override("font",COMIC)
 	tip_box.z_index = 20
-	for label in [message,edit_hint]:
+	for label in [edit_hint]:
 		add_child(label)
 		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -250,14 +251,13 @@ func open_context(target: Dictionary) -> void:
 			for scar in cell.lost_organs:
 				if scar.id != target.id: continue
 				_choice("Restore "+game.TITLES[sim.KINDS.find(scar.kind)],"%d biomass\nRestore the lost organ in its original form." % cell.construction_price(scar.kind),func():
-					game._message("Organelle restored." if sim.edit("restore",{"id":target.id}) else "Needs %d biomass and membrane room." % cell.construction_price(scar.kind))
+					if not sim.edit("restore",{"id":target.id}) and not sim.remote_client:game._message("Needs %d biomass and membrane room." % cell.construction_price(scar.kind),"error")
 					close_context(),scar.kind,"",cell.biomass >= cell.construction_price(scar.kind),float(cell.construction_price(scar.kind)),0,scar)
 		"nucleus":
 			for gene in run.division_offers:
 				var data: Dictionary=sim.Genes.DATA[gene]
 				_choice("Keep "+data.title,data.text+"\nFree division mutation.",func():
 					sim.edit("choose_mutation",{"gene":gene})
-					game._message("Mutation selected.")
 					close_context(),data.kind)
 			_choice("Family",sim.lineage.summary(sim),open_context.bind({"kind":"lineage"}),"","Family")
 			if not run.sandbox: _choice("Known blueprints","Recall a discovered blueprint.",open_context.bind({"kind":"archive","page":0}),"","Genes")
@@ -339,8 +339,7 @@ func _toggle_reproduction(mode: String) -> void:
 
 func _merge(identity: int) -> void:
 	if identity==game.world.player.id:return
-	if game.world.edit("merge",{"id":identity}):game._message("Absorbing relative…" if game.world.remote_client else "Family cells merged.")
-	else:game._message("Choose a living, unattended member of this family.")
+	if not game.world.edit("merge",{"id":identity}) and not game.world.remote_client:game._message("Choose a living, unattended member of this family.","error")
 	close_context()
 
 func _specialize(cell_id: int,organ_id: int,gene: String) -> void:
@@ -349,9 +348,7 @@ func _specialize(cell_id: int,organ_id: int,gene: String) -> void:
 	if game.world.mutate_organ(organ_id,gene):
 		if game.world.remote_client:
 			pending_mutation={"cell":cell_id,"id":organ_id,"gene":gene}
-			game._message("Applying specialization…")
-		else:game._message("Specialization installed.")
-	else:game._message("This organ cannot accept that mutation.")
+	else:game._message("This organ cannot accept that mutation.","error")
 	open_context({"kind":"organ","id":organ_id})
 
 func command_result(command: Dictionary,result: Dictionary) -> void:
@@ -363,7 +360,7 @@ func command_result(command: Dictionary,result: Dictionary) -> void:
 
 func _reproduce() -> void:
 	if game.build_open:game._finish_build()
-	game._message("Mitosis requested." if game.world.divide_lineage(false,false,"mitosis") else game.world.division_status().reason)
+	if not game.world.divide_lineage(false,false,"mitosis") and not game.world.remote_client:game._message(game.world.division_status().reason,"error")
 
 func _follow(identity: int) -> void:
 	var keep_editing: bool=game.build_open and not game.world.remote_client
@@ -440,12 +437,12 @@ func _tooltip(value: String, at: Vector2) -> void:
 	var extent := tip_box.get_combined_minimum_size()
 	tip_box.size = extent # Shrink after text reflow; stale tall panels otherwise clip at large UI scales.
 	tip_box.position = (at+Vector2(18,18)).clamp(Vector2(12,12),get_viewport_rect().size-extent-Vector2(12,12))
-	if mobile() or game.merge_selecting() or context.get("kind","")=="organ" or value.begins_with("Instinct ·"):
+	if mobile() or game.merge_selecting() or context.get("kind","")=="organ":
 		tip.custom_minimum_size.x=maxf(50,get_viewport_rect().size.x-32*s)
 		tip.max_lines_visible=3
-		tip.add_theme_font_size_override("font_size",roundi((22 if game.notice_timer>3 else 18)*s))
+		tip.add_theme_font_size_override("font_size",roundi(18*s))
 		tip_box.reset_size();tip_box.size=tip_box.get_combined_minimum_size()
-		tip_box.position=Vector2(8*s,get_viewport_rect().size.y-mobile_resources.get_combined_minimum_size().y-tip_box.size.y-16*s)
+		tip_box.position=Vector2(8*s,maxf(8*s,status_feed.top-tip_box.size.y-5*s))
 		return
 	var budget_area: Rect2 = biomass_view.comparison_bounds()
 	if game.build_open and Rect2(tip_box.position,extent).intersects(budget_area):
@@ -455,24 +452,13 @@ func _tooltip(value: String, at: Vector2) -> void:
 			tip_box.position.y = budget_area.end.y+18*s
 
 func _events() -> void:
-	var run = game.world.evolution
-	if run.tide != last_tide:
-		last_tide = run.tide
-		pass
-	if run.resistance != last_resistance:
-		last_resistance = run.resistance
-		game._message("The habitat is adapting to your recent strategy.\nInspect the nucleus for the emerging response.")
-	var family = game.world.lineage
-	if family.serial != last_lineage:
-		last_lineage = family.serial
-		game._message(family.notices[-1])
-	var goal: String = run.goal_key(game.world)
-	if goal != last_goal:
-		last_goal = goal
-		if family.notices.is_empty() or game.notice_timer < 3: game._message(run.objective(game.world))
-	if run.terminal() and run.ending != last_ending:
-		last_ending = run.ending
-		game._message(run.ending+"\nEsc → Family history · R starts the next expedition.")
+	var cell=game.world.player;var family=game.world.lineage
+	# A selection change establishes a baseline, never replays another cell's history.
+	if event_cell!=cell.id or event_root!=cell.lineage_id():
+		event_cell=cell.id;event_root=cell.lineage_id();last_lineage=family.serial;return
+	if family.serial>last_lineage:
+		last_lineage=family.serial
+		if not family.notices.is_empty():game._message(family.notices[-1])
 
 func _sync_family_portraits() -> void:
 	if context.get("kind","") not in ["lineage","merge_family"]:return
@@ -491,6 +477,7 @@ func sync(_dt: float) -> void:
 			if context.get("kind","")=="organ":open_context(context.duplicate())
 
 	if game == null: return
+	status_feed.advance(_dt)
 	_events()
 	biomass_view.sync()
 	var active: bool = not game.settings_panel.visible
@@ -502,13 +489,8 @@ func sync(_dt: float) -> void:
 	_sync_family_portraits()
 	var s: float = ui_scale()
 	var size := get_viewport_rect().size
-	var cell_screen: Vector2 = game.world_layer.to_global(interior.position)
-	message.visible = (game.notice_timer > 3) or game.world.evolution.terminal()
-	message.text = game.notice if Input.is_key_pressed(KEY_ALT) else game.notice.split("\n")[0]
-	message.custom_minimum_size.x = minf(500*s,size.x-48)
-	message.size.x = message.custom_minimum_size.x
-	message.add_theme_font_size_override("font_size",roundi((22 if mobile() else 20)*s))
-	message.position = (cell_screen+Vector2(-message.size.x*0.5,game.world.player.radius*game.zoom+35)).clamp(Vector2(16,16),size-message.size-Vector2(16,16))
+	var bottom: float=size.y-(mobile_resources.get_combined_minimum_size().y+16*s if mobile_resources.visible else 12*s)
+	status_feed.sync(0,game.world.player,game.preferences.show_instinct,game.world.Behavior.summary(game.world.player),game.waiting_for_world(),s,size,bottom)
 	edit_hint.visible = game.build_open and not mobile() and context.get("kind","") not in ["lineage","merge_family"] and (game.selected>=0 or game.moving_id>=0 or not context.is_empty())
 	var placing_kind: String=game.Simulation.KINDS[game.selected] if game.selected>=0 else game.world.player.organ_by_id(game.moving_id).get("kind","")
 	edit_hint.text = "Tab · return to habitat" if placing_kind=="" else ("Place inside the cell · right-click cancels" if game.world.player.internal_organ(placing_kind) else "Place on membrane · right-click cancels")
@@ -549,8 +531,6 @@ func sync(_dt: float) -> void:
 				var choice=choices[i];choice.text_scale=s;choice.size=Vector2.ONE*68*s
 				choice.position=menu_center+Vector2.from_angle(-PI/2+TAU*i/maxi(1,choices.size()))*menu_radius-choice.size*.5
 				choice.queue_redraw()
-	if mobile():
-		message.visible=false
 
 
 	var cursor := get_global_mouse_position()
@@ -587,14 +567,10 @@ func sync(_dt: float) -> void:
 		elif not keyboard_target.is_empty() and game.selected < 0: _tooltip(describe(keyboard_target),screen_at(keyboard_target))
 		elif game.selected >= 0:
 			_tooltip("%s\nCost %d biomass · You have %.1f biomass\n%s" % [game.TITLES[game.selected],game.world.player.construction_price(game.Simulation.KINDS[game.selected]),game.world.player.biomass,game.placement_status()],cursor)
-		elif game.preferences.show_instinct and not game.world.player.dead:
-			_tooltip("Instinct · "+game.world.Behavior.summary(game.world.player),Vector2.ZERO)
 		else:
 			tip_box.hide()
 	if context.get("kind","")=="organ" and not tip_box.visible:_tooltip(describe(context),Vector2.ZERO)
-	if mobile():
-		if game.notice_timer>3:_tooltip(game.notice,Vector2.ZERO)
-		elif game.inspector.box.visible:tip_box.hide()
+	if mobile() and game.inspector.box.visible:tip_box.hide()
 	biomass_view.sync()
 	queue_redraw()
 

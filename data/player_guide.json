@@ -17,7 +17,7 @@
       {
         "id": "build",
         "title": "Build and restore",
-        "text": "Open Assembly for movement, oral grooves, armor and glands, Chemistry for internal organs and leaves, or Receptors for free chemical senses. The first two non-receptor organelles on each cell are free. After those, prices follow Fibonacci ×10: 10, 10, 20, 30, 50, 80… biomass. Reabsorbing one moves the next build back one step. Free receptors do not advance the sequence. Both starter organelles can be replaced. Placing an organelle shows an outward ripple and a preview while it is confirmed.",
+        "text": "Open Assembly for movement, oral grooves, armor and glands, Chemistry for internal organs and leaves, or Receptors for free chemical senses. The first two non-receptor organelles on each cell are free. After those, prices follow Fibonacci ×10: 10, 10, 20, 30, 50, 80… biomass. Reabsorbing one moves the next build back one step. Free receptors do not advance the sequence. Both starter organelles can be replaced. Placing an organelle shows an outward ripple and a preview while it is confirmed. Refused placements have a red-bordered notice. Brief notices fade after a second; a little amoeba at the bottom right shows waiting.",
         "sources": []
       },
       {
@@ -41,7 +41,7 @@
       {
         "id": "behavior",
         "title": "Understand your cell’s instincts",
-        "text": "Intent view starts on. Nucleus → Instinct toggles the live intention readout and direction arrow. Low ATP favors food, useful light or resting while food digests. Low biomass favors feeding or hunting. Healthy cells can hunt or explore. Harmful acid and attacks take priority; family traces help attacked cells spread out. The same instincts apply to every cell, using its own organs and local signals.",
+        "text": "Intent view starts on. Nucleus → Instinct toggles the live intention readout in its own pane and the direction arrow. A separate red warning shows starvation. Low ATP favors food, useful light or resting while food digests. Low biomass favors feeding or hunting. Healthy cells can hunt or explore. Harmful acid and attacks take priority; family traces help attacked cells spread out. The same instincts apply to every cell, using its own organs and local signals.",
         "sources": []
       },
       {

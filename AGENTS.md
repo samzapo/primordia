@@ -860,3 +860,19 @@ photosynthesis organ, including a damaged leaf, blocks Parasite synergy.
 Assigned Parasites reabsorb leaves before completing their core, using ordinary
 investment costs/cadence and selected/favorite protection. Retain experimental;
 update its cumulative notice and guide, with no main promotion.
+
+
+## October21 quiet client status
+Routine queued/applied/selection/build-complete chatter is silent. Keep real
+command failures as individual compact bordered notices, red for rejections,
+bounded to three, deduplicated without extending their one-second fade.
+Separate persistent Instinct and red starvation panes from tooltips/notices;
+starvation presentation reads empty ATP and reserve biomass, without changing
+physiology. Notices expire through menus. A locally animated amoeba at the
+bottom right shows actual pending commands/placements/mutations and connection
+loading/retry, instead of progress prose. Actionable sign-in errors stay readable.
+Cell selection establishes a family-event baseline rather than replaying old
+notices or retired crisis goals. Ignore pointer/touch input across these panes.
+Preserve biology, authority receipts, optimistic placement/ripple and camera
+controls. Update guide and one final-feature cumulative experimental preview;
+retain the pond, main unchanged. Focused client UI/queue/layout checks only.

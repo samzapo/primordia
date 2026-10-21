@@ -162,8 +162,8 @@ var simulation_ms := 0.0
 var render_ms := 0.0
 var screenshot_path := ""
 var capture_frame := 0
-var notice := "Build, feed and grow your family. Your first two organelles are free."
-var notice_timer := 12.0
+var notice := ""
+var notice_timer := 0.0
 
 func _ready() -> void:
 	if OS.has_feature("web"):detail_pixel_ratio=maxf(1,float(JavaScriptBridge.eval("window.primordiaRenderPixelRatio || window.devicePixelRatio || 1")))
@@ -303,7 +303,6 @@ func _physics_process(dt: float) -> void:
 		camera_locked = true
 		camera_offset = Vector2.ZERO
 		free_camera = world.player.position
-		_message(world.lineage.notices[-1] if not world.lineage.notices.is_empty() else world.evolution.objective(world))
 	var tick_usec := Time.get_ticks_usec()-started
 	frame_ticks += 1
 	frame_tick_usec += tick_usec
@@ -444,7 +443,6 @@ func _toggle_perception() -> void:
 	for view in views.values():view.seen_revision=-1;view._queue_body_redraw()
 	_update_world(1.0 if is_paused() else Engine.get_physics_interpolation_fraction())
 	touch_zoom.layout();_update_perception_menu()
-	_message("Internal · camera attached to the cell." if perception=="interoception" else "External · zoom retained within pond limits.")
 
 func can_follow() -> bool:
 	return _follow_cell()!=null and not _follow_cell().dead
@@ -1098,7 +1096,6 @@ func _toggle_build() -> void:
 	tube_start.clear()
 	cell_ui.close_context()
 	cell_ui.keyboard_target.clear()
-	_message("Tap a factory or organelle. Details appear below." if touch_zoom.enabled else "Click a factory · hold Alt for details.")
 	_layout()
 
 func _finish_build() -> void:
@@ -1119,7 +1116,6 @@ func _finish_build() -> void:
 		camera_offset = observation_view.offset
 		focus_animating = true
 		observation_view.clear()
-	_message("Anatomy kept · the world continues." if world.server_mode else "Anatomy kept · the ecological clock resumes.")
 	_layout()
 
 func placement_status() -> String:
@@ -1141,13 +1137,13 @@ func _place_at(angle: float) -> bool:
 	if moving_id >= 0:
 		var moved: bool = world.edit("move",{"id":moving_id,"angle":angle})
 		moving_id = -1
-		_message("Organelle moved." if moved else "That organ is no longer available.")
+		if not moved and not world.remote_client:_message("That organ is no longer available.","error")
 		return moved
 	if selected < 0: return false
 	var kind: String=Simulation.KINDS[selected]
 	var placed: bool = world.install(kind,angle,"flee" if selected == 5 else "graze",1.0)
 	if placed and not world.remote_client:placement_feedback.begin(world.player,kind,angle,false)
-	_message(("Placing organelle…" if world.remote_client else "Organelle attached.") if placed else placement_status())
+	if not placed and not world.remote_client:_message(placement_status(),"error")
 	return placed
 
 func _zoom_button(factor: float) -> void:
@@ -1231,10 +1227,13 @@ func _restart(profile: int = -1) -> void:
 	_layout()
 	_message("New expedition · family history and known blueprints retained.\nBuild, feed and grow your family.")
 
-func _message(value: String) -> void:
+func waiting_for_world() -> bool:
+	return false
+
+func _message(value: String,tone: String="info") -> void:
 	notice = value
-	notice_timer = 6
-	_update_hud()
+	notice_timer = 1.0
+	cell_ui.status_feed.push(value,tone)
 
 func touch_controls_available() -> bool:
 	return true
@@ -1242,7 +1241,6 @@ func touch_controls_available() -> bool:
 func _cancel_placement() -> void:
 	selected=-1;moving_id=-1;tube_start.clear()
 	cell_ui.close_context()
-	_message("Placement cancelled.")
 
 func _mobile_pause_menu() -> void:
 	if not pause_control_ready:return
@@ -1383,7 +1381,6 @@ func _choose_merge_at(screen: Vector2) -> void:
 		_message("Choose a bright relative whose pheromones this cell can detect.");return
 	if world.edit("merge",{"id":identity}):
 		_end_merge_selection()
-		_message("Merging selected relative..." if world.remote_client else "Family cells merged.")
 	else:_message("That relative is no longer available. Choose another bright cell.")
 
 func _family_at(screen: Vector2) -> int:
@@ -1446,7 +1443,6 @@ func _unhandled_input(event: InputEvent) -> void:
 				tube_group = world.edit("link_add",{"start":tube_start,"end":endpoint,"value":tube_tension})
 				if tube_group >= 0:
 					shape_preview_ticks = 60
-					_message("Microtubule placed · hover and scroll to set tension.")
 			tube_start.clear()
 		return
 	if event.button_index == MOUSE_BUTTON_MIDDLE and (merge_selecting() or build_open or not camera_locked or perception=="interoception"):
@@ -1463,7 +1459,6 @@ func _unhandled_input(event: InputEvent) -> void:
 			tube_tension = clampf(link.tension+(0.05 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -0.05),0,1)
 			world.edit("tension",{"id":tube_group,"value":tube_tension})
 			shape_preview_ticks = 60
-			_message("Microtubule tension %d%%" % roundi(tube_tension*100))
 			return
 		_zoom_at(event.position,1.12 if event.button_index == MOUSE_BUTTON_WHEEL_UP else 1/1.12)
 		return
