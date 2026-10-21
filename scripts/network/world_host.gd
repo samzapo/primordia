@@ -27,7 +27,7 @@ var cpu := false
 var running := false
 var port := 9001
 var bind_address := "127.0.0.1"
-var last_publication_usec := 0
+var next_publication_usec := 0
 var checkpoint_clock := 0.0
 var last_metrics_usec := 0
 var pending_frame: Dictionary = {}
@@ -73,7 +73,7 @@ var snapshot_encode_usec: Array=[]
 func _ready() -> void:
 	get_tree().auto_accept_quit = false
 	Engine.physics_ticks_per_second=physics_hz
-	Engine.max_physics_steps_per_frame = 2
+	Engine.max_physics_steps_per_frame = 1 # One late tick; let networking/render submission run between ticks.
 	if store.directory=="": store.directory = ProjectSettings.globalize_path("user://world")
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--state-dir="): store.directory = arg.trim_prefix("--state-dir=")
@@ -196,6 +196,7 @@ func _started() -> void:
 	if listener.listen(port,bind_address) != OK: _fatal("Cannot bind world socket"); return
 	running = true
 	started_usec=Time.get_ticks_usec();start_simulation_seconds=world.time
+	next_publication_usec=started_usec+100000
 	print("WORLD_READY id=%s epoch=%d tick=%d backend=%s port=%d" % [world_id,epoch,world.revision,"cpu" if world.resident==null else "gpu",port])
 	_write_metrics()
 
@@ -207,12 +208,18 @@ func _process(_dt: float) -> void:
 	_poll_feedback()
 	_poll_snapshots()
 	var now:=Time.get_ticks_usec()
-	if now-last_publication_usec>=100000:
-		last_publication_usec=now;_publish()
+	if now>=next_publication_usec:
+		_publish()
+		next_publication_usec=publication_deadline(next_publication_usec,Time.get_ticks_usec())
 	if now-last_metrics_usec>=5000000:
 		_write_metrics()
 	if shutdown_after>0 and (Time.get_ticks_usec()-started_usec)/1000000.0>=shutdown_after:
 		stop()
+
+static func publication_deadline(previous: int,finished: int) -> int:
+	# Drop missed work and retain the original100ms phase, including a late
+	# computation that itself crosses another scheduled boundary.
+	return previous+(maxi(0,int((finished-previous)/100000))+1)*100000
 
 func _physics_process(dt: float) -> void:
 	if not running: return

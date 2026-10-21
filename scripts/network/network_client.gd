@@ -436,7 +436,7 @@ func _welcome(message: Dictionary) -> void:
 	death_view.reset(world,world.death_serial)
 	received_merge_serial=int(message.get("merge_serial",0));world.merge_serial=received_merge_serial;world.merge_bursts.clear();merge_tombstones.clear();merge_view.reset(world,received_merge_serial)
 	player_name=str(message.get("player_name",""));favorite_name=str(message.get("favorite_name",""));last_presence=""
-	token=message.token;epoch=message.epoch;command_sequence=message.sequence;edit_revision=message.edit
+	token=message.token;epoch=message.epoch;command_sequence=message.sequence;edit_revision=maxi(edit_revision,int(message.edit))
 	world.seed_value=message.seed;world.habitat_geometry=Codec.new().restore(message.habitat)
 	habitat_view.configure(world.habitat_geometry)
 	light_layer.material.set_shader_parameter("habitat_seed",float(posmod(world.seed_value,997)))
@@ -608,7 +608,7 @@ func _release_result(message: Dictionary) -> void:
 		_show_next_update.call_deferred()
 
 func _debug_population_lines() -> String:
-	return population_text(server_census,world.particles.size())
+	return population_text(server_census,world.particles.size())+"\nState updates: %.2fs apart · buffer %.2fs · underruns %d · resyncs %d" % [playback.period,playback.delay,playback.underruns,playback.resyncs]
 
 static func population_text(server_census: Dictionary,local_count: int) -> String:
 	if server_census.is_empty():return "\nCamera region: %d particles\nHabitat total: waiting for server" % local_count

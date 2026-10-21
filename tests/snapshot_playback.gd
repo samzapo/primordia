@@ -58,6 +58,25 @@ func run() -> void:
 	check(resumed.alpha>=0 and resumed.alpha<=1 and buffer.resyncs>0,"Returning from a suspended tab skips obsolete motion with valid interpolation")
 	buffer.reset()
 	check(buffer.sample(20).is_empty() and buffer.frames.is_empty(),"Pause/reconnect can discard the old timeline completely")
+	# Actual live steady-player sample was about1.7s between captures.
+	var sparse=Playback.new();var next_sparse:=0;var last_sparse:=-1.0;var jumped:=false;var reversed:=false;var steady_holds:=0
+	for n in 1200:
+		var now:=n/60.0
+		if now>=next_sparse*1.7:
+			sparse.push({"tick":next_sparse,"time":next_sparse*.2,"presentation_usec":next_sparse*1700000},next_sparse*1.7);next_sparse+=1
+		var sample: Dictionary=sparse.sample(now)
+		if sample.is_empty():continue
+		var at: float=lerpf(sample.before.presentation_usec/1000000.0,sample.after.presentation_usec/1000000.0,sample.alpha)
+		if now>5 and last_sparse>=0:
+			jumped=jumped or at-last_sparse>1.121/60
+			reversed=reversed or at<last_sparse
+			steady_holds+=int(at-last_sparse<.000001)
+		last_sparse=at
+	check(not jumped and not reversed and steady_holds==0 and sparse.resyncs==0,"Sparse1.7s authority updates interpolate continuously without periodic hard resets or invented simulation")
+	check(sparse.delay<=Playback.MAX_DELAY and sparse.frames.size()<=Playback.MAX_FRAMES,"Sparse recovery retains bounded latency and memory")
+	var Host=preload("res://scripts/network/world_host.gd")
+	check(Host.publication_deadline(1000000,1000000)==1100000 and Host.publication_deadline(1000000,1250000)==1300000,"Publication resumes at the next original scheduled tick after one late computation")
+	check(Host.publication_deadline(1000000,1300000)==1400000,"An execution crossing another boundary drops it rather than firing a catch-up burst")
 	var client=Client.new();root.add_child(client);client.set_process(false);client.set_physics_process(false)
 	client.music.enabled=false;client.music.player.stop();client.epoch=4
 	var sim=Sim.new(18,0,false);sim.cells=[sim.player]
@@ -73,7 +92,9 @@ func run() -> void:
 	wire.particles=packet_bytes(Vector2(8,600))
 	wire.tick=2;wire.time=1.1;wire.presentation_usec=1100000
 	wire.graph=Codec.new().capture({"cells":sim.cells,"player":sim.player,"lineage":sim.lineage,"evolution":sim.evolution})
+	client.edit_revision=9
 	client._snapshot(wire)
+	check(client.edit_revision==9,"Buffered older anatomy cannot rewind a newer command receipt revision")
 	check(client.world.player.previous_position==Vector2(4090,500) and client.world.player.position==Vector2(6,500),"Cell interpolation retains actual consecutive server endpoints across the wrapped pond")
 	check(client.world.particles[0].previous==Vector2(4092,600) and client.world.particles[0].p==Vector2(8,600),"External particles retain actual endpoints instead of repeatedly easing from partial poses")
 	var internal=client.world.player.chemistry.particles[0]

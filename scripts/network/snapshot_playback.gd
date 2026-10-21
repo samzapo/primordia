@@ -2,7 +2,7 @@ extends RefCounted
 ## Presentation only. Play captured poses on one monotonic host-time timeline.
 ## No prediction, chemistry steps or simulation random draws.
 const MAX_FRAMES:=8
-const MAX_DELAY:=0.75
+const MAX_DELAY:=2.0
 var frames: Array=[]
 var gaps: Array[float]=[]
 var period:=0.1
@@ -24,14 +24,14 @@ func push(frame: Dictionary,arrival: float) -> bool:
 	if not frames.is_empty():
 		var previous: float=frames[-1].stamp
 		if stamp<=previous:return false
-		if stamp-previous>1.5:
-			reset();resyncs+=1 # Returning from a suspended tab must not replay stale water.
-		else:
-			period=lerpf(period,clampf(stamp-previous,1.0/60,0.5),0.125)
-			gaps.append(clampf(arrival-last_arrival,0,1))
-			if gaps.size()>16:gaps.pop_front()
-			var ordered:=gaps.duplicate();ordered.sort()
-			delay=clampf(maxf(period*2,ordered[int((ordered.size()-1)*0.9)]*1.1),0.12,MAX_DELAY)
+		# A slow authority is not a suspended browser. Preserve its consecutive
+		# captured endpoints instead of teleporting to every sparse arrival.
+		var span:=clampf(stamp-previous,1.0/60,MAX_DELAY)
+		period=span if gaps.is_empty() else lerpf(period,span,.125)
+		gaps.append(clampf(arrival-last_arrival,0,MAX_DELAY))
+		if gaps.size()>16:gaps.pop_front()
+		var ordered:=gaps.duplicate();ordered.sort()
+		delay=clampf(maxf(period*1.15+.05,ordered[int((ordered.size()-1)*.9)]*1.1),.12,MAX_DELAY)
 	if frames.is_empty():cursor=stamp;last_sample=arrival
 	frames.append({"stamp":stamp,"frame":frame})
 	last_arrival=arrival
@@ -62,4 +62,4 @@ func sample(now: float) -> Dictionary:
 	return {"before":before.frame,"after":after.frame,"alpha":alpha}
 
 func diagnostics() -> Dictionary:
-	return {"buffered":frames.size(),"delay_ms":roundi(delay*1000),"underruns":underruns,"resyncs":resyncs,"started":started}
+	return {"buffered":frames.size(),"delay_ms":roundi(delay*1000),"period_ms":roundi(period*1000),"underruns":underruns,"resyncs":resyncs,"started":started}
