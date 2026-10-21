@@ -349,7 +349,8 @@ func step(dt: float) -> void:
 		sim.profile_usec["cold_sense"]=Time.get_ticks_usec()-cold_started
 		# The private cold workset remains borrowed until intake is credited.
 		sim.resident=self
-	gpu.environment(sim.fluid.velocity,sim.acidity.values);gpu.advance(dt,sim.revision)
+	sim.fluid.prepare_attractors(sim.cells)
+	gpu.environment(sim.fluid.particle_flow(),sim.acidity.values);gpu.advance(dt,sim.revision)
 	var receipt:=_receipt(cells,queries,{"projection":false,"coarse":schedule.coarse,"scope":scope,"summaries":streaming!=null})
 	sim.profile_usec["particles"]=Time.get_ticks_usec()-mark
 	if receipt.has("error"):

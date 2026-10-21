@@ -119,7 +119,7 @@ func advance(sim,packets: Array,force: bool=false) -> void:
 	if sim.kernels!=null and not ids.is_empty():
 		# Existing native large-step midpoint/Brownian integrator. The negative
 		# activity rectangle selects the explicit borrowed IDs as cold everywhere.
-		sim.kernels.transport(packets,ids,sim.fluid.velocity,Vector2.ZERO,-Vector2.ONE*256,0,sim.revision,random,sim.transport_clock,true)
+		sim.kernels.transport(packets,ids,sim.fluid.particle_flow(),Vector2.ZERO,-Vector2.ONE*256,0,sim.revision,random,sim.transport_clock,true)
 	transported+=ids.size()
 
 func _region_keys() -> Array:

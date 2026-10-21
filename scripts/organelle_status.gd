@@ -11,6 +11,11 @@ static func state(sim,cell,organ: Dictionary) -> Dictionary:
   if sim.light_at(cell.organ_position(organ))*cell.Genes.factor(organ,"sun" if sim.light_at(cell.organ_position(organ))>=.5 else "shade")<cell.Chemistry.MIN_LEAF_LIGHT:result.label="Collecting diffuse light";return result
   result.label="Collecting light";result.progress=clampf(float(organ.get("photo_elapsed",0))/.25,0,1)
   return result
+ if kind=="proboscis":
+  result.label="Feeding · 0.5 ATP / biomass" if organ.get("feeding",false) else "Waiting for contact with a living cell"
+  if cell.energy+cell.biomass<=0:result.label="Waiting for ATP or reserve biomass"
+  elif cell.substrate>=cell.gut_capacity():result.label="Digesting a full meal"
+  return result
  if kind=="toxin_sac":
   result.progress=preload("res://scripts/toxin_sac.gd").fraction(organ)
   result.capacity=cell.work_capacity();result.depleted=result.capacity<1

@@ -47,7 +47,7 @@
       {
         "id": "offspring",
         "title": "Cell division",
-        "text": "Open Divide and choose Mitosis or Budding. Mitosis leaves your organelles with the parent and uses half your available biomass to grow a basic daughter. Budding funds a small daughter directly. Neither needs clear water. Each cell can reproduce once per minute. Both automatic modes start on and let instincts choose suitable moments. At 12 family members, an extra daughter is immediately reabsorbed.",
+        "text": "Open Divide and choose Mitosis or Budding. Mitosis leaves your organelles with the parent and uses half your available biomass to grow a basic daughter. Budding funds a small daughter directly. Neither needs clear water. Each cell can reproduce once per minute. Both automatic modes start on and let instincts choose suitable moments. At 12 family members, an extra daughter is immediately reabsorbed. Family investment settings show each automatic mode as On or Off; This cell changes only the selected relative.",
         "sources": []
       },
       {
@@ -237,7 +237,7 @@
         {
           "id": "photosynthesis",
           "title": "Carbon + light → food, biomass and oxygen",
-          "text": "Leaves use dissolved CO2 and light to make food, biomass, oxygen and ATP. Air slowly replenishes carbon throughout the pond, with excess carbon returning to the air near a low local saturation. One healthy leaf can sustain a basic cell even in dim water; larger active builds need more leaves and efficient respiration. Sun and Shade still favor different light conditions. Most new food stays inside, with a little released into the pond. Attacks and damaging acid can still kill a cell.",
+          "text": "Leaves use dissolved CO2 and light to make food, biomass, oxygen and ATP. Air slowly replenishes carbon throughout the pond, with excess carbon returning to the air near a low local saturation. One healthy leaf can sustain a basic cell even in dim water; larger active builds need more leaves and efficient respiration. Sun and Shade still favor different light conditions. Producers share half their new food once survival, birth and internal food reserves are covered; while recovering, they keep three quarters. Attacks and damaging acid can still kill a cell.",
           "sources": [
             {
               "title": "Oxygen production in photosynthesis",
@@ -278,7 +278,7 @@
         {
           "id": "low_power",
           "title": "Low ATP: quarter capacity",
-          "text": "Low ATP slows movement, feeding currents, glands and active repair to 25% capacity instead of switching them off. Weapons recharge four times more slowly. Normal activity returns automatically when ATP recovers. Organs still need their usual materials and signals. Digestion, photosynthesis, sensing and passive protection keep their existing operation. This residual capacity is a game rule.",
+          "text": "Spare biomass can fuel organelles at normal power when ATP is low. This consumes real biomass. When both ATP and reserves run out, movement, feeding currents, glands and repair fall to quarter capacity. Digestion, photosynthesis and passive protection keep working.",
           "sources": []
         }
       ]
@@ -491,7 +491,7 @@
         {
           "id": "organ_feeding",
           "title": "Oral groove",
-          "text": "An optional mouth on the membrane, built in Assembly. It draws surrounding water toward its opening, takes in food and releases digestive enzymes. A taut internal strand connects the mouth to the center of the cell. Reabsorb it to remove the mouth and strand; leaves and gas uptake still work without it.",
+          "text": "An optional mouth on the membrane, built in Assembly. It draws surrounding water toward its opening, takes in food and releases digestive enzymes. A taut internal strand connects the mouth to the center of the cell. Reabsorb it to remove the mouth and strand; leaves and gas uptake still work without it. A strong attractor draws nearby particles toward the mouth from a wider area. It does not push cells or change the pond current. Hazardous particles are drawn in too.",
           "sources": [
             {
               "title": "Food-vacuole formation",
@@ -655,6 +655,17 @@
             {
               "title": "Chemical sensing under flow",
               "url": "https://www.nature.com/articles/s41467-023-44267-y"
+            }
+          ]
+        },
+        {
+          "id": "organ_proboscis",
+          "title": "Feeding proboscis",
+          "text": "Its tip must touch a living cell. It draws up to 2 biomass per second as food, costing 0.5 ATP per unit. Food still needs digestion. It cannot drain protected unattended favorites. These rates, the fixed tube and ATP cost are game choices inspired by protists that extract other cells’ contents.",
+          "sources": [
+            {
+              "title": "Experimental study of protoplast feeding",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC9721047/"
             }
           ]
         }

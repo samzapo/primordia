@@ -4,7 +4,7 @@ const Medium = preload("res://scripts/medium.gd")
 const Genes = preload("res://scripts/mutations.gd")
 const PERIOD := 1.0
 const SUBSTEP := 0.125
-const FEED_MARGIN := 70.0
+const FEED_MARGIN := 320.0
 const CONTACT_DUTY := 0.5
 # Calibrated swept collection area for unresolved pore motion and fluid delivery.
 # This affects encounters with real packets, never cell storage/metabolic stats.
@@ -156,7 +156,7 @@ static func feeding_request(sim, cell, dt: float, period: float) -> Dictionary:
 	var radius: float=cell.extent()+FEED_MARGIN+minf(60,relative*period)
 	for organ in cell.organs:
 		if organ.kind!="feeding" or organ.hp<=0: continue
-		var pump: float=24*organ.scale*organ.hp/organ.max_hp*Genes.factor(organ,"suction")*cell.work_capacity()
+		var pump: float=(cell.ORAL_FLOW*.375)*organ.scale*organ.hp/organ.max_hp*Genes.factor(organ,"suction")*cell.work_capacity()
 		var center: Vector2=cell.pore_center(organ)
 		var arm: Vector2=Medium.offset(cell.position,center)
 		var local_flow: float=(cell.velocity+Vector2(-arm.y,arm.x)*cell.angular_velocity-sim.fluid.sample(center)).length()
@@ -175,7 +175,7 @@ func _feed(sim, cell, dt: float) -> void:
 	for organ in cell.organs:
 		if organ.kind != "feeding" or organ.hp <= 0: continue
 		if mouth.is_empty(): mouth = organ
-		var pump: float = 24*organ.scale*organ.hp/organ.max_hp*Genes.factor(organ,"suction")*cell.work_capacity()
+		var pump: float = (cell.ORAL_FLOW*.375)*organ.scale*organ.hp/organ.max_hp*Genes.factor(organ,"suction")*cell.work_capacity()
 		var center: Vector2 = cell.pore_center(organ)
 		var arm: Vector2 = Medium.offset(cell.position,center)
 		var local_flow: float = (cell.velocity+Vector2(-arm.y,arm.x)*cell.angular_velocity-sim.fluid.sample(center)).length()

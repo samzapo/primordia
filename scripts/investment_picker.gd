@@ -17,6 +17,7 @@ var adopt:=Button.new()
 var exemplar:=Button.new()
 var auto_mitosis:=Button.new()
 var auto_bud:=Button.new()
+var pending_auto: Dictionary={}
 var cards: Array[Button]=[]
 var margin:=MarginContainer.new()
 var layout_scale:=-1.0
@@ -52,12 +53,26 @@ func initialize(owner_game) -> void:
  var auto_row:=HBoxContainer.new();box.add_child(auto_row)
  for entry in [{"button":auto_mitosis,"mode":"mitosis"},{"button":auto_bud,"mode":"budding"}]:
   var button: Button=entry.button;var mode: String=entry.mode
-  auto_row.add_child(button);button.toggle_mode=true;button.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+  auto_row.add_child(button);button.expand_icon=true;button.icon_alignment=HORIZONTAL_ALIGNMENT_RIGHT;button.size_flags_horizontal=Control.SIZE_EXPAND_FILL
   button.pressed.connect(_set_auto.bind(mode,button))
 
  hide()
-func _set_auto(mode: String,button: Button) -> void:
- game.world.edit("division_policy",{"mode":mode,"scope":scope,"automatic":button.button_pressed})
+func _auto_active(mode: String) -> bool:
+ return game.world.player.automatic_division if mode=="mitosis" else game.world.player.automatic_budding
+
+func _set_auto(mode: String,_button: Button) -> void:
+ if pending_auto.has(mode):return
+ if game.world.remote_client and (not game.connected or game.user_paused):return
+ var desired:=not _auto_active(mode)
+ if game.world.edit("division_policy",{"mode":mode,"scope":scope,"automatic":desired}) and game.world.remote_client:
+  pending_auto[mode]={"cell":game.world.player.id,"scope":scope,"value":desired,"at":Time.get_ticks_msec()}
+ sync()
+
+func command_result(command: Dictionary,result: Dictionary) -> void:
+ if command.get("action","")!="division_policy":return
+ var mode: String=command.get("args",{}).get("mode","mitosis")
+ if not result.get("ok",false):pending_auto.erase(mode)
+ sync()
 
 func open() -> void:
  scope="lineage";get_parent().move_child(self,get_parent().get_child_count()-1);show();sync()
@@ -78,8 +93,16 @@ func sync() -> void:
  family.text="Family";body.text="This cell"
  family.icon=SELECTION_MARK if scope=="lineage" else null
  body.icon=SELECTION_MARK if scope=="cell" else null
- auto_mitosis.text="Auto mitosis";auto_bud.text="Auto budding"
- auto_mitosis.set_pressed_no_signal(game.world.player.automatic_division);auto_bud.set_pressed_no_signal(game.world.player.automatic_budding)
+ for entry in [{"button":auto_mitosis,"mode":"mitosis","label":"Auto mitosis"},{"button":auto_bud,"mode":"budding","label":"Auto budding"}]:
+  var mode: String=entry.mode;var button: Button=entry.button
+  var active:=_auto_active(mode)
+  if pending_auto.has(mode):
+   var request: Dictionary=pending_auto[mode]
+   if request.cell!=game.world.player.id or active==request.value or Time.get_ticks_msec()-request.at>15000:pending_auto.erase(mode)
+  var waiting: bool=pending_auto.has(mode)
+  button.text=entry.label+": "+("On" if active else "Off")+(" …" if waiting else "")
+  button.icon=SELECTION_MARK if active else null
+  button.disabled=waiting
  var value:=current()
  var inherited: String=game.world.investment.lineages.get(game.world.player.lineage_id(),game.world.Investment.DEFAULT)
  var effective: String=inherited if value=="inherit" else value

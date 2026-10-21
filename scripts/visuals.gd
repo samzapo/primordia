@@ -221,6 +221,14 @@ static func icon(c, p: Vector2, kind: String, rotation: float, scale: float, ani
 			c.draw_circle(Vector2(0,0),7,Color("198a99"))
 			c.draw_line(Vector2(0,-4),Vector2(0,4),Color("d0ffbe"),3,true)
 			c.draw_line(Vector2(-4,0),Vector2(4,0),Color("d0ffbe"),3,true)
+		"proboscis":
+			c.draw_circle(Vector2(-5,0),10,Color("773558"))
+			c.draw_circle(Vector2(-5,-1),7,Color("e877a0"))
+			c.draw_line(Vector2(-2,0),Vector2(24,0),Color("91335d"),7,true)
+			c.draw_line(Vector2(-1,-1),Vector2(27,-1),Color("ffc5ac").lerp(Color("fff4a0"),pulse),3,true)
+			c.draw_circle(Vector2(27,0),3,Color("ffe0b3"))
+			if detail:
+				for i in 3:c.draw_circle(Vector2(4+i*7,0),1.8,Color("ffe895").lerp(Color("e877a0"),pulse))
 		"feeding":
 			var lip := PackedVector2Array()
 			for i in 17:

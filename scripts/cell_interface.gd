@@ -209,7 +209,7 @@ func open_context(target: Dictionary) -> void:
 				choices[-1].scar=entry.kind=="scar"
 				if entry.kind=="nucleus" and game.views.has(cell.id):choices[-1].structure_art=game.views[cell.id].art
 		"assembly","chemistry","receptors":
-			for index in ([0,1,2,3,4,11,13] if target.kind == "assembly" else [5,10,15,16] if target.kind=="receptors" else [12,14,6,7,9,3,8]):
+			for index in ([0,1,2,3,4,11,13,17] if target.kind == "assembly" else [5,10,15,16] if target.kind=="receptors" else [12,14,6,7,9,3,8]):
 				var kind: String = sim.KINDS[index]
 				var cost := 0.0
 				var price: int=cell.construction_price(kind)
@@ -353,6 +353,7 @@ func _specialize(cell_id: int,organ_id: int,gene: String) -> void:
 	open_context({"kind":"organ","id":organ_id})
 
 func command_result(command: Dictionary,result: Dictionary) -> void:
+	investment_picker.command_result(command,result)
 	if command.get("action","")!="mutate" or pending_mutation.is_empty():return
 	if not result.get("ok",false):
 		pending_mutation.clear()

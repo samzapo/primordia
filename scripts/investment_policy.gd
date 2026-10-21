@@ -5,7 +5,7 @@ const DEFAULT:="producer"
 const OPERATING_BIOMASS:=12.0
 const STRATEGIES:=["manual","hunter","producer","grazer","custom"]
 const PRIORITIES:={
- "hunter":["hunting","toxin","propulsion","poreforming","cilia","mitochondrion","protection"],
+ "hunter":["hunting","proboscis","toxin","propulsion","poreforming","cilia","mitochondrion","protection"],
  "producer":["photosynthesis","protection","mitochondrion","regenerative","neutralizing"],
  "grazer":["cilia","protection","propulsion","regenerative","mitochondrion","sensing"],
 }
@@ -26,8 +26,8 @@ static func inherit_strategy(sim,parent,child) -> void:
 
 # Variants are deterministic preferences, never free organs or hidden ecology knowledge.
 const VARIANTS:={
- "hunter":[["hunting","toxin","propulsion","poreforming","sensing","protection","mitochondrion","regenerative"],
-           ["hunting","poreforming","cilia","counterattack","protection","neutralizing","mitochondrion","regenerative","toxin_sac","family_toward"]],
+ "hunter":[["hunting","proboscis","propulsion","toxin","sensing","protection","mitochondrion","regenerative"],
+           ["hunting","poreforming","proboscis","cilia","counterattack","protection","neutralizing","mitochondrion","regenerative","toxin_sac","family_toward"]],
  "producer":[["photosynthesis","protection","regenerative","mitochondrion","neutralizing","cilia","sensing","family_away","toxin_sac"],
              ["photosynthesis","cilia","neutralizing","mitochondrion","regenerative","protection","sensing","family_toward","toxin_sac"]],
  "grazer":[["cilia","mitochondrion","regenerative","sensing","feeding","protection","neutralizing","family_toward"],
@@ -63,7 +63,7 @@ static func candidate(sim,cell) -> Dictionary:
   # Establish a complete working role before duplicating its headline organ.
   if index>0 and count==0:value+=12
   if policy=="hunter" and working(cell,"hunting")>0:
-   if working(cell,"toxin")+working(cell,"poreforming")+working(cell,"counterattack")==0 and kind in ["toxin","poreforming"]:value+=70
+   if working(cell,"toxin")+working(cell,"poreforming")+working(cell,"counterattack")+working(cell,"proboscis")==0 and kind in ["toxin","poreforming","proboscis"]:value+=70
    if working(cell,"propulsion")+working(cell,"cilia")==0 and kind in ["propulsion","cilia"]:value+=50
   if cell.health<70 or cell.acid_stress>.25:
    if kind=="regenerative" and count==0:value+=40
@@ -116,7 +116,7 @@ static func essential(cell,policy: String,kind: String) -> bool:
  if kind=="feeding":return working(cell,"feeding")==0 and working(cell,"photosynthesis")==0
  if kind=="regenerative" and cell.health<70:return working(cell,kind)==0
  if policy=="hunter":
-  if kind in ["hunting","toxin","poreforming"]:return working(cell,"toxin")+working(cell,"poreforming")+working(cell,"counterattack")==0
+  if kind in ["hunting","toxin","poreforming","proboscis"]:return working(cell,"toxin")+working(cell,"poreforming")+working(cell,"counterattack")+working(cell,"proboscis")==0
   if kind in ["propulsion","cilia"]:return working(cell,"propulsion")+working(cell,"cilia")==0
  return policy=="grazer" and kind=="cilia" and working(cell,kind)==0
 

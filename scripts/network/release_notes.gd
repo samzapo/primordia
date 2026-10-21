@@ -538,6 +538,20 @@ const RELEASES=[
  ],
  "footer":"Experimental starts from a fresh copy of the main pond. Main is unchanged.",
  "button":"Back to the pond"
+},
+{
+ "id":"2026-10-20-feeding-and-family",
+ "audience":"experimental",
+ "title":"What’s new in the pond",
+ "items":[
+  "Automatic mitosis and budding now clearly show On or Off in Family settings.",
+  "Producers share half their new food once their reserves are covered.",
+  "Build a feeding proboscis to draw food directly from a living cell on contact.",
+  "Oral grooves pull particles in much more strongly from a wider area.",
+  "Reserve biomass keeps organelles working at normal power until it runs out."
+ ],
+ "footer":"Try these changes in the experimental pond.",
+ "button":"Back to the pond"
 }
 ]
 const CURRENT=RELEASES[-1]

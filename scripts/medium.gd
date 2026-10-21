@@ -11,6 +11,7 @@ const PLANT_DAMPING := .5 # Owner: halve vegetation dissipation, retaining its g
 const ACTIVE_PAD := 64.0
 const ACTIVE_FADE := 64.0
 var velocity := PackedVector2Array()
+var particle_velocity := PackedVector2Array() # Derived particle-only attractor field; never saved.
 var activity := PackedFloat32Array()
 var driven := true
 var induced_key := "" # Derived target cache; never a retained physical velocity.
@@ -66,15 +67,49 @@ func current(p: Vector2) -> Vector2:
 	# Explicit externally maintained tide plus periodic vortices.
 	return Vector2(11 + 17 * sin(TAU * p.y / WORLD.y * 4), 15 * sin(TAU * p.x / WORLD.x * 4))
 
+func particle_flow() -> PackedVector2Array:
+	return particle_velocity if not particle_velocity.is_empty() else velocity
+
+func prepare_attractors(cells: Array) -> void:
+	# Strongest mouth wins locally: crowded mouths cannot sum into a launch.
+	var pull:=PackedVector2Array();pull.resize(COLS*ROWS)
+	var strengths:=PackedFloat32Array();strengths.resize(COLS*ROWS)
+	for cell in cells:
+		if cell.dead:continue
+		for organ in cell.organs:
+			if organ.kind!="feeding" or organ.hp<=0:continue
+			var at: Vector2=cell.pore_center(organ)
+			var reach: float=cell.ORAL_REACH*sqrt(organ.scale)
+			var power: float=cell.ORAL_FLOW*organ.scale*organ.hp/organ.max_hp*cell.Genes.factor(organ,"suction")*cell.work_capacity()
+			var lo:=Vector2i(((at-Vector2.ONE*reach)/SIZE-.5*Vector2.ONE).floor())
+			var hi:=Vector2i(((at+Vector2.ONE*reach)/SIZE-.5*Vector2.ONE).ceil())
+			for y in range(lo.y,mini(hi.y+1,lo.y+ROWS)):
+				for x in range(lo.x,mini(hi.x+1,lo.x+COLS)):
+					var delta:=offset(Vector2(x+.5,y+.5)*SIZE,at)
+					var distance:=delta.length()
+					if distance>=reach:continue
+					var speed: float=minf(300,power)*(1-distance/reach)
+					var i:=index(x,y)
+					if speed>strengths[i]:
+						strengths[i]=speed;pull[i]=delta.normalized()*speed
+	particle_velocity=velocity.duplicate()
+	for i in particle_velocity.size():particle_velocity[i]+=pull[i]
+
+func transport_sample(p: Vector2) -> Vector2:
+	return _sample(p,particle_flow())
+
 func sample(p: Vector2) -> Vector2:
+	return _sample(p,velocity)
+
+func _sample(p: Vector2,field: PackedVector2Array) -> Vector2:
 	# Allocation-free bilinear sampling is the hottest transport operation.
 	var q := wrap_position(p) / SIZE - Vector2.ONE * 0.5
 	var x := floori(q.x)
 	var y := floori(q.y)
 	var fx := q.x-x
 	var fy := q.y-y
-	var top := velocity[index(x,y)].lerp(velocity[index(x+1,y)],fx)
-	var bottom := velocity[index(x,y+1)].lerp(velocity[index(x+1,y+1)],fx)
+	var top := field[index(x,y)].lerp(field[index(x+1,y)],fx)
+	var bottom := field[index(x,y+1)].lerp(field[index(x+1,y+1)],fx)
 	return top.lerp(bottom,fy)
 
 func set_camera(camera: Vector2, half_view: Vector2 = Vector2(508,316)) -> void:

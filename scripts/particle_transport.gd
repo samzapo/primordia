@@ -4,15 +4,15 @@ const Medium = preload("res://scripts/medium.gd")
 
 static func advect(at: Vector2, velocity: Vector2, fluid, elapsed: float) -> Vector2:
 	if elapsed <= 0.05:
-		return Medium.wrap_position(at+(fluid.sample(at)+velocity)*elapsed)
+		return Medium.wrap_position(at+(fluid.transport_sample(at)+velocity)*elapsed)
 	# A few midpoint samples follow bends in the cached flow instead of taking
 	# one long straight Euler jump. Launch velocity has an exact drag integral.
 	var steps := clampi(ceili(elapsed/0.25),1,8)
 	var h := elapsed/steps
 	var damping := exp(-0.8*h)
 	for i in steps:
-		var midpoint: Vector2 = at+fluid.sample(at)*(h*0.5)+velocity*((1.0-exp(-0.4*h))/0.8)
-		at = Medium.wrap_position(at+fluid.sample(midpoint)*h+velocity*((1.0-damping)/0.8))
+		var midpoint: Vector2 = at+fluid.transport_sample(at)*(h*0.5)+velocity*((1.0-exp(-0.4*h))/0.8)
+		at = Medium.wrap_position(at+fluid.transport_sample(midpoint)*h+velocity*((1.0-damping)/0.8))
 		velocity *= damping
 	return at
 

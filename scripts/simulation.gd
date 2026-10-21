@@ -529,7 +529,7 @@ func _emit_pheromone(cell, emitted_at: float = -1.0) -> Dictionary:
 	var hostile := false
 	var armored := false
 	for organ in cell.organs:
-		if organ.kind in ["poreforming","toxin","acidifying"] and organ.hp > 0: hostile = true
+		if organ.kind in ["poreforming","toxin","acidifying","proboscis"] and organ.hp > 0: hostile = true
 		if organ.kind in ["protection","neutralizing"] and organ.hp > 0: armored = true
 		if organ.kind=="toxin_sac" and organ.hp>0 and float(organ.get("stored_toxin",0))>0:armored=true
 	# Value snapshots, never a Cell reference. Coordinates are deliberately old
@@ -721,6 +721,7 @@ func _step_simulation(dt: float) -> void:
 			cell.hurt_flash = maxf(0,cell.hurt_flash-local_dt*2)
 			cell.reaction_flash = maxf(0,cell.reaction_flash-local_dt*2)
 	_suction(dt)
+	fluid.prepare_attractors(cells)
 	profile_usec["fluid"] = Time.get_ticks_usec()-mark
 	mark = Time.get_ticks_usec()
 	_expire_pheromones()
@@ -790,6 +791,7 @@ func _step_simulation(dt: float) -> void:
 	if packed_render_tick: kernels.particle_render_ready(particles,revision)
 
 func _biology_after_feed(cell, local_dt: float) -> void:
+	preload("res://scripts/proboscis.gd").step(self,cell,local_dt)
 	_acid_stress(cell,local_dt)
 	_photosynthesize(cell,local_dt)
 	_metabolize(cell,local_dt)
@@ -957,9 +959,9 @@ func _move_particles(dt: float) -> void:
 	# Keep the starting IDs for swept contacts, even if catch-up leaves the halo.
 	foreground_particle_ids = ids
 	if gpu_transport != null:
-		active_particles = gpu_transport.step(particles,ids,fluid.velocity,camera,view_half,dt,revision,rng,transport_clock)
+		active_particles = gpu_transport.step(particles,ids,fluid.particle_flow(),camera,view_half,dt,revision,rng,transport_clock)
 	elif native_particles:
-		active_particles = kernels.transport(particles,ids,fluid.velocity,camera,view_half,dt,revision,rng,transport_clock,false)
+		active_particles = kernels.transport(particles,ids,fluid.particle_flow(),camera,view_half,dt,revision,rng,transport_clock,false)
 	else:
 		active_particles = _transport_reference(ids,dt,rng,false)
 	var mark := Time.get_ticks_usec()
@@ -973,7 +975,7 @@ func _move_particles(dt: float) -> void:
 				radii.append(cell.extent())
 		kernels.parcel_protect(centers,radii)
 	if native_particles:
-		background_particles = kernels.transport(particles,far_ids,fluid.velocity,camera,view_half,dt,revision,background_rng,transport_clock,true)
+		background_particles = kernels.transport(particles,far_ids,fluid.particle_flow(),camera,view_half,dt,revision,background_rng,transport_clock,true)
 	else:
 		background_particles = _transport_reference(far_ids,dt,background_rng,true)
 	# Colonies are permeable to packets in both transport tiers. The retained
@@ -1202,6 +1204,7 @@ func _suction_cell(cell, dt: float) -> void:
 		cell.spend_energy(cost*capacity,organ,"pumping")
 		power *= capacity
 		var at: Vector2 = cell.organ_position(organ)+cell.organ_normal(organ).rotated(cell.angle)*8 if ciliary else cell.pore_center(organ)
+		if not ciliary:continue # Oral groove uses a particle attractor, not water momentum.
 		fluid.suction(cell,at,(Cell.CILIA_REACH if ciliary else Cell.ORAL_REACH)*sqrt(organ.scale),power,dt,cell.target if ciliary else Vector2.ZERO)
 
 const Behavior=preload("res://scripts/cell_behavior.gd")
@@ -1611,11 +1614,9 @@ func _metabolize(cell, dt: float) -> void:
 			var elapsed: float=cell.behavior.reserve_elapsed;cell.behavior.reserve_elapsed=0.0
 			var used: float=minf(cell.biomass,minf(maxf(0,18-cell.energy),elapsed*rate))
 			if used>0:
-				cell.biomass-=used;cell.gain_energy(used);cell.reserve_used+=used;cell.reserve_activity=2
-				cell.chemistry.heat+=used*6.5
-				spawn_particle(CARBON,cell.excretion_position(),Vector2.ZERO,used*.1,cell.id)
-				spawn_particle(WASTE,cell.excretion_position(),Vector2.ZERO,used*.9,cell.id)
+				cell.burn_biomass(used)
 	else:cell.behavior.erase("reserve_elapsed")
+	_flush_reserve_products(cell)
 	if not perception_modes_enabled:cell.chemistry.advance(cell,dt,0.15+acidity.sample(cell.position)*0.1)
 	cell.Surface.advance(cell,dt,self)
 	cell.decay_energy(dt)
@@ -1629,6 +1630,13 @@ func _metabolize(cell, dt: float) -> void:
 		cell.death_hint = "Prolonged starvation; no usable food or ATP reserves remained"
 	else:
 		cell.starvation_seconds=maxf(0,cell.starvation_seconds-dt*4)
+
+func _flush_reserve_products(cell,force: bool=false) -> void:
+	var products: float=cell.behavior.get("reserve_products",0)
+	if products>0 and (force or products>=.1 or cell.biomass<=0):
+		cell.behavior.erase("reserve_products")
+		spawn_particle(CARBON,cell.excretion_position(),Vector2.ZERO,products*.1,cell.id)
+		spawn_particle(WASTE,cell.excretion_position(),Vector2.ZERO,products*.9,cell.id)
 
 func _secretion_needed(cell, organ: Dictionary, kind: int) -> bool:
 	if kind == BUFFER: return acidity.sample(cell.organ_position(organ)) > 0.4 or cell.acid_stress > 0.03
@@ -1663,6 +1671,8 @@ func _emit_and_attack(cell, dt: float) -> void:
 			# Query only on a scheduled secretion attempt, rather than every tick.
 			if not _secretion_needed(cell,organ,kind): continue
 			cell.biomass -= 0.06
+			if cell.biomass<maxf(0,energy_cost-cell.energy):
+				cell.biomass+=.06;break
 			cell.spend_energy(energy_cost,organ,"secretion")
 			var direction: Vector2 = cell.organ_normal(organ).rotated(cell.angle)
 			spawn_particle(kind,cell.organ_position(organ)+direction*10,direction*18*Genes.factor(organ,"dispersal"),0.06,cell.id)
@@ -1695,7 +1705,7 @@ func _emit_and_attack(cell, dt: float) -> void:
 			if cue.is_empty() or cue.expires_at<=time or receptor.is_empty() or receptor.hp<=0 or cue.lineage==cell.lineage_id():continue
 			aim=Medium.offset(cell.organ_position(organ),cue.at).normalized()
 		if organ.burst_clock>0 or aim.length_squared()<.01:continue
-		if cell.biomass < 0.18*burst: continue
+		if cell.biomass < 0.18*burst+maxf(0,2*burst*Genes.inefficiency(organ)-cell.energy): continue
 		cell.spend_energy(2*burst*Genes.inefficiency(organ),organ,"combat")
 		var source: int=_attack_owner(cell,organ.kind=="counterattack")
 		if organ.kind == "poreforming":
@@ -1905,6 +1915,7 @@ func _toxin_contacts() -> void:
 
 func _die(cell, transferred: float = 0.0) -> void:
 	if cell.dead:return
+	_flush_reserve_products(cell,true)
 	if server_mode and not remote_client:
 		for ledger in family_ledgers: ledger.died(cell,self)
 	elif evolution.enabled: lineage.died(cell,self)

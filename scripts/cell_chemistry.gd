@@ -299,6 +299,16 @@ func partition(parent,fraction: float) -> float:
 	batching=false;parent.refresh();refresh()
 	return moved
 func anchor_photosynthesis(_cell,_organ: Dictionary) -> void:pass
+func food_share(sim,cell) -> float:
+	if sim.Investment.strategy(sim,cell)!="producer" and cell.synergy()!="producer":return .25
+	var material:=12.0;var energy:=18.0
+	if sim.automatic_reproduction:
+		for mode in ["mitosis","budding"]:
+			if not (cell.automatic_division if mode=="mitosis" else cell.automatic_budding):continue
+			var quote: Dictionary=sim.Lifecycle.quote(sim,cell,mode)
+			material=maxf(material,quote.material);energy=maxf(energy,quote.energy)
+	return .5 if cell.biomass>=material and cell.energy>=energy and cell.substrate>=2*cell.growth_scale() else .25
+
 func photosynthesize(sim,cell,organ: Dictionary,dt: float) -> void:
 	if cell.synergy()=="producer":dt*=1.15
 	# Bound newly released parcels and render-thread work without losing time.
@@ -313,21 +323,22 @@ func photosynthesize(sim,cell,organ: Dictionary,dt: float) -> void:
 	var extra_cost: float = .2*cell.Genes.inefficiency(organ)
 	budget = baseline_budget+minf(budget-baseline_budget,cell.energy/extra_cost)
 	var site: Vector2=cell.local_point(organ.a)*.72
+	var share:=food_share(sim,cell)
 	var used:=0.0
 	if accelerator!=null:
-		used=accelerator.command(10,budget,site,24,-1,-1,-1,0,0,"carbon")
+		used=accelerator.command(10,budget,site,24,-1,-1,-1,0,0,"carbon",{22:share})
 
 	else:
 		batching=true
 		used=_near_consume("carbon",budget,site,24)
 		if used>0:
-			emit("food",used*.65*.75,site,organ.id,-1,used*.65*.75*FOOD_FUEL)
+			emit("food",used*.65*(1-share),site,organ.id,-1,used*.65*(1-share)*FOOD_FUEL)
 			emit("oxygen",used*2.5,site,organ.id,-1,0)
 			cell.biomass+=used*.35;solar_work+=used*LEAF_SOLAR_WORK;heat+=used*(4-LEAF_ATP_YIELD)
 		batching=false;refresh()
 	if used>0:
 		var normal: Vector2=cell.organ_normal(organ).rotated(cell.angle)
-		sim.spawn_particle(0,cell.organ_position(organ)+normal*12,normal*12,used*.65*.25,cell.id)
+		sim.spawn_particle(0,cell.organ_position(organ)+normal*12,normal*12,used*.65*share,cell.id)
 		cell.spend_energy(maxf(0,used-baseline_budget)*extra_cost,organ,"photosynthesis")
 		cell.gain_energy(used*LEAF_ATP_YIELD,organ)
 		cell.fixed_carbon+=used;cell.oxygen_produced+=used*2.5

@@ -130,6 +130,7 @@ static func commit(sim,receiver,donor,from_selection: bool=false,for_capacity: b
  # GPU ownership is
  # released once for this rare explicit transaction; normal simulation stays resident.
  var picture: Dictionary=preload("res://scripts/cell_portrait.gd").capture(donor)
+ sim._flush_reserve_products(donor,true)
  receiver.chemistry.ensure_cpu();donor.chemistry.ensure_cpu()
  var ledger=sim._family_ledger(donor)
  for index in range(donor.organs.size()-1,-1,-1):

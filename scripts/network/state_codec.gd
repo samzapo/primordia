@@ -14,7 +14,7 @@ const TYPES := {
 	"offscreen": preload("res://scripts/offscreen_ecology.gd"),
 	"budget": preload("res://scripts/energy_budget.gd"),
 }
-const TRANSIENT := ["hunter_angle","cell_wall","merge_bursts","remote_division","combat_context","managed_cells","unattended_protected","kernels","native","grid","reaction_grid","cell_index","gpu_transport","resident","experimental_fluid","owner","_owner","build_original","build_state","bins","profile_usec","profile_counts","foreground_particle_ids","last_spawn","accelerator","render_origins","command_sink","interoceptive_cells","resource_effects_enabled","batching","plant_drag","plant_geometry","plant_revision","plant_enabled","induced_key","induced_base","induced_base_key"]
+const TRANSIENT := ["particle_velocity","hunter_angle","cell_wall","merge_bursts","remote_division","combat_context","managed_cells","unattended_protected","kernels","native","grid","reaction_grid","cell_index","gpu_transport","resident","experimental_fluid","owner","_owner","build_original","build_state","bins","profile_usec","profile_counts","foreground_particle_ids","last_spawn","accelerator","render_origins","command_sink","interoceptive_cells","resource_effects_enabled","batching","plant_drag","plant_geometry","plant_revision","plant_enabled","induced_key","induced_base","induced_base_key"]
 const DERIVED_CELL := ["raw_fuel","substrate","waste","oxygen","carbon"]
 var objects: Array = []
 var identities: Dictionary = {}

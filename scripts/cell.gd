@@ -7,7 +7,7 @@ func accepts_attack(source: int) -> bool:
 	var rule: Dictionary=combat_context.get("sources",{}).get(source,{})
 	if rule.get("no_damage",false):return false
 	if rule.get("selective",false):
-		return organs.any(func(organ):return organ.kind in ["toxin","poreforming","acidifying"] and organ.hp>0)
+		return organs.any(func(organ):return organ.kind in ["toxin","poreforming","acidifying","proboscis"] and organ.hp>0)
 	return true
 var raw_fuel: float:
 	get: return chemistry.raw_fuel()
@@ -15,9 +15,9 @@ var raw_fuel: float:
 var surface_complexes: Array = []
 const Genes = preload("res://scripts/mutations.gd")
 const Membrane = preload("res://scripts/membrane.gd")
-const KINDS := ["propulsion", "protection", "poreforming", "regenerative", "feeding", "sensing", "photosynthesis", "toxin", "neutralizing", "acidifying", "hunting", "cilia", "mitochondrion", "counterattack", "toxin_sac", "family_toward", "family_away"]
-const COST := [8.0, 10.0, 12.0, 10.0, 8.0, 0.0, 12.0, 12.0, 10.0, 12.0, 0.0, 8.0, 10.0, 12.0, 10.0, 0.0, 0.0]
-const WIDTH := [19.0, 34.0, 26.0, 27.0, 36.0, 20.0, 30.0, 26.0, 26.0, 26.0, 20.0, 24.0, 0.0, 24.0, 0.0, 20.0, 20.0]
+const KINDS := ["propulsion", "protection", "poreforming", "regenerative", "feeding", "sensing", "photosynthesis", "toxin", "neutralizing", "acidifying", "hunting", "cilia", "mitochondrion", "counterattack", "toxin_sac", "family_toward", "family_away", "proboscis"]
+const COST := [8.0, 10.0, 12.0, 10.0, 8.0, 0.0, 12.0, 12.0, 10.0, 12.0, 0.0, 8.0, 10.0, 12.0, 10.0, 0.0, 0.0, 12.0]
+const WIDTH := [19.0, 34.0, 26.0, 27.0, 36.0, 20.0, 30.0, 26.0, 26.0, 26.0, 20.0, 24.0, 0.0, 24.0, 0.0, 20.0, 20.0, 24.0]
 const SENSE_MODES := ["flee"]
 const MODES := ["graze"]
 const BASAL_UPKEEP := 0.18
@@ -42,8 +42,8 @@ const STARVATION_DAMAGE := 0.1
 # In this 2D habitat, enclosed area is the represented cytoplasmic volume.
 const TISSUE_AREA := Membrane.COUNT*0.5*sin(TAU/Membrane.COUNT)*47.0*47.0/78.0
 const ATP_TURNOVER := 0.002
-const ORAL_FLOW := 64.0
-const ORAL_REACH := 170.0
+const ORAL_FLOW := 300.0
+const ORAL_REACH := 320.0
 var automatic_division:=true
 var division_requested:=false # One paid birth at the next safe opportunity; never inherited.
 var merge_after:=0.0
@@ -182,7 +182,7 @@ func construction_refund(organ: Dictionary) -> float:
 	return 0.0 if current.is_empty() else minf(float(current.material),float(current.get("paid_material",current.material)))*.5
 
 func synergy() -> String:
-	var attack=int(working("poreforming"))+int(working("toxin"))+int(working("counterattack"))
+	var attack=int(working("poreforming"))+int(working("toxin"))+int(working("counterattack"))+int(working("proboscis"))
 	if working("hunting") and working("propulsion") and attack>0 and count("photosynthesis")==0:return "hunter"
 	if working("photosynthesis",2) and working("mitochondrion") and attack==0 and count("feeding")==0:return "producer"
 	if working("feeding") and working("cilia") and count("photosynthesis")==0 and attack==0:return "grazer"
@@ -203,7 +203,7 @@ func organ_mass() -> float:
 	return result
 
 func organic_mass() -> float:
-	return body + biomass + organ_mass() + brood_mass + chemistry.material() + surface_material()
+	return body + biomass + organ_mass() + brood_mass + chemistry.material() + surface_material()+float(behavior.get("reserve_products",0))
 
 func surface_material() -> float:
 	var amount := 0.0
@@ -309,8 +309,16 @@ func update_power_state() -> void:
 	if energy<LOW_POWER_ATP:behavior["low_power"]=true
 	elif energy>=POWER_RECOVERY_ATP:behavior.erase("low_power")
 
+func burn_biomass(quantity: float) -> void:
+	var used:=minf(maxf(0,quantity),biomass)
+	if used<=0:return
+	biomass-=used;gain_energy(used);reserve_used+=used;reserve_activity=2
+	chemistry.heat+=used*6.5
+	behavior["reserve_products"]=float(behavior.get("reserve_products",0))+used
+
 func work_capacity(required: float=0.0) -> float:
 	# Read-only, including when used by presentation or coarse intake requests.
+	if biomass>0 and energy+biomass+0.0000001>=required:return 1.0
 	var threshold: float=POWER_RECOVERY_ATP if behavior.get("low_power",false) else LOW_POWER_ATP
 	return LOW_POWER_CAPACITY if energy+0.0000001<maxf(threshold,required) else 1.0
 
@@ -497,6 +505,7 @@ func consumed(organ: Dictionary, amount: float) -> void:
 	reaction_flash = 1.0
 
 func spend_energy(amount: float, organ: Dictionary = {}, category: String = "upkeep", shares: Dictionary = {}) -> float:
+	if amount>energy:burn_biomass(amount-energy)
 	var spent := minf(energy,maxf(0,amount))
 	energy-=spent
 	energy_budget.record(age,0,0,maxf(0,spent),organ.get("id",-1),category,shares)
@@ -507,6 +516,7 @@ func available_energy(_organ: Dictionary = {}) -> float:
 	return energy
 
 func spend_energy_at(amount: float, _at: Vector2, _reach: float, category: String) -> float:
+	if amount>energy:burn_biomass(amount-energy)
 	var spent := minf(energy,maxf(0,amount))
 	energy-=spent
 	energy_budget.record(age,0,0,spent,-1,category)
