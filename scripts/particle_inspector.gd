@@ -253,7 +253,8 @@ func update_lens(dt: float, screen: Vector2, alpha: float, allowed: bool) -> voi
 		glyph.position = lens_center+(hovered.screen-lens_center)*magnification
 		glyph.rotation = hovered.angle+game.render_rotation
 		glyph.scale = Vector2.ONE*hovered.radius*2*magnification/(96*Art.display_scale(hovered.kind))
-		glyph.modulate.a = lens_amount
+		glyph.modulate=preload("res://scripts/signal_colors.gd").family(game,preload("res://scripts/signal_colors.gd").root(hovered.packet)) if hovered.kind==3 and not hovered.get("internal",false) else Color.WHITE
+		glyph.modulate.a *= lens_amount
 		glyph.material.set_shader_parameter("lens_center",lens_center/get_viewport_rect().size)
 		glyph.material.set_shader_parameter("lens_radius",RADIUS*game.cell_ui.ui_scale()/get_viewport_rect().size.x)
 		glyph.material.set_shader_parameter("canvas_aspect",get_viewport_rect().size.y/get_viewport_rect().size.x)

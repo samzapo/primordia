@@ -445,7 +445,7 @@
         {
           "id": "signals",
           "title": "Pheromones carry old reports",
-          "text": "Hunting and flight receptors read drifting reports of nearby cells. Reports age and expire; they do not reveal another cell’s live location. Family signatures help relatives recognize one another. Hunters still choose non-family targets, but stray toxin, pores and decoys can affect relatives. Mouth suction never pulls pheromones; they follow the water and diffuse. Round pheromones share their family’s color and are slightly transparent.",
+          "text": "Hunting and flight receptors read drifting reports of nearby cells. Reports age and expire; they do not reveal another cell’s live location. Family signatures help relatives recognize one another. Hunters still choose non-family targets, but stray toxin, pores and decoys can affect relatives. Mouth suction never pulls pheromones; they follow the water and diffuse. Round pheromones share their family’s color and are slightly transparent, including when magnified.",
           "sources": [
             {
               "title": "Chemical signals in flowing habitats",
