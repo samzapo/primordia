@@ -4,6 +4,8 @@ uniform sampler2D state_texture : filter_nearest, repeat_disable;
 uniform sampler2D previous_texture : filter_nearest, repeat_disable;
 uniform sampler2D bodies_texture : filter_nearest, repeat_disable;
 uniform sampler2D outlines_texture : filter_nearest, repeat_disable;
+uniform sampler2D body_grid : filter_nearest, repeat_disable;
+uniform bool use_body_grid = true; // Diagnostic reference path.
 uniform int body_count = 0;
 uniform float interpolation = 1.0;
 uniform vec2 camera = vec2(2048.0,1280.0);
@@ -13,15 +15,21 @@ vec2 offset(vec2 a,vec2 b){return mod(b-a+WORLD*.5,WORLD)-WORLD*.5;}
 float turn(float a,float b){return a+mod(b-a+3.14159265,6.2831853)-3.14159265;}
 float cross2(vec2 a,vec2 b){return a.x*b.y-a.y*b.x;}
 vec2 outline_point(int index){return texelFetch(outlines_texture,ivec2(index%256,index/256),0).xy;}
+uvec4 candidates(vec2 at){
+ ivec2 tile=ivec2(mod(floor(mod(at,WORLD)/128.0),vec2(32.0,20.0)));
+ return uvec4(texelFetch(body_grid,tile,0));
+}
 vec2 exclude_bodies(vec2 at){
+ uvec4 mask=candidates(at);
  for(int b=0;b<64;b++){
   if(b>=body_count)break;
+  if(use_body_grid && (mask[b/16] & (1u<<uint(b%16)))==0u)continue;
   vec4 pose=texelFetch(bodies_texture,ivec2(0,b),0);
   vec4 prior=texelFetch(bodies_texture,ivec2(1,b),0);
-  vec4 shape=texelFetch(bodies_texture,ivec2(2,b),0);
   vec2 center=prior.xy+offset(prior.xy,pose.xy)*interpolation;
   vec2 d=offset(center,at);
   if(dot(d,d)>pow(pose.w+8.0,2.0))continue;
+  vec4 shape=texelFetch(bodies_texture,ivec2(2,b),0);
   float heading=turn(prior.z,pose.z);
   heading=mix(prior.z,heading,interpolation);
   float a=atan(d.y,d.x)-heading;
@@ -37,7 +45,11 @@ vec2 exclude_bodies(vec2 at){
    if(t>=0.0 && t<=1.0 && r>=0.0){support=length(mix(p,q,t));break;}
   }
   float distance=length(d);
-  if(distance<support+7.0)at=center+vec2(cos(atan(d.y,d.x)),sin(atan(d.y,d.x)))*(support+7.0);
+  if(distance<support+7.0){
+   at=center+vec2(cos(atan(d.y,d.x)),sin(atan(d.y,d.x)))*(support+7.0);
+   // A projection can enter another body: refresh candidates, preserving order.
+   mask=candidates(at);
+  }
  }
  return at;
 }

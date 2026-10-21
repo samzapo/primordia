@@ -145,6 +145,7 @@ func _hit_candidates(screen: Vector2) -> Array:
 		var radius := maxf(18*game.preferences.hud_scale,interior.anchors.radius*game.zoom*(0.28 if target.kind == "nucleus" else 0.16))
 		if target.kind=="chemistry":radius=maxf(20*ui_scale(),interior.anchors.radius*game.zoom*.24)
 		if target.kind in ["organ","scar"]: radius = maxf(17*game.preferences.hud_scale,14*game.zoom)
+		radius=maxf(radius*1.15,(22 if mobile() else 20)*ui_scale())
 		var distance := screen.distance_to(screen_at(target))
 		if distance < radius: found.append({"target":target,"score":distance/radius})
 	found.sort_custom(func(a,b):return a.score < b.score)
@@ -278,6 +279,7 @@ func open_context(target: Dictionary) -> void:
 				choices[-1].set_meta("reproduction_mode",mode)
 				_choice("Auto "+mode,"Let the behavior tree choose "+mode+" when appropriate.",_toggle_reproduction.bind(mode),"","Auto "+mode)
 				choices[-1].set_meta("reproduction_auto",mode)
+				choices[-1].selection_glow=false
 			_choice("Back","Return to this cell.",open_context.bind({"kind":"bud"}),"","Back")
 		"lineage","merge_family":
 			context["roster"]=hash(sim.lineage.records)
@@ -323,7 +325,7 @@ func open_context(target: Dictionary) -> void:
 func _toggle_instinct() -> void:
 	game.preferences.show_instinct=not game.preferences.show_instinct
 	game.preferences.save_settings()
-	if game.views.has(game.world.player.id):game.views[game.world.player.id].queue_redraw()
+	if game.views.has(game.world.player.id):game.views[game.world.player.id]._queue_body_redraw()
 	sync(0)
 
 func _start_reproduction(mode: String) -> void:

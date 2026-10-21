@@ -624,3 +624,9 @@ motivate measuring real frames, reusing static data and reducing draw work.
 Runtime glyph textures come from the existing procedural vector source. CSS-pixel
 detail thresholds do not change physical geometry or cell behavior. Desktop
 hardware WebGL replay establishes a controlled comparison, not phone FPS.
+
+
+- Client cosmetic animation and display: [Godot CanvasItem shader reference](https://docs.godotengine.org/en/stable/tutorials/shaders/shader_reference/canvas_item_shader.html)
+  documents local vertex animation and time uniforms. Primordia uses a continuous
+  pause-aware presentation clock for appendage artwork; this is rendering, not a
+  new biological mechanic or client simulation.

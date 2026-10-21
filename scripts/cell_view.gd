@@ -28,6 +28,7 @@ var was_internal := false
 var detail_lod := true
 var label := Label.new()
 var appendages := Node2D.new()
+var motile_art=preload("res://scripts/motile_art.gd").new()
 var surface := MeshInstance2D.new()
 var interior_backing:=MeshInstance2D.new()
 var water_wake := MeshInstance2D.new()
@@ -62,6 +63,7 @@ func _ready() -> void:
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	label.add_theme_color_override("font_outline_color",Color("21375d"))
 	label.add_theme_constant_override("outline_size",4)
+	add_child(motile_art)
 	add_child(label)
 	appendages.texture_filter=CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	appendages.z_index = 0 # Keep each body and all its organs in one cell-local drawing order.
@@ -103,6 +105,7 @@ func sync(render_position: Vector2, render_angle: float, zoom: float, alpha: flo
 	var reduced: bool = detail_lod and cell.radius*zoom*game.detail_canvas_scale < 18*game.detail_pixel_ratio and not game.build_open and not internal
 	var detail_changed: bool = reduced != simple_view
 	simple_view = reduced
+	motile_art.sync(cell,not simple_view,game.ui_time,game.world)
 	if (seen_revision != cell.render_revision and (not reduced or game.world.revision-last_draw_tick >= 2)) or detail_changed or game.show_senses != get_meta("senses",false) or game.build_open != get_meta("assembly",false):
 		seen_revision = cell.render_revision
 		last_draw_tick = game.world.revision
@@ -298,11 +301,11 @@ func _draw_organs() -> void:
 		if organ.kind == "toxin" and cell.target_id >= 0 and cell.threat.length_squared() > 0.01 and cell.biomass >= 0.18*organ.scale*organ.scale*cell.Genes.factor(organ,"burst"):
 			charge = maxf(charge,clampf(1-float(organ.get("burst_clock",0))/(0.75*cell.Genes.factor(organ,"cooldown")),0,1))
 		if organ.kind=="feeding":
-			Visuals.oral_groove(appendages,cell,organ,cell.age,not simple_view)
+			Visuals.oral_groove(appendages,cell,organ,game.ui_time,false)
 		else:
 			var cached_icon: bool=game.zoom*organ.scale*game.detail_canvas_scale<=.8*game.detail_pixel_ratio and not game.internal_visible(cell) and not game.build_open and organ.consume_flash<.001 and charge<.001 and not readiness.depleted
 			if not cached_icon or not preload("res://scripts/organ_atlas.gd").draw(appendages,at,organ.kind,heading,drawn_scale):
-				Visuals.icon(appendages,at,organ.kind,heading,drawn_scale,cell.age,organ.mode,organ.consume_flash,not simple_view,charge,readiness.depleted,preload("res://scripts/toxin_sac.gd").fraction(organ) if organ.kind=="toxin_sac" else 0,preload("res://scripts/proboscis.gd").reach(cell,organ)/organ.scale if organ.kind=="proboscis" else 27)
+				Visuals.icon(appendages,at,organ.kind,heading,drawn_scale,cell.age,organ.mode,organ.consume_flash,not simple_view,charge,readiness.depleted,preload("res://scripts/toxin_sac.gd").fraction(organ) if organ.kind=="toxin_sac" else 0,preload("res://scripts/proboscis.gd").reach(cell,organ)/organ.scale if organ.kind=="proboscis" else 27,false)
 		if readiness.progress>=0:
 			appendages.draw_arc(at,19*organ.scale,-PI/2,-PI/2+TAU*maxf(.001,readiness.progress),28,Color("fff0ac") if not readiness.depleted else Color("8c969f"),1.8*organ.scale,true)
 		if organ.get("mutation","") != "": appendages.draw_circle(at,3.5*organ.scale,Color("fff2a3"))

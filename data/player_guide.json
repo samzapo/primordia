@@ -17,7 +17,7 @@
       {
         "id": "build",
         "title": "Build and restore",
-        "text": "Open Assembly for movement, oral grooves, armor and glands, Chemistry for internal organs and leaves, or Receptors for free chemical senses. The first two non-receptor organelles on each cell are free. After those, prices follow Fibonacci ×10: 10, 10, 20, 30, 50, 80… biomass. Reabsorbing one moves the next build back one step. Free receptors do not advance the sequence. Both starter organelles can be replaced.",
+        "text": "Open Assembly for movement, oral grooves, armor and glands, Chemistry for internal organs and leaves, or Receptors for free chemical senses. The first two non-receptor organelles on each cell are free. After those, prices follow Fibonacci ×10: 10, 10, 20, 30, 50, 80… biomass. Reabsorbing one moves the next build back one step. Free receptors do not advance the sequence. Both starter organelles can be replaced. Placing an organelle shows an outward ripple and a preview while it is confirmed.",
         "sources": []
       },
       {
@@ -90,6 +90,12 @@
         "id": "favorite-cell",
         "title": "Your favorite cell",
         "text": "Your last directly selected relative gets a gold outline. When you are offline, paused or the game tab is hidden, it cannot die, lose organs or be automatically absorbed. Its biomass and ATP can still run out. It becomes vulnerable when you return to active play."
+      },
+      {
+        "id": "logout",
+        "title": "Change player",
+        "text": "Open Pause and choose Log out at the bottom, with Close game. Your cells and progress stay in the pond.",
+        "sources": []
       }
     ],
     "touch": [

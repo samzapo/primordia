@@ -6,6 +6,7 @@ var texture := ImageTexture.new()
 var previous_texture := ImageTexture.new()
 var bodies_texture := ImageTexture.new()
 var outlines_texture := ImageTexture.new()
+var grid_texture:=ImageTexture.new()
 
 func _ready() -> void:
 	_upload(texture,PackedFloat32Array([0,0,0,1,0,0,0,0]),2,1,Image.FORMAT_RGBAF)
@@ -15,6 +16,7 @@ func _ready() -> void:
 	batch.material.set_shader_parameter("previous_texture",previous_texture)
 	batch.material.set_shader_parameter("bodies_texture",bodies_texture)
 	batch.material.set_shader_parameter("outlines_texture",outlines_texture)
+	batch.material.set_shader_parameter("body_grid",grid_texture)
 	batch.multimesh.visible_instance_count=0
 
 func prepare(packets: Array,cells: Array) -> void:
@@ -32,6 +34,8 @@ func prepare(packets: Array,cells: Array) -> void:
 		prior[old+2]=p.previous_angle;prior[old+3]=diameter
 	_upload(texture,current,512,rows,Image.FORMAT_RGBAF)
 	_upload(previous_texture,prior,256,rows,Image.FORMAT_RGBAF)
+	var Grid=preload("res://scripts/network/body_grid.gd")
+	_upload(grid_texture,Grid.pixels(cells),Grid.WIDTH,Grid.HEIGHT,Image.FORMAT_RGBAF)
 	var bodies:=PackedFloat32Array();bodies.resize(64*12)
 	var points:=PackedFloat32Array()
 	var n:=0
@@ -42,8 +46,8 @@ func prepare(packets: Array,cells: Array) -> void:
 		assert(outline.size()<=512)
 		var start:=points.size()/2
 		for point in outline: points.append(point.x);points.append(point.y)
-		for j in 12:
-			bodies[n*12+j]=[cell.position.x,cell.position.y,cell.angle,cell.extent(),cell.previous_position.x,cell.previous_position.y,cell.previous_angle,cell.extent(),start,outline.size(),0,0][j]
+		var row:=PackedFloat32Array([cell.position.x,cell.position.y,cell.angle,cell.extent(),cell.previous_position.x,cell.previous_position.y,cell.previous_angle,cell.extent(),start,outline.size(),0,0])
+		for j in 12:bodies[n*12+j]=row[j]
 		n+=1
 	_upload(bodies_texture,bodies,3,64,Image.FORMAT_RGBAF)
 	var point_rows:=maxi(1,ceili(points.size()/512.0))

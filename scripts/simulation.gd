@@ -2143,7 +2143,9 @@ func follow_family(identity: int) -> bool:
 
 func edit(action: String,args: Dictionary = {}):
 	if remote_client:
-		if command_sink.is_valid(): command_sink.call(action,args)
+		if not command_sink.is_valid():return false
+		var queued=command_sink.call(action,args)
+		if queued is bool and not queued:return false
 		if action in ["module_add","link_add"]: return 0
 		if action in ["route_add","configuration"]: return ""
 		return true

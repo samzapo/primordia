@@ -10,6 +10,7 @@ var portrait_geometry:=0
 var lettering:=Node2D.new()
 const SELECTION_MARK=preload("res://assets/ui/selection-mark.svg")
 var selected:=false
+var selection_glow:=true
 var radial_progress:=-1.0
 var progress_ready:=false
 const Visuals = preload("res://scripts/visuals.gd")
@@ -39,11 +40,13 @@ func _ready() -> void:
 	mouse_exited.connect(queue_redraw)
 	focus_entered.connect(queue_redraw)
 	focus_exited.connect(queue_redraw)
+	button_down.connect(queue_redraw)
+	button_up.connect(queue_redraw)
 
 func _draw() -> void:
 	var center := size*0.5
 	var r := minf(size.x,size.y)*0.47
-	var active := is_hovered() or has_focus() or selected
+	var active := is_pressed() or (selection_glow and (is_hovered() or has_focus() or selected))
 	draw_circle(center,r,Color("172448"))
 	draw_circle(center,r*0.9,Color("305066") if active else Color("223954"))
 	draw_arc(center,r*0.93,0,TAU,32,tint if active else tint.darkened(0.3),2*text_scale,true)

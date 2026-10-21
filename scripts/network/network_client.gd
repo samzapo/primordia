@@ -140,9 +140,8 @@ func _empty_remote_world() -> void:
 
 func _build_ui() -> void:
 	super()
-	var options:=profile_menu_button.get_parent()
-	logout_menu_button=_button(options,"Log out",_logout)
-	options.move_child(logout_menu_button,profile_menu_button.get_index()+1)
+	logout_menu_button=_button(session_controls,"Log out",_logout)
+	session_controls.move_child(logout_menu_button,0)
 
 func _logout() -> void:
 	# Only this browser's login is forgotten. The authority keeps the account,
@@ -153,7 +152,7 @@ func _logout() -> void:
 	token="";invitation="";invite_input.clear();_save_identity()
 	connected=false;connecting=false;loading_world=false;attempted=false;retry_enabled=false
 	hello_sent=false;transport_failures=0;reconnect_due=0
-	commands.clear();inflight.clear();cell_ui.pending_mutation.clear()
+	commands.clear();inflight.clear();cell_ui.pending_mutation.clear();placement_feedback.clear()
 	command_sequence=0;edit_revision=0;epoch=0;view_announced=false;received_usec=0
 	update_popup.close();pending_release_updates.clear();defer_release_updates=false
 	player_help.close();feedback.close();profile.close();palette.close()
@@ -347,7 +346,7 @@ func _connect(manual: bool=true) -> void:
 		return
 	if socket.get_ready_state()!=WebSocketPeer.STATE_CLOSED: socket.close(-1)
 	socket=WebSocketPeer.new();socket.inbound_buffer_size=Protocol.MAX_FRAME;socket.outbound_buffer_size=65536;socket.max_queued_packets=8
-	hello_sent=false;connected=false;connecting=true;attempted=true;retry_enabled=true;reconnect_due=3;inflight.clear();commands.clear();cell_ui.pending_mutation.clear()
+	hello_sent=false;connected=false;connecting=true;attempted=true;retry_enabled=true;reconnect_due=3;inflight.clear();commands.clear();cell_ui.pending_mutation.clear();placement_feedback.clear()
 	view_announced=false;view_clock=0;keepalive_clock=0;received_usec=0
 	update_popup.close();pending_release_updates=[]
 	playback.reset();playback_domain="";playback_after_tick=-1;user_paused=false;paused_snapshot={};touch_zoom.cancel();camera_initialized=false
@@ -365,7 +364,7 @@ func _connect(manual: bool=true) -> void:
 func _connection_closed(code: int,reason: String) -> void:
 	update_popup.close();pending_release_updates=[];player_help.close()
 	playback.reset();playback_domain="";playback_after_tick=-1
-	connecting=false;connected=false;loading_world=false;commands.clear();inflight.clear();cell_ui.pending_mutation.clear();connection_stage="disconnected"
+	connecting=false;connected=false;loading_world=false;commands.clear();inflight.clear();cell_ui.pending_mutation.clear();placement_feedback.clear();connection_stage="disconnected"
 	if code==1008:
 		retry_enabled=false
 		var explanation:="The server refused this connection. Check your access key and try again."
@@ -416,6 +415,7 @@ func _poll_network() -> void:
 						edit_revision=message.get("edit",edit_revision)
 						command_sequence=message.get("server_sequence",message.sequence)
 						cell_ui.command_result(inflight,message)
+						if inflight.has("local_placement"):placement_feedback.result(inflight.local_placement,message.get("ok",false),int(message.get("edit",-1)))
 						inflight.clear()
 						_message(message.message)
 						if cell_ui.pathways.visible: cell_ui.pathways._rebuild()
@@ -591,6 +591,7 @@ func _snapshot(message: Dictionary) -> void:
 	if OS.has_feature("web"):
 		JavaScriptBridge.eval("window.primordiaDiagnostics="+JSON.stringify({"fps":Engine.get_frames_per_second(),"frame_ms":last_frame_ms,"view_sync_ms":render_ms,"current_art":flow_view.curve_budget.diagnostics(),"playback":playback.diagnostics(),"connected":connected,"tick":world.revision,"world_id":message.world_id,"packets":packets.size(),"camera_packets":server_census.get("camera_particles",packets.size()),"buffered_packets":server_census.get("buffered_particles",packets.size()),"coverage":str(message.get("coverage",Vector4.ZERO)),"cells":world.cells.size(),"time":world.time,"player_name":player_name,"nameplates":nameplates.items.map(func(item):return {"cell":item.cell,"name":item.name,"online":item.online})}))
 
+	placement_feedback.reconcile(int(message.get("edit",-1)))
 	_show_next_update()
 
 func _show_next_update() -> void:
@@ -652,19 +653,24 @@ func _submit_feedback(report: Dictionary) -> String:
 	_send(message)
 	return ""
 
-func _queue_command(action: String,args: Dictionary) -> void:
-	if user_paused:_message("Resume the view before editing this cell.");return
-	if not connected or world.player.dead: _message("Reconnect before editing.");return
-	if commands.size()>=16: _message("Waiting for pending edits.");return
-	commands.append({"action":action,"args":_json_value(args),"cell":world.player.id})
+func _queue_command(action: String,args: Dictionary) -> bool:
+	if user_paused:_message("Resume the view before editing this cell.");return false
+	if not connected or world.player.dead: _message("Reconnect before editing.");return false
+	if commands.size()>=16: _message("Waiting for pending edits.");return false
+	var command: Dictionary={"action":action,"args":_json_value(args),"cell":world.player.id}
+	if action=="install":command.local_placement=placement_feedback.begin(world.player,str(args.kind),float(args.angle))
+	commands.append(command)
 	_message("Edit queued · the world continues.")
+	_send_next() # Send on the input frame; never wait for a physics update.
+	return true
 
 func _send_next() -> void:
 	if not connected or not inflight.is_empty() or commands.is_empty(): return
 	inflight=commands.pop_front()
 	command_sequence+=1
 	inflight.merge({"op":"command","epoch":epoch,"sequence":command_sequence,"edit":edit_revision})
-	_send(inflight)
+	var wire:=inflight.duplicate();wire.erase("local_placement")
+	_send(wire)
 
 func _json_value(value):
 	if value is Vector2: return [value.x,value.y]

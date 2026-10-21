@@ -762,3 +762,20 @@ at min(nativeDPR,2), preserving logical layout and actual touch-coordinate mappi
 Desktop remains engine-sized. Verify real browser taps, resize, cache exits/
 cleanup and rendered wall FPS; desktop hardware is still not physical-phone
 acceptance. Keep cumulative notices and the retained experimental pond.
+
+
+October21 client responsiveness direction: animate flagella/cilia/oral hairs from
+the continuous pause-aware local cosmetic clock, outside small-cell raster
+caches. Server anatomy/activity/physics remain authoritative; do not advance
+biology or generate secretion events locally. Input and held-organ previews use
+the same interpolated cell pose. Placement sends immediately and displays a
+bounded translucent preview/outward ripple, reconciled by command receipt and
+the corresponding authoritative edit snapshot; reject/disconnect clears it.
+Touch targets have a44CSS-pixel minimum diameter with the existing overlap picker.
+Auto mitosis/budding retain checks and transient press feedback without persistent
+focus/selection illumination. Group Log out with Close game in the Pause footer.
+Diffuse mobile water may render at one sample/CSS pixel, keeping the approved
+pH shader/palette and full-resolution foreground. Body-grid broad phase retains
+swept periodic bounds, all64body bits and sequential contact order, refreshing
+candidates after projections; preserve the shader reference switch. Phone load
+evidence is52cells/~3800camera packets, not the earlier700packet replay.

@@ -2,6 +2,12 @@ extends SceneTree
 const Acid=preload("res://scripts/acidity.gd")
 const Medium=preload("res://scripts/medium.gd")
 const Surface=preload("res://scripts/membrane_art.gd")
+class Body:
+	var position:=Vector2.ZERO
+	var previous_position:=Vector2.ZERO
+	var dead:=false
+	var radius:=40.0
+	func extent() -> float:return radius
 var failures:=0
 var assertions:=0
 func check(ok: bool,text: String) -> void:
@@ -40,5 +46,27 @@ func _initialize() -> void:
 		check(again[Mesh.ARRAY_INDEX]==arrays[Mesh.ARRAY_INDEX] and again[Mesh.ARRAY_VERTEX]!=arrays[Mesh.ARRAY_VERTEX],"Topology reuse cannot freeze changing membrane vertices")
 	var sheet=preload("res://scripts/organ_atlas.gd").texture()
 	check(sheet!=null and sheet.get_width()==384 and sheet.get_image().has_mipmaps(),"Tiny-organ atlas derives usable antialiased mipmapped art from source vectors")
+	var Grid=preload("res://scripts/network/body_grid.gd")
+	var bodies: Array=[]
+	for i in 64:
+		var body:=Body.new();body.previous_position=Vector2(i*67,15+i*39).posmodv(Grid.WORLD)
+		body.position=(body.previous_position+Vector2(180,-210)).posmodv(Grid.WORLD)
+		body.radius=40+i*3;bodies.append(body)
+	bodies[31].radius=5000 # Full-world bounds and high bit in each texture word.
+	var masks=Grid.masks(bodies);var pixels=Grid.pixels(bodies)
+	var covered:=true;var packed:=true
+	for b in 64:
+		var body=bodies[b]
+		var delta: Vector2=(body.position-body.previous_position+Grid.WORLD*.5).posmodv(Grid.WORLD)-Grid.WORLD*.5
+		for step in 11:
+			var center: Vector2=body.previous_position+delta*step/10.0
+			for ray in 24:
+				var at: Vector2=(center+Vector2.from_angle(ray*TAU/24)*(body.radius+7.999)).posmodv(Grid.WORLD)
+				var index: int=posmod(floori(at.y/Grid.TILE),Grid.HEIGHT)*Grid.WIDTH+posmod(floori(at.x/Grid.TILE),Grid.WIDTH)
+				covered=covered and (masks[index] & (1<<b))!=0
+	for i in masks.size():
+		for channel in 4:packed=packed and int(pixels[i*4+channel])==((masks[i]>>(channel*16))&65535)
+	check(covered,"Swept periodic body grid keeps every candidate across interpolation, seams, large bodies and all 64 bits")
+	check(packed,"Float texture words retain all 64 membership bits exactly")
 	print("CLIENT PRESENTATION: %d assertions, %d failures" % [assertions,failures])
 	quit(0 if failures==0 else 1)

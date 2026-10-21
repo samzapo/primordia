@@ -7,7 +7,10 @@ class Client:
 	func _load_identity() -> void:pass
 	func _save_identity() -> void:pass
 	func _poll_network() -> void:pass
-	func _send(_value: Dictionary) -> void:pass
+	var sent: Array=[]
+	func _send(value: Dictionary) -> void:
+		sent.append(value.duplicate(true))
+		if sent.size()>128:sent.pop_front()
 var game
 var wire: Array=[]
 var elapsed:=0.0
@@ -19,6 +22,7 @@ var finished:=false
 var trace
 var settings: Dictionary={}
 var cache_checks: Array=[]
+var input_checks: Array=[]
 var check_phase:=0
 var cached_view_refs: Array=[]
 func option(key: String,fallback: String) -> String:
@@ -29,18 +33,19 @@ func option(key: String,fallback: String) -> String:
 		if arg.begins_with("--"+key+"="):return arg.trim_prefix("--"+key+"=")
 	return fallback
 func _ready() -> void:
-	settings={"cells":int(option("cells","48")),"zoom":float(option("zoom","0.8")),"case":option("case","all"),"seconds":float(option("seconds","8"))}
+	settings={"cells":int(option("cells","48")),"particles":int(option("particles","700")),"zoom":float(option("zoom","0.8")),"case":option("case","all"),"seconds":float(option("seconds","8"))}
 	assert(settings.cells>=1 and settings.cells<=64 and settings.zoom>=.8)
 	game=Client.new();add_child(game);game.login.hide()
 	game.preferences.persist=false;game.archive.persist=false
 	game.music.enabled=option("music","off")=="on"
 	game.touch_zoom.enabled=true
-	if settings.case=="controls-check":game.connected=true
+	if settings.case in ["controls-check","placement-check"]:game.connected=true
 	game.epoch=1;game.camera_seen_world=true;game.camera_initialized=true
 	game.manual_zoom=settings.zoom;game.camera_zoom=settings.zoom;game.camera_locked=true
 	if settings.case=="no-flow":game.flow_streamers=false;game.flow_wakes=false
 	if settings.case=="no-post":game.microscope_layer.hide()
 	if settings.case=="no-light":game.light_layer.hide()
+	if settings.case=="full-water":game.water_cache_enabled=false
 	var sim=Sim.new(9701,0,false);sim.server_mode=true;sim.cells.clear();sim.particles.clear()
 	var center:=Vector2(2048,1280)
 	for i in settings.cells:
@@ -55,9 +60,9 @@ func _ready() -> void:
 	sim.fluid.velocity.fill(Vector2(28,12));sim.environment={"light":.8}
 	sim.habitat_geometry=Sim.Habitat.new(9701,sim.cells)
 	game.world.habitat_geometry=sim.habitat_geometry;game.habitat_view.configure(sim.habitat_geometry)
-	var packets:=PackedByteArray();packets.resize(700*32)
+	var packets:=PackedByteArray();packets.resize(settings.particles*32)
 	var random:=RandomNumberGenerator.new();random.seed=9701
-	for i in 700:
+	for i in settings.particles:
 		var at:=center+Vector2(random.randf_range(-1300,1300),random.randf_range(-1900,1900))
 		for k in 6:packets.encode_float(i*32+k*4,[at.x,at.y,random.randf()*TAU,i%Sim.SPECIES_COUNT,.6,5][k])
 		packets.encode_u32(i*32+24,i)
@@ -83,8 +88,11 @@ func _process(dt: float) -> void:
 		game._receive_snapshot(message)
 		if trace!=null:trace.work("wire_decode",Time.get_ticks_usec()-at)
 		next_snapshot+=floor((elapsed-next_snapshot)/.1+1)*.1
+	if settings.case=="no-body-grid":game.network_particles.batch.material.set_shader_parameter("use_body_grid",false)
 	if settings.case=="no-raster":
 		for view in game.views.values():view.raster_enabled=false
+	if settings.case=="placement-check" and elapsed>4 and check_phase==0:
+		check_phase=1;_check_placement()
 	if settings.case=="raster-check":
 		if elapsed>4 and check_phase==0:
 			cache_checks.append(game.views.values().any(func(view):return view.raster_active))
@@ -104,9 +112,53 @@ func _process(dt: float) -> void:
 		started=true;measure_start=elapsed;trace=preload("res://scripts/frame_trace.gd").new();game.frame_trace=trace;trace.start(game)
 	if started and elapsed-measure_start>=settings.seconds:
 		finished=true;trace.stop();game.frame_trace=null
+		if settings.case=="placement-check":assert(input_checks.size()>=10 and input_checks.all(func(ok):return ok),"Local placement/animation and menu checks")
 		if settings.case=="raster-check":assert(cache_checks.size()==4 and cache_checks.all(func(ok):return ok),"Small-cell cache must exit cleanly for zoom/internal views")
-		var result={"settings":settings,"adapter":RenderingServer.get_video_adapter_name(),"device":RenderingServer.get_video_adapter_vendor(),"cache_checks":cache_checks,"viewport":str(game.get_viewport_rect().size),"canvas_scale":game.detail_canvas_scale,"dpr":game.detail_pixel_ratio,"views":game.views.values().map(func(view):return {"radius":view.cell.radius,"css_radius":view.cell.radius*game.zoom*game.detail_canvas_scale/game.detail_pixel_ratio,"small":view.simple_view,"raster":view.raster_active}),"rows":trace.rows}
+		var result={"settings":settings,"adapter":RenderingServer.get_video_adapter_name(),"device":RenderingServer.get_video_adapter_vendor(),"cache_checks":cache_checks,"input_checks":input_checks,"viewport":str(game.get_viewport_rect().size),"canvas_scale":game.detail_canvas_scale,"dpr":game.detail_pixel_ratio,"views":game.views.values().map(func(view):return {"radius":view.cell.radius,"css_radius":view.cell.radius*game.zoom*game.detail_canvas_scale/game.detail_pixel_ratio,"small":view.simple_view,"raster":view.raster_active}),"rows":trace.rows}
 		if OS.has_feature("web"):JavaScriptBridge.eval("window.primordiaRenderProfile="+JSON.stringify(result))
 		else:
 			var file:=FileAccess.open(option("output","res://build/network-render.json"),FileAccess.WRITE)
 			file.store_string(JSON.stringify(result));file.close();get_tree().quit()
+
+func _check_placement() -> void:
+ var cell=game.world.player
+ var view=game.views[cell.id]
+ var count: int=cell.organs.size()
+ var heading: float=view.rotation
+ view.rotation=cell.angle+.7 # Deliberately different from the latest server angle.
+ var angle:=.25
+ var local: Vector2=cell.local_point(angle)
+ var screen: Vector2=game.world_layer.to_global(view.position+local.rotated(view.rotation))
+ input_checks.append(game._player_relative(screen).rotated(-game._player_heading()).distance_to(local)<.001)
+ game.build_open=true;game.selected=Sim.KINDS.find("photosynthesis")
+ var click:=InputEventMouseButton.new();click.button_index=MOUSE_BUTTON_LEFT;click.pressed=true;click.position=screen
+ game._unhandled_input(click)
+ input_checks.append(game.inflight.get("action","")=="install")
+ input_checks.append(absf(game.inflight.get("args",{}).get("angle",-100)-angle)<.001)
+ input_checks.append(game.placement_feedback.entries.size()==1 and cell.organs.size()==count)
+ input_checks.append(game.sent[-1].action=="install" and not game.sent[-1].has("local_placement"))
+ var item: Dictionary=game.placement_feedback.entries[0]
+ game.placement_feedback.result(item.id,false,0)
+ input_checks.append(not item.pending and not item.ghost.visible)
+ game.inflight.clear();game.placement_feedback.clear()
+ var token: int=game.placement_feedback.begin(cell,"photosynthesis",angle)
+ item=game.placement_feedback.entries[0]
+ game.placement_feedback.result(token,true,101);game.placement_feedback.reconcile(100)
+ input_checks.append(item.pending and item.ghost.visible)
+ game.placement_feedback.reconcile(101)
+ input_checks.append(not item.pending and not item.ghost.visible and cell.organs.size()==count)
+ game.placement_feedback.clear();game.selected=-1;game.build_open=false;view.rotation=heading
+ var age: float=cell.age
+ var clock: float=game.ui_time
+ view.motile_art.sync(cell,true,clock+.15,game.world)
+ preload("res://scripts/motile_art.gd").set_clock(clock+.15)
+ input_checks.append(is_equal_approx(view.motile_art.material.get_shader_parameter("clock"),clock+.15) and cell.age==age and view.motile_art.get_parent()==view)
+ game.build_open=true;game.cell_ui.open_context({"kind":"division"})
+ var auto_choices=game.cell_ui.choices.filter(func(choice):return choice.has_meta("reproduction_auto"))
+ input_checks.append(auto_choices.size()==2 and auto_choices.all(func(choice):return not choice.selection_glow))
+ game.cell_ui.close_context();game.build_open=false
+ game.settings_panel.show();game._layout()
+ await get_tree().process_frame
+ var menu: Rect2=game.settings_panel.get_global_rect()
+ input_checks.append(menu.encloses(game.quit_button.get_global_rect()) and menu.encloses(game.logout_menu_button.get_global_rect()) and game.quit_button.get_parent()==game.logout_menu_button.get_parent() and game.logout_menu_button.get_global_rect().end.y<=game.quit_button.get_global_rect().position.y)
+ game.settings_panel.hide()

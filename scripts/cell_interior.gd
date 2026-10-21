@@ -62,7 +62,7 @@ func _draw() -> void:
 	if game.internal_visible(cell):
 		for side in [-1,1]:
 			var center:=Vector2(.02,side*.62)*r
-			var swell:=.35+.65*sin(fposmod(cell.age*.23+(.5 if side<0 else 0),1)*PI)
+			var swell:=.35+.65*sin(fposmod(game.ui_time*.23+(.5 if side<0 else 0),1)*PI)
 			for i in 6:
 				var ray:=Vector2.from_angle(TAU*i/6)
 				draw_line(center+ray*r*.05,center+ray*r*.17,Color(.55,.94,.93,.3),r*.026,true)

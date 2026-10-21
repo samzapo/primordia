@@ -50,6 +50,7 @@ var flow_streamers := true
 var flow_wakes := true
 var currents_origin := Vector2.ZERO
 var preview := Node2D.new()
+var placement_feedback=preload("res://scripts/placement_feedback.gd").new()
 var ui := Control.new()
 var player_help:=preload("res://scripts/player_help.gd").new()
 var gameplay_menu_button: Button
@@ -114,7 +115,11 @@ var free_camera := Vector2.ZERO
 var camera_dragging := false
 var camera_button := 0
 var quit_button := Button.new()
+var session_controls:=VBoxContainer.new()
 var light_layer := ColorRect.new()
+var water_target: SubViewport
+var water_display: TextureRect
+var water_cache_enabled:=true
 var microscope_layer := ColorRect.new()
 var acidity_texture := ImageTexture.new()
 var light_texture := ImageTexture.new()
@@ -236,6 +241,7 @@ func _ready() -> void:
 	world_layer.add_child(preview)
 	preview.z_index = 9
 	preview.draw.connect(_draw_preview)
+	placement_feedback.game=self;placement_feedback.z_index=12;world_layer.add_child(placement_feedback)
 	add_child(microscope_layer)
 	var canvas := CanvasLayer.new()
 	canvas.layer = 10
@@ -351,6 +357,7 @@ func _process(dt: float) -> void:
 	var started := Time.get_ticks_usec()
 	var alpha := 1.0 if is_paused() or screenshot_path != "" else Engine.get_physics_interpolation_fraction()
 	_update_world(alpha)
+	placement_feedback.sync()
 	render_ms = lerpf(render_ms,(Time.get_ticks_usec()-started)/1000.0,0.15)
 	var ui_start := Time.get_ticks_usec() if frame_trace != null else 0
 	hud_clock += dt
@@ -427,7 +434,7 @@ func _toggle_perception() -> void:
 	if perception=="interoception" and world.resident!=null and can_follow() and _follow_cell().chemistry.accelerator==null:
 		world.resident.gpu.attach_cytoplasm(_follow_cell().chemistry,_follow_cell())
 	touch_zoom.cancel()
-	for view in views.values():view.seen_revision=-1;view.queue_redraw()
+	for view in views.values():view.seen_revision=-1;view._queue_body_redraw()
 	_update_world(1.0 if is_paused() else Engine.get_physics_interpolation_fraction())
 	touch_zoom.layout();_update_perception_menu()
 	_message("Internal · camera attached to the cell." if perception=="interoception" else "External · zoom retained within pond limits.")
@@ -440,6 +447,7 @@ func _cell_render_alpha(cell,alpha: float) -> float:
 	return alpha if cell.activity>0 or world.remote_client else 1.0
 
 func _update_world(alpha: float) -> void:
+	preload("res://scripts/motile_art.gd").set_clock(ui_time)
 	var canvas_scale:=get_viewport().get_final_transform().get_scale().abs()
 	detail_canvas_scale=maxf(.001,minf(canvas_scale.x,canvas_scale.y))
 	var sync_start := Time.get_ticks_usec() if frame_trace != null else 0
@@ -666,21 +674,23 @@ func _draw_preview() -> void:
 	_draw_tubule_preview()
 	if not build_open or (selected < 0 and moving_id < 0): return
 	var cell = world.player
+	var heading:=_player_heading()
+	if views.has(cell.id):preview.position=views[cell.id].position
 	var relative := _player_relative(get_global_mouse_position())
-	var a: float = placement_angle if placement_keyboard else cell.surface_parameter(relative.angle()-cell.angle)
+	var a: float = placement_angle if placement_keyboard else cell.surface_parameter(relative.angle()-heading)
 	var local: Vector2 = cell.local_point(a)
 	var organ: Dictionary = cell.organ_by_id(moving_id)
 	var size: float = organ.scale if not organ.is_empty() else 1.0
 	var kind: String = organ.kind if not organ.is_empty() else Simulation.KINDS[selected]
 	var normal: Vector2 = cell.local_normal(a)
-	var point: Vector2 = cell.organ_local_position({"kind":kind,"a":a,"scale":size}).rotated(cell.angle)
-	var fits: bool = moving_id >= 0 or (cell.can_fit(kind,a,1,false) and world.player.ap >= cell.construction_price(kind))
-	Visuals.icon(preview,point,kind,normal.angle()+cell.angle,size,ui_time)
+	var point: Vector2 = cell.organ_local_position({"kind":kind,"a":a,"scale":size}).rotated(heading)
+	var fits: bool = moving_id >= 0 or (cell.can_fit(kind,a,1,false) and world.player.biomass >= cell.construction_price(kind))
+	Visuals.icon(preview,point,kind,normal.angle()+heading,size,ui_time)
 	preview.draw_arc(point,22*size,0,TAU,32,MINT if fits else Color("fc8c90"),2/zoom,true)
 	if selected >= 0:
 		var outline: PackedVector2Array = cell.membrane.outline()
 		var contour := PackedVector2Array()
-		for vertex in outline: contour.append(vertex.rotated(cell.angle))
+		for vertex in outline: contour.append(vertex.rotated(heading))
 		contour.append(contour[0])
 		preview.draw_polyline(contour,Color(0.6,1,0.85,0.6) if fits else Color(1,0.6,0.65,0.65),1.5/zoom,true)
 
@@ -703,8 +713,11 @@ func _refresh_light_texture() -> void:
 	microscope_layer.material.set_shader_parameter("light_map",light_texture)
 
 
+func _player_heading() -> float:
+	return views[world.player.id].rotation if views.has(world.player.id) else world.player.angle
+
 func _player_relative(screen: Vector2) -> Vector2:
-	var origin: Vector2=cell_ui.interior.position if views.has(world.player.id) else Simulation.Medium.offset(render_camera,world.player.position)
+	var origin: Vector2=views[world.player.id].position if views.has(world.player.id) else Simulation.Medium.offset(render_camera,world.player.position)
 	return (screen-camera_screen).rotated(-render_rotation)/zoom-origin
 
 func _ease_camera() -> void:
@@ -904,8 +917,10 @@ func _build_ui() -> void:
 	_button(options,"Resume / Close [M]",func():
 		if touch_zoom.enabled and user_paused:_toggle_user_pause()
 		else:_toggle_settings())
-	options.add_child(quit_button)
-	quit_button.text = "Quit game"
+	options_box.add_child(HSeparator.new())
+	options_box.add_child(session_controls)
+	session_controls.add_child(quit_button)
+	quit_button.text = "Close game"
 	quit_button.pressed.connect(func(): get_tree().quit())
 	settings_panel.hide()
 	touch_zoom.initialize(self)
@@ -943,11 +958,32 @@ func _apply_ui_scale(value: float) -> void:
 	_layout()
 	_layout.call_deferred()
 
+func _layout_water(size: Vector2) -> void:
+	if not OS.has_feature("web") or not touch_zoom.enabled or not water_cache_enabled:
+		if water_target!=null:
+			if light_layer.get_parent()!=self:light_layer.reparent(self,false);move_child(light_layer,world_layer.get_index())
+			water_target.render_target_update_mode=SubViewport.UPDATE_DISABLED;water_display.hide()
+		light_layer.size=size;return
+	if water_target==null:
+		water_target=SubViewport.new();water_target.disable_3d=true;water_target.world_2d=World2D.new()
+		water_target.render_target_update_mode=SubViewport.UPDATE_ALWAYS;add_child(water_target)
+		water_display=TextureRect.new();water_display.mouse_filter=Control.MOUSE_FILTER_IGNORE
+		water_display.texture_filter=CanvasItem.TEXTURE_FILTER_LINEAR
+		water_display.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;water_display.texture=water_target.get_texture()
+		add_child(water_display);move_child(water_display,world_layer.get_index())
+		light_layer.reparent(water_target,false)
+	if light_layer.get_parent()!=water_target:light_layer.reparent(water_target,false)
+	water_display.show();water_target.render_target_update_mode=SubViewport.UPDATE_ALWAYS
+	# One sample per CSS pixel is enough for diffuse water, retaining full-resolution
+	# foreground, controls and the exact approved shader/pH palette.
+	water_target.size=Vector2i((size/maxf(1,touch_zoom.pixels)).ceil()).max(Vector2i.ONE)
+	light_layer.size=Vector2(water_target.size);water_display.size=size
+
 func _layout() -> void:
 	var size := get_viewport_rect().size
 	current_style_choices.columns=1 if touch_zoom.enabled else 2
 	touch_zoom.layout()
-	light_layer.size = size
+	_layout_water(size)
 	microscope_layer.size = size
 	var density: float=touch_zoom.pixels if touch_zoom.enabled else 1.0
 	var margin:=16*density
@@ -1087,9 +1123,10 @@ func placement_status() -> String:
 func _placement_hit(relative: Vector2) -> bool:
 	var organ: Dictionary=world.player.organ_by_id(moving_id)
 	var kind: String=organ.get("kind","") if moving_id>=0 else Simulation.KINDS[selected] if selected>=0 else ""
-	var reach: float=world.player.support(relative.angle())
-	if world.player.internal_organ(kind):return relative.length()<=reach+maxf(12,26/zoom)
-	return absf(relative.length()-reach)<=maxf(26/zoom,12)
+	var reach: float=world.player.support(relative.angle()-_player_heading()+world.player.angle)
+	var pad: float=maxf(16,32*cell_ui.ui_scale()/zoom)
+	if world.player.internal_organ(kind):return relative.length()<=reach+pad
+	return absf(relative.length()-reach)<=pad
 
 func _place_at(angle: float) -> bool:
 	if moving_id >= 0:
@@ -1098,8 +1135,10 @@ func _place_at(angle: float) -> bool:
 		_message("Organelle moved." if moved else "That organ is no longer available.")
 		return moved
 	if selected < 0: return false
-	var placed: bool = world.install(Simulation.KINDS[selected],angle,"flee" if selected == 5 else "graze",1.0)
-	_message("Organelle attached." if placed else placement_status())
+	var kind: String=Simulation.KINDS[selected]
+	var placed: bool = world.install(kind,angle,"flee" if selected == 5 else "graze",1.0)
+	if placed and not world.remote_client:placement_feedback.begin(world.player,kind,angle,false)
+	_message(("Placing organelle…" if world.remote_client else "Organelle attached.") if placed else placement_status())
 	return placed
 
 func _zoom_button(factor: float) -> void:
@@ -1389,7 +1428,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if not event is InputEventMouseButton: return
 	var relative := _player_relative(event.position)
-	var local := relative.rotated(-world.player.angle)
+	var local := relative.rotated(-_player_heading())
 	if not event.pressed:
 		if event.button_index == camera_button: camera_dragging = false
 		if event.button_index == MOUSE_BUTTON_LEFT and not tube_start.is_empty():

@@ -62,6 +62,7 @@ var curve_half:=Vector2.ZERO
 var curve_zoom:=0.0
 var curve_style:=false
 var field_speed:=0.0
+var cached_field_speed:=0.0
 var curve_baselines: Array[Vector2]=[]
 
 func _ready() -> void:
@@ -186,9 +187,11 @@ func sync(world,camera: Vector2,half_view: Vector2,zoom: float,show_streams: boo
 			previous_field.update(image if reset else cached_field);field.update(image)
 		previous_velocity=world.fluid.velocity.duplicate() if cached_velocity.is_empty() or reset else cached_velocity
 		cached_velocity=world.fluid.velocity.duplicate();cached_field=image;last_field_time=world.time
-		field_speed=0
-		for values in [previous_velocity,cached_velocity]:
-			for velocity in values:field_speed=maxf(field_speed,velocity.length())
+		var old_speed:=cached_field_speed
+		var squared:=0.0
+		for velocity in cached_velocity:squared=maxf(squared,velocity.length_squared())
+		cached_field_speed=sqrt(squared)
+		field_speed=maxf(old_speed,cached_field_speed)
 	display_mix=clampf((world.time-last_field_time)*15.0,0,1)
 	if reset:habitat_cache=world.habitat_geometry;anchor_data.clear()
 	if anchor_data.is_empty():

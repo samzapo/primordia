@@ -103,6 +103,9 @@ func sync() -> void:
   button.text=entry.label+": "+("On" if active else "Off")+(" …" if waiting else "")
   button.icon=SELECTION_MARK if active else null
   button.disabled=waiting
+  # A check records the mode; only an actual press uses the lit style.
+  button.add_theme_stylebox_override("hover",button.get_theme_stylebox("normal"))
+  button.add_theme_stylebox_override("focus",StyleBoxEmpty.new())
  var value:=current()
  var inherited: String=game.world.investment.lineages.get(game.world.player.lineage_id(),game.world.Investment.DEFAULT)
  var effective: String=inherited if value=="inherit" else value

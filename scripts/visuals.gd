@@ -128,7 +128,7 @@ class DimmedInk extends RefCounted:
 	func draw_polyline(points: PackedVector2Array,color: Color,width: float=-1,antialias: bool=false) -> void:canvas.draw_polyline(points,tint(color),width,antialias)
 	func draw_colored_polygon(points: PackedVector2Array,color: Color) -> void:canvas.draw_colored_polygon(points,tint(color))
 
-static func icon(c, p: Vector2, kind: String, rotation: float, scale: float, animation_time: float = 0, mode: String = "graze", pulse: float = 0, detail: bool = true, charge: float = 0, depleted: bool=false, stored: float=0.0, reach: float=27.0) -> void:
+static func icon(c, p: Vector2, kind: String, rotation: float, scale: float, animation_time: float = 0, mode: String = "graze", pulse: float = 0, detail: bool = true, charge: float = 0, depleted: bool=false, stored: float=0.0, reach: float=27.0,motile_strokes: bool=true) -> void:
 	if depleted:c=DimmedInk.new(c)
 	c.draw_set_transform(p,rotation,Vector2.ONE*scale)
 	var steps := 24 if detail else 10
@@ -144,25 +144,27 @@ static func icon(c, p: Vector2, kind: String, rotation: float, scale: float, ani
 		"internal_factory":
 			internal_factory(c,Vector2.ZERO,23)
 		"propulsion":
-			var path := PackedVector2Array()
-			for i in (18 if detail else 9):
-				var t := float(i)/(17 if detail else 8)
-				path.append(Vector2(t*43,sin(t*7-animation_time*9)*t*9))
-			c.draw_polyline(path,Color("137889"),8,true)
-			c.draw_polyline(path,MINT,5,true)
-			c.draw_circle(path[-1],2.5,MINT)
+			if motile_strokes:
+				var path := PackedVector2Array()
+				for i in (18 if detail else 9):
+					var t := float(i)/(17 if detail else 8)
+					path.append(Vector2(t*43,sin(t*7-animation_time*9)*t*9))
+				c.draw_polyline(path,Color("137889"),8,true)
+				c.draw_polyline(path,MINT,5,true)
+				c.draw_circle(path[-1],2.5,MINT)
 			c.draw_circle(Vector2(-3,0),8,Color("1a7a87"))
 			c.draw_circle(Vector2(-1,-1),5,MINT)
 		"cilia":
 			c.draw_line(Vector2(-3,-12),Vector2(-3,12),Color("126a9b"),9,true)
-			for strand in (5 if detail else 3):
-				var base := Vector2(0,(strand-(2 if detail else 1))*5.0)
-				var hair := PackedVector2Array()
-				for i in 6:
-					var t := float(i)/5
-					hair.append(base+Vector2(t*24,sin(t*4-animation_time*10+strand*0.9)*t*6))
-				c.draw_polyline(hair,Color("2be2e6"),3.5,true)
-				if detail: c.draw_circle(hair[-1],1.5,Color("c5ffff"))
+			if motile_strokes:
+				for strand in (5 if detail else 3):
+					var base := Vector2(0,(strand-(2 if detail else 1))*5.0)
+					var hair := PackedVector2Array()
+					for i in 6:
+						var t := float(i)/5
+						hair.append(base+Vector2(t*24,sin(t*4-animation_time*10+strand*0.9)*t*6))
+					c.draw_polyline(hair,Color("2be2e6"),3.5,true)
+					if detail: c.draw_circle(hair[-1],1.5,Color("c5ffff"))
 		"protection":
 			var shield := PackedVector2Array([Vector2(-10,-16),Vector2(4,-17),Vector2(15,-9),Vector2(18,0),Vector2(15,9),Vector2(4,17),Vector2(-10,16)])
 			c.draw_colored_polygon(shield,Color("1966ad"))
