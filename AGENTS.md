@@ -917,3 +917,12 @@ October21 notice follow-up: transient bordered notices fade over3seconds, includ
 repeated division refusals. Readiness failures must not fall through to persistent
 hover/focus/bud tooltips. Keep duplicate suppression without extending lifetime,
 independent Instinct/starvation panes and quiet routine success/wait states.
+
+October21 owner-approved main promotion: the tested4039e26experimental feature
+batch is released with stable notice2026-10-21-a-growing-pond. Stable copy matches
+the cumulative final-feature preview, with its own stable audience/identity;
+keep every historical experimental notice excluded from main. Future experimental
+roundups begin from this new main baseline, rather than repeating this batch.
+Retain main's world/cells/accounts/keys/feedback and the independent running
+experimental pond. Routine focused checks/deploy only; no new reset/standby,
+network helper, schedule, balance trial or FPS benchmark.

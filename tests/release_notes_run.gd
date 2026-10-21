@@ -9,6 +9,7 @@ func check(ok: bool,message: String) -> void:
 func _initialize() -> void:run.call_deferred()
 func run() -> void:
 	var stable_current: Dictionary=Notes.pending_all({},"stable")[-1]
+	var experimental_current: Dictionary=Notes.RELEASES.filter(func(update):return update.audience=="experimental")[-1]
 	var account: Dictionary={}
 	check(not Notes.pending(account).is_empty(),"Unseen update appears for existing and new players")
 	check(not Notes.acknowledge(account,"unknown") and not account.has("seen_release"),"Unknown update cannot suppress the notice")
@@ -25,28 +26,32 @@ func run() -> void:
 		check(update.get("audience","") in ["shared","stable","experimental"],"Every release declares its pond audience")
 	var stable_ids:=Notes.pending_all({},"stable").map(func(update):return update.id)
 	var experimental_ids:=Notes.pending_all({},"experimental").map(func(update):return update.id)
-	check(Notes.CURRENT.id not in stable_ids and Notes.CURRENT.id in experimental_ids,"Consolidated experimental update never enters main")
+	check(experimental_current.id not in stable_ids and experimental_current.id in experimental_ids,"Consolidated experimental update never enters main")
 	for release in Notes.RELEASES:
 		if release.audience=="experimental":check(release.id not in stable_ids,"Experimental copy stays outside main")
 		if release.audience=="stable":check(release.id not in experimental_ids,"Main copy stays outside experimental")
-	check(experimental_ids.filter(func(id):return id==Notes.CURRENT.id).size()==1,"New experimental notice appears once")
+	check(experimental_ids.filter(func(id):return id==experimental_current.id).size()==1,"New experimental notice appears once")
 	var consolidated:=0
 	for i in Notes.RELEASES.size():
 		if Notes.RELEASES[i].get("supersedes_experimental",false):consolidated=i
 	var expected:=Notes.RELEASES.slice(consolidated).filter(func(update):return update.audience=="experimental").map(func(update):return update.id)
 	check(Notes.pending_all({},"experimental").filter(func(update):return update.audience=="experimental").map(func(update):return update.id)==expected,"Consolidation replaces earlier notices while later updates remain in order")
-	check(Notes.CURRENT.get("supersedes_experimental",false) and Notes.CURRENT.get("supersedes_shared_for_experimental",false),"Every experimental update previews one cumulative next-main release message")
-	check(Notes.pending_all({},"experimental").size()==1 and Notes.pending({},"experimental").id==Notes.CURRENT.id,"Experimental starts with one roundup, including missed shared updates")
+	check(experimental_current.get("supersedes_experimental",false) and experimental_current.get("supersedes_shared_for_experimental",false),"Every experimental update previews one cumulative next-main release message")
+	check(Notes.pending_all({},"experimental").size()==1 and Notes.pending({},"experimental").id==experimental_current.id,"Experimental starts with one roundup, including missed shared updates")
 	for seen in [Notes.RELEASES[0].id,"2026-10-19-experimental-cell-lifecycle","2026-10-21-smoother-swimming-and-surplus-release"]:
 		var existing: Dictionary={"seen_release":seen}
-		check(Notes.pending_all(existing,"experimental").size()==1 and Notes.pending(existing,"experimental").id==Notes.CURRENT.id,"Existing acknowledgement reaches the same single roundup")
-		check(Notes.acknowledge(existing,Notes.CURRENT.id,"experimental") and Notes.pending_all(existing,"experimental").is_empty(),"Clearing the roundup clears its covered experimental history")
+		check(Notes.pending_all(existing,"experimental").size()==1 and Notes.pending(existing,"experimental").id==experimental_current.id,"Existing acknowledgement reaches the same single roundup")
+		check(Notes.acknowledge(existing,experimental_current.id,"experimental") and Notes.pending_all(existing,"experimental").is_empty(),"Clearing the roundup clears its covered experimental history")
 	check(not Notes.acknowledge({},"unknown","experimental"),"Unrecognized notice cannot skip the queue")
 	for instance in ["stable","experimental"]:
 		var migrated: Dictionary={}
 		for update in Notes.pending_all(migrated,instance):
 			check(Notes.acknowledge(migrated,update.id,instance),"Each pond clears every applicable notice oldest first")
 		check(Notes.pending_all(migrated,instance).is_empty(),"Hidden notices cannot leave either pond queue stuck")
+	check(Notes.CURRENT.id==stable_current.id and stable_current.items==experimental_current.items,"Main promotes the tested final-feature roundup with its own stable identity")
+	var stable_history: Array=Notes.RELEASES.filter(func(update):return Notes.applies(update,"stable"))
+	var previous: Dictionary={"seen_release":stable_history[-2].id}
+	check(Notes.pending_all(previous,"stable").size()==1 and Notes.pending(previous,"stable").id==stable_current.id,"An up-to-date main player receives one consolidated release notice")
 	var parent:=Control.new();root.add_child(parent);parent.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var popup=NoticePopup.new();popup.initialize(parent)
 	var clicked: Array=[];popup.dismissed.connect(func(id):clicked.append(id))
