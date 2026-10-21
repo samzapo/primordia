@@ -865,7 +865,7 @@ update its cumulative notice and guide, with no main promotion.
 ## October21 quiet client status
 Routine queued/applied/selection/build-complete chatter is silent. Keep real
 command failures as individual compact bordered notices, red for rejections,
-bounded to three, deduplicated without extending their one-second fade.
+bounded to three, deduplicated without extending their three-second fade.
 Separate persistent Instinct and red starvation panes from tooltips/notices;
 starvation presentation reads empty ATP and reserve biomass, without changing
 physiology. Notices expire through menus. A locally animated amoeba at the
@@ -896,3 +896,24 @@ their displayed source outline until refresh; immediately update external
 anchors and contact cues when a queued texture refresh changes that source.
 Retain experimental and keep main unchanged. One cumulative final-feature
 notice; focused mixed-anatomy, exaggerated-strain and WebGL checks, no FPS claim.
+
+
+October21 pH filtering correction: use bicubic reconstruction of transported
+acid equivalents in the water shader, then the existing pH conversion/palette.
+Use positive cubic B-spline weights (four paired hardware-linear lookups) to
+avoid acid/alkaline ringing. Preserve periodic edges, the approved colors and
+invisible neutral band, physical chemistry and gameplay field sampling.
+Retain experimental, keep main unchanged and fold this into its cumulative
+water-color feature description. Focused shader/WebGL checks only.
+
+October21 compact internals: fixed internal artwork uses half the former linear
+size, including its circles/badges, installed organs, placement previews and
+portrait counterparts. All six landmarks must fit an empty-reserve founder and
+minimal daughter using their full visible footprints. Every anchor spreads with
+body growth; never grow the artwork or shrink the existing minimum touch areas.
+Preserve biology, installed organ scales, deformation anchors and overlap picker.
+
+October21 notice follow-up: transient bordered notices fade over3seconds, including
+repeated division refusals. Readiness failures must not fall through to persistent
+hover/focus/bud tooltips. Keep duplicate suppression without extending lifetime,
+independent Instinct/starvation panes and quiet routine success/wait states.

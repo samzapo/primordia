@@ -214,7 +214,7 @@ func _sync_surface(render_angle: float, changed: bool) -> void:
 
 func _sync_anchor_art() -> void:
 	nucleus_lag=Vector2.ZERO
-	var nucleus_anchor: Vector2=Layout.layout(cell).nucleus if cell==game.world.player else Vector2(-6,-4)
+	var nucleus_anchor: Vector2=Layout.layout(cell).nucleus if cell==game.world.player else Vector2(-.08,-.05)*cell.radius
 	nucleus_center=motion.point(nucleus_anchor)
 	nucleus_size=Layout.NUCLEUS;nucleus_ink.position=nucleus_center
 	if seen_revision!=cell.render_revision:nucleus_ink.queue_redraw()
@@ -243,12 +243,13 @@ func _draw_internal_organ(id: int,ink: Node2D) -> void:
 	var organ: Dictionary=cell.organ_by_id(id)
 	if organ.is_empty():return
 	var status: Dictionary=preload("res://scripts/organelle_status.gd").state(game.world,cell,organ)
-	var cached_icon: bool=game.zoom*organ.scale*game.detail_canvas_scale<=.8*game.detail_pixel_ratio and not game.internal_visible(cell) and not game.build_open and organ.consume_flash<.001 and organ.charge_flash<.001 and not status.depleted
-	if not cached_icon or not preload("res://scripts/organ_atlas.gd").draw(ink,Vector2.ZERO,organ.kind,0,organ.scale):
-		Visuals.icon(ink,Vector2.ZERO,organ.kind,0,organ.scale,game.ui_time,organ.mode,organ.consume_flash,not simple_view,organ.charge_flash,status.depleted,preload("res://scripts/toxin_sac.gd").fraction(organ) if organ.kind=="toxin_sac" else 0)
-	if status.progress>=0:ink.draw_arc(Vector2.ZERO,19*organ.scale,-PI/2,-PI/2+TAU*maxf(.001,status.progress),28,Color("fff0ac") if not status.depleted else Color("8c969f"),1.8*organ.scale,true)
-	if organ.get("mutation","")!="":ink.draw_circle(Vector2.ZERO,3.5*organ.scale,Color("fff2a3"))
-	if organ.hp<organ.max_hp:ink.draw_arc(Vector2.ZERO,19*organ.scale,-PI/2,-PI/2+TAU*organ.hp/organ.max_hp,24,Color("fc8c90"),2,true)
+	var drawn_scale: float=organ.scale*Layout.INTERNAL_SCALE
+	var cached_icon: bool=game.zoom*drawn_scale*game.detail_canvas_scale<=.8*game.detail_pixel_ratio and not game.internal_visible(cell) and not game.build_open and organ.consume_flash<.001 and organ.charge_flash<.001 and not status.depleted
+	if not cached_icon or not preload("res://scripts/organ_atlas.gd").draw(ink,Vector2.ZERO,organ.kind,0,drawn_scale):
+		Visuals.icon(ink,Vector2.ZERO,organ.kind,0,drawn_scale,game.ui_time,organ.mode,organ.consume_flash,not simple_view,organ.charge_flash,status.depleted,preload("res://scripts/toxin_sac.gd").fraction(organ) if organ.kind=="toxin_sac" else 0)
+	if status.progress>=0:ink.draw_arc(Vector2.ZERO,19*drawn_scale,-PI/2,-PI/2+TAU*maxf(.001,status.progress),28,Color("fff0ac") if not status.depleted else Color("8c969f"),1.8*drawn_scale,true)
+	if organ.get("mutation","")!="":ink.draw_circle(Vector2.ZERO,3.5*drawn_scale,Color("fff2a3"))
+	if organ.hp<organ.max_hp:ink.draw_arc(Vector2.ZERO,19*drawn_scale,-PI/2,-PI/2+TAU*organ.hp/organ.max_hp,24,Color("fc8c90"),2,true)
 
 func visible_point(at: Vector2) -> Vector2:return motion.point(at)
 func visible_normal(at: Vector2,direction: Vector2) -> Vector2:return motion.normal(at,direction)

@@ -696,8 +696,9 @@ func _draw_preview() -> void:
 		source_point=views[cell.id].visible_point(source_point)
 	var point: Vector2=source_point.rotated(heading)
 	var fits: bool = moving_id >= 0 or (cell.can_fit(kind,a,1,false) and world.player.biomass >= cell.construction_price(kind))
-	Visuals.icon(preview,point,kind,normal.angle()+heading,size,ui_time)
-	preview.draw_arc(point,22*size,0,TAU,32,MINT if fits else Color("fc8c90"),2/zoom,true)
+	var drawn_size: float=size*(preload("res://scripts/factory_layout.gd").INTERNAL_SCALE if cell.internal_organ(kind) else 1.0)
+	Visuals.icon(preview,point,kind,normal.angle()+heading,drawn_size,ui_time)
+	preview.draw_arc(point,22*drawn_size,0,TAU,32,MINT if fits else Color("fc8c90"),2/zoom,true)
 	if selected >= 0:
 		var outline: PackedVector2Array = views[cell.id].visible_outline() if views.has(cell.id) else cell.membrane.outline()
 		var contour := PackedVector2Array()
@@ -1236,7 +1237,7 @@ func waiting_for_world() -> bool:
 
 func _message(value: String,tone: String="info") -> void:
 	notice = value
-	notice_timer = 1.0
+	notice_timer = 3.0
 	cell_ui.status_feed.push(value,tone)
 
 func touch_controls_available() -> bool:

@@ -55,7 +55,7 @@ static func draw(canvas: Node2D,model: Dictionary,art: Dictionary,mesh: ArrayMes
  preload("res://scripts/synergy_art.gd").draw(canvas,model.get("synergy",{}),model.outline,model.radius,art.colors[1],model.age)
  var safe: float=model.radius
  for point in model.outline:safe=minf(safe,point.length())
- Visuals.nucleus_art(canvas,Vector2(-.12,-.10)*safe,safe*.28,art.core,art.colors,false)
+ Visuals.nucleus_art(canvas,Vector2(-.12,-.10)*safe,safe*.28*preload("res://scripts/factory_layout.gd").INTERNAL_SCALE,art.core,art.colors,false)
  for hole in model.holes:canvas.draw_circle(hole.at,3+hole.size*6,Color("27325e"))
  for organ in model.organs:
   if organ.inherent:
@@ -63,7 +63,7 @@ static func draw(canvas: Node2D,model: Dictionary,art: Dictionary,mesh: ArrayMes
    canvas.draw_polyline(organ.mouth,Color("6ee6d4"),minf(5,model.radius*.10),true)
   else:
    var at: Vector2=organ.at.rotated(rotation)*scale
-   Visuals.icon(canvas,at,organ.kind,organ.heading+rotation,organ.scale*scale,model.age,organ.mode,organ.pulse,false,0,organ.depleted,float(organ.get("stored",0)),float(organ.get("reach",27)))
+   Visuals.icon(canvas,at,organ.kind,organ.heading+rotation,organ.scale*scale*(preload("res://scripts/factory_layout.gd").INTERNAL_SCALE if organ.kind in ["mitochondrion","toxin_sac"] else 1.0),model.age,organ.mode,organ.pulse,false,0,organ.depleted,float(organ.get("stored",0)),float(organ.get("reach",27)))
    if organ.hp<1:
-    canvas.draw_arc(at,19*organ.scale*scale,-PI/2,-PI/2+TAU*maxf(.001,organ.hp),16,Color("fc8c90"),maxf(.7,scale),true)
+    canvas.draw_arc(at,19*organ.scale*scale*(preload("res://scripts/factory_layout.gd").INTERNAL_SCALE if organ.kind in ["mitochondrion","toxin_sac"] else 1.0),-PI/2,-PI/2+TAU*maxf(.001,organ.hp),16,Color("fc8c90"),maxf(.7,scale),true)
  canvas.draw_set_transform(Vector2.ZERO)

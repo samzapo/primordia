@@ -219,7 +219,7 @@ rewritten. Native/reference local diffusion changes0.5→0.12/s and neutralizati
 0.012→0.08/s (half-life~8.7s) to reduce lasting whole-pond exposure. No reset or
 particle deletion occurs. Buffer packets retain finite acid neutralization down
 to neutral; no new alkaline source or toxicity rule is introduced. The display
-palette supports alkaline values too. Tint reads the actual bilinear field
+palette supports alkaline values too. Tint reads the reconstructed field
 without the old nine-sample oversized footprint. Low pH is deliberately pinker
 than the owner's universal-indicator reference; pH within0.25of7 is invisible.
 Local pH appears in the performance overlay and acid/buffer particle inspection.
@@ -338,7 +338,7 @@ health/biomass rules unchanged. Experimental retained; cumulative notice.
 ## October21 quiet client status
 Routine queued/applied/selection/build-complete chatter is silent. Keep real
 command failures as individual compact bordered notices, red for rejections,
-bounded to three, deduplicated without extending their one-second fade.
+bounded to three, deduplicated without extending their three-second fade.
 Separate persistent Instinct and red starvation panes from tooltips/notices;
 starvation presentation reads empty ATP and reserve biomass, without changing
 physiology. Notices expire through menus. A locally animated amoeba at the
@@ -369,3 +369,30 @@ their displayed source outline until refresh; immediately update external
 anchors and contact cues when a queued texture refresh changes that source.
 Retain experimental and keep main unchanged. One cumulative final-feature
 notice; focused mixed-anatomy, exaggerated-strain and WebGL checks, no FPS claim.
+
+## October21 bicubic pH presentation
+
+The water shader reconstructs acid equivalents with a separable cubic B-spline
+before the existing logarithmic pH conversion. Four paired hardware-linear
+samples evaluate the4x4 neighborhood with positive normalized weights, avoiding
+cubic ringing and invented acid/alkaline extremes. Texture addressing remains
+periodic across pond edges. This replaces bilinear presentation only; transport,
+neutralization, gameplay samples, the approved indicator colors and the0.25pH
+neutral transparency band remain unchanged. Light sampling is unchanged.
+
+## October21 compact internal artwork
+
+Internal organs and control artwork are half their previous linear size,
+including nucleus, factories, ATP/bud stores, inset circles, badges and installed
+mitochondria/toxin sacs. Placement ghosts and family portraits use the same
+visual factor. No installed scale/material/ATP/collision data is changed.
+Contain factory outlines/badges/full ATP sac using explicit footprints, including
+zero-reserve founders and30-tissue daughters. Anchor preferences use body bounds
+for every factory, including the nucleus; positions spread as the body grows
+while glyph dimensions stay fixed. Keep44CSS-pixel touch areas and overlap
+selection, as well as the shared squash/stretch anchor map.
+
+October21 status follow-up: notices now fade over3seconds. Division action/entry
+buttons no longer repeat refusal text through persistent hover/focus tooltips;
+their radial circle remains readiness feedback, and actual failures use the red
+notice feed on every attempt. Offline division refusals use the same path.

@@ -1,9 +1,9 @@
 extends Control
-## Local presentation only: bounded one-second notices and independent status panes.
+## Local presentation only: bounded three-second notices and independent status panes.
 const FONT=preload("res://assets/fonts/ComicNeue-Regular.ttf")
 const RED:=Color("f47f8b")
 const MINT:=Color("86cfbd")
-const LIFETIME:=1.0
+const LIFETIME:=3.0
 const MAX_MESSAGES:=3
 var entries: Array=[]
 var instinct: PanelContainer

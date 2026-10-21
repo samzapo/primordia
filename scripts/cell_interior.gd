@@ -39,7 +39,7 @@ func sync() -> void:
 		position = game.Simulation.Medium.offset(game.render_camera,cell.position)
 		rotation = cell.angle
 	# A full, elastic sac changes size rather than filling a fixed tank.
-	atp_size = minf(18,Layout.REFERENCE*0.13*sqrt(log(1+maxf(0,cell.energy)/cell.energy_reference()*3)))
+	atp_size = minf(18*Layout.INTERNAL_SCALE,Layout.REFERENCE*0.13*sqrt(log(1+maxf(0,cell.energy)/cell.energy_reference()*3)))
 	bud_material = game.world.division_status().get("progress",0.0)
 	bud_energy = bud_material
 	visible = not cell.dead and game.views.has(cell.id)

@@ -40,14 +40,36 @@ float caustics(vec2 phase, float time) {
 	float halo = 1.0-smoothstep(0.06,0.24,edge);
 	return ridge*0.60+halo*0.16;
 }
+// Positive cubic B-spline weights reconstruct the 4x4 field neighborhood.
+// Pairing adjacent weights lets four hardware-linear reads evaluate all 16
+// contributions. Their convex weights cannot invent acid/alkaline overshoot.
+vec4 cubic_weights(float v) {
+	float v2 = v*v, v3 = v2*v;
+	return vec4(1.0-3.0*v+3.0*v2-v3, 4.0-6.0*v2+3.0*v3,
+		1.0+3.0*v+3.0*v2-3.0*v3, v3)/6.0;
+}
+float bicubic_acidity(vec2 uv) {
+	vec2 size = vec2(textureSize(acidity_map,0));
+	vec2 grid = uv*size-0.5, base = floor(grid), f = fract(grid);
+	vec4 wx = cubic_weights(f.x), wy = cubic_weights(f.y);
+	vec2 gx = vec2(wx.x+wx.y,wx.z+wx.w);
+	vec2 gy = vec2(wy.x+wy.y,wy.z+wy.w);
+	vec2 x = (base.x+vec2(-1.0+wx.y/gx.x,1.0+wx.w/gx.y)+0.5)/size.x;
+	vec2 y = (base.y+vec2(-1.0+wy.y/gy.x,1.0+wy.w/gy.y)+0.5)/size.y;
+	float a = mix(texture(acidity_map,vec2(x.x,y.x)).r,
+		texture(acidity_map,vec2(x.y,y.x)).r,gx.y);
+	float b = mix(texture(acidity_map,vec2(x.x,y.y)).r,
+		texture(acidity_map,vec2(x.y,y.y)).r,gx.y);
+	return mix(a,b,gy.y);
+}
 void fragment() {
 	vec2 delta = (UV-screen_center)*view_size;
 	float c = cos(camera_rotation), s = sin(camera_rotation);
 	vec2 p = camera + vec2(c*delta.x+s*delta.y,-s*delta.x+c*delta.y);
 	vec2 habitat_uv = fract(p/vec2(4096.0,2560.0));
 	float light = texture(light_map,habitat_uv).r;
-	// Display only the actual bilinear field: no oversized color halo.
-	float acid = texture(acidity_map,habitat_uv).r;
+	// Reconstruct equivalents smoothly before the existing logarithmic pH palette.
+	float acid = bicubic_acidity(habitat_uv);
 	float excess = abs(acid)*0.001;
 	float major = (excess+sqrt(excess*excess+4e-14))*0.5;
 	float ph = clamp(-log(acid>=0.0 ? major : 1e-14/major)/log(10.0),0.0,14.0);

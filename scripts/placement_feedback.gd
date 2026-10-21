@@ -48,7 +48,7 @@ func _draw_ghost(item: Dictionary) -> void:
  if item.kind=="feeding":
   Visuals.oral_groove(item.ghost,cell,{"a":item.angle,"consume_flash":0},game.ui_time,false)
  else:
-  Visuals.icon(item.ghost,item.point,item.kind,view.visible_normal(cell.organ_local_position({"kind":item.kind,"a":item.angle,"scale":1.0}),cell.local_normal(item.angle)).angle(),1,game.ui_time)
+  Visuals.icon(item.ghost,item.point,item.kind,view.visible_normal(cell.organ_local_position({"kind":item.kind,"a":item.angle,"scale":1.0}),cell.local_normal(item.angle)).angle(),preload("res://scripts/factory_layout.gd").INTERNAL_SCALE if cell.internal_organ(item.kind) else 1.0,game.ui_time)
 func _draw_ripple(item: Dictionary) -> void:
  var t: float=clampf((game.ui_time-item.started)/.65,0,1)
  var pixels: float=maxf(.001,game.zoom*game.detail_canvas_scale/game.detail_pixel_ratio)

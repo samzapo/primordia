@@ -31,7 +31,21 @@ func run() -> void:
  check(next.distance_to(Motion.spring(10,15,3,.21))<.00001,"Layout easing is independent of frame subdivision")
  check(Motion.spring(10,15,0,.2).x<15 and absf(Motion.spring(10,15,0,5).x-15)<.00001,"Factory slots settle without oscillatory overshoot")
  var layout:=Layout.layout(cell)
- check(layout.radius==96 and Layout.NUCLEUS==19 and Layout.FACTORY==16,"Nucleus and factories retain fixed artwork sizes")
+ check(layout.radius==48 and Layout.NUCLEUS==9.5 and Layout.FACTORY==8,"Nucleus and factories retain fixed artwork sizes")
+ var fitted:=true;var spread:=true
+ for mass in [30,60]:
+  var empty=Cell.new();empty.body=mass;empty.biomass=0;empty.substrate=0;empty.oxygen=0;empty.carbon=0;empty.waste=0
+  empty.radius=Cell.tissue_radius(empty.storage_volume());empty.membrane=preload("res://scripts/membrane.gd").new(empty.radius,0)
+  var small:=Layout.layout(empty)
+  for key in Layout.KEYS:
+   var at: Vector2=small[key];var clearance:=INF
+   for i in empty.membrane.points.size():clearance=minf(clearance,at.distance_to(Geometry2D.get_closest_point_to_segment(at,empty.membrane.points[i],empty.membrane.points[(i+1)%empty.membrane.points.size()])))
+   fitted=fitted and clearance>=Layout.footprint(key)
+  for i in empty.membrane.points.size():empty.membrane.points[i]*=3
+  empty.membrane.invalidate();var large:=Layout.layout(empty)
+  for key in Layout.KEYS:spread=spread and (large[key] as Vector2).length()>(small[key] as Vector2).length()+1
+ check(fitted,"Every control outline fits inside empty-reserve founder and minimal daughter cells")
+ check(spread,"All control anchors spread with body growth while their artwork stays fixed")
  var old: PackedVector2Array=cell.membrane.outline();motion.capture_raster(old);motion.cached=true
  for i in cell.membrane.points.size():cell.membrane.points[i]*=1.1
  cell.membrane.invalidate();motion.sync(cell,.5,Transform2D.IDENTITY)

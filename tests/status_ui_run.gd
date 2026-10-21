@@ -46,15 +46,28 @@ func run() -> void:
  check(feed.instinct.visible,"Instinct stays in its own pane while a rejection is shown")
  game._message("Not enough biomass.","error")
  check(feed.entries.size()==1,"Repeated failures do not duplicate a notice or extend its life")
- game.cell_ui.sync(.5)
- check(pane.modulate.a>.45 and pane.modulate.a<.55,"Each notice fades continuously over the next second")
- game.cell_ui.sync(.51)
+ game.cell_ui.sync(1.5)
+ check(pane.modulate.a>.45 and pane.modulate.a<.55,"Each notice fades continuously over three seconds")
+ game.cell_ui.sync(1.51)
  check(feed.entries.is_empty() and feed.instinct.visible,"Expired notices disappear without replacing Instinct")
+ for attempt in 3:
+  game.cell_ui.open_context({"kind":"division"})
+  for choice in game.cell_ui.choices:
+   if choice.has_meta("reproduction_mode"):choice.grab_focus();break
+  game.cell_ui.sync(0)
+  check(not game.cell_ui.tip_box.visible or not game.cell_ui.tip.text.contains("needs"),"Division readiness cannot reappear in a persistent focus tooltip")
+  game.cell_ui._start_reproduction("mitosis")
+  sequence=game.inflight.sequence
+  game._command_result({"sequence":sequence,"ok":false,"edit":1,"message":"Mitosis needs 84 biomass and 56 ATP, including survival reserves."})
+  game.cell_ui.sync(0)
+  check(feed.entries.size()==1 and feed.entries[0].tone=="error","Every repeated division refusal uses the bordered feed")
+  game.cell_ui.sync(3.01)
+  check(feed.entries.is_empty() and not game.cell_ui.tip_box.visible,"Repeated division failure leaves no persistent old message pane")
  game.world.player.energy=0;game.world.player.biomass=0;game.preferences.show_instinct=false;game.cell_ui.sync(0)
  check(feed.starvation.visible and feed.starvation.get_theme_stylebox("panel").border_color.r>.9,"Starvation stays red even when the Instinct readout is hidden")
  game.world.player.energy=30;game.world.player.biomass=18;game.preferences.show_instinct=true;game.cell_ui.sync(0)
  check(not feed.starvation.visible,"Refuelling clears the starvation warning without a repeated message")
- game.settings_panel.show();game._message("One brief notice");game.cell_ui.sync(1.1)
+ game.settings_panel.show();game._message("One brief notice");game.cell_ui.sync(3.1)
  check(feed.entries.is_empty(),"Notices expire while menus are open instead of returning later")
  game.settings_panel.hide()
  for view in [Vector2i(393,740),Vector2i(1170,2100),Vector2i(740,393),Vector2i(1280,720)]:

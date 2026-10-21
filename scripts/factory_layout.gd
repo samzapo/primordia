@@ -1,12 +1,16 @@
 extends RefCounted
 ## Fixed world-size landmarks. Fit positions to the whole cytoplasm, never shrink art.
-const REFERENCE:=96.0
-const NUCLEUS:=19.0
-const FACTORY:=16.0
+const INTERNAL_SCALE:=0.5
+const REFERENCE:=96.0*INTERNAL_SCALE
+const NUCLEUS:=19.0*INTERNAL_SCALE
+const FACTORY:=16.0*INTERNAL_SCALE
 const KEYS:=["nucleus","assembly","chemistry","receptors","bud","atp"]
 const PREFERRED:=[Vector2(-.08,-.05),Vector2(-.48,.35),Vector2(.5,.20),Vector2(.05,.63),Vector2(-.45,-.48),Vector2(.40,-.48)]
 static var cache: Dictionary={}
 static func radius(kind: String) -> float:return NUCLEUS if kind=="nucleus" else FACTORY
+# Include organic outlines, inset badges and the fullest ATP sac in containment.
+static func footprint(kind: String) -> float:
+ return {"nucleus":34.0,"assembly":23.0,"chemistry":18.5,"receptors":18.0,"bud":18.0,"atp":26.0}[kind]*INTERNAL_SCALE
 static func layout(cell) -> Dictionary:
  var id: int=cell.get_instance_id()
  var points: PackedVector2Array=cell.membrane.points
@@ -27,13 +31,13 @@ static func layout(cell) -> Dictionary:
   var preferred: Vector2=bound.get_center()+bound.size*PREFERRED[k]*.65
   var best:=Vector2.ZERO;var best_score:=-INF
   for c in candidates:
-   var separation: float=c.clearance-radius(KEYS[k])*.8
-   for prior in used:separation=minf(separation,c.p.distance_to(prior.p)-radius(KEYS[k])-prior.r-3)
+   if c.clearance<footprint(KEYS[k])+1:continue
+   var separation: float=c.clearance-footprint(KEYS[k])
+   for prior in used:separation=minf(separation,c.p.distance_to(prior.p)-footprint(KEYS[k])-prior.r-2)
    var score: float=minf(separation,8)*5-c.p.distance_to(preferred)*.55
    if score>best_score:best_score=score;best=c.p
-  if k==0 and Geometry2D.is_point_in_polygon(Vector2(-6,-4),points):best=Vector2(-6,-4)
   result[KEYS[k]]=best
-  used.append({"p":best,"r":radius(KEYS[k])})
+  used.append({"p":best,"r":footprint(KEYS[k])})
  if cache.size()>=64:cache.clear()
  cache[id]={"points":points.duplicate(),"layout":result}
  return result.duplicate()

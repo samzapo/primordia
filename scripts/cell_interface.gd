@@ -329,7 +329,8 @@ func _toggle_instinct() -> void:
 	sync(0)
 
 func _start_reproduction(mode: String) -> void:
-	game.world.edit("reproduce",{"mode":mode});close_context()
+	if not game.world.edit("reproduce",{"mode":mode}) and not game.world.remote_client:game._message(game.world.division_status(null,null,mode).reason,"error")
+	close_context()
 
 func _toggle_reproduction(mode: String) -> void:
 	var status: Dictionary=game.world.division_status(null,null,mode)
@@ -393,7 +394,7 @@ func describe(target: Dictionary) -> String:
 		"lineage": return "FAMILY TREE\n"+sim.lineage.summary(sim)+"\n"+run.forecast()
 		"archive": return "Known blueprints · %d\nOne draft choice per tide; recalling grants no free anatomy." % game.archive.discovered.size()
 		"past": return "Expedition history · %d recorded\nYour next expedition retains these discoveries, not extra stats." % game.archive.expeditions.size()
-		"bud","division": return sim.division_status().reason
+		"bud","division": return "" # Radial readiness and fading failures replace persistent status prose.
 		"organ":
 			var organ: Dictionary = cell.organ_by_id(target.id)
 			if organ.is_empty(): return ""
@@ -541,11 +542,13 @@ func sync(_dt: float) -> void:
 
 	var inspected_choice = null
 	for choice in choices:
+		if choice.has_meta("reproduction_mode") or choice.has_meta("division_entry"):continue # Readiness failures belong to fading notices.
 		if choice.get_global_rect().has_point(cursor):
 			inspected_choice = choice
 			break
 	if inspected_choice == null:
 		for choice in choices:
+			if choice.has_meta("reproduction_mode") or choice.has_meta("division_entry"):continue
 			if choice.has_focus():
 				inspected_choice = choice
 				break
