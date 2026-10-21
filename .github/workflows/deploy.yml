@@ -2,9 +2,17 @@ name: Primordia persistent server CD
 "on":
   push:
     branches: [main]
-    paths-ignore: [docs/**, README.md, AGENTS.md, .github/workflows/target-probe.yml, .github/workflows/host-telemetry.yml]
+    paths-ignore: [docs/**, README.md, AGENTS.md, .github/workflows/target-probe.yml, .github/workflows/host-telemetry.yml, .github/workflows/deploy.yml]
   workflow_dispatch:
     inputs:
+      verify_only:
+        description: Check the running stable game without rebuilding or restarting it
+        type: boolean
+        default: false
+      verify_build:
+        description: Exact running build SHA for read-only verification
+        type: string
+        default: ""
       allow_performance_warnings:
         description: Ship with known timing shortfalls; retain GPU, correctness and state checks
         type: boolean
@@ -20,7 +28,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   deploy:
-    if: github.repository == 'samzapo/primordia' && github.ref == 'refs/heads/main'
+    if: github.repository == 'samzapo/primordia' && github.ref == 'refs/heads/main' && !inputs.verify_only
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 50
     steps:
@@ -104,6 +112,7 @@ jobs:
           print("STABLE_DEPLOYMENT_PRESERVATION "+json.dumps(report))
           PYTHON
   verify:
+    if: always() && github.repository == 'samzapo/primordia' && github.ref == 'refs/heads/main' && (needs.deploy.result == 'success' || (inputs.verify_only == true && needs.deploy.result == 'skipped'))
     needs: deploy
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 5
@@ -112,7 +121,7 @@ jobs:
         shell: bash
         env:
           PRIMORDIA_DEPLOY_FULL_CHECKS: ${{ inputs.full_validation == true && '1' || '0' }}
-          EXPECTED_SHA: ${{ github.sha }}
+          EXPECTED_SHA: ${{ inputs.verify_only == true && inputs.verify_build || github.sha }}
           PRIMORDIA_PERFORMANCE_WARNINGS: ${{ (inputs.allow_performance_warnings == true || (github.event_name == 'push' && contains(github.event.head_commit.message, '[allow-performance-warnings]'))) && '1' || '0' }}
         run: |
           test "$RUNNER_NAME" = samzapo-desktop
@@ -127,6 +136,7 @@ jobs:
           assert subprocess.check_output(['loginctl','show-user',str(os.getuid()),'-p','Linger','--value'],text=True).strip()=='yes'
           ca=pathlib.Path.home()/".local/share/primordia-deploy/tls/authority/ca.pem"
           opener=build_opener(ProxyHandler({}),HTTPSHandler(context=ssl.create_default_context(cafile=str(ca))))
+          assert len(os.environ['EXPECTED_SHA'])==40 and all(c in '0123456789abcdef' for c in os.environ['EXPECTED_SHA']), 'An exact build SHA is required'
           samples=[]
           full_checks=os.environ.get("PRIMORDIA_DEPLOY_FULL_CHECKS")=="1"
           sample_count=3 if full_checks else 2
@@ -134,8 +144,9 @@ jobs:
               with opener.open('https://127.0.0.1:8766/health',timeout=5) as response: value=json.load(response)
               assert value['build']==os.environ['EXPECTED_SHA'] and value['backend']=='gpu' and not value['backend_error'] and not value['checkpoint_error']
               samples.append(value)
-              if index<sample_count-1: time.sleep(6 if full_checks else 1)
-          assert samples[-1]['tick']>samples[0]['tick']
+              # Health is published every five seconds; sample a new publication.
+              if index<sample_count-1: time.sleep(6)
+          assert samples[-1]['updated_unix']>samples[0]['updated_unix'] and samples[-1]['tick']>samples[0]['tick']
           import sys
           sys.path.insert(0,str(root/"current/tools"))
           from performance_policy import evaluate
