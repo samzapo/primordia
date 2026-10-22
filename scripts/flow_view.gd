@@ -56,6 +56,7 @@ var curve_texture: ImageTexture
 var drawn_paths: Array[PackedVector2Array]=[]
 var drawn_samples: Array[Dictionary]=[]
 var curve_time:=-INF
+var curve_deadline:=-INF
 var curve_field_time:=-INF
 var curve_camera:=Vector2(INF,INF)
 var curve_half:=Vector2.ZERO
@@ -173,12 +174,12 @@ func sync(world,camera: Vector2,half_view: Vector2,zoom: float,show_streams: boo
 	input_streamers.visible=show_streams and use_crests;input_crests.visible=show_streams and not use_crests
 	wakes.visible=show_wakes and world.habitat_geometry.enabled
 	if not show_streams and not show_wakes:return
-	if curve_budget.configure(mobile_quality):curve_time=-INF
+	if curve_budget.configure(mobile_quality):curve_time=-INF;curve_deadline=-INF
 	var reset: bool=habitat_cache!=world.habitat_geometry or crest_world!=world or world.time<crest_clock
 	if reset:
-		crest_tracks.clear();visual_sources.clear();source_clock=-INF;curve_time=-INF;crest_world=world
+		crest_tracks.clear();visual_sources.clear();source_clock=-INF;curve_time=-INF;curve_deadline=-INF;crest_world=world
 	crest_clock=world.time
-	if field==null or reset or world.time-last_field_time>=1.0/15:
+	if field==null or reset or (world.time-last_field_time>=1.0/15 and world.fluid.velocity!=cached_velocity):
 		var image:=Image.create_from_data(Medium.COLS,Medium.ROWS,false,Image.FORMAT_RGF,world.fluid.velocity.to_byte_array())
 		if field==null:
 			field=ImageTexture.create_from_image(image);previous_field=ImageTexture.create_from_image(image)
@@ -211,8 +212,11 @@ func sync(world,camera: Vector2,half_view: Vector2,zoom: float,show_streams: boo
 	for view in [streamers,crests,input_streamers,input_crests]:
 		view.material.set_shader_parameter("eddy_sources",sources);view.material.set_shader_parameter("zoom",stroke_zoom);view.material.set_shader_parameter("camera",camera)
 	if show_streams:
-		if reset or world.time-curve_time>=CURVE_INTERVAL or curve_field_time!=last_field_time or curve_style!=use_crests or Medium.offset(curve_camera,camera).length()>64 or half_view!=curve_half or not is_equal_approx(stroke_zoom,curve_zoom):
+		if reset or world.time>=curve_deadline or curve_field_time!=last_field_time or curve_style!=use_crests or Medium.offset(curve_camera,camera).length()>64 or half_view!=curve_half or not is_equal_approx(stroke_zoom,curve_zoom):
 			var build_start:=Time.get_ticks_usec()
+			var interval: float=CURVE_INTERVAL*(2 if mobile_quality else 1)
+			if not is_finite(curve_deadline):curve_deadline=world.time
+			if world.time>=curve_deadline:curve_deadline+=(floor((world.time-curve_deadline)/interval)+1)*interval
 			_build_curves(world,events,camera,half_view,stroke_zoom)
 			curve_budget.observe(Time.get_ticks_usec()-build_start,Time.get_ticks_usec()/1000000.0)
 		_move_drawn(world.time,camera)
@@ -259,16 +263,20 @@ func _candidate(seed: Color,dense: bool,input: bool,now: float) -> Dictionary:
 	return {"key":key,"seed":seed,"dense":dense,"input":input,"target":(1.0 if input else seed.a)*(1-smoothstep(18.0,20.0,age))}
 
 func _velocity(at: Vector2,input: bool) -> Vector2:
-	return _sample_velocity(previous_input_velocity,at).lerp(_sample_velocity(input_velocity,at),input_mix) if input else _display_flow(at)
+	if not input:return _display_flow(at)
+	if input_mix<=0:return _sample_velocity(previous_input_velocity,at)
+	if input_mix>=1:return _sample_velocity(input_velocity,at)
+	return _sample_velocity(previous_input_velocity,at).lerp(_sample_velocity(input_velocity,at),input_mix)
 
 func _curve(center: Vector2,span: float,waves: bool,input: bool=false) -> PackedVector2Array:
 	var result:=PackedVector2Array()
+	var segments:=STRIP_SEGMENTS/2 if mobile_quality else STRIP_SEGMENTS
 	if waves:
 		var left:=PackedVector2Array();var right:=PackedVector2Array([center])
 		for sign_step in [-1.0,1.0]:
 			var at:=center
-			for i in STRIP_SEGMENTS/2:
-				var h: float=sign_step*span/STRIP_SEGMENTS/2.0
+			for i in segments/2:
+				var h: float=sign_step*span/segments/2.0
 				for j in 2:
 					var v:=_velocity(at,input)
 					if v.length()<.05:return PackedVector2Array()
@@ -283,8 +291,8 @@ func _curve(center: Vector2,span: float,waves: bool,input: bool=false) -> Packed
 		left.reverse();result.append_array(left);result.append_array(right)
 	else:
 		var at:=center;result.append(at)
-		var h: float=-8.4/STRIP_SEGMENTS/2.0
-		for i in STRIP_SEGMENTS:
+		var h: float=-8.4/segments/2.0
+		for i in segments:
 			for j in 2:
 				var v:=_velocity(at,input);at+=_velocity(at+v*h*.5,input)*h
 			result.append(at)
@@ -306,14 +314,16 @@ func _current_path(sample: Dictionary) -> PackedVector2Array:
 func _build_curves(world,events: Array,camera: Vector2,half_view: Vector2,zoom: float) -> void:
 	var style_changed:=curve_style!=use_crests
 	if style_changed:crest_tracks.clear()
-	var shape_dt:=CURVE_INTERVAL if not is_finite(curve_time) else maxf(0,world.time-curve_time)
+	var interval: float=CURVE_INTERVAL*(2 if mobile_quality else 1)
+	var shape_dt:=interval if not is_finite(curve_time) else maxf(0,world.time-curve_time)
 	curve_time=world.time;curve_field_time=last_field_time;curve_style=use_crests
 	curve_camera=camera;curve_half=half_view;curve_zoom=zoom
 	var generated:=seeds(camera,half_view);streamer_data=generated.data
 	var wanted: Dictionary={}
 	# Gold traces only the true induced input. Ordinary denser samples show total flow.
 	for input in [true,false]:
-		var dense:=_dense_seeds(events,camera,half_view,Vector2(23,11) if input else Vector2.ZERO)
+		var limit: int=curve_budget.limits().y if input else curve_budget.limits().x
+		var dense:=_dense_seeds_for_tracks(events,camera,half_view,Vector2(23,11) if input else Vector2.ZERO,input,limit)
 		for i in mini(128,dense.size()):
 			var item:=_candidate(dense[i],true,input,world.time);wanted[item.key]=item
 	var ambient:=0
@@ -323,7 +333,7 @@ func _build_curves(world,events: Array,camera: Vector2,half_view: Vector2,zoom: 
 		if ambient>=64:break
 	# Reserve every already-visible curve before proposing replacements. A curve
 	# which no longer fits keeps its last safe geometry throughout its fade.
-	var layout=CurveLayout.new(5.0/maxf(zoom,.001)+2*maxf(field_speed,60)*CURVE_INTERVAL)
+	var layout=CurveLayout.new(5.0/maxf(zoom,.001)+2*maxf(field_speed,60)*interval)
 	for sample in crest_tracks.values():
 		if sample.points.is_empty():continue
 		var points:=_current_path(sample)
@@ -362,6 +372,7 @@ func _build_curves(world,events: Array,camera: Vector2,half_view: Vector2,zoom: 
 			var points:=_curve(center,sample.span,waves,sample.input) if beyond.x<=0 and beyond.y<=0 and _velocity(center,sample.input).length()>=.05 else PackedVector2Array()
 			if not points.is_empty() and not sample.points.is_empty():
 				var old: PackedVector2Array=sample.points
+				if old.size()!=points.size():old=_resample(old,points.size())
 				var shift:=Medium.offset(sample.baseline,center)
 				var blend:=1-exp(-shape_dt/.25)
 				var wrap_shift:=old[0]+Medium.offset(old[0],points[0])-points[0]
@@ -393,13 +404,23 @@ func _budget_tracks() -> void:
 		if retained[group]>=(limits.y if sample.input else limits.x):sample.retiring=true
 		else:retained[group]+=1
 
+static func _resample(points: PackedVector2Array,count: int) -> PackedVector2Array:
+	if points.is_empty() or points.size()==count:return points
+	var result:=PackedVector2Array();result.resize(count)
+	for i in count:
+		var at:=float(i)*(points.size()-1)/maxi(1,count-1)
+		var left:=floori(at)
+		result[i]=points[left].lerp(points[mini(left+1,points.size()-1)],at-left)
+	return result
+
 func publish_paths(paths: Array[PackedVector2Array],opacities: Array=[],camera: Vector2=Vector2.ZERO) -> void:
 	if curve_image==null:
 		curve_image=Image.create(STRIP_SEGMENTS+1,MAX_CRESTS,false,Image.FORMAT_RGF)
 		curve_texture=ImageTexture.create_from_image(curve_image)
 		for view in [streamers,crests]:view.material.set_shader_parameter("curve_map",curve_texture)
 	for row in paths.size():
-		for column in paths[row].size():curve_image.set_pixel(column,row,Color(paths[row][column].x,paths[row][column].y,0))
+		var display:=_resample(paths[row],STRIP_SEGMENTS+1)
+		for column in display.size():curve_image.set_pixel(column,row,Color(display[column].x,display[column].y,0))
 	curve_texture.update(curve_image)
 	var active:=crests if use_crests else streamers
 	active.multimesh.visible_instance_count=paths.size()
@@ -411,7 +432,8 @@ func _publish_input() -> void:
 		input_texture=ImageTexture.create_from_image(input_image)
 		for view in [input_streamers,input_crests]:view.material.set_shader_parameter("curve_map",input_texture)
 	for row in input_paths.size():
-		for column in input_paths[row].size():input_image.set_pixel(column,row,Color(input_paths[row][column].x,input_paths[row][column].y,0))
+		var display:=_resample(input_paths[row],STRIP_SEGMENTS+1)
+		for column in display.size():input_image.set_pixel(column,row,Color(display[column].x,display[column].y,0))
 	input_texture.update(input_image)
 	var active:=input_streamers if use_crests else input_crests
 	active.multimesh.visible_instance_count=input_paths.size()
@@ -430,6 +452,34 @@ func _move_drawn(now: float,camera: Vector2) -> void:
 			if not sample.retiring and not sample.blocked:_move_track(sample.track,now,input)
 			var shift:=Medium.offset(baselines[row],sample.track.p)
 			active.multimesh.set_instance_custom_data(row,Color(shift.x,shift.y,row,sample.opacity))
+
+func _dense_seeds_for_tracks(events: Array,camera: Vector2,half_view: Vector2,offset: Vector2,input: bool,limit: int) -> Array[Color]:
+	var allocated:=0
+	for sample in crest_tracks.values():
+		if sample.input==input:allocated+=1
+	# Admission counts fading tracks too. With no free slots, enumerate only
+	# the already-admitted seeds; their source weights still refresh every time.
+	if allocated<limit:return _dense_seeds(events,camera,half_view,offset)
+	var result: Array[Color]=[]
+	for sample in crest_tracks.values():
+		if not sample.dense or sample.input!=input:continue
+		var seed: Color=sample.seed
+		var weight:=_dense_weight(events,camera,half_view,Vector2(seed.r,seed.g),offset)
+		if weight>.001:result.append(Color(seed.r,seed.g,seed.b,weight))
+	return result
+
+func _dense_weight(events: Array,camera: Vector2,half_view: Vector2,at: Vector2,offset: Vector2) -> float:
+	var key:=Vector2i((Medium.wrap_position(at-offset)/64.0).floor())
+	var weight:=0.0
+	for source in events:
+		if source.envelope<=.001:continue
+		var beyond: Vector2=Medium.offset(camera,source.p).abs()-half_view-Vector2.ONE*(source.radius+PAD)
+		if beyond.x>0 or beyond.y>0:continue
+		var low:=Vector2i(((source.p-Vector2.ONE*source.radius)/64.0).floor())
+		var high:=Vector2i(((source.p+Vector2.ONE*source.radius)/64.0).floor())
+		if low.x+posmod(key.x-low.x,64)>high.x or low.y+posmod(key.y-low.y,40)>high.y:continue
+		weight=maxf(weight,(1-smoothstep(.3,1.0,Medium.offset(source.p,at).length()/source.radius))*float(source.envelope))
+	return weight
 
 func _dense_seeds(events: Array,camera: Vector2,half_view: Vector2,offset: Vector2=Vector2.ZERO) -> Array[Color]:
 	var chosen: Dictionary={}
@@ -462,4 +512,6 @@ static func _sample_velocity(values: PackedVector2Array,p: Vector2) -> Vector2:
 	return top.lerp(bottom,f.y)
 
 func _display_flow(p: Vector2) -> Vector2:
+	if display_mix<=0:return _sample_velocity(previous_velocity,p)
+	if display_mix>=1:return _sample_velocity(cached_velocity,p)
 	return _sample_velocity(previous_velocity,p).lerp(_sample_velocity(cached_velocity,p),display_mix)

@@ -1167,6 +1167,16 @@ const RELEASES=[
  "footer": "Your cell and its progress carry on in this pond.",
  "button": "Back to the pond"
 },
+{
+ "id": "2026-10-22-smoother-pond-view",
+ "audience": "stable",
+ "title": "What’s new in the pond",
+ "items": [
+  "Improved smoothness when watching a busy pond, including moving current crests and streamlines."
+ ],
+ "footer": "Your cell and its progress carry on in this pond.",
+ "button": "Back to the pond"
+},
 
 ]
 const CURRENT=RELEASES[-1]

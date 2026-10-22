@@ -50,3 +50,18 @@ static func draw(canvas: Node2D,at: Vector2,kind: String,angle: float,scale: flo
 	canvas.draw_texture_rect_region(sheet,Rect2(-Vector2.ONE*SPAN/2,Vector2.ONE*SPAN),Rect2(Vector2(index%4,int(index/4))*TILE,Vector2.ONE*TILE))
 	canvas.draw_set_transform(Vector2.ZERO)
 	return true
+
+static var nucleus_cache: Dictionary={}
+static func nucleus(core: PackedVector2Array,palette: Array,detail: bool) -> Texture2D:
+	var key:=var_to_bytes([core,palette,detail])
+	if nucleus_cache.has(key):return nucleus_cache[key]
+	var ink:=Ink.new()
+	preload("res://scripts/visuals.gd").nucleus_art(ink,Vector2.ZERO,1.0,core,palette,detail)
+	var svg: String='<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="-2 -2 4 4">'+ink.output+'</svg>'
+	var image:=Image.new()
+	if image.load_svg_from_string(svg)!=OK:return null
+	image.generate_mipmaps()
+	var texture:=ImageTexture.create_from_image(image)
+	if nucleus_cache.size()>=64:nucleus_cache.clear()
+	nucleus_cache[key]=texture
+	return texture

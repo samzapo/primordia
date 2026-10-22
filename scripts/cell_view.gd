@@ -108,6 +108,7 @@ func sync(render_position: Vector2, render_angle: float, zoom: float, alpha: flo
 	var reduced: bool = detail_lod and cell.radius*zoom*game.detail_canvas_scale < 18*game.detail_pixel_ratio and not game.build_open and not internal
 	var detail_changed: bool = reduced != simple_view
 	simple_view = reduced
+	if detail_changed:nucleus_ink.queue_redraw()
 	if seen_revision != cell.render_revision or detail_changed or game.show_senses != get_meta("senses",false) or game.build_open != get_meta("assembly",false):
 		seen_revision = cell.render_revision
 		last_draw_tick = game.world.revision
@@ -258,6 +259,11 @@ func visible_outline() -> PackedVector2Array:
 
 func _draw_nucleus() -> void:
 	if art.is_empty():return
+	if simple_view and cell!=game.world.player:
+		var texture=preload("res://scripts/organ_atlas.gd").nucleus(art.core,art.colors,false)
+		if texture!=null:
+			nucleus_ink.draw_texture_rect(texture,Rect2(Vector2.ONE*(-2*Layout.NUCLEUS),Vector2.ONE*(4*Layout.NUCLEUS)),false)
+			return
 	Visuals.nucleus_art(nucleus_ink,Vector2.ZERO,Layout.NUCLEUS,art.core,art.colors,not simple_view)
 
 func _draw_body() -> void:

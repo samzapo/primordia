@@ -958,3 +958,17 @@ the main pond and experimental saved state. After main acceptance, use the
 existing experimental standby operation; keep it inactive and disabled until
 the next authorized experimental deployment. Future experimental roundups start
 from this released baseline. Do not repool the shared-controls feature.
+
+October22 main rendering repair: keep current art movement/fades on every rendered
+frame. Reuse unchanged velocity uploads; skip inactive blend endpoints; keep
+admitted dense samples while their source remains active instead of rebuilding
+the full candidate roster when no slot is free. Mobile curve geometry uses16
+segments, linearly uploaded into the existing32-segment display mesh, with the
+same noncrossing admission on the displayed polyline. Geometry rebuilds use an
+anchored100ms simulation schedule on touch and50ms otherwise, skip missed work,
+and retain the corresponding clearance horizon; camera/style changes update
+immediately. Cache tiny distant nuclei from the same vector art; keep selected
+and close-up artwork, constant sizes and all anchors unchanged. No particle,
+physics, chemistry, balance or server-cadence changes. Experimental remains
+inactive/disabled with its saved world retained. A desktop throttled replay is
+comparative evidence only; do not claim a measured phone FPS from it.

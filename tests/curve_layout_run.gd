@@ -21,6 +21,13 @@ class Oracle:
      if pair[0].distance_to(Geometry2D.get_closest_point_to_segment(pair[0],pair[1],pair[2]))<gap:return false
   reserve(points,owner)
   return true
+class CountingFlow:
+ extends "res://scripts/flow_view.gd"
+ var builds:=0
+ var frames:=0
+ func _build_curves(world,_events: Array,camera: Vector2,half_view: Vector2,zoom: float) -> void:
+  builds+=1;curve_time=world.time;curve_field_time=last_field_time;curve_camera=camera;curve_half=half_view;curve_zoom=zoom;curve_style=use_crests
+ func _move_drawn(_now: float,_camera: Vector2) -> void:frames+=1
 var checks:=0
 var failures:=0
 func check(ok: bool,message: String) -> void:
@@ -73,5 +80,56 @@ func run() -> void:
  flow._budget_tracks()
  check(flow.crest_tracks.values().filter(func(sample):return not sample.retiring and not sample.input).size()==8 and flow.crest_tracks.values().filter(func(sample):return not sample.retiring and sample.input).size()==4,"Only the target number of ordinary/gold tracks continue updating")
  check(flow.crest_tracks.size()==18 and flow.crest_tracks.values().all(func(sample):return sample.opacity==.75),"Excess curves retain their artwork for the existing fade, without popping away")
+ flow.crest_tracks.clear()
+ var Medium=preload("res://scripts/medium.gd")
+ flow.cached_velocity.resize(Medium.COLS*Medium.ROWS);flow.cached_velocity.fill(Vector2(20,5))
+ flow.previous_velocity=flow.cached_velocity.duplicate();flow.display_mix=1
+ flow.mobile_quality=false
+ var full_crest=flow._curve(Vector2(500,500),240,true)
+ var full_stream=flow._curve(Vector2(500,500),240,false)
+ flow.mobile_quality=true
+ var mobile_crest=flow._curve(Vector2(500,500),240,true)
+ var mobile_stream=flow._curve(Vector2(500,500),240,false)
+ check(mobile_crest.size()==17 and full_crest.size()==33,"Mobile integrates fewer geometry samples while retaining a whole crest")
+ check(mobile_crest[0].distance_to(full_crest[0])<.001 and mobile_crest[-1].distance_to(full_crest[-1])<.001 and mobile_stream[0].distance_to(full_stream[0])<.001 and mobile_stream[-1].distance_to(full_stream[-1])<.001,"Both current styles retain their full span and travel interval in a uniform field")
+ var display=flow._resample(mobile_crest,33);var aligned=true
+ for i in 17:aligned=aligned and display[i*2].distance_to(mobile_crest[i])<.0001
+ check(aligned,"Display interpolation preserves every admitted vertex without introducing a new curve or crossing")
+ flow.publish_paths([mobile_crest],[1.0])
+ var uploaded=true
+ for i in 33:
+  var pixel=flow.curve_image.get_pixel(i,0)
+  uploaded=uploaded and Vector2(pixel.r,pixel.g).distance_to(display[i])<.0001
+ check(uploaded,"The shader receives all33samples after lower-cost mobile integration")
+ var Currents=preload("res://scripts/induced_currents.gd")
+ var weights_match=true;var capacity_match=true
+ for time in [0.2,7.3,19.9,20.2]:
+  var events=Currents.sources(17,time)
+  for offset in [Vector2.ZERO,Vector2(23,11)]:
+   for camera in [Vector2(2048,1280),Vector2(2,2558)]:
+    var half=Vector2(2048,1280)
+    var candidates=flow._dense_seeds(events,camera,half,offset)
+    for seed in candidates.slice(0,24):weights_match=weights_match and absf(flow._dense_weight(events,camera,half,Vector2(seed.r,seed.g),offset)-seed.a)<.00001
+    flow.crest_tracks={0:{"input":false,"dense":true,"seed":candidates[0]}}
+    capacity_match=capacity_match and flow._dense_seeds_for_tracks(events,camera,half,offset,false,2)==candidates
+    var active=flow._dense_seeds_for_tracks(events,camera,half,offset,false,1)
+    capacity_match=capacity_match and active.size()==1 and active[0]==candidates[0]
+ check(weights_match,"Admitted source weights match full enumeration, including wrapped edges and the gold offset")
+ check(capacity_match,"Only occupied groups use the cheaper roster; free slots still consider the full candidate set")
+ var art=preload("res://scripts/cell_art.gd").make(17,1,"")
+ var core=preload("res://scripts/cell_art.gd").nucleus_outline(art.nucleus,art.phase)
+ var Atlas=preload("res://scripts/organ_atlas.gd")
+ var nucleus=Atlas.nucleus(core,art.colors,false)
+ check(nucleus!=null and nucleus==Atlas.nucleus(core,art.colors,false) and nucleus.get_width()==96,"Distant nucleus art is generated once and reused at fixed size")
+ var alternate=art.colors.duplicate();alternate[5]=Color.RED
+ check(Atlas.nucleus(core,alternate,false)!=nucleus,"Different lineage colors never share the wrong nucleus texture")
+ var counted=CountingFlow.new();root.add_child(counted);counted.mobile_quality=true
+ var model={"seed_value":17,"time":0.0,"fluid":{"velocity":flow.cached_velocity},"habitat_geometry":{"enabled":false,"plants":[],"forms":[]}}
+ for time in [0.0,.06,.11,.51,.59,.61]:
+  model.time=time;counted.sync(model,Vector2(500,500),Vector2(200,120),1,true,false)
+ check(counted.builds==4 and is_equal_approx(counted.curve_deadline,.7),"Late mobile shape work runs once and resumes its original100ms schedule")
+ check(counted.frames==6,"Current movement and fades still update on every rendered frame")
+ check(counted.last_field_time==0,"Unchanged authoritative water is not reuploaded at each geometry refresh")
+ counted.free()
  flow.free()
  print("CURVE LAYOUT: %d assertions, %d failures" % [checks,failures]);quit(0 if failures==0 else 1)
