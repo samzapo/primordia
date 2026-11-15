@@ -71,4 +71,4 @@ add_library(primordia_dictionary_probe SHARED EXCLUDE_FROM_ALL ../tests/native_d
 target_link_libraries(primordia_dictionary_probe PRIVATE godot-cpp::template_release)
 set_target_properties(primordia_dictionary_probe PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
 file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/dictionary_probe.gdextension" CONTENT
-"[configuration]\nentry_symbol = \"primordia_dictionary_probe_init\"\ncompatibility_minimum = \"4.4\"\n[libraries]\nlinux.x86_64 = \"res://build/native/$<TARGET_FILE_NAME:primordia_dictionary_probe>\"\nmacos = \"res://build/native/$<TARGET_FILE_NAME:primordia_dictionary_probe>\"\n")
+"[configuration]\nentry_symbol = \"primordia_dictionary_probe_init\"\ncompatibility_minimum = \"4.4\"\n[libraries]\nlinux.x86_64 = \"res://build/native/$<TARGET_FILE_NAME:primordia_dictionary_probe>\"\nlinux.arm64 = \"res://build/native/$<TARGET_FILE_NAME:primordia_dictionary_probe>\"\nmacos = \"res://build/native/$<TARGET_FILE_NAME:primordia_dictionary_probe>\"\n")

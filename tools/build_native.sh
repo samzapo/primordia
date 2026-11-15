@@ -33,6 +33,7 @@ entry_symbol = "primordia_library_init"
 compatibility_minimum = "4.4"
 [libraries]
 linux.x86_64 = "res://build/native/libprimordia.so"
+linux.arm64 = "res://build/native/libprimordia.so"
 macos = "res://build/native/libprimordia.dylib"
 EXTENSION
 printf '%s\n' "$native_opt" > build/native/.optimization_stamp
