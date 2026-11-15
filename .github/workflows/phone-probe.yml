@@ -18,14 +18,14 @@ jobs:
     outputs:
       report_b64: ${{ steps.inspect.outputs.report_b64 }}
     steps:
-      - name: Deep probe GPU, Termux, processes and Vulkan on samzapo-phone
+      - name: Inspect start-primordia-runner.sh and Vulkan/GPU access on samzapo-phone
         id: inspect
         shell: bash
         run: |
           python3 - <<'PY'
-          import base64, ctypes, glob, json, os, pathlib, subprocess
+          import base64, glob, json, os, pathlib, subprocess
 
-          def run(cmd, timeout=15, env=None):
+          def run(cmd, timeout=20, env=None):
               try:
                   r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=env)
                   return {"status": r.returncode, "stdout": r.stdout.strip()[:4000], "stderr": r.stderr.strip()[:2000]}
@@ -33,56 +33,102 @@ jobs:
                   return {"error": f"{type(e).__name__}: {e}"}
 
           report = {}
-          # Check /dev/mali0 and /dev permissions directly
-          devs = {}
-          for p in ["/dev/mali0", "/dev/mali", "/dev/kgsl-3d0", "/dev/dri", "/dev/ashmem", "/dev/binder"]:
-              path = pathlib.Path(p)
-              info = {"exists": path.exists()}
-              if path.exists():
-                  try:
-                      st = path.stat()
-                      info["mode"] = oct(st.st_mode)
-                      info["r"] = os.access(p, os.R_OK)
-                      info["w"] = os.access(p, os.W_OK)
-                  except Exception as e:
-                      info["stat_error"] = str(e)
-              devs[p] = info
-          report["dev_checks"] = devs
+          runner_script = pathlib.Path("/data/data/com.termux/files/home/start-primordia-runner.sh")
+          if runner_script.is_file():
+              report["start_primordia_runner_sh"] = runner_script.read_text()[:4000]
 
-          # Check running processes in proot/termux
-          report["ps"] = run(["ps", "-ef"])
+          # Test loading /system/lib64/libvulkan.so from Termux's bionic python or clang/c-program if available
+          # Let's compile a tiny 20-line C program with Termux's clang (which targets aarch64-linux-android / Bionic!)
+          # that calls dlopen("libvulkan.so") and vkEnumeratePhysicalDevices to see if hardware Vulkan Mali GPU is accessible!
+          c_code = r'''
+          #include <stdio.h>
+          #include <dlfcn.h>
+          #include <stdint.h>
 
-          # Check termux home and usr
-          termux_home = pathlib.Path("/data/data/com.termux/files/home")
-          termux_usr = pathlib.Path("/data/data/com.termux/files/usr")
-          report["termux_home"] = sorted(p.name for p in termux_home.iterdir()) if termux_home.is_dir() else []
-          report["termux_usr_share_vulkan"] = glob.glob("/data/data/com.termux/files/usr/share/vulkan/**/*", recursive=True)
-          report["termux_libs_vulkan_gl"] = (
-              glob.glob("/data/data/com.termux/files/usr/lib/*vulkan*")
-              + glob.glob("/data/data/com.termux/files/usr/lib/*GL*")
-              + glob.glob("/data/data/com.termux/files/usr/lib/*EGL*")
-              + glob.glob("/usr/lib/aarch64-linux-gnu/*vulkan*")
-              + glob.glob("/usr/lib/aarch64-linux-gnu/*GL*")
-              + glob.glob("/usr/lib/aarch64-linux-gnu/*EGL*")
-          )
+          typedef int32_t VkResult;
+          typedef struct VkInstance_T* VkInstance;
+          typedef struct VkPhysicalDevice_T* VkPhysicalDevice;
+          typedef struct VkApplicationInfo {
+              uint32_t sType;
+              const void* pNext;
+              const char* pApplicationName;
+              uint32_t applicationVersion;
+              const char* pEngineName;
+              uint32_t engineVersion;
+              uint32_t apiVersion;
+          } VkApplicationInfo;
+          typedef struct VkInstanceCreateInfo {
+              uint32_t sType;
+              const void* pNext;
+              uint32_t flags;
+              const VkApplicationInfo* pApplicationInfo;
+              uint32_t enabledLayerCount;
+              const char* const* ppEnabledLayerNames;
+              uint32_t enabledExtensionCount;
+              const char* const* ppEnabledExtensionNames;
+          } VkInstanceCreateInfo;
+          typedef struct VkPhysicalDeviceProperties {
+              uint32_t apiVersion;
+              uint32_t driverVersion;
+              uint32_t vendorID;
+              uint32_t deviceID;
+              uint32_t deviceType;
+              char deviceName[256];
+              uint8_t pipelineCacheUUID[16];
+              uint8_t pad[1024];
+          } VkPhysicalDeviceProperties;
 
-          # Check if libvulkan can be loaded and vkEnumerateInstanceExtensionProperties / vkCreateInstance works
-          vk_probe = {}
-          for libname in ["libvulkan.so.1", "libvulkan.so", "/data/data/com.termux/files/usr/lib/libvulkan.so", "/system/lib64/libvulkan.so"]:
-              try:
-                  lib = ctypes.CDLL(libname)
-                  vk_probe[libname] = "loaded"
-              except Exception as e:
-                  vk_probe[libname] = f"error: {e}"
-          report["dlopen_vulkan"] = vk_probe
+          int main() {
+              void* h = dlopen("/system/lib64/libvulkan.so", RTLD_NOW);
+              if (!h) h = dlopen("libvulkan.so", RTLD_NOW);
+              if (!h) { printf("dlopen failed: %s\n", dlerror()); return 1; }
+              VkResult (*vkCreateInstance)(const VkInstanceCreateInfo*, const void*, VkInstance*) = dlsym(h, "vkCreateInstance");
+              VkResult (*vkEnumeratePhysicalDevices)(VkInstance, uint32_t*, VkPhysicalDevice*) = dlsym(h, "vkEnumeratePhysicalDevices");
+              void (*vkGetPhysicalDeviceProperties)(VkPhysicalDevice, VkPhysicalDeviceProperties*) = dlsym(h, "vkGetPhysicalDeviceProperties");
+              if (!vkCreateInstance || !vkEnumeratePhysicalDevices || !vkGetPhysicalDeviceProperties) {
+                  printf("dlsym failed\n"); return 2;
+              }
+              VkApplicationInfo app = {0, NULL, "probe", 1, "probe", 1, (1U << 22) | (1U << 12)};
+              VkInstanceCreateInfo info = {1, NULL, 0, &app, 0, NULL, 0, NULL};
+              VkInstance inst = NULL;
+              VkResult res = vkCreateInstance(&info, NULL, &inst);
+              printf("vkCreateInstance=%d\n", res);
+              if (res != 0) return 3;
+              uint32_t count = 0;
+              res = vkEnumeratePhysicalDevices(inst, &count, NULL);
+              printf("vkEnumeratePhysicalDevices count=%u res=%d\n", count, res);
+              if (count > 0 && count <= 8) {
+                  VkPhysicalDevice devs[8];
+                  vkEnumeratePhysicalDevices(inst, &count, devs);
+                  for (uint32_t i = 0; i < count; i++) {
+                      VkPhysicalDeviceProperties props;
+                      vkGetPhysicalDeviceProperties(devs[i], &props);
+                      printf("GPU[%u]: name=%s type=%u vendor=0x%x device=0x%x api=%u.%u.%u\n",
+                             i, props.deviceName, props.deviceType, props.vendorID, props.deviceID,
+                             (props.apiVersion >> 22) & 0x3ff, (props.apiVersion >> 12) & 0x3ff, props.apiVersion & 0xfff);
+                  }
+              }
+              return 0;
+          }
+          '''
+          pathlib.Path("/tmp/vk_probe.c").write_text(c_code)
+          termux_env = {
+              "PATH": "/data/data/com.termux/files/usr/bin:/system/bin",
+              "PREFIX": "/data/data/com.termux/files/usr",
+              "LD_LIBRARY_PATH": "/data/data/com.termux/files/usr/lib:/system/lib64",
+              "HOME": "/data/data/com.termux/files/home",
+              "TMPDIR": "/data/data/com.termux/files/usr/tmp",
+          }
+          report["compile_termux_vk"] = run(["/data/data/com.termux/files/usr/bin/clang", "/tmp/vk_probe.c", "-ldl", "-o", "/data/data/com.termux/files/usr/tmp/vk_probe"], env=termux_env)
+          report["run_termux_vk"] = run(["/data/data/com.termux/files/usr/tmp/vk_probe"], env=termux_env)
+          try:
+              pathlib.Path("/data/data/com.termux/files/usr/tmp/vk_probe").unlink(missing_ok=True)
+              pathlib.Path("/tmp/vk_probe.c").unlink(missing_ok=True)
+          except Exception:
+              pass
 
-          # Check if termux has vulkan-tools or mesa or angle or anything installed
-          termux_env = dict(os.environ, PATH="/data/data/com.termux/files/usr/bin:" + os.environ.get("PATH", ""), PREFIX="/data/data/com.termux/files/usr", LD_LIBRARY_PATH="/data/data/com.termux/files/usr/lib")
-          report["termux_packages"] = run(["/data/data/com.termux/files/usr/bin/dpkg", "-l"], env=termux_env)
-          report["debian_packages_build"] = run(["dpkg-query", "-W", "-f=${binary:Package} ${Version}\n", "cmake*", "ninja*", "g++*", "clang*", "libvulkan*", "mesa*", "xvfb*", "xauth*", "libx11*", "libgl*"])
-
-          # Check network interfaces on phone
-          report["ip_addr"] = run(["ip", "-j", "addr"])
+          # Also check all installed Debian packages and Termux packages matching x11, vulkan, mesa, etc.
+          report["debian_dpkg_all"] = run(["dpkg-query", "-W", "-f=${binary:Package}\n"])
 
           text = json.dumps(report, indent=2)
           b64 = base64.b64encode(text.encode("utf-8")).decode("ascii")
@@ -109,5 +155,5 @@ jobs:
           out_dir.mkdir(parents=True, exist_ok=True)
           b64 = os.environ.get("REPORT_B64", "")
           payload = {"result": os.environ.get("PHONE_RESULT"), "report": json.loads(base64.b64decode(b64).decode("utf-8")) if b64 else None}
-          (out_dir / "phone-probe-output-2.json").write_text(json.dumps(payload, indent=2))
+          (out_dir / "phone-probe-output-3.json").write_text(json.dumps(payload, indent=2))
           PY
