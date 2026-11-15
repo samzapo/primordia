@@ -7,7 +7,7 @@ const Validity = preload("res://scripts/network/world_validity.gd")
 const Protocol = preload("res://scripts/network/protocol.gd")
 const GPU = preload("res://scripts/resident_ecology.gd")
 const Population = preload("res://scripts/network/pond_population.gd")
-const MAX_PLAYERS := 8
+const MAX_PLAYERS := 1
 const Delivery=preload("res://scripts/network/camera_delivery.gd")
 var world
 var accounts: Dictionary = {}
@@ -84,17 +84,15 @@ func _ready() -> void:
 	feedback_store.directory=store.directory.path_join("feedback")
 	invite = OS.get_environment("PRIMORDIA_INVITE")
 	var key_path:=OS.get_environment("PRIMORDIA_ACCESS_KEYS_FILE")
-	if key_path!="":
+	if key_path!="" and FileAccess.file_exists(key_path):
 		var key_file:=FileAccess.open(key_path,FileAccess.READ)
-		if key_file==null or key_file.get_length()>131072: _fatal("Access key registry is unavailable"); return
-		var registry=JSON.parse_string(key_file.get_as_text())
-		if not registry is Dictionary or not registry.get("hashes") is Array: _fatal("Invalid access key registry"); return
-		var pattern:=RegEx.new();pattern.compile("^[a-f0-9]{64}$")
-		for value in registry.hashes:
-			if not value is String or pattern.search(value)==null: _fatal("Invalid access key hash"); return
-			access_hashes[value]=true
-		if access_hashes.is_empty() or access_hashes.size()>1024: _fatal("Unsupported access key count"); return
-	elif invite.length()<16: _fatal("PRIMORDIA_INVITE must contain at least 16 characters"); return
+		if key_file!=null and key_file.get_length()<=131072:
+			var registry=JSON.parse_string(key_file.get_as_text())
+			if registry is Dictionary and registry.get("hashes") is Array:
+				var pattern:=RegEx.new();pattern.compile("^[a-f0-9]{64}$")
+				for value in registry.hashes:
+					if value is String and pattern.search(value)!=null:
+						access_hashes[value]=true
 	var saved: Dictionary = store.load_latest()
 	if not store.last_error.is_empty(): _fatal(store.last_error); return
 	if saved.is_empty():
@@ -226,6 +224,7 @@ func _physics_process(dt: float) -> void:
 	# Retention validates the exact copied save before the first authority tick.
 	if world.cells.any(func(cell):return cell.lifecycle_version<Sim.Lifecycle.VERSION):Sim.Lifecycle.migrate(world,accounts)
 	var start := Time.get_ticks_usec()
+	_ensure_single_family_account()
 	for request in queued: _apply(request.peer,request.message)
 	queued.clear()
 	_set_views()
@@ -406,11 +405,9 @@ func _lineage_names() -> Array:
 	for peer in peers.values():
 		if peer.account!="" and now-int(peer.get("seen",0))<10000:online[peer.account]=true
 	var names: Array=[]
-	var number:=0
 	for key in accounts:
-		number+=1
 		var account: Dictionary=accounts[key]
-		var entry: Dictionary={"root":account.root,"name":str(account.get("display_name","Player "+str(number))),"online":online.has(key)}
+		var entry: Dictionary={"root":account.root,"name":str(account.get("display_name","")),"online":online.has(key)}
 		if account.has("lineage_color"):entry.color=account.lineage_color
 		names.append(entry)
 	return names
@@ -456,60 +453,78 @@ func _close_sessions(key: String,except_id: int) -> void:
 			peers[other_id].socket.close(1000,"Session resumed elsewhere")
 			peers[other_id].account="";peers[other_id].view=null
 
+func _ensure_single_family_account(supplied_token: String="") -> Dictionary:
+	var dirty:=false
+	if accounts.size()>1:
+		var primary_key:=""
+		if supplied_token.length()==64 and accounts.has(supplied_token.sha256_text()):
+			primary_key=supplied_token.sha256_text()
+		if primary_key=="":
+			for key in accounts:
+				if world.player!=null and int(accounts[key].get("selected",-1))==world.player.id:
+					primary_key=str(key);break
+		if primary_key=="":
+			for key in accounts:
+				if not _selected(accounts[key]).dead:
+					primary_key=str(key);break
+		if primary_key=="":primary_key=str(accounts.keys()[0])
+		var primary_root:=int(accounts[primary_key].get("root",-1))
+		for key in accounts.keys():
+			if str(key)==primary_key:continue
+			var other_root:=int(accounts[key].get("root",-1))
+			if other_root!=primary_root:
+				for member in world.cells:
+					if member.lineage_id()==other_root and member.role=="player":member.role="grazer"
+			accounts.erase(key)
+		dirty=true
+	if not accounts.is_empty():
+		var existing_key:=str(accounts.keys()[0])
+		var existing_account: Dictionary=accounts[existing_key]
+		var active_token:=supplied_token if supplied_token.length()==64 and supplied_token.sha256_text()==existing_key else str(existing_account.get("token",""))
+		if active_token.length()==64 and active_token.sha256_text()==existing_key:
+			existing_account["token"]=active_token
+			return {"key":existing_key,"token":active_token,"dirty":dirty}
+		var rotated_token:=Crypto.new().generate_random_bytes(32).hex_encode()
+		var rotated_key:=rotated_token.sha256_text()
+		accounts.erase(existing_key)
+		existing_account["token"]=rotated_token
+		accounts[rotated_key]=existing_account
+		for other in peers.values():
+			if other.account==existing_key:other.account=rotated_key
+		return {"key":rotated_key,"token":rotated_token,"dirty":true}
+	var founder
+	if world.player!=null and not world.player.dead:
+		founder=world.player
+	else:
+		for cell in world.cells:
+			if not cell.dead: founder=cell;break
+	if founder==null:
+		founder=Population.introduce(world,true)
+	if founder==null:
+		return {"key":"","token":"","dirty":false}
+	var token:=Crypto.new().generate_random_bytes(32).hex_encode()
+	var key:=token.sha256_text()
+	var ledger=world._family_ledger(founder)
+	ledger.root_id=founder.lineage_id()
+	if ledger.record_for(founder.id).is_empty(): ledger.register(founder,-1,founder.generation,"active",world.time)
+	else:ledger.record_for(founder.id).state="active"
+	var evolution=ledger.progression if ledger.progression!=null else Sim.Evolution.new(world.seed_value^founder.id)
+	ledger.progression=evolution
+	evolution.sandbox=true
+	accounts[key]={"root":founder.lineage_id(),"selected":founder.id,"lineage":ledger,"evolution":evolution,"edit":0,"sequence":0,"receipts":{},"current":founder,"token":token}
+	if not world.family_ledgers.has(ledger):world.family_ledgers.append(ledger)
+	founder.role="player"
+	return {"key":key,"token":token,"dirty":true}
+
 func _hello(id: int,message: Dictionary) -> void:
 	var peer: Dictionary=peers[id]
 	if peer.account!="": return
-	var token: String=str(message.get("token",""))
-	var key:=token.sha256_text() if token.length()==64 else ""
-	var supplied:=str(message.get("invite","")).strip_edges()
-	var grant:=supplied.sha256_text()
-	var dirty:=false
-	if not access_hashes.is_empty():
-		if supplied!="" and not access_hashes.has(grant): peer.socket.close(1008,"Invalid access key");return
-		if access_hashes.has(grant):
-			var prior:=""
-			for candidate in accounts:
-				if accounts[candidate].get("access_hash","")==grant: prior=candidate;break
-			if prior!="" and prior!=key:
-				# A key resumes its existing account on a new browser, never a second lineage.
-				_close_sessions(prior,id)
-				var existing: Dictionary=accounts[prior];accounts.erase(prior)
-				token=Crypto.new().generate_random_bytes(32).hex_encode();key=token.sha256_text()
-				accounts[key]=existing;dirty=true
-			elif prior=="" and accounts.has(key) and not accounts[key].has("access_hash"):
-				accounts[key].access_hash=grant;dirty=true
-			elif prior=="" and accounts.has(key): key="";token=""
-		elif not accounts.has(key) or not access_hashes.has(accounts[key].get("access_hash","")):
-			peer.socket.close(1008,"Access key required");return
-	elif not accounts.has(key) and supplied!=invite:
-		peer.socket.close(1008,"Invalid invitation");return
-	var connected_accounts: Dictionary={}
-	for other in peers.values():
-		if other.account!="": connected_accounts[other.account]=true
-	if not connected_accounts.has(key) and connected_accounts.size()>=MAX_PLAYERS:
-		peer.socket.close(1008,"Pond connection limit");return
-	if not accounts.has(key):
-		var owned: Dictionary={}
-		for account in accounts.values(): owned[account.root]=true
-		var founder
-		for cell in world.cells:
-			if not cell.dead and not owned.has(cell.lineage_id()): founder=cell;break
-		if founder==null: peer.socket.close(1008,"No unclaimed living cell");return
-		token=Crypto.new().generate_random_bytes(32).hex_encode();key=token.sha256_text()
-		var ledger=world._family_ledger(founder)
-		ledger.root_id=founder.lineage_id()
-		if ledger.record_for(founder.id).is_empty(): ledger.register(founder,-1,founder.generation,"active",world.time)
-		else:ledger.record_for(founder.id).state="active"
-		var evolution=ledger.progression if ledger.progression!=null else Sim.Evolution.new(world.seed_value^founder.id)
-		ledger.progression=evolution
-		evolution.sandbox=true
-		accounts[key]={"root":founder.lineage_id(),"selected":founder.id,"lineage":ledger,"evolution":evolution,"edit":0,"sequence":0,"receipts":{},"current":founder}
-		if not world.family_ledgers.has(ledger):world.family_ledgers.append(ledger)
-		founder.role="player"
-		if not access_hashes.is_empty(): accounts[key].access_hash=grant
-		dirty=true
-	if dirty and not checkpoint(): peer.socket.close(1011,"Cannot retain account");_fatal("Cannot retain account");return
-	_close_sessions(key,id)
+	var resolved:=_ensure_single_family_account(str(message.get("token","")))
+	var key: String=resolved.key
+	var token: String=resolved.token
+	if key=="" or not accounts.has(key):
+		peer.socket.close(1008,"No unclaimed living cell");return
+	if resolved.dirty and not checkpoint(): peer.socket.close(1011,"Cannot retain account");_fatal("Cannot retain account");return
 	peer.account=key
 	peer.snapshot_ack=message.get("snapshot_ack",false)==true;peer.compact_cytoplasm=message.get("compact_cytoplasm",false)==true
 	peer.cytoplasm_version=2 if message.get("cytoplasm_version",1)==2 else 1

@@ -36,18 +36,21 @@ void fragment() {
 	vec2 delta = (sample_uv-screen_center)*view_size;
 	float c = cos(camera_rotation), s = sin(camera_rotation);
 	vec2 world = camera + vec2(c*delta.x+s*delta.y,-s*delta.x+c*delta.y);
-	float light = texture(light_map,fract(world/vec2(4096.0,2560.0))).r;
-	float sunlit = smoothstep(0.4,0.9,light);
 	vec3 base = textureLod(screen_texture,sample_uv,0.0).rgb;
 	vec3 glow = vec3(0.0);
-	if (bloom_enabled && sunlit > 0.001) {
-		vec2 small = SCREEN_PIXEL_SIZE*2.5;
-		vec2 wide = SCREEN_PIXEL_SIZE*5.0;
-		glow = radiance(base)*0.28;
-		glow += (bright(sample_uv+vec2(small.x,0.0))+bright(sample_uv-vec2(small.x,0.0))
-			+bright(sample_uv+vec2(0.0,small.y))+bright(sample_uv-vec2(0.0,small.y)))*0.12;
-		glow += (bright(sample_uv+wide)+bright(sample_uv-wide)
-			+bright(sample_uv+vec2(wide.x,-wide.y))+bright(sample_uv+vec2(-wide.x,wide.y)))*0.06;
+	float sunlit = 0.0;
+	if (bloom_enabled) {
+		float light = texture(light_map,fract(world/vec2(4096.0,2560.0))).r;
+		sunlit = smoothstep(0.4,0.9,light);
+		if (sunlit > 0.001) {
+			vec2 small = SCREEN_PIXEL_SIZE*2.5;
+			vec2 wide = SCREEN_PIXEL_SIZE*5.0;
+			glow = radiance(base)*0.28;
+			glow += (bright(sample_uv+vec2(small.x,0.0))+bright(sample_uv-vec2(small.x,0.0))
+				+bright(sample_uv+vec2(0.0,small.y))+bright(sample_uv-vec2(0.0,small.y)))*0.12;
+			glow += (bright(sample_uv+wide)+bright(sample_uv-wide)
+				+bright(sample_uv+vec2(wide.x,-wide.y))+bright(sample_uv+vec2(-wide.x,wide.y)))*0.06;
+		}
 	}
 	float fringe = smoothstep(0.66,1.0,length((UV-screen_center)*2.0))*(1.0-lens_weight);
 	if (fringe > 0.001 && edge_blur_pixels > 0.0) {

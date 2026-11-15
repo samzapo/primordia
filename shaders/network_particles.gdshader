@@ -21,7 +21,9 @@ uvec4 candidates(vec2 at){
  return uvec4(texelFetch(body_grid,tile,0));
 }
 vec2 exclude_bodies(vec2 at){
+ if(body_count<=0)return at;
  uvec4 mask=candidates(at);
+ if(use_body_grid && mask==uvec4(0u))return at;
  for(int b=0;b<64;b++){
   if(b>=body_count)break;
   if(use_body_grid && (mask[b/16] & (1u<<uint(b%16)))==0u)continue;
@@ -61,14 +63,18 @@ void vertex(){
  vec4 prior=texelFetch(previous_texture,ivec2(INSTANCE_ID%256,INSTANCE_ID/256),0);
  vec2 at=prior.xy+offset(prior.xy,current.xy)*interpolation;
  species=data.x;
- float rgb=data.z;
- signal_tint=vec4(floor(rgb/65536.0),mod(floor(rgb/256.0),256.0),mod(rgb,256.0),255.0)/255.0;signal_tint.a=data.w;
- if(species!=3.0)at=exclude_bodies(at);
- float heading=mix(prior.z,turn(prior.z,current.z),interpolation);
- float size=mix(prior.w,current.w,interpolation);
- float co=cos(heading),si=sin(heading);
- VERTEX=mat2(vec2(co,si),vec2(-si,co))*VERTEX*size+offset(camera,at);
- COLOR=vec4(1.0);
+ if(species<0.0){
+  VERTEX=vec2(0.0);
+ }else{
+  float rgb=data.z;
+  signal_tint=vec4(floor(rgb/65536.0),mod(floor(rgb/256.0),256.0),mod(rgb,256.0),255.0)/255.0;signal_tint.a=data.w;
+  if(species!=3.0)at=exclude_bodies(at);
+  float heading=mix(prior.z,turn(prior.z,current.z),interpolation);
+  float size=mix(prior.w,current.w,interpolation);
+  float co=cos(heading),si=sin(heading);
+  VERTEX=mat2(vec2(co,si),vec2(-si,co))*VERTEX*size+offset(camera,at);
+  COLOR=vec4(1.0);
+ }
 }
 void fragment(){
  if(species<0.0)discard;

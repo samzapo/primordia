@@ -872,7 +872,7 @@ func _build_ui() -> void:
 	options.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	settings_scroll.add_child(options)
 	_label(options,"Pause",MINT)
-	profile_menu_button=_button(options,"Player name",profile.open)
+	profile_menu_button=_button(options,"Family name",profile.open)
 	palette_menu_button=_button(options,"Lineage color",palette.open)
 	feedback_menu_button=_button(options,"Feature request / Bug report",feedback.open)
 	gameplay_menu_button=_button(options,"Gameplay",player_help.open.bind("gameplay"))

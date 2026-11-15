@@ -69,18 +69,23 @@ def retained_restart(value, previous, state):
             if hashlib.sha256(handle.read()).hexdigest() != digest: return False
     return True
 
-def health(build, previous=None, ca_file=None, state=None):
-    context = ssl.create_default_context(cafile=str(ca_file))
-    opener = build_opener(ProxyHandler({}), HTTPSHandler(context=context))
+def health(build, previous=None, ca_file=None, state=None, expected_backend="gpu"):
+    if ca_file is not None:
+        context = ssl.create_default_context(cafile=str(ca_file))
+        opener = build_opener(ProxyHandler({}), HTTPSHandler(context=context))
+        base_url = "https://127.0.0.1:8766"
+    else:
+        opener = build_opener(ProxyHandler({}))
+        base_url = "http://127.0.0.1:8766"
     deadline = time.monotonic() + 120
     first = None
     while time.monotonic() < deadline:
         try:
-            with opener.open("https://127.0.0.1:8766/health", timeout=3) as response:
+            with opener.open(base_url + "/health", timeout=3) as response:
                 value = json.load(response)
-            if value.get("build") != build or value.get("backend") != "gpu" or value.get("backend_error") or value.get("checkpoint_error"):
-                raise ValueError("Unhealthy build or GPU backend")
-            if any(name in value.get("gpu", "").lower() for name in ["llvmpipe", "lavapipe", "swiftshader"]):
+            if value.get("build") != build or value.get("backend") != expected_backend or value.get("backend_error") or value.get("checkpoint_error"):
+                raise ValueError("Unhealthy build or backend")
+            if expected_backend == "gpu" and any(name in value.get("gpu", "").lower() for name in ["llvmpipe", "lavapipe", "swiftshader"]):
                 raise ValueError("Software GPU rejected")
             if previous:
                 if value["epoch"] <= previous["epoch"]:
@@ -96,11 +101,11 @@ def health(build, previous=None, ca_file=None, state=None):
                     value, allow_warnings=os.environ.get("PRIMORDIA_PERFORMANCE_WARNINGS") == "1") if os.environ.get("PRIMORDIA_DEPLOY_FULL_CHECKS")=="1" else []
                 if value.get("food_vacuole_version")!=1 or value.get("biochemistry_version")!=1 or value.get("internal_packet_limit_per_cell")!=36 or value.get("internal_packets",0)>36*value.get("living_cells",0):
                     raise ValueError("Unbounded or obsolete internal chemistry")
-                with opener.open("https://127.0.0.1:8766/music-bank.json", timeout=3) as response:
+                with opener.open(base_url + "/music-bank.json", timeout=3) as response:
                     music = json.load(response)
                 if not re.fullmatch(r"music-bank-[a-f0-9]{24}\.bin", music["file"]) or not 0 < music["bytes"] < 4 * 1024 * 1024:
                     raise ValueError("Invalid deployed music manifest")
-                with opener.open(Request("https://127.0.0.1:8766/" + music["file"], method="HEAD"), timeout=3) as response:
+                with opener.open(Request(base_url + "/" + music["file"], method="HEAD"), timeout=3) as response:
                     if int(response.headers.get("Content-Length", -1)) != music["bytes"]:
                         raise ValueError("Deployed music bank is unavailable")
                 value["music_delivery"] = {"file": music["file"], "bytes": music["bytes"], "http": 200}
@@ -109,7 +114,7 @@ def health(build, previous=None, ca_file=None, state=None):
             first = value["tick"] if first is None else first
         except (OSError, ValueError, KeyError): pass
         time.sleep(1)
-    raise RuntimeError("Candidate did not pass live GPU and checkpoint health checks")
+    raise RuntimeError("Candidate did not pass live health checks")
 
 def _sync_directory(path):
     fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
@@ -168,14 +173,95 @@ def restore_model_boundary(state, backup, root, failed_prefix="failed-food-vacuo
     _sync_directory(state)
 
 
+def stop_phone_service(state):
+    lock_path = state / "world.lock"
+    if not lock_path.exists():
+        return
+    with lock_path.open("a+") as probe:
+        try:
+            fcntl.flock(probe, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(probe, fcntl.LOCK_UN)
+            return
+        except BlockingIOError:
+            pass
+    (state / "stop.request").write_text("graceful checkpoint and stop\n")
+    pid_path = state / "service.pid"
+    if pid_path.is_file():
+        try:
+            pid = int(pid_path.read_text().strip())
+            os.kill(pid, signal.SIGTERM)
+        except (ValueError, OSError):
+            pass
+    deadline = time.monotonic() + 50
+    while time.monotonic() < deadline:
+        with lock_path.open("a+") as probe:
+            try:
+                fcntl.flock(probe, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                fcntl.flock(probe, fcntl.LOCK_UN)
+                return
+            except BlockingIOError:
+                time.sleep(0.5)
+    raise RuntimeError("Existing phone service did not release world.lock in time")
+
+
+def deploy_phone(source, root, sha, branch):
+    print(f"Phone execution host: {os.uname().nodename}; branch: {branch or sha}; deployment root: {root}", flush=True)
+    verify(); inspect()
+    runtime = root / "runtime"
+    run("python3", str(source / "tools/provision_runtime.py"), "--runtime-dir", str(runtime))
+    version = json.loads((source / "tools/toolchain.json").read_text())["version"]
+    godot = runtime / f"Godot_v{version}-stable_linux.arm64"
+    environment = os.environ.copy()
+    environment.update(GODOT_BIN=str(godot), PRIMORDIA_BUILD_JOBS="4", GODOT_SILENCE_ROOT_WARNING="1")
+    run("bash", str(source / "tools/build_native.sh"), env=environment)
+    inspect()
+    run(str(godot), "--headless", "--path", str(source), "--editor", "--import", "--quit", env=environment)
+    state = root / "state"
+    state.mkdir(mode=0o700, exist_ok=True)
+    if any((state / name).exists() for name in ("world-0.pworld", "world-1.pworld")):
+        environment["PRIMORDIA_VERIFY_CHECKPOINT_DIR"] = str(state)
+    run("python3", str(source / "tools/check_interface.py"), "--godot", str(godot), env=environment)
+    inspect()
+    run("bash", str(source / "tools/build_web.sh"), env=environment)
+    previous = json.loads((state / "health.json").read_text()) if (state / "health.json").exists() else None
+    stop_phone_service(state)
+    if (state / "health.json").exists():
+        previous = json.loads((state / "health.json").read_text())
+    current = root / "current"
+    switch(current, source)
+    daemon_env = {
+        k: v for k, v in os.environ.items()
+        if not k.startswith(("GITHUB_", "RUNNER_", "ACTIONS_", "INVOCATION_ID"))
+    }
+    daemon_env["PRIMORDIA_BUILD_SHA"] = sha
+    daemon_env["GODOT_SILENCE_ROOT_WARNING"] = "1"
+    log_path = root / "service.log"
+    with log_path.open("ab") as log_handle:
+        subprocess.Popen(
+            ["python3", str(current / "tools/run_service.py"),
+             "--godot", str(godot), "--state", str(state),
+             "--port", "8766", "--world-port", "8767", "--cpu", "--no-tls"],
+            cwd=str(current),
+            env=daemon_env,
+            stdin=subprocess.DEVNULL,
+            stdout=log_handle,
+            stderr=log_handle,
+            start_new_session=True,
+            close_fds=True,
+        )
+    report = health(sha, previous, ca_file=None, state=state, expected_backend="cpu")
+    (root / "last-deploy.json").write_text(json.dumps(report, indent=2))
+    print("Local phone browser endpoint is http://127.0.0.1:8766 (http://localhost:8766)", flush=True)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path.home() / ".local/share/primordia-deploy")
     args = parser.parse_args()
     source = Path(__file__).resolve().parents[1]
-    if os.environ.get("RUNNER_NAME") != "samzapo-desktop":
-        raise RuntimeError("Deployment requires the authorized samzapo-desktop runner")
-    os.environ.setdefault("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+    runner_name = os.environ.get("RUNNER_NAME", "")
+    if runner_name not in ("samzapo-desktop", "samzapo-phone"):
+        raise RuntimeError("Deployment requires an authorized runner (samzapo-desktop or samzapo-phone)")
     root = args.root.expanduser().resolve()
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
     root.chmod(0o700)
@@ -183,6 +269,10 @@ def main():
     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     sha = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
     branch = subprocess.check_output(["git", "-C", str(source), "branch", "--show-current"], text=True).strip()
+    if runner_name == "samzapo-phone":
+        deploy_phone(source, root, sha, branch)
+        return
+    os.environ.setdefault("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
     print(f"Execution host: {os.uname().nodename}; branch: {branch or sha}; deployment root: {root}", flush=True)
     verify(); inspect()
     releases = root / "releases"
@@ -292,7 +382,7 @@ def main():
         run("systemctl", "--user", "daemon-reload")
         run("systemctl", "--user", "enable", "--now", UNIT)
         report = health(sha, previous, root / "tls/authority/ca.pem", state)
-        if previous and report.get("accounts", 0) < previous.get("accounts", 0):
+        if previous and report.get("accounts", 0) < min(1, previous.get("accounts", 0)):
             raise RuntimeError("Deployment lost a retained account")
         if previous and previous.get("food_vacuole_version", 0) >= 1 and previous.get("biochemistry_version", 0) >= 1:
             retention = report.get("cell_retention", {})

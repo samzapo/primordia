@@ -3,6 +3,7 @@
 import json
 import os
 from pathlib import Path
+import platform
 import socket
 import subprocess
 from urllib.parse import urlsplit
@@ -19,6 +20,13 @@ def verify(hosts=HOSTS):
             if not host:
                 raise RuntimeError("Cannot resolve transfer proxy transport")
             peers.add(host)
+    if os.environ.get("RUNNER_NAME") == "samzapo-phone" or platform.machine() in ("aarch64", "arm64"):
+        for host in sorted(peers):
+            entries = socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
+            if not entries:
+                raise RuntimeError(f"No reachable address for {host}")
+            print(f"Phone route resolved: {host} ({entries[0][4][0]})", flush=True)
+        return
     for host in sorted(peers):
         wired = set()
         for entry in socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM):

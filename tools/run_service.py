@@ -18,6 +18,7 @@ def main():
     parser.add_argument("--port", type=int, default=8766)
     parser.add_argument("--world-port", type=int, default=8767)
     parser.add_argument("--cpu", action="store_true")
+    parser.add_argument("--no-tls", action="store_true")
     parser.add_argument("--proxy-loopback", action="store_true",
                         help="Private HTTP gateway for the experimental HTTPS reverse proxy")
     args = parser.parse_args()
@@ -26,10 +27,11 @@ def main():
     state.mkdir(parents=True, exist_ok=True)
     lock = (state / "world.lock").open("a+")
     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    (state / "service.pid").write_text(f"{os.getpid()}\n")
     (state / "stop.request").unlink(missing_ok=True)
     gateway = create(source / "build/web", state, args.port, args.world_port,
                      bind="127.0.0.1" if args.proxy_loopback else "0.0.0.0",
-                     tls_directory=None if args.proxy_loopback else state.parent / "tls",
+                     tls_directory=None if (args.proxy_loopback or args.no_tls) else state.parent / "tls",
                      trusted_proxy=args.proxy_loopback)
     worker = threading.Thread(target=gateway.serve_forever, daemon=True)
     worker.start()
@@ -46,6 +48,7 @@ def main():
         command += ["--cpu"]
     environment = os.environ.copy()
     environment.pop("RUNNER_TRACKING_ID", None)
+    environment["GODOT_SILENCE_ROOT_WARNING"] = "1"
     # The service configuration, never a browser request or inherited build env,
     # selects which pond’s update notices the authority can offer.
     environment["PRIMORDIA_INSTANCE"] = "experimental" if args.proxy_loopback else "stable"

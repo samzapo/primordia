@@ -20,7 +20,10 @@ func sync(alpha: float) -> void:
 		var owner: Dictionary=owners[cell.lineage_id()]
 		var at: Vector2=cell.previous_position+game.Simulation.Medium.offset(cell.previous_position,cell.position)*game._cell_render_alpha(cell,alpha)
 		var center: Vector2=game._world_screen(at)
-		var text: String=(cell.favorite_name+" · " if cell.favorite and cell.favorite_name!="" else "")+str(owner.name)
+		var family_label:=str(owner.get("name","")).strip_edges()
+		var fav_label: String=str(cell.favorite_name).strip_edges() if cell.favorite else ""
+		var text: String=fav_label+" · "+family_label if fav_label!="" and family_label!="" else fav_label if fav_label!="" else family_label
+		if text=="":continue
 		var width: float=font.get_string_size(text,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size).x
 		var bounds:=Rect2(Vector2(center.x-width*.5-7*pixels,center.y-cell.extent()*game.zoom-font_size-13*pixels),Vector2(width+14*pixels,font_size+10*pixels))
 		if not Rect2(Vector2.ZERO,size).intersects(bounds):continue

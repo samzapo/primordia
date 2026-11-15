@@ -82,9 +82,8 @@ class Handler(SimpleHTTPRequestHandler):
             self.serving_asset = False
 
     def end_headers(self):
-        if not self.server.tls_context or isinstance(self.connection, ssl.SSLSocket):
-            self.send_header("Cross-Origin-Opener-Policy", "same-origin")
-            self.send_header("Cross-Origin-Embedder-Policy", "require-corp")
+        self.send_header("Cross-Origin-Opener-Policy", "same-origin")
+        self.send_header("Cross-Origin-Embedder-Policy", "require-corp")
         if getattr(self, "serving_asset", False):
             # Revalidate unversioned page/runtime URLs; unchanged large files can return 304.
             self.send_header("Cache-Control", "no-cache")
@@ -117,11 +116,6 @@ class Handler(SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(data)
             return
-        if self.server.tls_context and not isinstance(self.connection, ssl.SSLSocket) and path not in {"/health", "/metrics", "/api/network"}:
-            if path == "/ws":
-                self.send_error(426, "Use the HTTPS game address and secure WebSocket")
-                return
-            return self.certificate_setup()
         if path == "/setup" and self.server.tls_directory:
             return self.certificate_setup()
         if path == "/ws":
@@ -140,9 +134,6 @@ class Handler(SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_HEAD(self):
-        if self.server.tls_context and not isinstance(self.connection, ssl.SSLSocket):
-            self.send_error(426, "Use HTTPS for game assets")
-            return
         super().do_HEAD()
 
     def certificate_setup(self):

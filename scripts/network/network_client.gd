@@ -127,7 +127,8 @@ func _ready() -> void:
 		url_input.hide()
 		get_viewport().size_changed.connect(_layout_login)
 		_layout_login()
-	if token!="" or invitation!="": _connect()
+	login.hide()
+	_connect()
 	_publish_login_geometry.call_deferred()
 
 func _empty_remote_world() -> void:
@@ -141,6 +142,7 @@ func _empty_remote_world() -> void:
 func _build_ui() -> void:
 	super()
 	logout_menu_button=_button(session_controls,"Log out",_logout)
+	logout_menu_button.hide()
 	session_controls.move_child(logout_menu_button,0)
 
 func _logout() -> void:
@@ -316,9 +318,9 @@ func _process(dt: float) -> void:
 			last_camera=view;last_detail=detail;last_perception=perception;view_announced=true;keepalive_clock=0
 		elif keepalive_clock>=2:
 			_send({"op":"ping"});keepalive_clock=0
-	if not connected and attempted and retry_enabled and (token!="" or invitation!="") and socket.get_ready_state()==WebSocketPeer.STATE_CLOSED:
+	if not connected and attempted and retry_enabled and socket.get_ready_state()==WebSocketPeer.STATE_CLOSED:
 		reconnect_due-=dt
-		if reconnect_due<=0: reconnect_due=3;_connect(false)
+		if reconnect_due<=0: reconnect_due=1.5;_connect(false)
 	_send_next()
 
 func waiting_for_world() -> bool:
@@ -347,14 +349,9 @@ func _connect(manual: bool=true) -> void:
 	if address!=server_url: server_url=address;_load_identity()
 	invitation=invite_input.text.strip_edges()
 	if manual: transport_failures=0
-	if token=="" and invitation=="":
-		retry_enabled=false;attempted=false
-		connection_stage="sign_in"
-		_show_connection("Paste your personal access key, then press Sign in. The shared world is already running.",true)
-		return
 	if socket.get_ready_state()!=WebSocketPeer.STATE_CLOSED: socket.close(-1)
 	socket=WebSocketPeer.new();socket.inbound_buffer_size=Protocol.MAX_FRAME;socket.outbound_buffer_size=65536;socket.max_queued_packets=8
-	hello_sent=false;connected=false;connecting=true;attempted=true;retry_enabled=true;reconnect_due=3;inflight.clear();commands.clear();cell_ui.pending_mutation.clear();placement_feedback.clear()
+	hello_sent=false;connected=false;connecting=true;attempted=true;retry_enabled=true;reconnect_due=1.5;inflight.clear();commands.clear();cell_ui.pending_mutation.clear();placement_feedback.clear()
 	view_announced=false;view_clock=0;keepalive_clock=0;received_usec=0
 	update_popup.close();pending_release_updates=[]
 	playback.reset();playback_domain="";playback_after_tick=-1;user_paused=false;paused_snapshot={};controls.cancel();camera_initialized=false
@@ -362,38 +359,19 @@ func _connect(manual: bool=true) -> void:
 	if OS.has_feature("web"):
 		JavaScriptBridge.eval(BROWSER_SOCKET_ADDRESS % JSON.stringify(server_url))
 	if socket.connect_to_url(server_url)!=OK:
-		connecting=false;retry_enabled=false
-		connection_stage="error"
-		_show_connection("Cannot connect to this server address. Check it and try again.",not OS.has_feature("web"),true)
+		connecting=false;retry_enabled=true;reconnect_due=1.5
+		connection_stage="disconnected"
+		_show_connection("Connecting to the local pond…")
 		return
 	connection_stage="connecting"
-	_show_connection("Connecting to the shared pond…")
+	_show_connection("Connecting to the local pond…")
 
-func _connection_closed(code: int,reason: String) -> void:
+func _connection_closed(_code: int,_reason: String) -> void:
 	update_popup.close();pending_release_updates=[];player_help.close()
 	playback.reset();playback_domain="";playback_after_tick=-1
 	connecting=false;connected=false;loading_world=false;commands.clear();inflight.clear();cell_ui.pending_mutation.clear();placement_feedback.clear();connection_stage="disconnected"
-	if code==1008:
-		retry_enabled=false
-		var explanation:="The server refused this connection. Check your access key and try again."
-		match reason:
-			"Invalid access key","Invalid invitation","Access key required": explanation="Access key rejected or missing. Paste the key you were given and press Sign in again."
-			"No unclaimed living cell": explanation="Your key is valid, but no unclaimed living cell is available in this pond. The world is still running."
-			"Pond connection limit": explanation="The pond currently has eight connected players. Try again when a place is free."
-			"Authentication timeout": explanation="Sign-in timed out. Press Sign in to retry."
-		var needs_key: bool=reason in ["Invalid access key","Invalid invitation","Access key required"]
-		if needs_key:token="";connection_stage="sign_in"
-		_show_connection(explanation,needs_key,not needs_key)
-	elif code==1000 and reason=="Session resumed elsewhere":
-		retry_enabled=false
-		_show_connection("This identity signed in on another browser. Paste its key and press Sign in to return here.",true)
-	else:
-		transport_failures+=1;retry_enabled=transport_failures<3
-		var text:="Connection lost; the world continues. Reconnecting…" if retry_enabled else "Cannot reach the game server. Check the address and press Sign in to retry."
-		if not hello_sent and server_url.begins_with("wss://"):
-			text="The game connection could not be opened. Reload this page and press Sign in again."
-			if retry_enabled:text+=" Retrying…"
-		_show_connection(text,false,not retry_enabled)
+	transport_failures+=1;retry_enabled=true;reconnect_due=1.5
+	_show_connection("Reconnecting to the local pond…")
 
 func _poll_network() -> void:
 	socket.poll()

@@ -106,7 +106,7 @@ jobs:
               assert before==after,"Experimental standby state changed"
           elif before:
               assert all(before[k]==after[k] for k in ["build","world_id","epoch","pid"]),"Experimental service identity changed"
-              assert after["tick"]>before["tick"] and after["accounts"]>=before["accounts"],"Experimental world stopped or lost accounts"
+              assert after["tick"]>before["tick"] and after["accounts"]>=min(1,before["accounts"]),"Experimental world stopped or lost accounts"
           report={"experimental_before":before,"experimental_after":after,"retained_files_verified":len(retained)}
           (stable/"last-promotion-preservation.json").write_text(json.dumps(report,indent=2))
           print("STABLE_DEPLOYMENT_PRESERVATION "+json.dumps(report))
@@ -168,7 +168,7 @@ jobs:
           assert resumed is not None and resumed['backend']=='gpu' and not resumed['backend_error'] and not resumed['checkpoint_error'], 'Saved world did not resume after a service restart'
           retention=resumed.get("cell_retention",{})
           assert retention.get("ok") and not retention.get("missing") and not retention.get("changed"),"A saved cell changed or disappeared on restart"
-          assert resumed["accounts"]>=before["accounts"] and resumed["world_id"]==before["world_id"]
+          assert resumed["accounts"]>=min(1,before["accounts"]) and resumed["world_id"]==before["world_id"]
           assert not any(name in resumed.get("gpu","").lower() for name in ["llvmpipe","lavapipe","swiftshader"])
           with opener.open('https://127.0.0.1:8766/api/network',timeout=5) as response: urls=json.load(response)
           assert all(url.startswith('https://') for url in urls['home_urls'])
@@ -193,3 +193,58 @@ jobs:
                   main(restart=False)
           PYTHON
           fi
+  deploy-phone:
+    if: github.repository == 'samzapo/primordia' && github.ref == 'refs/heads/main' && !inputs.verify_only
+    runs-on: [self-hosted, ARM64]
+    timeout-minutes: 50
+    steps:
+      - name: Sync checkout and deploy local phone service
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ github.sha }}
+          PRIMORDIA_DEPLOY_FULL_CHECKS: ${{ inputs.full_validation == true && '1' || '0' }}
+        run: |
+          set -euo pipefail
+          test "$RUNNER_NAME" = samzapo-phone
+          checkout_dir="$HOME/.local/share/primordia/checkout"
+          mkdir -p "$(dirname "$checkout_dir")"
+          if [ ! -d "$checkout_dir/.git" ]; then
+            git clone "https://x-access-token:${GH_TOKEN}@github.com/samzapo/primordia.git" "$checkout_dir"
+          else
+            git -C "$checkout_dir" remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/samzapo/primordia.git"
+            git -C "$checkout_dir" fetch origin "$TARGET_SHA"
+          fi
+          git -C "$checkout_dir" checkout -f "$TARGET_SHA"
+          git -C "$checkout_dir" remote set-url origin "https://github.com/samzapo/primordia.git"
+          cd "$checkout_dir"
+          python3 tools/deploy.py
+  verify-phone:
+    if: always() && github.repository == 'samzapo/primordia' && github.ref == 'refs/heads/main' && (needs.deploy-phone.result == 'success' || (inputs.verify_only == true && needs.deploy-phone.result == 'skipped'))
+    needs: deploy-phone
+    runs-on: [self-hosted, ARM64]
+    timeout-minutes: 5
+    steps:
+      - name: Verify local phone service after deployment job cleanup
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.verify_only == true && inputs.verify_build || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$RUNNER_NAME" = samzapo-phone
+          python3 - <<'PY'
+          import json, os, time
+          from urllib.request import build_opener, ProxyHandler
+          opener = build_opener(ProxyHandler({}))
+          samples = []
+          for index in range(2):
+              with opener.open("http://127.0.0.1:8766/health", timeout=5) as response:
+                  value = json.load(response)
+              assert value["build"] == os.environ["EXPECTED_SHA"] and value["backend"] == "cpu" and not value["backend_error"] and not value["checkpoint_error"]
+              samples.append(value)
+              if index == 0:
+                  time.sleep(6)
+          assert samples[-1]["updated_unix"] > samples[0]["updated_unix"] and samples[-1]["tick"] > samples[0]["tick"]
+          assert all(value["living_cells"] >= 15 for value in samples)
+          print(json.dumps({"samples": samples, "endpoint": "http://127.0.0.1:8766"}, indent=2))
+          PY

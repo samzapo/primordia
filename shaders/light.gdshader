@@ -84,7 +84,7 @@ void fragment() {
 		float hue = 0.5+0.5*sin(phase.y+0.9*sin(phase.x+habitat_seed*0.13));
 		water *= mix(vec3(0.83,0.92,1.08),vec3(1.10,1.04,0.93),hue);
 	}
-	if (water_ripples) {
+	if (water_ripples && sunlit > 0.01) {
 		water += vec3(0.22,0.33,0.27)*caustics(phase,clock)*sunlit*sunlit*daylight;
 	}
 	vec3 tint;
