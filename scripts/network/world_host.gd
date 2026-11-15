@@ -753,7 +753,8 @@ func _publish() -> void:
 				var record:=PackedByteArray();record.resize(32)
 				for i in 6: record.encode_float(i*4,[packet.p.x,packet.p.y,packet.angle,packet.kind,packet.amount,2*world.particle_radius(packet.kind)*world.particle_scale(packet.amount)][i])
 				if packet.kind==Sim.PHEROMONE:record.encode_s32(20,int(packet.get("report",{}).get("lineage",-1)))
-				record.encode_u32(24,index);record.encode_u32(28,0)
+				var handle: int=int(packet.get("_handle",index))
+				record.encode_u32(24,handle&0xffffffff);record.encode_u32(28,(handle>>32)&0xffffffff)
 				bytes.append_array(record)
 			_send_snapshot(peer,bytes,_frame(peer,view))
 
