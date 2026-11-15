@@ -18,264 +18,76 @@ jobs:
     outputs:
       report_b64: ${{ steps.inspect.outputs.report_b64 }}
     steps:
-      - name: Inspect Android phone runner environment and GPU capabilities
+      - name: Deep probe GPU, Termux, processes and Vulkan on samzapo-phone
         id: inspect
         shell: bash
         run: |
           python3 - <<'PY'
-          import base64, glob, json, os, pathlib, platform, shutil, socket, subprocess
+          import base64, ctypes, glob, json, os, pathlib, subprocess
 
-          def run(cmd, timeout=10):
+          def run(cmd, timeout=15, env=None):
               try:
-                  r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-                  return {"status": r.returncode, "stdout": r.stdout.strip()[:4000], "stderr": r.stderr.strip()[:1000]}
+                  r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=env)
+                  return {"status": r.returncode, "stdout": r.stdout.strip()[:4000], "stderr": r.stderr.strip()[:2000]}
               except Exception as e:
                   return {"error": f"{type(e).__name__}: {e}"}
 
-          report = {
-              "runner": {
-                  "name": os.environ.get("RUNNER_NAME"),
-                  "os": os.environ.get("RUNNER_OS"),
-                  "arch": os.environ.get("RUNNER_ARCH"),
-                  "workspace": os.environ.get("RUNNER_WORKSPACE"),
-                  "temp": os.environ.get("RUNNER_TEMP"),
-                  "cwd": os.getcwd(),
-                  "home": str(pathlib.Path.home()),
-                  "uid": os.getuid() if hasattr(os, "getuid") else None,
-                  "user": os.environ.get("USER") or os.environ.get("LOGNAME"),
-                  "prefix": os.environ.get("PREFIX"),
-                  "path": os.environ.get("PATH"),
-                  "ld_library_path": os.environ.get("LD_LIBRARY_PATH"),
-                  "termux_version": os.environ.get("TERMUX_VERSION"),
-                  "android_root": os.environ.get("ANDROID_ROOT"),
-                  "android_data": os.environ.get("ANDROID_DATA"),
-                  "display": os.environ.get("DISPLAY"),
-                  "wayland_display": os.environ.get("WAYLAND_DISPLAY"),
-                  "xdg_runtime_dir": os.environ.get("XDG_RUNTIME_DIR"),
-              },
-              "platform": {
-                  "uname": list(platform.uname()),
-                  "python": platform.python_version(),
-                  "cpu_count": os.cpu_count(),
-              },
-          }
-
-          # Check .runner file in parent dirs of workspace
-          for parent in pathlib.Path(os.getcwd()).parents:
-              candidate = parent / ".runner"
-              if candidate.is_file():
+          report = {}
+          # Check /dev/mali0 and /dev permissions directly
+          devs = {}
+          for p in ["/dev/mali0", "/dev/mali", "/dev/kgsl-3d0", "/dev/dri", "/dev/ashmem", "/dev/binder"]:
+              path = pathlib.Path(p)
+              info = {"exists": path.exists()}
+              if path.exists():
                   try:
-                      report["runner_config"] = json.loads(candidate.read_text(encoding="utf-8-sig"))
+                      st = path.stat()
+                      info["mode"] = oct(st.st_mode)
+                      info["r"] = os.access(p, os.R_OK)
+                      info["w"] = os.access(p, os.W_OK)
                   except Exception as e:
-                      report["runner_config_error"] = str(e)
-                  break
+                      info["stat_error"] = str(e)
+              devs[p] = info
+          report["dev_checks"] = devs
 
-          for p in ["/etc/os-release", "/proc/version"]:
-              if pathlib.Path(p).is_file():
-                  try:
-                      report[p] = pathlib.Path(p).read_text()[:2000]
-                  except Exception as e:
-                      report[p] = f"error: {e}"
+          # Check running processes in proot/termux
+          report["ps"] = run(["ps", "-ef"])
 
-          if pathlib.Path("/proc/meminfo").is_file():
+          # Check termux home and usr
+          termux_home = pathlib.Path("/data/data/com.termux/files/home")
+          termux_usr = pathlib.Path("/data/data/com.termux/files/usr")
+          report["termux_home"] = sorted(p.name for p in termux_home.iterdir()) if termux_home.is_dir() else []
+          report["termux_usr_share_vulkan"] = glob.glob("/data/data/com.termux/files/usr/share/vulkan/**/*", recursive=True)
+          report["termux_libs_vulkan_gl"] = (
+              glob.glob("/data/data/com.termux/files/usr/lib/*vulkan*")
+              + glob.glob("/data/data/com.termux/files/usr/lib/*GL*")
+              + glob.glob("/data/data/com.termux/files/usr/lib/*EGL*")
+              + glob.glob("/usr/lib/aarch64-linux-gnu/*vulkan*")
+              + glob.glob("/usr/lib/aarch64-linux-gnu/*GL*")
+              + glob.glob("/usr/lib/aarch64-linux-gnu/*EGL*")
+          )
+
+          # Check if libvulkan can be loaded and vkEnumerateInstanceExtensionProperties / vkCreateInstance works
+          vk_probe = {}
+          for libname in ["libvulkan.so.1", "libvulkan.so", "/data/data/com.termux/files/usr/lib/libvulkan.so", "/system/lib64/libvulkan.so"]:
               try:
-                  mem = {}
-                  for line in pathlib.Path("/proc/meminfo").read_text().splitlines():
-                      if ":" in line:
-                          k, v = line.split(":", 1)
-                          if k in {"MemTotal", "MemAvailable", "MemFree", "SwapTotal", "SwapFree"}:
-                              mem[k] = v.strip()
-                  report["meminfo"] = mem
+                  lib = ctypes.CDLL(libname)
+                  vk_probe[libname] = "loaded"
               except Exception as e:
-                  report["meminfo_error"] = str(e)
+                  vk_probe[libname] = f"error: {e}"
+          report["dlopen_vulkan"] = vk_probe
 
-          if pathlib.Path("/proc/cpuinfo").is_file():
-              try:
-                  lines = pathlib.Path("/proc/cpuinfo").read_text().splitlines()
-                  keys = ("Processor", "model name", "Hardware", "CPU implementer", "CPU architecture", "CPU variant", "CPU part", "CPU revision", "Features")
-                  summary = []
-                  seen = set()
-                  for line in lines:
-                      if line.startswith(keys) and line not in seen:
-                          seen.add(line)
-                          summary.append(line)
-                  report["cpuinfo"] = summary[:40]
-              except Exception as e:
-                  report["cpuinfo_error"] = str(e)
+          # Check if termux has vulkan-tools or mesa or angle or anything installed
+          termux_env = dict(os.environ, PATH="/data/data/com.termux/files/usr/bin:" + os.environ.get("PATH", ""), PREFIX="/data/data/com.termux/files/usr", LD_LIBRARY_PATH="/data/data/com.termux/files/usr/lib")
+          report["termux_packages"] = run(["/data/data/com.termux/files/usr/bin/dpkg", "-l"], env=termux_env)
+          report["debian_packages_build"] = run(["dpkg-query", "-W", "-f=${binary:Package} ${Version}\n", "cmake*", "ninja*", "g++*", "clang*", "libvulkan*", "mesa*", "xvfb*", "xauth*", "libx11*", "libgl*"])
 
-          report["lscpu"] = run(["lscpu"])
-          report["df"] = run(["df", "-h", "."])
-
-          tools = [
-              "godot", "godot4", "python3", "git", "curl", "clang", "clang++", "gcc", "g++",
-              "cmake", "ninja", "make", "pkg", "apt", "dpkg", "pacman", "proot", "proot-distro",
-              "termux-info", "termux-open", "termux-open-url", "termux-wake-lock", "termux-chroot",
-              "am", "pm", "getprop", "dumpsys", "adb", "vulkaninfo", "glxinfo", "eglinfo",
-              "xvfb-run", "Xvfb", "weston", "virgl_test_server_android", "turnip", "zink",
-              "openssl", "node", "npm", "java", "javac", "systemctl", "sv", "runsv", "tmux",
-          ]
-          report["tools"] = {t: shutil.which(t) for t in tools if shutil.which(t)}
-
-          if shutil.which("getprop"):
-              props = [
-                  "ro.product.manufacturer", "ro.product.model", "ro.product.brand", "ro.product.device",
-                  "ro.product.board", "ro.board.platform", "ro.hardware", "ro.hardware.egl",
-                  "ro.hardware.vulkan", "ro.soc.manufacturer", "ro.soc.model",
-                  "ro.build.version.release", "ro.build.version.sdk", "ro.build.display.id",
-              ]
-              report["android_props"] = {p: run(["getprop", p]).get("stdout", "") for p in props}
-
-          gpu_devs = []
-          for pat in ["/dev/kgsl*", "/dev/mali*", "/dev/dri/*", "/dev/pvr*", "/dev/ion", "/dev/dma_heap/*"]:
-              gpu_devs.extend(glob.glob(pat))
-          report["gpu_devices"] = gpu_devs
-
-          vulkan_files = []
-          for pat in [
-              "/usr/share/vulkan/icd.d/*.json",
-              "/etc/vulkan/icd.d/*.json",
-              "/data/data/com.termux/files/usr/share/vulkan/icd.d/*.json",
-              "/vendor/etc/vulkan/icd.d/*.json",
-              "/vendor/lib64/hw/vulkan*.so",
-              "/system/lib64/libvulkan.so",
-              "/system/lib64/libEGL.so",
-              "/system/lib64/libGLESv2.so",
-              "/system/lib64/libGLESv3.so",
-          ]:
-              vulkan_files.extend(glob.glob(pat))
-          report["graphics_files"] = vulkan_files
-
-          icd_contents = {}
-          for icd in glob.glob("/usr/share/vulkan/icd.d/*.json") + glob.glob("/data/data/com.termux/files/usr/share/vulkan/icd.d/*.json") + glob.glob("/etc/vulkan/icd.d/*.json"):
-              try:
-                  icd_contents[icd] = json.loads(pathlib.Path(icd).read_text())
-              except Exception as e:
-                  icd_contents[icd] = str(e)
-          report["vulkan_icds"] = icd_contents
-
-          if shutil.which("vulkaninfo"):
-              report["vulkaninfo_summary"] = run(["vulkaninfo", "--summary"], timeout=15)
-              if shutil.which("xvfb-run"):
-                  report["vulkaninfo_xvfb"] = run(["xvfb-run", "-a", "vulkaninfo", "--summary"], timeout=15)
-
-          if shutil.which("eglinfo"):
-              report["eglinfo"] = run(["eglinfo"], timeout=10)
-
-          # Check X11 / Wayland sockets
-          report["x11_sockets"] = glob.glob("/tmp/.X11-unix/*") + glob.glob("/data/data/com.termux/files/usr/tmp/.X11-unix/*")
-
-          # Check loopback socket bind
-          try:
-              with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                  s.bind(("127.0.0.1", 0))
-                  report["loopback_bind_ok"] = s.getsockname()[1]
-          except Exception as e:
-              report["loopback_bind_ok"] = f"error: {e}"
-
-          # Check home & local/share for any existing primordia setup or godot binaries
-          home = pathlib.Path.home()
-          report["home_entries"] = sorted(p.name for p in home.iterdir()) if home.is_dir() else []
-          local_share = home / ".local/share"
-          if local_share.is_dir():
-              report["local_share_entries"] = sorted(p.name for p in local_share.iterdir())
-          godot_candidates = []
-          for pat in [str(home / "**/*Godot*"), str(home / "**/*godot*"), "/usr/bin/godot*", "/usr/local/bin/godot*", "/data/data/com.termux/files/usr/bin/godot*"]:
-              for m in glob.glob(pat, recursive=True):
-                  if not "/_work/" in m and len(godot_candidates) < 30:
-                      godot_candidates.append(m)
-          report["godot_candidates"] = godot_candidates
+          # Check network interfaces on phone
+          report["ip_addr"] = run(["ip", "-j", "addr"])
 
           text = json.dumps(report, indent=2)
-          print("PHONE_PROBE_JSON_START")
-          print(text)
-          print("PHONE_PROBE_JSON_END")
           b64 = base64.b64encode(text.encode("utf-8")).decode("ascii")
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
               f.write(f"report_b64={b64}\n")
-          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
-              f.write("```json\n" + text + "\n```\n")
-          PY
-
-  collect_live:
-    if: github.repository == 'samzapo/primordia'
-    runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 5
-    steps:
-      - name: Poll run jobs and save phone probe result locally
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.run_id }}
-        run: |
-          test "$RUNNER_NAME" = samzapo-desktop
-          python3 - <<'PY'
-          import json, os, pathlib, time, urllib.request
-
-          out_dir = pathlib.Path("/home/samzapo/Development/primordia/build")
-          out_dir.mkdir(parents=True, exist_ok=True)
-          headers = {
-              "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
-              "Accept": "application/vnd.github+json",
-          }
-          run_id = os.environ["RUN_ID"]
-
-          def api_get(url, raw=False):
-              req = urllib.request.Request(url, headers=headers)
-              with urllib.request.urlopen(req, timeout=15) as resp:
-                  data = resp.read()
-                  return data.decode("utf-8", errors="replace") if raw else json.loads(data)
-
-          status_report = {"run_id": run_id, "polls": []}
-          # Also try listing runners in case token permits it
-          try:
-              status_report["runners"] = api_get("https://api.github.com/repos/samzapo/primordia/actions/runners")
-          except Exception as e:
-              status_report["runners_error"] = str(e)
-
-          phone_job = None
-          for i in range(45):
-              try:
-                  jobs_data = api_get(f"https://api.github.com/repos/samzapo/primordia/actions/runs/{run_id}/jobs")
-                  for job in jobs_data.get("jobs", []):
-                      if job.get("name") == "phone":
-                          phone_job = job
-                  status_report["last_jobs"] = [
-                      {
-                          "id": j.get("id"),
-                          "name": j.get("name"),
-                          "status": j.get("status"),
-                          "conclusion": j.get("conclusion"),
-                          "runner_name": j.get("runner_name"),
-                          "labels": j.get("labels"),
-                      }
-                      for j in jobs_data.get("jobs", [])
-                  ]
-                  (out_dir / "phone-probe-live.json").write_text(json.dumps(status_report, indent=2))
-                  if phone_job and phone_job.get("status") == "completed":
-                      break
-              except Exception as e:
-                  status_report["poll_error"] = str(e)
-              time.sleep(2)
-
-          if phone_job and phone_job.get("status") == "completed":
-              try:
-                  logs = api_get(f"https://api.github.com/repos/samzapo/primordia/actions/jobs/{phone_job['id']}/logs", raw=True)
-                  status_report["phone_logs"] = logs
-                  if "PHONE_PROBE_JSON_START" in logs and "PHONE_PROBE_JSON_END" in logs:
-                      body = logs.split("PHONE_PROBE_JSON_START", 1)[1].split("PHONE_PROBE_JSON_END", 1)[0]
-                      cleaned = "\n".join(
-                          line.split(" ", 1)[1] if len(line) > 28 and line[4] == "-" and line[7] == "-" and "T" in line[:20] else line
-                          for line in body.strip().splitlines()
-                      )
-                      try:
-                          status_report["parsed_report"] = json.loads(cleaned)
-                      except Exception as pe:
-                          status_report["parse_error"] = str(pe)
-                          status_report["raw_extracted"] = cleaned
-              except Exception as e:
-                  status_report["logs_error"] = str(e)
-
-          (out_dir / "phone-probe-live.json").write_text(json.dumps(status_report, indent=2))
           PY
 
   collect_after:
@@ -297,5 +109,5 @@ jobs:
           out_dir.mkdir(parents=True, exist_ok=True)
           b64 = os.environ.get("REPORT_B64", "")
           payload = {"result": os.environ.get("PHONE_RESULT"), "report": json.loads(base64.b64decode(b64).decode("utf-8")) if b64 else None}
-          (out_dir / "phone-probe-output.json").write_text(json.dumps(payload, indent=2))
+          (out_dir / "phone-probe-output-2.json").write_text(json.dumps(payload, indent=2))
           PY
