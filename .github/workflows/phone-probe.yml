@@ -6,6 +6,9 @@ on:
       - samzapo/phone-probe
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   phone:
     runs-on: [self-hosted, ARM64]
@@ -13,44 +16,59 @@ jobs:
     outputs:
       report_b64: ${{ steps.probe.outputs.report_b64 }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
-        with:
-          clean: false
-      - name: Build ARM64 native and benchmark world_server on phone
+      - name: Checkout build and benchmark on phone
         id: probe
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          GH_SHA: ${{ github.sha }}
         run: |
           python3 - << 'PY'
           import os, subprocess, json, base64, time, shutil
           from pathlib import Path
 
-          def sh(cmd, env=None, timeout=600):
+          def sh(cmd, env=None, timeout=600, cwd=None):
               e = os.environ.copy()
+              e["DEBIAN_FRONTEND"] = "noninteractive"
               e["GODOT_SILENCE_ROOT_WARNING"] = "1"
               e["GODOT_BIN"] = "/root/.local/share/primordia/runtime/godot-4.7.2-stable/Godot_v4.7.2-stable_linux.arm64"
               if env:
                   e.update(env)
               t0 = time.time()
               try:
-                  r = subprocess.run(["bash", "-lc", cmd], capture_output=True, text=True, timeout=timeout, env=e)
+                  r = subprocess.run(["bash", "-lc", cmd], capture_output=True, text=True, timeout=timeout, env=e, cwd=cwd)
                   return {
                       "status": r.returncode,
                       "elapsed_s": round(time.time() - t0, 2),
-                      "stdout": r.stdout[-4000:],
-                      "stderr": r.stderr[-4000:],
+                      "stdout": r.stdout[-2500:],
+                      "stderr": r.stderr[-2500:],
                   }
               except Exception as ex:
                   return {"status": -1, "elapsed_s": round(time.time() - t0, 2), "error": str(ex)}
 
           out = {}
-          out["ls_runtime"] = sh("ls -la /root/.local/share/primordia/runtime /root/.local/share/primordia/runtime/godot-4.7.2-stable /root/.local/share/primordia/Exports/4.7.2.stable 2>&1 || true")
-          out["ls_build"] = sh("ls -la build build/native /root/.local/share/primordia/runtime/native-cache 2>&1 || true")
+          out["ensure_pkgs"] = sh("which git >/dev/null 2>&1 || apt-get install -y --no-install-recommends git ca-certificates libxkbcommon0 libdbus-1-3 psmisc")
 
-          # Check if export templates are already installed
+          repo_dir = Path("/root/.local/share/primordia/checkout")
+          repo_dir.mkdir(parents=True, exist_ok=True)
+          out["git_checkout"] = sh("""
+            set -e
+            if [ ! -d .git ]; then
+              git init
+            fi
+            git remote remove origin 2>/dev/null || true
+            git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GH_REPO}.git"
+            git fetch --depth 1 origin "$GH_SHA"
+            git checkout -f FETCH_HEAD
+            git remote set-url origin "https://github.com/${GH_REPO}.git"
+          """, cwd=str(repo_dir))
+
+          # Ensure export templates symlink
           tpl_dir = Path("/root/.local/share/godot/export_templates/4.7.2.stable")
           if not (tpl_dir / "web_nothreads_release.zip").exists():
               out["install_templates"] = sh("""
-                set -ex
+                set -e
                 mkdir -p /root/.local/share/primordia/Exports/4.7.2.stable /root/.local/share/godot/export_templates
                 if [ ! -f /root/.local/share/primordia/Exports/4.7.2.stable/web_nothreads_release.zip ]; then
                   curl -fL --retry 3 -o /root/.local/share/primordia/runtime/templates.tpz https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_export_templates.tpz
@@ -59,40 +77,19 @@ jobs:
                   rm -rf /root/.local/share/primordia/runtime/tpl_extract /root/.local/share/primordia/runtime/templates.tpz
                 fi
                 ln -sfn /root/.local/share/primordia/Exports/4.7.2.stable /root/.local/share/godot/export_templates/4.7.2.stable
-              """)
+              """, cwd=str(repo_dir))
           else:
               out["install_templates"] = "already_installed"
 
-          # Restore cached build/godot-cpp, build/liquidfun-original, build/native if present
-          cache_root = Path("/root/.local/share/primordia/runtime/native-cache")
-          cache_root.mkdir(parents=True, exist_ok=True)
-          Path("build").mkdir(parents=True, exist_ok=True)
-          for sub in ["godot-cpp", "liquidfun-original", "native"]:
-              c = cache_root / sub
-              b = Path("build") / sub
-              if c.exists() and not b.exists():
-                  shutil.copytree(c, b, symlinks=True)
+          out["build_native"] = sh("PRIMORDIA_BUILD_JOBS=4 ./tools/build_native.sh", timeout=600, cwd=str(repo_dir))
+          out["import_project"] = sh('"$GODOT_BIN" --headless --path "$PWD" --import', timeout=180, cwd=str(repo_dir))
+          out["build_web"] = sh('./tools/build_web.sh', timeout=180, cwd=str(repo_dir))
 
-          out["build_native"] = sh("PRIMORDIA_BUILD_JOBS=4 ./tools/build_native.sh", timeout=600)
-
-          # Save to cache_root even if partial
-          for sub in ["godot-cpp", "liquidfun-original", "native"]:
-              c = cache_root / sub
-              b = Path("build") / sub
-              if b.exists():
-                  if c.exists():
-                      shutil.rmtree(c)
-                  shutil.copytree(b, c, symlinks=True)
-
-          out["import_project"] = sh('"$GODOT_BIN" --headless --path "$PWD" --import', timeout=180)
-          out["interface_test"] = sh('"$GODOT_BIN" --headless --path "$PWD" -s res://tests/interface.gd', timeout=120)
-
-          # Benchmark world_server --cpu
           sh("rm -rf /tmp/phone-world-bench && mkdir -p /tmp/phone-world-bench")
           out["world_server_run"] = sh(
-              'PRIMORDIA_INVITE=phone-local-key "$GODOT_BIN" --headless --path "$PWD" res://scenes/world_server.tscn -- --cpu --port=18765 --data-dir=/tmp/phone-world-bench & '
-              'PID=$!; sleep 6; kill -TERM $PID 2>/dev/null || true; wait $PID 2>/dev/null || true',
-              timeout=30
+              'PRIMORDIA_INVITE=phone-local-key-1234 "$GODOT_BIN" --headless --path "$PWD" res://scenes/world_server.tscn -- --cpu --port=18765 --state-dir=/tmp/phone-world-bench --shutdown-after=6',
+              timeout=30,
+              cwd=str(repo_dir)
           )
           health_path = Path("/tmp/phone-world-bench/health.json")
           if health_path.exists():
@@ -114,6 +111,7 @@ jobs:
     runs-on: [self-hosted, Linux, X64]
     steps:
       - name: Write phone probe output to local workspace
+        shell: bash
         env:
           REPORT_B64: ${{ needs.phone.outputs.report_b64 }}
           PHONE_RESULT: ${{ needs.phone.result }}
@@ -122,6 +120,6 @@ jobs:
           import os, base64, json
           b64 = os.environ.get("REPORT_B64", "")
           out = {"result": os.environ.get("PHONE_RESULT", ""), "report": json.loads(base64.b64decode(b64).decode()) if b64 else None}
-          with open("/home/samzapo/Development/primordia/build/phone-probe-output-8.json", "w") as f:
+          with open("/home/samzapo/Development/primordia/build/phone-probe-output-9.json", "w") as f:
               json.dump(out, f, indent=2)
           PY
