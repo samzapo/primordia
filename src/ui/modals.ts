@@ -13,6 +13,7 @@ import type { Cell, OrganKind } from '../sim/cell.ts';
 import { TAU } from '../sim/constants.ts';
 import type { InvestmentStrategy, RoleName } from '../sim/investmentPolicy.ts';
 import { rawStrategyForCell } from '../sim/investmentPolicy.ts';
+import { rolePreviewGeometry, type RolePreviewGeometry } from '../sim/membrane.ts';
 import { MUTATION_DATA } from '../sim/mutations.ts';
 import type { Simulation } from '../sim/simulation.ts';
 import { bindHoldTooltip, hideHoldTooltip } from './tooltip.ts';
@@ -117,45 +118,116 @@ function makeCellPortrait(
   return c;
 }
 
+const ROLE_PREVIEW_CACHE = new Map<RoleName, RolePreviewGeometry>();
+
+function getRoleGeometry(role: RoleName): RolePreviewGeometry {
+  let cached = ROLE_PREVIEW_CACHE.get(role);
+  if (!cached) {
+    cached = rolePreviewGeometry(role, 47);
+    ROLE_PREVIEW_CACHE.set(role, cached);
+  }
+  return cached;
+}
+
 function drawRoleSketch(ctx: CanvasRenderingContext2D, role: RoleName, cx: number, cy: number, r: number): void {
-  const palette: Record<RoleName, { body: string; rim: string; organs: OrganKind[] }> = {
-    grazer: { body: '#24829c', rim: '#6ae8cf', organs: ['feeding', 'cilia', 'regenerative', 'sensing'] },
-    producer: { body: '#1f8a5b', rim: '#8af59b', organs: ['photosynthesis', 'photosynthesis', 'mitochondrion', 'protection'] },
-    hunter: { body: '#c94148', rim: '#ffa452', organs: ['hunting', 'poreforming', 'toxin', 'propulsion', 'feeding'] },
-    parasite: { body: '#8938b5', rim: '#f078e2', organs: ['proboscis', 'hunting', 'sensing', 'mitochondrion'] },
+  const palette: Record<
+    RoleName,
+    {
+      body: string;
+      rim: string;
+      nucleus: string;
+      organs: Array<{ kind: OrganKind; angle: number }>;
+    }
+  > = {
+    grazer: {
+      body: '#24829c',
+      rim: '#6ae8cf',
+      nucleus: '#144d63',
+      organs: [
+        { kind: 'feeding', angle: 0 },
+        { kind: 'cilia', angle: Math.PI * 0.55 },
+        { kind: 'regenerative', angle: Math.PI * 1.05 },
+        { kind: 'sensing', angle: -Math.PI * 0.5 },
+      ],
+    },
+    producer: {
+      body: '#1f8a5b',
+      rim: '#8af59b',
+      nucleus: '#0e4c36',
+      organs: [
+        { kind: 'photosynthesis', angle: -Math.PI * 0.25 },
+        { kind: 'photosynthesis', angle: Math.PI * 0.75 },
+        { kind: 'protection', angle: Math.PI * 0.25 },
+        { kind: 'mitochondrion', angle: -Math.PI * 0.75 },
+      ],
+    },
+    hunter: {
+      body: '#c94148',
+      rim: '#ffa452',
+      nucleus: '#5e1424',
+      organs: [
+        { kind: 'feeding', angle: -Math.PI * 0.5 },
+        { kind: 'poreforming', angle: 0 },
+        { kind: 'toxin', angle: Math.PI / 3 },
+        { kind: 'propulsion', angle: Math.PI },
+        { kind: 'hunting', angle: -Math.PI / 3 },
+      ],
+    },
+    parasite: {
+      body: '#8938b5',
+      rim: '#f078e2',
+      nucleus: '#3c1361',
+      organs: [
+        { kind: 'proboscis', angle: 0 },
+        { kind: 'hunting', angle: Math.PI * 0.45 },
+        { kind: 'propulsion', angle: Math.PI },
+        { kind: 'sensing', angle: -Math.PI * 0.45 },
+      ],
+    },
   };
   const spec = palette[role];
+  const geom = getRoleGeometry(role);
+  const pts = geom.outline;
+  let maxR = 1;
+  for (const p of pts) maxR = Math.max(maxR, Math.hypot(p.x, p.y));
+  const sc = (r * 1.08) / maxR;
+
   ctx.save();
-  const g = ctx.createRadialGradient(cx - r * 0.25, cy - r * 0.25, r * 0.1, cx, cy, r);
+  ctx.translate(cx, cy);
+  const g = ctx.createRadialGradient(-r * 0.22, -r * 0.22, r * 0.08, 0, 0, r * 1.08);
   g.addColorStop(0, spec.rim);
-  g.addColorStop(0.65, spec.body);
+  g.addColorStop(0.62, spec.body);
   g.addColorStop(1, '#10203a');
   ctx.fillStyle = g;
   ctx.beginPath();
-  const lob = role === 'hunter' ? 6 : role === 'parasite' ? 4 : 12;
-  for (let i = 0; i < 36; i++) {
-    const a = (TAU * i) / 36;
-    const w = 1 + (role === 'hunter' ? 0.14 : 0.06) * Math.cos(a * lob);
-    const x = cx + Math.cos(a) * r * w;
-    const y = cy + Math.sin(a) * r * w;
+  for (let i = 0; i < pts.length; i++) {
+    const x = pts[i].x * sc;
+    const y = pts[i].y * sc;
     if (i === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
   }
   ctx.closePath();
   ctx.fill();
-  ctx.lineWidth = 2;
+  ctx.lineWidth = role === 'producer' ? Math.max(2.2, r * 0.14) : 2;
   ctx.strokeStyle = spec.rim;
   ctx.stroke();
 
-  const iconSize = Math.max(12, Math.round(r * 0.55));
+  // Inner nucleus silhouette matching cell portraits
+  ctx.fillStyle = spec.nucleus;
+  ctx.beginPath();
+  ctx.arc(0, 0, Math.max(2.5, r * 0.24), 0, TAU);
+  ctx.fill();
+
+  const iconSize = Math.max(12, Math.round(r * 0.54));
   const tmp = document.createElement('canvas');
   tmp.width = iconSize;
   tmp.height = iconSize;
   const tctx = tmp.getContext('2d')!;
-  for (let i = 0; i < spec.organs.length; i++) {
-    const a = (TAU * i) / spec.organs.length;
-    drawOrganIcon2D(tctx, spec.organs[i], iconSize);
-    ctx.drawImage(tmp, cx + Math.cos(a) * r * 0.85 - iconSize * 0.5, cy + Math.sin(a) * r * 0.85 - iconSize * 0.5);
+  for (const entry of spec.organs) {
+    const anchor = geom.pointAt(entry.angle);
+    tctx.clearRect(0, 0, iconSize, iconSize);
+    drawOrganIcon2D(tctx, entry.kind, iconSize);
+    ctx.drawImage(tmp, anchor.x * sc - iconSize * 0.5, anchor.y * sc - iconSize * 0.5);
   }
   ctx.restore();
 }

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MEMBRANE_COUNT, Membrane } from '../src/sim/membrane.ts';
+import { MEMBRANE_COUNT, Membrane, rolePreviewGeometry } from '../src/sim/membrane.ts';
 import { Habitat } from '../src/sim/habitat.ts';
 import { Cell } from '../src/sim/cell.ts';
 import { contactPair } from '../src/sim/contacts.ts';
@@ -42,4 +42,41 @@ test('Habitat plant obstacle contacts and cell-cell sequential contacts conserve
   contactPair(cellA, cellB, 1 / 60, true);
   assert.ok(Number.isFinite(cellA.position.x) && Number.isFinite(cellB.position.x));
   assert.equal(hab.plants.length, 10);
+});
+
+test('rolePreviewGeometry produces distinct synergy-matched silhouettes', () => {
+  const radius = 47;
+  const producer = rolePreviewGeometry('producer', radius);
+  const hunter = rolePreviewGeometry('hunter', radius);
+  const parasite = rolePreviewGeometry('parasite', radius);
+  const grazer = rolePreviewGeometry('grazer', radius);
+
+  assert.equal(producer.outline.length, MEMBRANE_COUNT * 4);
+  assert.equal(hunter.outline.length, MEMBRANE_COUNT * 4);
+  assert.equal(parasite.outline.length, MEMBRANE_COUNT * 4);
+  assert.equal(grazer.outline.length, MEMBRANE_COUNT * 4);
+
+  // Producer cell wall extends farther along diagonals (corners) than cardinal axes
+  const corner = producer.pointAt(Math.PI * 0.25);
+  const axis = producer.pointAt(0);
+  assert.ok(Math.hypot(corner.x, corner.y) > Math.hypot(axis.x, axis.y) * 1.12);
+
+  // Parasite profile is strongly elongated horizontally along proboscis axis
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const p of parasite.outline) {
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.y > maxY) maxY = p.y;
+  }
+  assert.ok((maxX - minX) / (maxY - minY) > 1.85);
+
+  // Hunter 6-pointed star has sharp ratio between peaks and valleys
+  let minR = Infinity, maxR = 0;
+  for (const p of hunter.outline) {
+    const r = Math.hypot(p.x, p.y);
+    if (r < minR) minR = r;
+    if (r > maxR) maxR = r;
+  }
+  assert.ok(maxR / minR > 1.6);
 });

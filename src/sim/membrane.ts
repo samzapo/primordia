@@ -473,3 +473,47 @@ export class Membrane {
     return angles;
   }
 }
+
+export type RoleShapeKind = 'grazer' | 'producer' | 'hunter' | 'parasite';
+
+export interface RolePreviewGeometry {
+  outline: Vec2[];
+  pointAt(localAngle: number): Vec2;
+}
+
+/** Generate settled equilibrium membrane geometry directly from `Membrane` physics for UI role previews. */
+export function rolePreviewGeometry(role: RoleShapeKind, radius = 47): RolePreviewGeometry {
+  const m = new Membrane(radius);
+  if (role === 'producer') {
+    m.cellWall = true;
+  } else if (role === 'hunter') {
+    m.oralAngle = -Math.PI * 0.5;
+    m.hunterAngle = 0;
+  } else if (role === 'parasite') {
+    m.parasiteAngle = 0;
+  } else {
+    m.oralAngle = 0;
+  }
+
+  const steps = role === 'grazer' ? 28 : 40;
+  for (let s = 0; s < steps; s++) {
+    m.step(0.05, radius, { x: 0, y: 0 }, 0.8);
+  }
+
+  const outline = m.outline().map((p) => ({ x: p.x, y: p.y }));
+  const angles = outline.map((p) => posmod(Math.atan2(p.y, p.x), TAU));
+  const pointAt = (localAngle: number): Vec2 => {
+    const target = posmod(localAngle, TAU);
+    let bestIdx = 0;
+    let bestDiff = Infinity;
+    for (let i = 0; i < angles.length; i++) {
+      const diff = Math.abs(wrapAngle(angles[i] - target));
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        bestIdx = i;
+      }
+    }
+    return outline[bestIdx] ?? { x: Math.cos(target) * radius, y: Math.sin(target) * radius };
+  };
+  return { outline, pointAt };
+}
