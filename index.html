@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#051124" />
+    <title>Primordia</title>
+    <link rel="icon" type="image/svg+xml" href="./assets/ui/primordia-cell.svg" />
+    <style>
+      @font-face {
+        font-family: 'ComicNeue';
+        src: url('./assets/fonts/ComicNeue-Regular.ttf') format('truetype');
+        font-weight: 400;
+        font-style: normal;
+        font-display: swap;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="canvas" tabindex="0" aria-label="Primordia pond"></canvas>
+    <div id="hud"></div>
+    <main id="status" aria-label="Loading Primordia">
+      <div class="loading-card">
+        <div class="cell-mark" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+            <defs>
+              <radialGradient id="splashBody" cx=".36" cy=".28" r=".8">
+                <stop stop-color="#62d6cf" />
+                <stop offset=".5" stop-color="#287f9c" />
+                <stop offset="1" stop-color="#304e87" />
+              </radialGradient>
+              <radialGradient id="splashCore" cx=".36" cy=".28" r=".8">
+                <stop stop-color="#ffe98b" />
+                <stop offset=".55" stop-color="#ffbf46" />
+                <stop offset="1" stop-color="#ed8644" />
+              </radialGradient>
+            </defs>
+            <path
+              d="M130 24C156 18 167 44 188 49C219 55 234 77 222 105C212 129 235 142 218 169C206 188 183 183 171 207C156 237 128 225 111 219C86 211 67 235 45 209C27 188 45 168 30 147C11 118 30 94 34 74C40 47 66 43 87 45C108 48 103 29 130 24Z"
+              fill="#16324f"
+              stroke="#59d9ce"
+              stroke-width="5"
+            />
+            <path
+              d="M130 29C152 24 164 48 186 54C214 60 226 79 216 103C205 130 229 144 212 167C199 185 180 178 166 204C151 230 128 219 112 213C85 204 67 228 50 204C35 184 52 167 36 144C19 118 36 97 40 76C46 52 69 49 88 51C112 55 108 34 130 29Z"
+              fill="url(#splashBody)"
+            />
+            <path
+              d="M53 91C59 62 82 67 98 66"
+              fill="none"
+              stroke="#b4fff0"
+              stroke-width="9"
+              stroke-linecap="round"
+              opacity=".55"
+            />
+            <ellipse cx="125" cy="133" rx="43" ry="40" fill="#203759" />
+            <ellipse cx="125" cy="129" rx="36" ry="35" fill="url(#splashCore)" />
+            <ellipse cx="114" cy="117" rx="16" ry="17" fill="#fff1ab" />
+            <ellipse
+              cx="181"
+              cy="115"
+              rx="15"
+              ry="22"
+              transform="rotate(24 181 115)"
+              fill="#35dab1"
+              stroke="#1c5b73"
+              stroke-width="4"
+            />
+            <path d="M174 104L188 111M170 114L183 122" stroke="#c7f7b6" stroke-width="5" />
+            <circle cx="76" cy="157" r="15" fill="#64e7e5" stroke="#286687" stroke-width="4" />
+            <circle cx="71" cy="153" r="5" fill="#b7ffff" />
+            <circle cx="162" cy="180" r="9" fill="#d496ef" />
+            <circle cx="87" cy="108" r="7" fill="#a1eed1" />
+            <path
+              d="M72 185Q89 197 104 186M76 191Q92 203 107 191"
+              fill="none"
+              stroke="#ffa96a"
+              stroke-width="4"
+              stroke-linecap="round"
+            />
+          </svg>
+        </div>
+        <h1>Primordia</h1>
+        <p class="tagline">A small world, always growing.</p>
+        <p id="loading-label" role="status" aria-live="polite">Preparing the pond…</p>
+        <progress id="loading-progress" aria-label="Loading the pond"></progress>
+        <p id="load-error" role="alert" hidden>
+          WebGPU is required to run Primordia in this browser.
+        </p>
+        <button id="retry" type="button" hidden>Try again</button>
+        <noscript><p>Turn on JavaScript to enter the pond.</p></noscript>
+      </div>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

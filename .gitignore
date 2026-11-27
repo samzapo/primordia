@@ -1,9 +1,8 @@
-# Godot imports and build output are generated, never authored.
-.godot/
+node_modules/
+dist/
 build/
+.godot/
 *.tmp
 *.log
+.DS_Store
 __pycache__/
-
-# Deterministic Godot sidecars regenerate during editor import.
-*.import

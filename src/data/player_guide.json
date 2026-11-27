@@ -1,0 +1,901 @@
+{
+  "version": 1,
+  "gameplay": {
+    "common": [
+      {
+        "id": "controls_view",
+        "title": "Follow and look inside",
+        "text": "Select Follow to center on your cell. Select Internal to look inside, or External to return to the pond. Inside, the view stays relative to your cell and you can zoom much closer.",
+        "sources": []
+      },
+      {
+        "id": "controls_select",
+        "title": "Open cell controls",
+        "text": "Select a factory, nucleus, division bud, ATP store or installed organelle. Choices appear along the top. Select × or empty water to close choices.",
+        "sources": []
+      },
+      {
+        "id": "controls_cancel",
+        "title": "Cancel placement",
+        "text": "Select the circular icon of the held organelle at the top left to cancel placing it.",
+        "sources": []
+      },
+      {
+        "id": "controls_switch",
+        "title": "Switch family member",
+        "text": "Select a living relative twice quickly, or choose it from Family. Your previous cell stays in the pond.",
+        "sources": []
+      },
+      {
+        "id": "controls_inspect",
+        "title": "Inspect particles",
+        "text": "Select a particle or vacuole to see its name and details along the bottom.",
+        "sources": []
+      },
+      {
+        "id": "controls_resources",
+        "title": "Show resources",
+        "text": "Biomass and ATP appear along the bottom. Select − to hide them and Resources to bring them back.",
+        "sources": []
+      },
+      {
+        "id": "controls_pause",
+        "title": "Pause, resume and music",
+        "text": "Select Pause for the menu and Resume to return to the live view. Enable music when shown, then use Music to mute or resume; the slider changes volume.",
+        "sources": []
+      },
+      {
+        "id": "controls_family_tools",
+        "title": "Family and growth",
+        "text": "Open Family to manage relatives. Drag the list or use its arrows to scroll. Merge zooms to nearby water: select a bright relative to merge immediately. Relatives remain selectable for five seconds after a family signal; others are dim. Cancel merge returns to your cell. Divide offers Mitosis or Budding and their automatic modes. Investment shows Balanced and all four specializations.",
+        "sources": []
+      },
+      {
+        "id": "anatomy",
+        "title": "Your cell chooses where to swim",
+        "text": "Build organs to shape what your cell can sense and do. It chooses when to feed, hunt, escape or seek light; you do not steer it directly.",
+        "sources": []
+      },
+      {
+        "id": "overlap",
+        "title": "Choose overlapping structures",
+        "text": "When several structures share a spot, choose the one you want from the temporary selection menu. Its pictures match the factories, organs and stores on your cell; damaged organs have a pink ring.",
+        "sources": []
+      },
+      {
+        "id": "factories",
+        "title": "Find your cell’s controls",
+        "text": "The small nucleus and internal factories fit inside an empty-reserve cell. They keep their size as your cell grows, while their positions spread through the cytoplasm. An inset circle with a tiny lower-left symbol marks each control; tap it to open its choices. Zoom in if the controls are too small, or choose from the pictures when tap areas overlap.",
+        "sources": []
+      },
+      {
+        "id": "build",
+        "title": "Build and restore",
+        "text": "Open Assembly for movement, oral grooves, armor and glands, Chemistry for internal organs and leaves, or Receptors for free chemical senses. The first two non-receptor organelles on each cell are free. After those, prices follow Fibonacci ×10: 10, 10, 20, 30, 50, 80… biomass. Reabsorbing one moves the next build back one step. Free receptors do not advance the sequence. Both starter organelles can be replaced. Placing an organelle shows an outward ripple. Refused placements have a red-bordered notice. Brief notices fade after three seconds.",
+        "sources": []
+      },
+      {
+        "id": "cell_details",
+        "title": "Read the cell’s resources",
+        "text": "Biomass builds and repairs your cell. ATP powers its work. Construction shows its biomass price before you place it. Free construction does not mean free running costs.",
+        "sources": []
+      },
+      {
+        "id": "organs",
+        "title": "Reabsorb and specialize",
+        "text": "Open an organelle and choose Reabsorb to remove it. Half its remaining paid tissue returns as biomass. A free build returns no biomass. Adaptations change matching organelles; free division mutation offers appear in the nucleus.",
+        "sources": []
+      },
+      {
+        "id": "mutate",
+        "title": "Choose adaptations",
+        "text": "Open the nucleus to keep an offered division mutation. Open a matching organelle to apply a learned mutation. Photosynthesis always offers Sun or Shade: Sun seeks brighter water; Shade seeks soft light and turns toward light if it is too dark. These choices are free.",
+        "sources": []
+      },
+      {
+        "id": "behavior",
+        "title": "Understand your cell’s instincts",
+        "text": "Intent view starts on. Nucleus → Instinct toggles the live intention readout in its own pane and the direction arrow. A separate red warning shows starvation. Low ATP favors food, useful light or resting while food digests. Low biomass favors feeding or hunting. Healthy cells can hunt or explore. Harmful acid and attacks take priority; family traces help attacked cells spread out. The same instincts apply to every cell, using its own organs and local signals.",
+        "sources": []
+      },
+      {
+        "id": "offspring",
+        "title": "Cell division",
+        "text": "Open Divide and choose Mitosis or Budding. Mitosis leaves your organelles with the parent and uses half your available biomass to grow a basic daughter. Budding funds a small daughter directly. Neither needs clear water. Each cell can reproduce once per minute. Both automatic modes start on and let instincts choose suitable moments. Division waits when your family has 12 living cells or the pond has 64. No daughter is created or paid for until there is room. Family investment settings show each automatic mode as On or Off; This cell changes only the selected relative.",
+        "sources": []
+      },
+      {
+        "id": "history",
+        "title": "View your family",
+        "text": "Nucleus → Family shows all living relatives together as pictures of their current cells. The tiny corner number is each cell’s generation. Choose a living relative to manage it; your previous cell stays alive. The menu grows to fit your screen; scroll if your family needs more room. The header keeps the highest generation and lifetime cell count. Deceased relatives leave the list.",
+        "sources": []
+      },
+      {
+        "id": "settings",
+        "title": "Pause and personalize",
+        "text": "Pause freezes your view and the pond while you adjust settings. Resume returns to the live world with one press. Pause includes Gameplay, Mechanics, visual display options, music, lineage color, habitat selection, family history, and New expedition.",
+        "sources": []
+      },
+      {
+        "id": "camera_transitions",
+        "title": "Smooth camera changes",
+        "text": "Following, recentering, changing views and switching family members glide into place. Pause holds the camera; direct camera gestures stay responsive. Nearby water is prepared ahead of your view to reduce empty patches while exploring. Cell bodies gently squash and stretch. Internal structures move with the cell while keeping their size and shape; Pause holds the animation too.",
+        "sources": []
+      },
+      {
+        "id": "investment",
+        "title": "Choose unattended investments",
+        "text": "Open the nucleus or Divide, then Invest. Balanced is the default; choose Manual to stop automatic building. Choose Balanced, Hunter, Parasite, Producer or Grazer, or save a relative’s current build as an example. Unattended cells use their own biomass and make at most one build or reabsorption per minute. Strategies first reabsorb organs that block their role and build toward their synergy. Hunters grow their hunting receptor, flagellum and oral groove before their first weapon; a pore-forming gland comes last so its self-protection is ready too. Once the synergy is complete, optional upgrades leave resources for reproduction. Family settings and individual exceptions are separate. The family controls also switch automatic mitosis and budding. Balanced gives each relative a stable role, with more Producers and Grazers than Hunters and Parasites.",
+        "sources": []
+      },
+      {
+        "id": "lineage_color",
+        "title": "Choose your lineage color",
+        "text": "Pause → Lineage color opens a color disc. Drag around the outer ring to change hue. Drag across the inner disc for saturation and brightness, then Save color. The choice applies to your lineage immediately.",
+        "sources": []
+      }
+    ],
+    "touch": [
+      {
+        "id": "camera",
+        "title": "Move, turn and zoom",
+        "text": "Use two fingers together: drag to move the view, twist to rotate, and pinch to zoom. The touched places stay under your fingers. The + and − buttons also zoom.",
+        "sources": []
+      }
+    ],
+    "desktop": [
+      {
+        "id": "camera",
+        "title": "Move and zoom",
+        "text": "Click and drag the view with the left mouse button. Scroll the mouse wheel to zoom around the pointer. The + and − buttons also zoom.",
+        "sources": []
+      }
+    ]
+  },
+  "mechanics": [
+    {
+      "id": "food",
+      "title": "Food & energy",
+      "items": [
+        {
+          "id": "digestion",
+          "title": "Food → ATP, biomass and waste",
+          "text": "The oral groove takes in real food particles. Food vacuoles move inside the cell while food becomes ATP, biomass and waste. Hunters keep a dense meal and digest it as they need energy. Grazers digest faster and build larger biomass reserves. Parasites promptly turn their food into biomass reserves instead of keeping a raw meal. Waste-filled vacuoles travel to the outlet and empty.",
+          "sources": [
+            {
+              "title": "Food-vacuole formation",
+              "url": "https://pubmed.ncbi.nlm.nih.gov/11831772/"
+            },
+            {
+              "title": "How cells obtain energy from food",
+              "url": "https://www.ncbi.nlm.nih.gov/books/NBK26882/"
+            },
+            {
+              "title": "Digestion in an algivorous amoeba",
+              "url": "https://journals.asm.org/doi/10.1128/AEM.00160-15"
+            },
+            {
+              "title": "Food intake and lipid reserves in Paramecium",
+              "url": "https://pubmed.ncbi.nlm.nih.gov/10213200/"
+            }
+          ]
+        },
+        {
+          "id": "respiration",
+          "title": "Food + oxygen → more useful energy",
+          "text": "Nearby oxygen supports more efficient digestion and more biomass. Without enough oxygen, fermentation still processes food but yields less. Carbon and waste are released. These are simplified food-processing rules, not full molecular pathways.",
+          "sources": [
+            {
+              "title": "How cells obtain energy from food",
+              "url": "https://www.ncbi.nlm.nih.gov/books/NBK26882/"
+            }
+          ]
+        },
+        {
+          "id": "photosynthesis",
+          "title": "Carbon + light → food, biomass and oxygen",
+          "text": "Leaves use dissolved CO2 and light to make food, biomass, oxygen and ATP. Producers keep making and releasing all their new food, while retaining direct ATP and a modest amount of biomass growth. One leaf can sustain a basic cell even in dim water; larger active builds need more support. Sun and Shade favor different light. A leaf grows tissue much more slowly than a hunter gains from a whole meal.",
+          "sources": [
+            {
+              "title": "Oxygen production in photosynthesis",
+              "url": "https://pubs.acs.org/doi/10.1021/ja01848a512"
+            },
+            {
+              "title": "Light-guided swimming",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC4868408/"
+            },
+            {
+              "title": "Gas exchange between air and water",
+              "url": "https://pubs.usgs.gov/publication/ofr20261068/full"
+            }
+          ]
+        },
+        {
+          "id": "emergency",
+          "title": "Emergency fuel",
+          "text": "Cells can burn real stored biomass for ATP when needed, keeping organelles working normally. A full meal or large reserve lasts much longer now. Reserves eventually run out if no new food or light is found.",
+          "sources": [
+            {
+              "title": "Microbial energy reserves",
+              "url": "https://journals.asm.org/doi/10.1128/AEM.00049-20"
+            }
+          ]
+        },
+        {
+          "id": "upkeep",
+          "title": "ATP pays for work",
+          "text": "Maintenance, swimming, pumping, repair and secretion spend ATP. Ordinary light collection and sensing remain possible at zero ATP. Free receptors need no biomass to repair; repair still uses ATP.",
+          "sources": [
+            {
+              "title": "Catalysis and cellular energy",
+              "url": "https://www.ncbi.nlm.nih.gov/books/NBK26838/"
+            }
+          ]
+        },
+        {
+          "id": "low_power",
+          "title": "Low ATP: quarter capacity",
+          "text": "Organelles spend ATP while doing their jobs; idle organs do not have a separate upkeep charge. The cell still needs basic maintenance. Spare biomass powers organs normally when ATP is low, consuming real reserves. When both run out, movement, feeding currents, glands and repair fall to quarter capacity. Digestion, photosynthesis and passive protection keep working.",
+          "sources": []
+        }
+      ]
+    },
+    {
+      "id": "water",
+      "title": "Chemistry in the water",
+      "items": [
+        {
+          "id": "encounters",
+          "title": "Particles have to meet",
+          "text": "Chemical parcels drift, turn and mix with the water. Reactions need compatible contact and facing. They stand for amounts of material, not individual molecules.",
+          "sources": [
+            {
+              "title": "Directional particle binding",
+              "url": "https://hoomd-blue.readthedocs.io/en/v5.2.0/hoomd/md/pair/aniso/patchy.html"
+            },
+            {
+              "title": "Life at low Reynolds number",
+              "url": "https://doi.org/10.1119/1.10903"
+            }
+          ]
+        },
+        {
+          "id": "nutrient_binding",
+          "title": "Nutrient + nutrient → a richer parcel",
+          "text": "Joining combines the food. Fully fueled parcels also gain a bounded ATP-yield bonus. Mild acid helps them bind; joining spent food does not refill its energy. The bonus is a game rule inspired by pH-sensitive assembly.",
+          "sources": [
+            {
+              "title": "Directional particle binding",
+              "url": "https://hoomd-blue.readthedocs.io/en/v5.2.0/hoomd/md/pair/aniso/patchy.html"
+            },
+            {
+              "title": "pH-dependent assembly",
+              "url": "https://pubmed.ncbi.nlm.nih.gov/12904028/"
+            }
+          ]
+        },
+        {
+          "id": "enzyme_recycling",
+          "title": "Enzyme + waste → reusable food",
+          "text": "An aligned digestive enzyme converts waste into edible material and can be reused. Moderate acidity helps; too much prevents the reaction. Recycling does not restore the food’s spent fuel.",
+          "sources": [
+            {
+              "title": "Acid protease activity",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC6027330/"
+            }
+          ]
+        },
+        {
+          "id": "oxygen_reabsorption",
+          "title": "Waste + oxygen → food and carbon",
+          "text": "When conditions permit, oxygen helps turn waste into reusable food material and carbon. Recycled food has no fresh fuel. This contact rule stands in for wider microbial reabsorption, rather than a literal chemical equation.",
+          "sources": [
+            {
+              "title": "Microbial respiration and growth",
+              "url": "https://www.nature.com/articles/s42003-025-07574-2"
+            }
+          ]
+        },
+        {
+          "id": "neutralization",
+          "title": "Antitoxin + toxin, tag or pore part → waste",
+          "text": "A neutralizer binds an attacking parcel and makes harmless waste containing both parcels’ material. Real antitoxins are specific; the game combines several defenses into one.",
+          "sources": [
+            {
+              "title": "Toxin–antitoxin binding",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8860590/"
+            }
+          ]
+        },
+        {
+          "id": "spoiling",
+          "title": "Toxin + nutrient → waste",
+          "text": "Toxins spoil food they contact. The toxin remains dangerous. This is a game simplification of contamination.",
+          "sources": [
+            {
+              "title": "Toxin–antitoxin binding",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8860590/"
+            }
+          ]
+        },
+        {
+          "id": "acid_buffer",
+          "title": "Acid + buffer → spent charge",
+          "text": "Acid raises local acidity; buffers reduce it. Opposite charges neutralize each other, and exhausted parcels become waste. Water color follows pH: acid is pink, then orange/yellow; alkaline water is green, cyan or violet. Around pH 7 the tint disappears. Acid patches fade back toward neutral instead of lingering across the pond. Inspect an acid or buffer particle to see the local pH.",
+          "sources": [
+            {
+              "title": "Acid protease activity",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC6027330/"
+            },
+            {
+              "title": "Cell responses to weak acids",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3678083/"
+            }
+          ]
+        },
+        {
+          "id": "aggregation",
+          "title": "Waste, carbon or oxygen + matching parcel → a larger parcel",
+          "text": "Matching parcels can combine up to their size limit, keeping their material. Only nutrient binding has the extra ATP-yield rule.",
+          "sources": [
+            {
+              "title": "Directional particle binding",
+              "url": "https://hoomd-blue.readthedocs.io/en/v5.2.0/hoomd/md/pair/aniso/patchy.html"
+            }
+          ]
+        },
+        {
+          "id": "toxin_contact",
+          "title": "Toxin + cell → damage",
+          "text": "Toxin packets can hurt any cell they reach, including relatives and their source. A neutralizer can intercept them. Defense and repair compete with the attacker’s finite supplies.",
+          "sources": [
+            {
+              "title": "Toxin–antitoxin binding",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8860590/"
+            },
+            {
+              "title": "Cell membrane repair",
+              "url": "https://pubmed.ncbi.nlm.nih.gov/11511344/"
+            }
+          ]
+        },
+        {
+          "id": "pore_assembly",
+          "title": "Tag + membrane + four pore parts → a damaging pore",
+          "text": "Surface tags attach locally. Pore parts land at the same small patch and build from a curved piece through a crescent and open ring. Four complete an active pore on the outside of the membrane. Antitoxin can cap an unfinished assembly, while repair helps remove an active pore. The four-part recipe is fictional. Free tags and subunits disperse quickly, keeping attacks local. Pieces already attached to a membrane keep assembling.",
+          "sources": [
+            {
+              "title": "Structure of a membrane pore",
+              "url": "https://www.nature.com/articles/s41467-019-10645-8"
+            },
+            {
+              "title": "Cell membrane repair",
+              "url": "https://pubmed.ncbi.nlm.nih.gov/11511344/"
+            }
+          ]
+        },
+        {
+          "id": "decoys",
+          "title": "Decoy + receptor → weaker sensing",
+          "text": "Decoys temporarily occupy receptors, including those of relatives. They can release on their own; ATP and repair help clear them sooner. Light seeking is separate.",
+          "sources": [
+            {
+              "title": "Receptor recovery",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3856725/"
+            }
+          ]
+        },
+        {
+          "id": "signals",
+          "title": "Pheromones carry old reports",
+          "text": "Hunting and flight receptors read drifting reports of nearby cells. Reports age and expire; they do not reveal another cell’s live location. Family signatures help relatives recognize one another. Hunters still choose non-family targets, but stray toxin, pores and decoys can affect relatives. Mouth suction never pulls pheromones; they follow the water and diffuse. Round pheromones share their family’s color and are slightly transparent, including when magnified.",
+          "sources": [
+            {
+              "title": "Chemical signals in flowing habitats",
+              "url": "https://www.nature.com/articles/s41467-023-44267-y"
+            },
+            {
+              "title": "Cell recognition",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC5769593/"
+            }
+          ]
+        },
+        {
+          "id": "turnover",
+          "title": "Particles decay and disperse",
+          "text": "Parcels have limited lifetimes. Above the pond’s particle limit, excess exterior parcels have the same chance of dispersing, regardless of type. The limit is a game rule; it never removes cells or their internal contents.",
+          "sources": []
+        }
+      ]
+    },
+    {
+      "id": "organs",
+      "title": "What each organelle does",
+      "items": [
+        {
+          "id": "organ_propulsion",
+          "title": "Flagellum",
+          "text": "Provides propulsion along its mounted axis. Cells respond quickly to thrust and local water without heavy coasting. Larger cells face more drag. Particle movement is unchanged.",
+          "sources": [
+            {
+              "title": "Life at low Reynolds number",
+              "url": "https://doi.org/10.1119/1.10903"
+            }
+          ]
+        },
+        {
+          "id": "organ_cilia",
+          "title": "Cilia",
+          "text": "Beat to swim and draw water past the cell. The current carries food and hazards alike; the oral groove still has to take food in.",
+          "sources": [
+            {
+              "title": "Cilia and swimming in Paramecium",
+              "url": "https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1010899"
+            }
+          ]
+        },
+        {
+          "id": "organ_protection",
+          "title": "Protective cortex",
+          "text": "Protects the patch of membrane beneath it. Coverage depends on placement.",
+          "sources": [
+            {
+              "title": "Cell shape and internal support",
+              "url": "https://www.ncbi.nlm.nih.gov/books/NBK26809/"
+            }
+          ]
+        },
+        {
+          "id": "organ_feeding",
+          "title": "Oral groove",
+          "text": "An optional mouth built in Assembly. While foraging, it spends ATP to pull nearby food strongly and other material gently. Pheromones ignore the pull. Suction stops with other intentions or a full gut; food touching the mouth can still be eaten. Reach scales with cell size. A strand connects the mouth to the cell center; reabsorbing the mouth removes that strand.",
+          "sources": [
+            {
+              "title": "Food-vacuole formation",
+              "url": "https://pubmed.ncbi.nlm.nih.gov/11831772/"
+            }
+          ]
+        },
+        {
+          "id": "organ_hunting",
+          "title": "Hunting receptor",
+          "text": "Free Hunting receptors follow any detected non-family pheromone report, regardless of size or defenses. Glands provide the attack.",
+          "sources": [
+            {
+              "title": "Chemical signals in flowing habitats",
+              "url": "https://www.nature.com/articles/s41467-023-44267-y"
+            }
+          ]
+        },
+        {
+          "id": "organ_sensing",
+          "title": "Flight receptor",
+          "text": "Free Flight receptors steer away from nearby toxin particles and armed non-family cells detected through pheromones. An unarmed cell’s size alone does not trigger flight.",
+          "sources": [
+            {
+              "title": "Chemical signals in flowing habitats",
+              "url": "https://www.nature.com/articles/s41467-023-44267-y"
+            }
+          ]
+        },
+        {
+          "id": "organ_photosynthesis",
+          "title": "Photosynthesis",
+          "text": "Uses light and carbon. Sun leaves seek brighter water; Shade leaves seek soft light, returning toward light when it is too dark. Choose Sun or Shade from its menu.",
+          "sources": [
+            {
+              "title": "Oxygen production in photosynthesis",
+              "url": "https://pubs.acs.org/doi/10.1021/ja01848a512"
+            },
+            {
+              "title": "Light-guided swimming",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC4868408/"
+            }
+          ]
+        },
+        {
+          "id": "organ_toxin",
+          "title": "Toxin gland",
+          "text": "Spends biomass and ATP to send toxin and receptor-blocking decoys toward a locally reported target.",
+          "sources": [
+            {
+              "title": "Toxin–antitoxin binding",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8860590/"
+            },
+            {
+              "title": "Receptor recovery",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3856725/"
+            }
+          ]
+        },
+        {
+          "id": "organ_poreforming",
+          "title": "Pore-forming gland",
+          "text": "Releases tags and pore parts toward a local target report. Damage requires assembly on an actual membrane, including a relative’s.",
+          "sources": [
+            {
+              "title": "Structure of a membrane pore",
+              "url": "https://www.nature.com/articles/s41467-019-10645-8"
+            }
+          ]
+        },
+        {
+          "id": "organ_acidifying",
+          "title": "Acid gland",
+          "text": "Releases acid parcels. Mild acid helps food binding and enzyme action, but too much also harms the secreting cell.",
+          "sources": [
+            {
+              "title": "Acid protease activity",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC6027330/"
+            },
+            {
+              "title": "Cell responses to weak acids",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3678083/"
+            }
+          ]
+        },
+        {
+          "id": "organ_neutralizing",
+          "title": "Toxin neutralizer",
+          "text": "Releases antitoxin when a nearby chemical threat is present.",
+          "sources": [
+            {
+              "title": "Toxin–antitoxin binding",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8860590/"
+            }
+          ]
+        },
+        {
+          "id": "organ_regenerative",
+          "title": "Buffer / repair gland",
+          "text": "Uses biomass and ATP to repair damage, helps remove pores and decoys, and releases buffer when needed.",
+          "sources": [
+            {
+              "title": "Cell membrane repair",
+              "url": "https://pubmed.ncbi.nlm.nih.gov/11511344/"
+            },
+            {
+              "title": "Cell responses to weak acids",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3678083/"
+            }
+          ]
+        },
+        {
+          "id": "organ_mitochondrion",
+          "title": "Mitochondrion",
+          "text": "Each healthy mitochondrion adds50%to baseline ATP recovery, up to5×, when food or stored biomass is respired with real oxygen. Biomass output from digestion stays the same. The bonus uses otherwise unused food energy; it does not create food or oxygen.",
+          "sources": [
+            {
+              "title": "The mitochondrion",
+              "url": "https://www.ncbi.nlm.nih.gov/books/NBK26894/"
+            }
+          ]
+        },
+        {
+          "id": "organ_counterattack",
+          "title": "Counterattack gland",
+          "text": "Fires at the last position reported by a nearby chemical warning from an armed cell. Its toxin spares cells without offensive organs. Perfect sparing is a game rule inspired by local bacterial counterattack.",
+          "sources": [
+            {
+              "title": "Bacterial tit-for-tat counterattack",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3616380/"
+            }
+          ]
+        },
+        {
+          "id": "organ_toxin_sac",
+          "title": "Toxin sac",
+          "text": "Stores toxin slowly from surplus biomass, using ATP while filling. A fuller sac has a larger pink center. When its cell dies, the stored toxin spills into nearby water as ordinary toxin particles. Reabsorbing safely dismantles it. It gives no new senses or suicidal behavior. This defensive organelle and its quantities are game choices.",
+          "sources": [
+            {
+              "title": "Toxin accumulation and release by cell lysis",
+              "url": "https://www.nature.com/articles/s41598-020-61086-z"
+            }
+          ]
+        },
+        {
+          "id": "organ_family_toward",
+          "title": "Toward family receptor",
+          "text": "A free receptor from the purple Receptor factory. Steers toward locally detected family pheromone trails. Food, energy recovery and danger take priority. It needs movement organs to swim; it cannot locate relatives that it has not sensed.",
+          "sources": [
+            {
+              "title": "Chemical sensing under flow",
+              "url": "https://www.nature.com/articles/s41467-023-44267-y"
+            }
+          ]
+        },
+        {
+          "id": "organ_family_away",
+          "title": "Away from family receptor",
+          "text": "A free receptor from the purple Receptor factory. Steers away from locally detected family pheromone trails, helping relatives spread out. Survival needs take priority. Free receptors do not raise the next organelle’s price and return no paid biomass when reabsorbed.",
+          "sources": [
+            {
+              "title": "Chemical sensing under flow",
+              "url": "https://www.nature.com/articles/s41467-023-44267-y"
+            }
+          ]
+        },
+        {
+          "id": "organ_proboscis",
+          "title": "Feeding proboscis",
+          "text": "Its tip must touch a living cell. It draws up to 2 biomass per second as food, paying ATP for the food it actually extracts. Food still needs digestion. It drains stored biomass, never health or structural body, and the visible puncture does not leak. Depleted reserves can still lead to starvation if the cell cannot refuel. These rates, the fixed tube and ATP cost are game choices inspired by protists that extract other cells’ contents. While it feeds, a puncture follows where the visible tube crosses the other cell’s membrane, and a round particle travels along the tube to its base.",
+          "sources": [
+            {
+              "title": "Experimental study of protoplast feeding",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC9721047/"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cells",
+      "title": "Cells & lineages",
+      "items": [
+        {
+          "id": "growth",
+          "title": "Biomass, shape and support",
+          "text": "Biomass supports growth and repair. The membrane deforms around a lightly drawn internal support network. That network is sampled per cell and is not editable.",
+          "sources": [
+            {
+              "title": "Cell shape and internal support",
+              "url": "https://www.ncbi.nlm.nih.gov/books/NBK26809/"
+            }
+          ]
+        },
+        {
+          "id": "division",
+          "title": "Mitosis and budding",
+          "text": "Mitosis and budding use available biomass and ATP directly, with no investment bank. Mitosis keeps the parent’s organs and splits its biomass budget and remaining ATP. Budding pays for a small daughter. Daughters begin with a leaf and removable oral groove, inherit investment choices, and wait a minute before reproducing. Families keep at most 12 cells through immediate reabsorption.",
+          "sources": [
+            {
+              "title": "Cell division",
+              "url": "https://www.ncbi.nlm.nih.gov/books/NBK26831/",
+              "text": "Open Divide and choose Mitosis or Budding. Mitosis leaves your organelles with the parent and uses half your available biomass to grow a basic daughter. Budding funds a small daughter directly. Neither needs clear water. Each cell can reproduce once per minute. Both automatic modes start on and let instincts choose suitable moments. Division waits when your family has 12 living cells or the pond has 64. No daughter is created or paid for until there is room."
+            }
+          ]
+        },
+        {
+          "id": "mutations",
+          "title": "Mutations and inheritance",
+          "text": "Each completed birth has a 10% chance to offer a free mutation in the nucleus. Daughters inherit investment settings, not copies of the parent’s organelles. They start with a removable oral groove and leaf.",
+          "sources": [
+            {
+              "title": "Cell division",
+              "url": "https://www.ncbi.nlm.nih.gov/books/NBK26831/",
+              "text": "Open Divide and choose Mitosis or Budding. Mitosis leaves your organelles with the parent and uses half your available biomass to grow a basic daughter. Budding funds a small daughter directly. Neither needs clear water. Each cell can reproduce once per minute. Both automatic modes start on and let instincts choose suitable moments. Division waits when your family has 12 living cells or the pond has 64. No daughter is created or paid for until there is room."
+            }
+          ]
+        },
+        {
+          "id": "starvation",
+          "title": "Hunger is gradual",
+          "text": "Low ATP can draw on spare reserves and biomass. Prolonged serious shortage eventually damages the cell; brief shortages have a grace period. Feeding, photosynthesis and repair can help it recover.",
+          "sources": [
+            {
+              "title": "Microbial energy reserves",
+              "url": "https://journals.asm.org/doi/10.1128/AEM.00049-20"
+            },
+            {
+              "title": "Cell membrane repair",
+              "url": "https://pubmed.ncbi.nlm.nih.gov/11511344/"
+            }
+          ]
+        },
+        {
+          "id": "death",
+          "title": "Death returns material to the pond",
+          "text": "A dying cell ruptures and releases its remaining represented contents. The material can feed other cells; the attacker receives no private food reward.",
+          "sources": [
+            {
+              "title": "Release of contents when cells rupture",
+              "url": "https://www.nature.com/articles/ncomms11220"
+            }
+          ]
+        },
+        {
+          "id": "continuity",
+          "title": "The pond continues",
+          "text": "Your lineage continues through living relatives when a cell dies. If your entire family is lost, a new starter cell enters the pond; the pond maintains a minimum of 15 living cells. Refreshing the page or choosing New expedition starts a fresh pond.",
+          "sources": []
+        },
+        {
+          "id": "contractile",
+          "title": "Contractile vacuoles",
+          "text": "The paired pulsing structures and canals illustrate water regulation. They do not currently simulate osmotic water balance or create resources.",
+          "sources": [
+            {
+              "title": "Contractile vacuoles",
+              "url": "https://pubmed.ncbi.nlm.nih.gov/12006618/"
+            }
+          ]
+        },
+        {
+          "id": "npc_growth",
+          "title": "Other cells develop too",
+          "text": "Balanced is the default investment: each family member follows a stable path using the same mix as NPCs—2 Hunters, 4 Parasites, 10 Grazers and 20 Producers in the reference pond. These are chances, so small families need not match the proportions exactly. Choose a single role, Manual or a relative’s saved build instead. Unattended cells make at most one build or reabsorption per minute, completing their role before optional upgrades and saving resources for reproduction. Saved family and individual choices stay as selected.",
+          "sources": []
+        }
+      ]
+    },
+    {
+      "id": "pond",
+      "title": "Pond life",
+      "items": [
+        {
+          "id": "currents",
+          "title": "Currents and plants",
+          "text": "Broad currents carry cells and chemical parcels through the pond. Swimming is a little faster, with gradual starts, stops and turns. Movement stays relative to the local water. Cilia stir water locally and plants damp flow. Cells meet solid plant branches while chemistry can pass through. This is a stylized fluid world.",
+          "sources": [
+            {
+              "title": "Life at low Reynolds number",
+              "url": "https://doi.org/10.1119/1.10903"
+            },
+            {
+              "title": "Vegetation slows water movement",
+              "url": "https://pubs.usgs.gov/publication/fs14796"
+            }
+          ]
+        },
+        {
+          "id": "environment",
+          "title": "Changing conditions",
+          "text": "Bright turquoise water and deep shade form broad, soft-edged patches. Rippling light shimmers in the sunlit water. Conditions also vary with the calendar and time of day, changing roughly hourly. Brighter water supports photosynthesis; excessive acid is stressful. The pattern and schedule are game choices.",
+          "sources": [
+            {
+              "title": "Light-guided swimming",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC4868408/"
+            },
+            {
+              "title": "Cell responses to weak acids",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3678083/"
+            }
+          ]
+        },
+        {
+          "id": "views",
+          "title": "Inside and outside views",
+          "text": "External shows exterior chemistry. Internal focuses on the followed cell’s contents and dims the exterior. The rest of the pond keeps evolving.",
+          "sources": []
+        },
+        {
+          "id": "names_music",
+          "title": "Identity and music",
+          "text": "Music responds to the cells and environment around your view, and muting it never changes biology. Pause also lets you choose your lineage’s color. Color and readiness rings are visual aids; they do not change biology.",
+          "sources": []
+        },
+        {
+          "id": "induced_currents",
+          "title": "Gentle eddies and currents",
+          "text": "Spiral eddies and directional currents move around the pond at 10–50 µm/s. Each lasts 1–20 seconds and spans 30–100 µm. Events overlap so there is always one stirring the water. Plants soften passing currents, with half their previous damping. A short golden stretch marks water immediately around an induced current source; ordinary trails keep their usual color. These are simplified game currents.",
+          "sources": [
+            {
+              "title": "External forces that drive water currents",
+              "url": "https://oceanexplorer.noaa.gov/ocean-fact/currents/"
+            }
+          ]
+        },
+        {
+          "id": "cell_instincts",
+          "title": "Shared instincts, different bodies",
+          "text": "Intent view starts on. Nucleus → Instinct toggles the current intention and direction arrow on or off. This only changes what you see. All cells escape harm, recover ATP, rebuild biomass, then hunt or explore using their actual organs and locally received chemical, light and acidity signals. Unattended relatives can follow family traces to merge; crowding makes this more likely. Well-fed Hunters rest until their stored meal runs low; Parasites rest while their biomass reserves are high.",
+          "sources": [
+            {
+              "title": "Chemical sensing under flow",
+              "url": "https://www.nature.com/articles/s41467-023-44267-y"
+            },
+            {
+              "title": "Light-guided swimming",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC4868408/"
+            },
+            {
+              "title": "Responses to acidity",
+              "url": "https://www.nature.com/articles/s42003-024-06698-1"
+            }
+          ]
+        },
+        {
+          "id": "surface_gases",
+          "title": "Air, CO2 and oxygen",
+          "text": "CO2 enters the water gradually from the air. A much smaller amount of oxygen also dissolves from air; leaves produce oxygen through photosynthesis. Faster-moving water exchanges gases faster, with a small background exchange in still water. The gases remain real moving parcels that must reach the cell. Saturation levels, parcel sizes and the use of fluid speed as a surface-mixing cue are game choices.",
+          "sources": [
+            {
+              "title": "Air–water oxygen exchange",
+              "url": "https://www.usgs.gov/publications/dissolved-oxygen-chapter-6"
+            }
+          ]
+        },
+        {
+          "id": "family_fusion",
+          "title": "Merging relatives",
+          "text": "Choose an unattended relative through Family after receiving its pheromone within the last five seconds. The merge happens immediately, and its image briefly slides into your cell. Resources combine once. Cells do not randomly merge below the family limit. Extra births beyond 12 are immediately reabsorbed into their parent.",
+          "sources": [
+            {
+              "title": "Cell fusion and membrane merger",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3739301/"
+            }
+          ]
+        },
+        {
+          "id": "mild_acidity",
+          "title": "Acid can help—and harm",
+          "text": "Mild acidity helps nutrients join and digestive enzymes recycle waste. Joined food can deliver a larger share of its existing fuel as ATP; spent food cannot be refueled this way. Excess acid costs ATP and damages cells. Buffer/repair glands respond to harmful exposure, protecting the cell without immediately erasing useful mild acidity. Water tint and reaction flashes show the chemistry.",
+          "sources": [
+            {
+              "title": "Acid-dependent digestive enzyme activity",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC6027330/"
+            },
+            {
+              "title": "Cellular cost of acid stress",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3678083/"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "new-lifecycle",
+      "title": "Cell roles and limits",
+      "items": [
+        {
+          "id": "anatomy-synergies",
+          "title": "Roles come from anatomy",
+          "text": "A leafless cell with an oral groove, hunting receptor, flagellum and an offensive gland becomes a six-pointed Hunter. It may also have a proboscis, but a proboscis cannot replace its mouth or gland. A Parasite has a proboscis, flagellum, hunting receptor and flight receptor, with no leaves, mouth or other offensive organs. Hunters keep compact meals. Short, wormlike Parasites face their proboscis forward and promptly turn food into biomass reserves, growing bulkier like Grazers. Both rest when well fed. Two working leaves and a mitochondrion, with no weapons, proboscis or mouth, make a Producer with stronger photosynthesis and a firm, boxy wall. An oral groove and cilia without leaves, weapons or a proboscis make a hairy Grazer that turns meals into bulkier biomass reserves. These are simplified game roles.",
+          "sources": [
+            {
+              "title": "Growth and maintenance energy",
+              "url": "https://doi.org/10.1007/s10811-011-9674-3"
+            },
+            {
+              "title": "Plant cell-wall mechanics",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3346220/"
+            },
+            {
+              "title": "Contact feeding between predation and parasitism",
+              "url": "https://link.springer.com/article/10.1186/s12915-022-01478-x"
+            }
+          ]
+        },
+        {
+          "id": "crowding-autolysis",
+          "title": "Crowding and autolysis",
+          "text": "Unattended, unprotected cells that keep receiving signals from more than six relatives have a small chance to break down and return their contents. A family cannot trigger this more than once per minute. Chemical reports are the only crowding information. The numerical probabilities are game rules.",
+          "sources": [
+            {
+              "title": "Quorum-associated autolysis",
+              "url": "https://doi.org/10.1016/j.cub.2015.11.056"
+            }
+          ]
+        },
+        {
+          "id": "stress-tears",
+          "title": "Growing beyond membrane support",
+          "text": "Above 3,000 total organic material, a cell can develop a temporary tear and leak stored material. Protection organs increase the supported amount. The tear closes after the excess is relieved. This is recoverable stress, not a hard biomass limit.",
+          "sources": [
+            {
+              "title": "Cell membrane repair",
+              "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3678083/"
+            }
+          ]
+        },
+        {
+          "id": "free-construction",
+          "title": "Two free organelles",
+          "text": "Each cell has two reusable free construction places, excluding the always-free sensing receptors. The starter leaf and oral groove fill both. Reabsorption returns half of biomass actually paid into an organ; free tissue gives no biomass refund. Free construction material is an explicit game allowance.",
+          "sources": []
+        },
+        {
+          "id": "surplus_biomass_vent",
+          "title": "Surplus biomass release",
+          "text": "Above 500 biomass, a cell gradually releases some surplus as nutrient and waste particles. More surplus gives a stronger release. Food in vacuoles does not count. The release keeps the first 500 biomass and preserves the body and organs. This is a game balance rule.",
+          "sources": [
+            {
+              "title": "Microbial growth and respiration",
+              "url": "https://www.nature.com/articles/s42003-025-07574-2"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

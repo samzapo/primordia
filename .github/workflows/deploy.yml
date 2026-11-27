@@ -1,250 +1,50 @@
-name: Primordia persistent server CD
-"on":
+name: Deploy to GitHub Pages
+
+on:
   push:
-    branches: [main]
-    paths-ignore: [docs/**, README.md, AGENTS.md, .github/workflows/target-probe.yml, .github/workflows/host-telemetry.yml, .github/workflows/deploy.yml]
+    branches: ['main']
   workflow_dispatch:
-    inputs:
-      verify_only:
-        description: Check the running stable game without rebuilding or restarting it
-        type: boolean
-        default: false
-      verify_build:
-        description: Exact running build SHA for read-only verification
-        type: string
-        default: ""
-      allow_performance_warnings:
-        description: Ship with known timing shortfalls; retain GPU, correctness and state checks
-        type: boolean
-        default: false
-      full_validation:
-        description: Opt in to broad gameplay/GPU tests and extra restart checks
-        type: boolean
-        default: false
+
 permissions:
   contents: read
+  pages: write
+  id-token: write
+
 concurrency:
-  group: primordia-private-deployment
+  group: pages
   cancel-in-progress: false
+
 jobs:
-  deploy:
-    if: github.repository == 'samzapo/primordia' && github.ref == 'refs/heads/main' && !inputs.verify_only
-    runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 50
+  build:
+    runs-on: ubuntu-latest
     steps:
-      - name: Verify target, ownership and wired checkout route
-        shell: bash
-        run: |
-          test "$RUNNER_NAME" = samzapo-desktop
-          test "$(hostname)" = samzapo-desktop
-          hostname
-          python3 - <<'PY'
-          import json, pathlib, socket, subprocess
-          for host in ['github.com','api.github.com','release-assets.githubusercontent.com']:
-              found=False
-              for entry in socket.getaddrinfo(host,443,type=socket.SOCK_STREAM):
-                  result=subprocess.run(['ip','-j','route','get',entry[4][0]],capture_output=True,text=True)
-                  if result.returncode: continue
-                  for route in json.loads(result.stdout):
-                      path=pathlib.Path('/sys/class/net')/route['dev']
-                      assert (path/'device').exists() and not (path/'wireless').exists() and not (path/'phy80211').exists() and (path/'operstate').read_text().strip()=='up', 'No verified wired route'
-                      found=True
-              assert found
-          PY
-      - name: Name task-owned source checkout
-        id: source
-        shell: bash
-        env:
-          SOURCE_REF: ${{ github.ref_name }}
-        run: |
-          python3 - <<'PYTHON'
-          import os,re
-          branch=re.sub(r'[^A-Za-z0-9._-]','-',os.environ['SOURCE_REF'].replace('/','--'))
-          path=branch+'--'+os.environ['GITHUB_RUN_ID']+'-'+os.environ['GITHUB_RUN_ATTEMPT']
-          with open(os.environ['GITHUB_OUTPUT'],'a') as output:output.write('path='+path+'\n')
-          PYTHON
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          path: ${{ steps.source.outputs.path }}
-          persist-credentials: false
-          fetch-depth: 1
-      - name: Build and deploy the stable service
-        shell: bash
-        env:
-          PRIMORDIA_DEPLOY_FULL_CHECKS: ${{ inputs.full_validation == true && '1' || '0' }}
-          PRIMORDIA_SOURCE_DIRECTORY: ${{ steps.source.outputs.path }}
-          PRIMORDIA_ACCESS_KEY_HASHES: ${{ secrets.PRIMORDIA_ACCESS_KEY_HASHES }}
-          PRIMORDIA_PERFORMANCE_WARNINGS: ${{ (inputs.allow_performance_warnings == true || (github.event_name == 'push' && contains(github.event.head_commit.message, '[allow-performance-warnings]'))) && '1' || '0' }}
-        run: |
-          task_dir="$GITHUB_WORKSPACE/$PRIMORDIA_SOURCE_DIRECTORY"
-          cd "$task_dir"
-          pwd
-          python3 - <<'PYTHON'
-          import hashlib,json,os,pathlib,subprocess,sys
-          os.environ.setdefault("XDG_RUNTIME_DIR",f"/run/user/{os.getuid()}")
-          sys.path.insert(0,str(pathlib.Path.cwd()/"tools"))
-          from deploy import main
-          from experimental_instance import get_json
-          from experimental_standby import standby_identity
-          stable=pathlib.Path.home()/".local/share/primordia-deploy"
-          experimental=pathlib.Path.home()/".local/share/primordia-experimental"
-          def retained_files(root):
-              paths=[root/"access-keys.json",*(root/"state/feedback").glob("*.json")]
-              return {str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in paths if p.is_file()}
-          retained={**retained_files(stable),**retained_files(experimental)}
-          def experimental_identity():
-              standby=standby_identity(experimental)
-              if standby is not None:return standby
-              value=get_json("http://127.0.0.1:8768/health")
-              return {**{k:value[k] for k in ["build","world_id","epoch","tick","accounts"]},
-                  "pid":subprocess.check_output(["systemctl","--user","show","primordia-experimental.service","-p","MainPID","--value"],text=True).strip()}
-          before=experimental_identity() if (experimental/"current").is_dir() else None
-          main()
-          assert all(pathlib.Path(p).is_file() and hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()==digest for p,digest in retained.items()),"A retained key registry or feedback report changed"
-          after=experimental_identity() if before else None
-          if before and before.get("state")=="standby":
-              assert before==after,"Experimental standby state changed"
-          elif before:
-              assert all(before[k]==after[k] for k in ["build","world_id","epoch","pid"]),"Experimental service identity changed"
-              assert after["tick"]>before["tick"] and after["accounts"]>=min(1,before["accounts"]),"Experimental world stopped or lost accounts"
-          report={"experimental_before":before,"experimental_after":after,"retained_files_verified":len(retained)}
-          (stable/"last-promotion-preservation.json").write_text(json.dumps(report,indent=2))
-          print("STABLE_DEPLOYMENT_PRESERVATION "+json.dumps(report))
-          PYTHON
-  verify:
-    if: always() && github.repository == 'samzapo/primordia' && github.ref == 'refs/heads/main' && (needs.deploy.result == 'success' || (inputs.verify_only == true && needs.deploy.result == 'skipped'))
-    needs: deploy
-    runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 5
+          node-version: '22'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Run tests
+        run: npm test
+      - name: Build
+        run: npm run build
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './dist'
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
     steps:
-      - name: Verify world after deployment job cleanup
-        shell: bash
-        env:
-          PRIMORDIA_DEPLOY_FULL_CHECKS: ${{ inputs.full_validation == true && '1' || '0' }}
-          EXPECTED_SHA: ${{ inputs.verify_only == true && inputs.verify_build || github.sha }}
-          PRIMORDIA_PERFORMANCE_WARNINGS: ${{ (inputs.allow_performance_warnings == true || (github.event_name == 'push' && contains(github.event.head_commit.message, '[allow-performance-warnings]'))) && '1' || '0' }}
-        run: |
-          test "$RUNNER_NAME" = samzapo-desktop
-          python3 - <<'PY'
-          import json, os, pathlib, subprocess, time, ssl, hashlib
-          root=pathlib.Path.home()/".local/share/primordia-deploy"
-          registry_before=hashlib.sha256((root/"access-keys.json").read_bytes()).hexdigest()
-          from urllib.request import build_opener, ProxyHandler, HTTPSHandler
-          os.environ.setdefault('XDG_RUNTIME_DIR',f'/run/user/{os.getuid()}')
-          subprocess.run(['systemctl','--user','is-active','primordia.service'],check=True)
-          subprocess.run(['systemctl','--user','is-enabled','primordia.service'],check=True)
-          assert subprocess.check_output(['loginctl','show-user',str(os.getuid()),'-p','Linger','--value'],text=True).strip()=='yes'
-          ca=pathlib.Path.home()/".local/share/primordia-deploy/tls/authority/ca.pem"
-          opener=build_opener(ProxyHandler({}),HTTPSHandler(context=ssl.create_default_context(cafile=str(ca))))
-          assert len(os.environ['EXPECTED_SHA'])==40 and all(c in '0123456789abcdef' for c in os.environ['EXPECTED_SHA']), 'An exact build SHA is required'
-          samples=[]
-          full_checks=os.environ.get("PRIMORDIA_DEPLOY_FULL_CHECKS")=="1"
-          sample_count=3 if full_checks else 2
-          for index in range(sample_count):
-              with opener.open('https://127.0.0.1:8766/health',timeout=5) as response: value=json.load(response)
-              assert value['build']==os.environ['EXPECTED_SHA'] and value['backend']=='gpu' and not value['backend_error'] and not value['checkpoint_error']
-              samples.append(value)
-              # Health is published every five seconds; sample a new publication.
-              if index<sample_count-1: time.sleep(6)
-          assert samples[-1]['updated_unix']>samples[0]['updated_unix'] and samples[-1]['tick']>samples[0]['tick']
-          import sys
-          sys.path.insert(0,str(root/"current/tools"))
-          from performance_policy import evaluate
-          performance_warnings = [warning for value in samples for warning in evaluate(value, os.environ.get("PRIMORDIA_PERFORMANCE_WARNINGS")=="1")] if full_checks else []
-          assert all(value['living_cells']>=15 and value['minimum_living_cells']==15 and value['automatic_pond_restart'] and value['automatic_lineage_restart'] for value in samples)
-          before=samples[-1]
-          resumed=before
-          if full_checks:
-              subprocess.run(['systemctl','--user','restart','primordia.service'],check=True)
-              resumed=None
-              for _ in range(60):
-                  try:
-                      with opener.open('https://127.0.0.1:8766/health',timeout=5) as response: candidate=json.load(response)
-                      if candidate['epoch']>before['epoch'] and candidate['tick']>=before['tick'] and candidate['world_id']==before['world_id']:
-                          resumed=candidate;break
-                  except OSError:pass
-                  time.sleep(2)
-          assert hashlib.sha256((root/'access-keys.json').read_bytes()).hexdigest()==registry_before, 'Access key registry changed during saved-world restart'
-          assert resumed is not None and resumed['backend']=='gpu' and not resumed['backend_error'] and not resumed['checkpoint_error'], 'Saved world did not resume after a service restart'
-          retention=resumed.get("cell_retention",{})
-          assert retention.get("ok") and not retention.get("missing") and not retention.get("changed"),"A saved cell changed or disappeared on restart"
-          assert resumed["accounts"]>=min(1,before["accounts"]) and resumed["world_id"]==before["world_id"]
-          assert not any(name in resumed.get("gpu","").lower() for name in ["llvmpipe","lavapipe","swiftshader"])
-          with opener.open('https://127.0.0.1:8766/api/network',timeout=5) as response: urls=json.load(response)
-          assert all(url.startswith('https://') for url in urls['home_urls'])
-          report={'performance_warnings':performance_warnings,'performance_warning_rollout':os.environ.get('PRIMORDIA_PERFORMANCE_WARNINGS')=='1','home_urls':urls['home_urls'],'tls_ca_sha256':hashlib.sha256((ca.parent/'ca.crt').read_bytes()).hexdigest(),'samples':samples,'running':resumed,'restart_tested':full_checks,'resumed_after_restart':resumed if full_checks else None}
-          print(json.dumps(report,indent=2))
-          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as output: output.write('Primordia remains on its hardware GPU after the deploy job ends.\n\n```json\n'+json.dumps(report,indent=2)+'\n```\n')
-          PY
-          if [ "$PRIMORDIA_DEPLOY_FULL_CHECKS" = "1" ]; then
-          python3 - <<'PYTHON'
-          import json,os,pathlib,sys
-          root=pathlib.Path.home()/".local/share/primordia-experimental"
-          if (root/"current").is_dir():
-              stable=pathlib.Path.home()/".local/share/primordia-deploy"
-              sys.path.insert(0,str(stable/"current/tools"))
-              from experimental_standby import standby_identity
-              standby=standby_identity(root)
-              if standby is not None:
-                  print("EXPERIMENTAL_STANDBY_PRESERVED "+json.dumps(standby))
-              else:
-                  os.environ["GITHUB_SHA"]=json.loads((root/"last-deploy.json").read_text())["revision"]
-                  from verify_experimental import main
-                  main(restart=False)
-          PYTHON
-          fi
-  deploy-phone:
-    if: github.repository == 'samzapo/primordia' && github.ref == 'refs/heads/main' && !inputs.verify_only
-    runs-on: [self-hosted, ARM64]
-    timeout-minutes: 50
-    steps:
-      - name: Sync checkout and deploy local phone service
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TARGET_SHA: ${{ github.sha }}
-          PRIMORDIA_DEPLOY_FULL_CHECKS: ${{ inputs.full_validation == true && '1' || '0' }}
-        run: |
-          set -euo pipefail
-          test "$RUNNER_NAME" = samzapo-phone
-          checkout_dir="$HOME/.local/share/primordia/checkout"
-          mkdir -p "$(dirname "$checkout_dir")"
-          if [ ! -d "$checkout_dir/.git" ]; then
-            git clone "https://x-access-token:${GH_TOKEN}@github.com/samzapo/primordia.git" "$checkout_dir"
-          else
-            git -C "$checkout_dir" remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/samzapo/primordia.git"
-            git -C "$checkout_dir" fetch origin "$TARGET_SHA"
-          fi
-          git -C "$checkout_dir" checkout -f "$TARGET_SHA"
-          git -C "$checkout_dir" remote set-url origin "https://github.com/samzapo/primordia.git"
-          cd "$checkout_dir"
-          python3 tools/deploy.py
-  verify-phone:
-    if: always() && github.repository == 'samzapo/primordia' && github.ref == 'refs/heads/main' && (needs.deploy-phone.result == 'success' || (inputs.verify_only == true && needs.deploy-phone.result == 'skipped'))
-    needs: deploy-phone
-    runs-on: [self-hosted, ARM64]
-    timeout-minutes: 5
-    steps:
-      - name: Verify local phone service after deployment job cleanup
-        shell: bash
-        env:
-          EXPECTED_SHA: ${{ inputs.verify_only == true && inputs.verify_build || github.sha }}
-        run: |
-          set -euo pipefail
-          test "$RUNNER_NAME" = samzapo-phone
-          python3 - <<'PY'
-          import json, os, time
-          from urllib.request import build_opener, ProxyHandler
-          opener = build_opener(ProxyHandler({}))
-          samples = []
-          for index in range(2):
-              with opener.open("http://127.0.0.1:8766/health", timeout=5) as response:
-                  value = json.load(response)
-              assert value["build"] == os.environ["EXPECTED_SHA"] and value["backend"] == "cpu" and not value["backend_error"] and not value["checkpoint_error"]
-              samples.append(value)
-              if index == 0:
-                  time.sleep(6)
-          assert samples[-1]["updated_unix"] > samples[0]["updated_unix"] and samples[-1]["tick"] > samples[0]["tick"]
-          assert all(value["living_cells"] >= 15 for value in samples)
-          print(json.dumps({"samples": samples, "endpoint": "http://127.0.0.1:8766"}, indent=2))
-          PY
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

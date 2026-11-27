@@ -1,271 +1,50 @@
 # Primordia
 
-A physics and chemistry simulation game about managing one small cell. Eat, grow and survive predation. **You never steer the cell:** its anatomy controls its behavior.
+A client-side WebGPU physics, chemistry, and cellular ecology simulation game. Eat, adapt, divide, and survive predation across a living pond. **You never steer the cell directly:** its anatomy and local chemical signals drive its behavior.
 
-This prototype uses **Godot 4.7.2**, a fixed-step simulation, deformable membranes, oriented chemical particles and procedural 2D artwork. Its vector artwork is authored in the project; cached particle textures and mipmaps generate automatically at runtime. The default Linux launcher builds a batched C++ GDExtension automatically; the GDScript reference backend remains available.
+Live static hosting: **https://samzapo.github.io/primordia/** (runs completely in your browser with no backend server; reloading the page resets the pond while UI, visual, audio, and lineage style preferences persist locally).
 
-## Run with Steam Godot on Linux
+## Unified WebGPU Architecture
 
-```sh
-./tools/run.sh
-```
+All external chemical molecules and pheromones across the entire **4096 × 2560** toroidal pond (up to **32,768** particles across 26 species) simulate directly in WebGPU compute shaders (`src/gpu/`) and render directly from GPU storage buffers (`src/render/`), eliminating any foreground/background CPU–GPU particle split:
 
-First launch needs **Git, CMake 3.20+, a C++17 compiler and Python 3**. It fetches a pinned Godot C++ binding revision and builds with two jobs by default; set `PRIMORDIA_BUILD_JOBS=8` for an eight-job build when CPU/RAM are available. Later launches rebuild only when native source changes. Generated bindings and libraries stay in ignored `build/`. Use `PRIMORDIA_BACKEND=script ./tools/run.sh` for the slower reference backend without native build dependencies. Opening the project directly in Godot uses the native library if it has already been built; otherwise F3 identifies the GDScript fallback.
-
-The launcher finds Godot in standard Steam locations, custom Steam libraries and Flatpak Steam installations. Steam need not be running. Use `./tools/run.sh --editor` to open the editor, then F5 to play. Discovery order is an explicit `GODOT_BIN`, Steam libraries, then `godot4`/`godot` on PATH. `STEAM_DIR` supports a nonstandard Steam client root.
-
-## Desktop backend playtest
-
-Normal desktop launches use the resident GPU implementation. A reported Threadripper/RTX 3090 performance failure is being addressed in [Revision 41](docs/REVISION_41.md):
-
-~~~sh
-./tools/playtest.sh resident      # GPU particles, reactions, queries and drawing
-./tools/playtest.sh cpu-matching  # Native CPU mutual-best reaction comparison
-./tools/playtest.sh cpu           # Existing CPU chemistry
-~~~
-
-These launchers find Steam Godot and use the same Mobile renderer. **F3 shows the backend, count scope, whole-frame timing and simulation/wall speed.** The GPU option retains cell-local editing, music, chemistry, predation and paid family succession, and advances distant cells with shared coarse CPU physiology while nearby cells receive full detail. If a resident limit is reached, it preserves the habitat and continues on CPU.
-
-Resident now runs nearby particles on the GPU and stores distant particles in sparse CPU chunks, with bounded transfers and large-step cold transport. F3 separates GPU nearby packets (including the transition buffer) from CPU stored slots. Zoom does not change feeding; rapid camera travel waits for prepared water. [Revision 41](docs/REVISION_41.md) records correctness checks, performance tradeoffs and limits: the normal workstation run remains at 60 FPS, but the dense hybrid still costs more than whole-GPU simulation in the current small habitat. The habitat's fluid grid and cell scheduler are not yet unbounded, and the owner's Threadripper/RTX 3090 needs a fresh comparison. Use `./tools/profile_playtest.sh resident` for the Steam-compatible trace. The ordinary launcher defaults to resident; CPU launch modes remain explicit correctness and diagnostic comparisons.
-
-## Food vacuoles and mobile controls
-
-Current intracellular chemistry is deliberately simple: ingested nutrient
-parcels circulate in food vacuoles, digestion credits numeric ATP and biomass,
-and waste vacuoles travel to the cytoproct and release finite waste particles.
-There is no seeded molecular cloud, glycolysis/respiration graph, cofactor pool,
-autocatalysis or osmotic simulation. The cell-local Food vacuoles action explains
-the lifecycle and shows current resources. Visible food/waste uses the resident
-GPU; hidden interiors use the existing coarse clock.
-
-Press **I** to switch interoception/exteroception and **M** for settings and the
-control guide. Phone taps inspect food/waste; two fingers move, twist and zoom
-the camera. Pause freezes only your multiplayer view. The dedicated persistent
-server advances actual time at 30 fixed steps per second; clients interpolate
-updates while rendering at their own frame rate. The desktop render target is
-60 FPS. Opening an editor or settings keeps the shared world running.
-
-Gameplay, objective and balance tests are enabled again, alongside conservation,
-paid actions, physics, UI, persistence, networking and performance checks. See [Revision 49](docs/REVISION_49.md) for the current model, archived
-checkpoint migration and measured performance. [Revision 50](docs/REVISION_50.md)
-adds ten-second vacuole residence, illustrated half-size contents, cell-attached
-interoception with up to 120x zoom, mobile top menus and hideable resource stocks.
-
-## Paramecium anatomy
-
-[Revision 43](docs/REVISION_43.md) records the historical expanded intracellular sandbox. [Revision 49](docs/REVISION_49.md) supersedes it with direct food-vacuole digestion and numeric ATP/biomass. External chemical glands and the particle transport backend remain available.
+- **Compute pipeline (`src/gpu/particleEngine.ts`)**: `transport.wgsl` (advection, oral suction, $\sqrt{\mathrm{d}t}$ diffusion, pheromone expiry), two-pass uniform grid prefix scan (`gridCount`, `prefixSum`, `gridScatter`), unary acidity exchange & 6-tick semi-Lagrangian acidity PDE (`acidUnary`, `acidStep`), stochastic decay, mutual-vote oriented reactions + soft collisions (`overlapDegree`, `voteImpulse`, `reactionCommit`), ambient gas equilibrium (`ambientGas`), ordered cellular intake (`feedConsume`, `emitSpawn`), receptor perception & particle inspection (`perception`), hazard/decoy exposure & membrane projection (`exposureNominate`, `exposureCollect`, `projectBodies`), and parallel workgroup census readback (`censusReduce`).
+- **Render pipeline (`src/render/renderer.ts`)**:
+  - Sunlit pond depth (`128 × 80` light field), animated Voronoi caustics, and 16-tap cubic B-spline pH watercolor reconstruction (`water.wgsl`).
+  - Non-overlapping current streamlines and plant wakes (`flowCurves.ts`).
+  - Seeded finite fractal plants (`fern`, `radial`, `fan`, `spiral`) across 10 non-overlapping colonies (`habitat.ts`, `atlasGenerator.ts`).
+  - Directly instanced WebGPU particles (`particles.wgsl`) with lineage-tinted translucent pheromones.
+  - All cell wakes drawn strictly beneath cell bodies, followed by 4-ring dome-shaded deformable 112-vertex membranes (`membrane.ts`), edit-only microtubules, exterior organelles, cytoplasmic vacuoles & gas bubbles, and compact interior landmarks (`factoryLayout.ts`).
+  - Microscope post-processing pass (`microscope.wgsl`) with a 3.5× circular magnifying inspector lens, toggleable sunlit bloom, peripheral mipmap blur, and exterior greyscale dim during interoception or relative merge selection.
+- **Procedural progressive audio (`src/audio/`)**: 17 deterministic waveforms generated from source at 22,050 Hz, 128 BPM 64-bar progressive synthesizer across 7 stereo/filtered/delay Web Audio lanes with biomass transposition, inherited 6-note lineage melodies, environmental pH/light filtering, and pitch-colored sound ripples.
 
 ## Controls
 
-On a phone, use two fingers to pan, twist and zoom with fixed world anchors. **Follow** is highlighted while it centers a living cell and dim while the camera is free. The perception button switches to **Interoception** (internal particles; outside grey/dim) or **Exteroception** (external particles). **I** switches perception on desktop. Hidden chemistry uses its actual offscreen simulation; view Pause freezes only a browser's presentation while the shared world continues. See [Revision 45](docs/REVISION_45.md).
+- **Left-click / Tap focused cell or interior landmark**: Open top circular Action Tray and Bottom Description Bar (`P`/`Space` also pauses/resumes; edits work live or while paused).
+- **Select organelle icon -> Click membrane**: Place fixed-size organelle cleanly around the perimeter (`Esc` or top-left **Cancel Placement** cancels).
+- **Hover / Tap-hold (`2.5s`) particles or internal vacuoles**: Open the 3.5× circular microscope magnifier & metadata readout (pheromones display immutable emission-time snapshot metadata only).
+- **Left-drag / One-finger drag**: Pan freely across the toroidal pond; **Follow (`F`)** recenters the camera on your active cell.
+- **Wheel / Two-finger pinch, pan & twist / `+` `-`**: Zoom from the **80% widest playable pond view** up to `12×` outdoors or `120×` in **Interoception (`I` / `Tab`)**.
+- **Double-tap living relative or open `Family`**: Switch active lineage member or merge an eligible relative into your cell.
+- **`Colors`**: Customize lineage name and primary palette via HSV hue ring + Shirley-Chiu saturation/value disc.
+- **`F3`**: Toggle live FPS, tick timing, GPU particle census, reaction counts, and pond UTC/weather telemetry.
+- **`M`**: Mute/unmute audio (`F1` / `?` opens the built-in Gameplay & Science Guide; `Esc` opens Menu / New Pond Expedition).
 
-- **Tab:** pause and zoom inside your cell; press Tab again to keep edits and resume. Enter also resumes when no choice or placement is active. There are no Undo, Apply or Cancel-plan controls. **M** opens settings without discarding edits.
-- **Click an intracellular factory:** the folded assembly ribbons offer physical organs in small pages; the chamber cluster offers the four chemistry organs. Choose a picture, then click the membrane. New organs have one fixed size and neighbors move aside. **1–4 / 6–9 / 0** remain construction shortcuts; **V** selects the hunting receptor. Cilia are available in the assembly factory.
-- **Click an installed organ:** move, recycle or apply an already-kept matching blueprint. The inherent oral groove, hunting receptors and photosynthetic organs also offer **Steering**: click to cycle Off, 25%, 50%, 100%, 200% and 400%. This changes directional priority and following time versus exploration; size, power and feeding throughput stay unchanged. The oral groove only offers Steering. There is no resizing during placement or afterward. Recycling returns half the tissue and never refunds AP. Click a damaged attachment scar to restore its original anatomy.
-- **Click the nucleus:** choose a blueprint and accept an optional challenge. Hover it for the next objective, crisis progress and forecasts; its family tree also offers known blueprints. **Click the offspring bud:** fund/reclaim reserves, release a juvenile, store a dormant successor or follow a living relative.
-- **In edit mode, drag on bare cell surface:** place a microtubule between membrane, interior or existing-link points. Hover within 16 screen pixels of an unobstructed tube (scaled with text size) and scroll to adjust tension; right-click it to remove it. Factories and organ controls take precedence. **Right-click** cancels a held organ/move or closes local choices.
-- **Wheel:** zoom around the cell in locked follow mode, or around the cursor in free view, from the 80% widest view to 12×. It never resizes organs. **Middle-drag** pans while editing or in free view. **Space** toggles position-follow without pausing or rotating the world. Leaving edit restores the previous observation view.
-- **Hover particles:** a temporary local lens magnifies the scene and shows the particle’s name and role. In interoception it identifies food and waste carriers inside the focused cell. Phone taps open the same inspection. Moving away dismisses the effect; simulation continues.
-- **Keyboard editing:** **[ / ]** cycles cell targets, **Enter** opens/activates a choice, and arrow keys navigate the local choices or position a held organ around the membrane. Microtubules retain their direct mouse gestures.
-- **M:** settings with Quit, fullscreen, bloom, and persistent **85–175% text/interaction size**. **F11:** fullscreen. **I:** interoception/exteroception. **S:** sensing ranges. **F3:** optional backend/FPS/timing diagnostics, without a zoom percentage. **H:** next habitat. **R:** new expedition, retaining family history and discovered blueprints. Settings also opens **Family history**, including after defeat.
+## Development
 
-**While inspecting or placing anatomy in build mode**, a translucent blob at the top right compares usable biomass with the tissue required, using the same area-per-unit as the body. Pink means a shortfall. ATP production/spending sacs compare rates; an installed organ shows its recent actual drain, and construction/upgrade choices show tissue/AP costs and estimated upkeep. Hold **Alt** over a label for detailed explanations.
-
-ATP is a whole elastic sac that grows with stored energy, without a tank level or storage cap. Higher concentrations decay faster. Each AP is a small floating gold vacuole inside the cell. Biomass is actual cell area; food and waste vacuoles circulate while the editor pauses external biology. Paired contractile vacuoles and a small micronucleus complete the anatomical landmarks. Brief cell-local labels replace persistent panels; Alt reveals more detail. Submerged wakes stay below cells, and background water shimmer never distorts the scene. The micrometer scale measures the ordinary view outside the temporary inspection lens.
-
-Plant stems remain solid to cells and spikes, but all chemical particles permeate them in both visible and distant simulation. Food is no longer held behind a hard plant wall. Current-driven clouds still form; some previously collision-collected patches will disperse. The flow streamers now show three times as much trail history. See [Revision 23](docs/REVISION_23.md).
-
-The world wraps without walls. The entire rectangular view simulates at full speed, including its corners and a short margin outside the screen. Living cells outside that margin advance on staggered one-second schedules: they move, metabolize, repair, photosynthesize and sense real pheromones. Wider statistical absorption consumes actual nearby particles; anatomy-weighted hunting rolls require a received prey cue and a wholly hidden encounter. A killed cell lyses into ordinary particles for predators or scavengers to collect—there is no automatic food award. Particles keep flowing and diffusing throughout the habitat: distant packets advance in staggered half-second steps, with coarse background fluid refresh. Pheromone expiry still uses real elapsed time. Nearby hidden chemistry uses the existing oriented reactions at reduced resolution. See [revision nineteen](docs/REVISION_19.md) for ecology balance and cost, and [revision eighteen](docs/REVISION_18.md) for transport. The active region follows the actual camera, including free view. Tab/settings pause biology; Space is solely a camera control.
-
-## Adapt and establish a lineage
-
-Start with **36 biomass and 3 adaptation points**. New fixed-size anatomy costs biomass and adaptation; existing damage repair, repositioning and microtubules do not cost adaptation. Keep one of three mutation blueprints each tide, then pay to specialize a matching organ. Local choices show costs; hover the ATP sac for stored fuel and an active-upkeep estimate.
-
-The goal is to **establish your lineage through three crises**: Lean Current (2:00–6:00), Chemical Bloom (6:00–10:00), and Long Dusk (10:00–13:30). Each requires 60 observed seconds with at least 50% health, 10 ATP and recent feeding or carbon fixation. The final crisis must be earned by a descendant, who must also be healthy at the finish. The nucleus shows three progress arcs, exact requirements and the next useful action.
-
-Two-minute tides forecast changing light, arrivals and costly opponent adaptations. Gain **2 AP** at each of the first five transitions; a chosen feeding, growth or stability challenge can earn **2 more** at its deadline, including the transition into the finale. There is one blueprint choice per tide, before the finale. Editing, settings and family history pause biology; looking elsewhere with the free camera does not pause the crisis clock or earn observed-cell viability.
-
-Reproduction is available **as soon as you can fund it**. The bud quotes the additional tissue and **60 ATP** needed to inherit the current anatomy. Release a living juvenile or store a dormant successor. You can keep managing the parent or follow a living relative; anatomy still chooses its movement. Up to 12 oxygen transfers if available, and 20 of the reserved ATP pays division.
-
-**Death continues in the same habitat.** Control passes to an existing living family member, or a prepaid dormant body hatches. AP, drafts, crisis progress, enemies and the family melody continue. One generation-zero reserve is included in the initial population; extra reserves cost real resources. There can be four living family members and three dormant reserves. Exhausting them ends the expedition.
-
-Family history records generations and causes of death. Discovered blueprints persist locally and can replace a later expedition's ordinary draft choice; installing them still costs tissue/AP. No permanent stat bonuses are granted. See [revision sixteen](docs/REVISION_16.md) for current rules; [revision nine](docs/REVISION_9.md) preserves the original economy and mutation catalog.
-
-**Shared biology, player-specific expedition:** other cells use the same physiology, particle interactions, anatomical costs and pheromone perception. AP, blueprint drafts, family management, dormant reserves and persistent discoveries are player-lineage systems. NPCs do not reproduce or maintain seed banks in this revision; bounded habitat arrivals/replacements maintain their population. They do not have a reproductive behavior tree.
-
-## Anatomy
-
-| Key | Organelle | Biomass cost | Role |
-| --- | --- | ---: | --- |
-| 1 | Flagellum | 8 | Supplies extra thrust and turns the detecting organ toward its target. |
-| 2 | Protective cortex | 10 | Absorbs local damage before the membrane. |
-| 3 | Hunting spike | 12 | Physical contact weapon. Strong impacts puncture hard; slow pressure causes smaller ATP-funded wounds. No detection or steering. |
-| 4 | Repair body | 10 | Repairs damage, speeds receptor cleaning and releases acid buffers. |
-| — | Oral groove (inherent) | — | Every cell has a permanent membrane dent that senses nutrients, draws in food and releases digestive enzymes. |
-| 6 | Flight receptor | 6 | Reads pheromones reporting larger or armed cells, faces their reported location and requests travel away. Only this organ triggers flight. |
-| 7 | Photosynthesis | 12 | Seeks brighter water, fixes dissolved carbon into organic resources and releases oxygen. |
-| 8 | Toxin vesicle | 12 | Fires damaging toxin and receptor-blocking decoy particles toward a chemically sensed cell. |
-| 9 | Toxin neutralizer | 10 | Releases particles that bind toxin and make harmless material. |
-| 0 | Acid gland | 12 | Releases acidifying particles to change local digestion conditions. |
-| V | Hunting receptor | 6 | Reads local pheromones from smaller **or undefended** prey; faces and pursues the reported location. |
-
-Proboscis and engulfing pores have been removed. The spike and toxin vesicle are the weapons. The hunting receptor compares reported total organic material with its own cell. “Undefended” means no working spike, toxin vesicle or protective cortex at emission; it never checks the live source. A hunting receptor or photosynthetic organ can guide pursuit; flagella provide additional power. Toxin vesicles use a report received by a hunting or flight receptor, and flight takes priority when both senses respond.
-
-New player organs have a fixed size. Surface area, biomass and adaptation constrain new construction; existing NPC/inherited anatomy keeps its physical dimensions. Biomass growth has no arbitrary upper cap, although the finite toroidal habitat remains a geometric limit. Hydrostatic pressure, a soft cortex and the player-authored tension network control shape. New cells start with 0–4 seeded, randomly tensioned links; later links can branch from earlier ones. Offspring inherit edited networks. Internal unattached junctions move freely; connect them to the membrane/network to transmit useful shape forces.
-
-Larger cells have proportionally greater membrane drag: doubling radius roughly halves swimming speed at equal propulsion. Currents can still carry them, and more propulsion still helps. Cells push, spin and slide against one another and solid plant stems. Membranes compress locally and recover under pressure; spikes physically catch cells and stems before the body reaches them. Impact damage depends on actual impulse, so a few strong hits can kill exposed prey; armor still takes damage first. Place spikes around a hunting receptor and invest in propulsion to line up repeated strikes. A poorly aligned or slow hunter may only push prey away. See [revision seventeen](docs/REVISION_17.md) for the contact model and evidence.
-
-## Membranes and visible flow
-
-Cells have rounded, shaded membrane lips and a soft gel interior that follow their actual deformed outline. Lineage colors remain independent of diet or occupation. Pale animated streamers replace the background flow vectors; longer trails show faster current and their bright ends show direction. Faint downstream glints appear around cells moving relative to the water and around sturdy plant stems. These are bounded presentation effects, not extra chemical particles or new fluid forces. [Revision twenty](docs/REVISION_20.md) records the implementation and wide-view rendering checks.
-
-## Living techno
-
-Music comes entirely from the anatomy: the nucleus supplies the main beat, and equipped organelles and real food vacuoles play the original progressive phrases. There is no anonymous backing track. Neighbors are quieter, softer and sparser; larger bodies lower their registers. Pitch-colored waves originate at the instrument when its buffered audio plays. The inherited family melody, light/acidity filtering and volume control remain. Sound never changes simulation, and chemical particles do not pulse. See [Revision 42](docs/REVISION_42.md).
-
-## Living chemistry
-
-Chemical particles use **soft particle–particle repulsion** alongside current-driven motion and independent random-walk diffusion. Their forks and branches are artwork; physical encounters remain circular and reactions require compatible species and facing. [Revision 29](docs/REVISION_29.md) restores collisions after the overlap trial and optimizes the exact contact search and acidity work. The trial switch has been removed from settings; old saved trial choices are ignored. Diagnostic comparisons can still pass `--particle-collisions=off` to the frame profiler.
-
-[Revision 30](docs/REVISION_30.md) compares packed indexing, a CPU BVH, quadtree and buffered neighbor lists at 80% view, including clustered and large-cell fixtures. None demonstrates a reliable speed gain over the existing grid, which remains the default. The packed index reduces index memory; BVH, quadtree and caching are diagnostic options. The 50k/60 FPS target remains unmet.
-
-Revision 34 adds an opt-in GPU-resident particle transport/drawing comparison and a generated touch benchmark. Ordinary gameplay keeps CPU chemistry and contacts. See [Revision 34](docs/REVISION_34.md) for commands and pending Pixel 9 Pro XL / Galaxy Z Flip7 validation.
-
-[Revision 33](docs/REVISION_33.md) adds an eight-thread native particle pipeline with deterministic random draws and ordered reaction commits. Independent transport and geometric contact screening run in parallel; small jobs and unsupported diagnostic paths remain serial.
-
-[Revision 32](docs/REVISION_32.md) reduces current-engine CPU overhead with reusable chemistry scratch and fewer particle-ID lookups. It preserves ordered contacts, chemistry, material and random streams, with a performance ablation and parity tests.
-
-[Revision 31](docs/REVISION_31.md) adds explicit original Google LiquidFun and conservative distant-transport parcel trials. Zoom/pan cannot improve feeding in these modes; material and individual orientations are retained. LiquidFun is slower in dense whole-game captures, and the current scheduler gives parcels little useful coverage. The established medium, particle engine and density remain default. This is a desktop comparison stage toward mobile/idle support; full-world saving, ARM64 exports and weighted collision/reaction parcels remain future work.
-
-**Cells are the only sources of external particles.** The initial clouds represent products of the existing cells' earlier life, with source-cell identifiers. There is no automatic food/oxygen habitat spawner. Respiration, lower-yield fermentation, photosynthesis, secretion, wounds, recycling and death sustain the particle economy. Replacing a dead NPC is an explicit population event with accounted material input. Hidden replacement remains preferred; forecasted tides can admit a bounded number of arrivals into safe visible space when wide zoom leaves no hidden habitat.
-
-**Combining hunting and grazing:** try hunting at 200% and grazing at 25%. Weights select one organ and direction, with a 20% switching margin to prevent near-tie oscillation. Stronger valid hunting cues retain pursuit even when an older food signal reaches the nucleus later. Once hunting memory expires, grazing can steer toward released nutrients. Grazing steering Off keeps suction, digestion and absorption active, but does not navigate toward food. Explicit flight always wins. Family pheromones, delayed internal family signals and remembered family targets are ignored; parent/offspring spikes still collide physically without tissue injury. See [Revision 22](docs/REVISION_22.md).
-
-Membrane organs, placement previews, pore mouths, weapon shafts and secretion outlets use the local outward membrane normal. Deforming the cell changes their mounting direction. Reversible flagella apply force along their mounted axis, and the selected receptor's normal defines its facing request.
-
-Successful two-particle reactions produce a brief white-gold contact spark. These bounded visual effects do not change chemistry or diffusion.
-
-**Cells only learn about other cells through pheromones.** Every active creature releases small signal points that drift with current, diffuse and decay rapidly (mean lifetime 5 seconds). They pass through cells, reefs and other particles. Nearby receptors read the source's location, size, hostile anatomy and defense status **as they were at release**; a distant plume may be stale, and losing it ends pursuit. No live target tracking bypasses the trail. Hover a point to inspect its reported size, armed/defended status and age. [Revision 13](docs/REVISION_13.md) describes the rules and validation.
-
-Eleven particle types are visible: nutrient, oxygen, waste, pheromone, toxin, dissolved carbon, digestive enzyme, antitoxin, acidifying carrier, buffer and decoy. Forks, hooks, combs and linked lobes distinguish reacting species; their bright tips rotate with the actual particle orientation. Pheromones are non-oriented points. Compatible faces must touch and point toward each other to react; there is no additional reaction success roll. Thermal motion tumbles particles, and decay uses a per-second hazard instead of a fixed lifetime. Neighbor searches use spatial grids rather than all-pairs testing.
-
-| Encounter | Result |
-| --- | --- |
-| Waste + oxygen | Recycled nutrient and dissolved carbon. |
-| Enzyme + waste | Nutrient; the enzyme remains reusable. |
-| Antitoxin + toxin | Harmless waste containing both packets' material. |
-| Toxin + nutrient | Spoiled nutrient becomes waste. |
-| Compatible nutrient packets | A larger edible packet with their combined value. |
-| Acid + buffer | Their remaining acid/buffer capacities neutralize. |
-| Decoy + chemical receptor | Temporary occupancy reduces sensing range. |
-
-Light varies smoothly across the habitat and is visible in the water. Photosynthesis requires both light and carbon; light supplies energy, while water is an implicit reservoir for oxygen production. Photosynthetic cells release food and oxygen for neighbors.
-
-Acidity is a local transported field: increasing acidity shifts blue/teal water toward rose/magenta; buffering restores its normal color. Moderate acidity favors the modeled digestive enzyme. Excess acidity raises maintenance ATP costs, accumulates internal stress, slows metabolism and eventually damages cells. Buffers have finite capacity. The secreting cell is also exposed. Nutrient assembly does **not** gain an automatic acid bonus.
-
-Decoys temporarily reduce chemical sensing range. Every affected receptor automatically spends a little ATP to clean itself, repair bodies accelerate clearance, and passive release still works with no ATP. Purple rings and organ hover descriptions show the effect. Light sensing is unaffected.
-
-Pores pulse on consumption. The ATP sac shows current energy; damaged membranes/organs and hover descriptions show health. Yellow sac-to-surface packets illustrate ATP spending; pink nucleus-to-surface packets illustrate biomass-funded repair. External particles are shunted to the membrane edge instead of rendering underneath cells.
-
-The former 90-second food milestone has been replaced by lineage victory. The starting anatomy is a starting point for adaptation, not a guaranteed unattended win. Balanced habitat stages three reserved hunter arrivals after the first warning in each crisis; lean and rich profiles retain their opening hunters.
-
-## Performance revision
-
-Revision twenty-one profiles complete live frames and batches particle indexing, hidden chemistry, feeding, contact rejection, membrane dents, scheduling and mesh generation. It retains 60 Hz simulation, the full visible halo, particle populations, music and all visual effects. See [whole-frame results and reproducible commands](docs/REVISION_21.md) for dense 80% view, grown-cell and hunter-encounter measurements; F3 labels CPU tick and view-sync costs separately.
-
-Revision seven adds compiled particle transport, orientation chemistry, spatial grids, membrane exclusion, edge/pressure constraints and particle drawing buffers. Fluid viscosity and acidity transport run in native batches, and feeding pumps visit only nearby fluid nodes. Tiny distant cells use less decorative drawing; contact and chemistry still advance at the fixed simulation rate.
-
-A Vulkan compute transport experiment is included, but **is not enabled by default**: measurements found that the current CPU/GPU transfer bridge costs more than native CPU transport. It can be tried with `./tools/run.sh --rendering-method mobile -- --gpu-transport`. It does not move chemistry or the entire game onto the GPU. See the [benchmark results and remaining limits](docs/REVISION_7.md).
-
-## Procedural habitat
-
-Procedural generation and fractals are now a core visual direction. Large plant-like colonies include paired-leaf ferns, branching fans, curled spiral rosettes and radial colonies with five or seven arms. Each family has two seeded procedural variants. Their stout stems obstruct cells; chemical particles permeate them. Contact slides along branches without consuming material. Fine fronds are decorative, and the scenery does not add food or oxygen sources.
-
-Water gains broad blue, teal, jade and violet regions from seamless multiscale noise. These patterns stay fixed in world space, with existing light, acidity tint and bloom layered over them. Plant art is cached in eight mipmapped textures per habitat. See [revision fifteen](docs/REVISION_15.md) for current shapes, the offscreen simulation margin and wide-view measurements, and [revision eight](docs/REVISION_8.md) for the original collision scope. These additions do not solve the remaining whole-game frame-rate problem documented in revision seven.
-
-## Graphics and proposed chemistry
-
-[Revision ten](docs/REVISION_10.md) adds deep indigo/petrol water, turquoise light pools, broad colored membranes and seeded lineage palettes. **Body color never depends on occupation:** organelles and emitted particles communicate function. Larger internal shapes, integrated organ bases, rounded secretory glands and cached wide-zoom chemistry silhouettes make the vector artwork clearer. Fractal colonies form loose reefs with thicker, matching solid stems. Highlight-selective bloom follows the actual light resource; soft peripheral blur keeps the center and HUD sharp without a dark vignette. Blur remains active when bloom is disabled.
-
-[Complement-inspired mechanics](docs/COMPLEMENT_PROPOSAL.md) are proposed next: surface tags, cooperative pore assembly and protective inhibitors. They are not enabled in this graphics revision.
-
-[Action economy proposal](docs/ACTION_ECONOMY_PROPOSAL.md) retains the approved design rationale and future alternative endings. Its first prototype is documented in [Revision 9](docs/REVISION_9.md); [revision sixteen](docs/REVISION_16.md) introduces the current crisis and succession rules.
-
-## Science and scope
-
-[references.md](references.md) records a real phenomenon and source for each biological/physical mechanic, plus the differences between evidence and game rules. Maintain it as mechanics evolve.
-
-This is a coarse 2D game, not molecular dynamics or a full biochemical network. “Microtubules” are generic tension links; real microtubules also bear compression. The membrane remains star-shaped for stable rendering. Fluid is a finite-mass viscous grid, not an incompressible Navier–Stokes solver. Acidity is an acid-equivalent field, not calibrated pH. Growth, repair, metabolism and reactions use explicit coarse material accounting rather than atom-by-atom stoichiometry.
-
-Family history and discovered blueprint options save locally to Godot's user data directory. The live habitat is not saved across application restarts, and there are no permanent stat upgrades or packaged releases yet. Same-seed reproducibility is checked on one engine/platform, not promised across platforms. Diet balance, dense chemistry and long authored networks need playtesting.
-
-## Verification
+Prerequisites: Node 22+ and a WebGPU-capable browser (Chromium/Chrome 113+, Edge, or Firefox with WebGPU).
 
 ```sh
-./tools/test.sh
-python3 tests/test_launchers.py
+npm install
+npm run dev      # Start Vite dev server
+npm test         # Run headless Node simulation, biology & audio unit tests
+npm run lint     # ESLint typechecked lint check
+npm run build    # TypeScript check + production bundle in dist/
+npm run preview  # Preview production dist/ bundle locally
 ```
 
-The test launcher uses the same Steam discovery and fails on assertions or Godot script errors. Native tests build the extension first. Run `PRIMORDIA_BACKEND=script ./tools/test.sh` to verify the independent fallback too. Wide-view performance checks and per-item ablations are described in [revision seven](docs/REVISION_7.md) and [revision twelve](docs/REVISION_12.md). `tests/profile.gd` is a historical close-view diagnostic, not performance acceptance. F3 during play measures the real frame rate.
+Push to `main` triggers [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml), publishing `dist/` automatically to GitHub Pages.
 
-For a rendered capture with a display:
+## Scientific Honesty
 
-```sh
-./tools/run.sh -- --capture=/absolute/path/primordia.png
-```
-
-Optional capture flags include `--habitat=0`, `--advance=600`, `--assembly`, `--settings`, `--hud-scale=1.75` and `--senses`. Put habitat selection before advance. Capture output belongs outside source control.
-
-The owner's separate Linux **Steam Godot 4.7.2 / RTX 3090 / Threadripper 2990WX** machine remains unavailable to this task. It is an upper-capacity reference, not minimum hardware. See [revision-seven performance results](docs/REVISION_7.md), [revision-six graphics notes](docs/REVISION_6.md), [architecture](docs/ARCHITECTURE.md) and [persistent design](docs/DESIGN.md).
-
-Only authored source and stable Godot `.uid` identifiers are tracked. `.godot/` imports and caches regenerate automatically. Engine downloads, captures, logs and exports are not committed. No redistribution license has been granted for this private project.
-
-## Cell interface and inspection
-
-[Revision eleven](docs/REVISION_11.md) replaces the screen panels with cell-local construction, resource displays, nucleus/offspring controls and a temporary particle magnifier. The [original proposal](docs/CELL_INTERFACE_PROPOSAL.md) is retained with the owner's amendments; its Undo and resize ideas were rejected.
-
-The magnifier briefly follows the selected particle after it drifts away from the pointer, keeping its tooltip and orientation stable. Deliberate pointer movement releases it. [Revision fifteen](docs/REVISION_15.md) covers tracking, camera-edge simulation and the new plant families.
-
-## Revision 24: food patches and breathing room
-
-ATP from food is more productive and routine operation is cheaper, with the same prices for visible and offscreen cells. Repair/combat, AP, tissue prices, crisis goals and finite fuel remain. See [Revision 24](docs/REVISION_24.md) for parameters and validation.
-
-In build mode, click the **nucleus → Behavior** to cycle **Exploration** (Off / 25 / 50 / 100 / 200 / 400%) and **Cycle** (2 / 4 / 8 seconds). Default exploration is 25% with a four-second cycle. Each organ's steering gain determines its share of following time against this wandering weight: 100% signal versus 25% exploration means 80% following and 20% exploration; 25% versus 25% splits time equally. Flight always takes priority. Hover the organ for its current split. Tuning costs no tissue, ATP or AP and paid offspring inherit it.
-
-Grazing selects a locally sensed nutrient patch by mass, heads toward its centroid at distance, then targets actual particles nearby. A remote patch outside receptor reach is still unknown. No direct movement control or live-cell lookup is added.
-
-Death holds the camera on the membrane rupture for 1.15 seconds, then eases toward the actual successor over 0.65 seconds. Biology continues normally; there is no extra invulnerability or respawn reward. Wakes follow local fluid-relative motion, and a current-carried cell has little directional wake.
-
-The player starts with a grazing pore and **neither cilia nor a flagellum**. Both remain separate fixed-size assembly purchases, each costing eight tissue and one AP. Flagella emphasize thrust; cyan ciliary bands add weaker thrust plus a stronger directional local feeding current. Cilia use the receptor/exploration-selected heading, add no sensing or absorption, and pull hazards along with food. The current acts on the real fluid and returns equal/opposite momentum to the cell in detailed and coarse simulation. NPC flagella remain unchanged; offspring inherit paid anatomy normally. Cilia also contribute their own synthesized flutter-pluck rhythm.
-
-## Revision 25: GPU fluid comparison
-
-Two opt-in prototypes compare a pressure grid and Position Based Fluids with the existing medium. Ordinary gameplay remains on the established CPU backend. [Revision 25](docs/REVISION_25.md) documents GPU validation, 20k/50k chemical workloads, live catch-up, physics defects and Steam-compatible reproduction commands.
-
-Neither solver alone makes dense chemistry fast: particle transport, reactions and view preparation dominate. Packed persistent chemical state is the next priority; moving-body pressure coupling and PBF boundary density need work before either experimental solver can become the default.
-
-## Revision 26: sharing particle state with drawing
-
-The native path now reuses numeric packet state between transport, grid updates and chemistry, then carries it into particle drawing. Feeding, toxin/decoy binding, membrane shunting, spawning and compaction refresh affected visuals; paused editing reads fresh state. Existing chemistry, finite material and sensing rules remain.
-
-[Revision 26](docs/REVISION_26.md) includes independent packing/render-cache measurements, 20k/50k/100k whole-frame tests at the 80% view, clustered clouds, large cells and live catch-up. This is the first migration stage: biological dictionaries still publish each tick, and dense particle soup has not reached the 60 FPS target.
-
-## Revision 27: native-owned particle state
-
-Ordinary native gameplay now keeps particles in a persistent C++ pool. Motion, chemistry, feeding, pheromone sensing, contact, offscreen biology and drawing share that state; per-tick dictionary mirrors are gone. Local inspection uses stable handles so the lens follows a particle through compaction.
-
-At the 80% view on the RTX 5080 workstation, matched initial 20k fixed-step whole-frame time falls from **71.3 to 23.5 ms**, about **67% less**. The live 20k fixture approaches real time, but frame stalls remain and particle counts shrink; sustained 20k at 60 FPS and larger soups remain unproven. Default gameplay density is unchanged. [Revision 27](docs/REVISION_27.md) documents 20k/50k/100k, clusters, large cells, hunters/cilia, audio and live catch-up tests, exact finite-ecology comparisons and the explicit fallback/snapshot interface.
-
-The [Revision 35 GPU matching diagnostic](docs/REVISION_35.md) adds parallel
-mutual-choice reactions and circular contacts to the resident experiment.
-It remains separate from gameplay; cell coupling and phone validation are pending.
-
-[Revision 36](docs/REVISION_36.md) adds finite GPU cell-exchange tests and an
-opt-in complete-game CPU matching comparison. Whole-frame gains remain too
-small to justify changing the default; the GPU gameplay migration remains gated.
-
-Revision 37 makes the resident GPU grid substantially cheaper and adds bounded, finite feeding-capacity reservations for queued cell exchange. This remains an opt-in GPU experiment; ordinary gameplay retains the CPU engine. See [Revision 37](docs/REVISION_37.md) for matched outcomes, rendered particle-scene measurements, exchange latency, and remaining integration work.
-
-Revision 38 adds resident pheromone reports and grazing/hunting/flight queries to the GPU feeding bridge, with completed results driving existing CPU cell behavior and resource updates. Spreading receptor work lowers clustered diagnostic step time from 8.68 to 6.86 ms; this is subsystem throughput with shrinking clouds, not whole-game FPS. Desktop correctness/performance gate the integration; phone validation is a later target. See [Revision 38](docs/REVISION_38.md) for comparisons, bounds and remaining coupling work.
-
-The shared persistent browser service uses port **8766** on `samzapo-desktop`, with native GPU simulation on the server and WebGL presentation in browsers. See [private deployment and access](docs/deployment.md) and [revision 44](docs/REVISION_44.md) for camera/coarse behavior, live editors, checkpointing and bounds.
+Primordia models simplified biological and physicochemical analogies rather than full molecular kinetics, true soft-body continuum mechanics, or cross-hardware floating-point determinism. Real-world motivating sources for each mechanic are tracked in [`references.md`](references.md) and inside the in-app Science Guide.
