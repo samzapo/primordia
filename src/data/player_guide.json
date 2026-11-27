@@ -71,19 +71,19 @@
       {
         "id": "build",
         "title": "Build and restore",
-        "text": "Open Assembly for movement, oral grooves, armor and glands, Chemistry for internal organs and leaves, or Receptors for free chemical senses. The first two non-receptor organelles on each cell are free. After those, prices follow Fibonacci ×10: 10, 10, 20, 30, 50, 80… biomass. Reabsorbing one moves the next build back one step. Free receptors do not advance the sequence. Both starter organelles can be replaced. Placing an organelle shows an outward ripple. Refused placements have a red-bordered notice. Brief notices fade after three seconds.",
+        "text": "Open Assembly for movement, oral grooves, armor and glands, Chemistry for internal organs and leaves, or Receptors for free chemical senses. Non-receptor organelles buy and sell along Fibonacci numbers: 0, 0, 1, 1, 2, 3, 5, 8… biomass based on how many non-receptor organelles are currently owned. Free receptors do not advance the sequence. Both starter organelles can be replaced. Placing an organelle spends biomass (shrinking cell size until more biomass is grown) and shows an outward ripple. Refused placements have a red-bordered notice. Brief notices fade after three seconds.",
         "sources": []
       },
       {
         "id": "cell_details",
         "title": "Read the cell’s resources",
-        "text": "Biomass builds and repairs your cell. ATP powers its work. Construction shows its biomass price before you place it. Free construction does not mean free running costs.",
+        "text": "Biomass builds and repairs your cell, pays for organelles, and directly scales cell size. ATP powers its work. Construction shows its biomass price before you place it. Free construction does not mean free running costs.",
         "sources": []
       },
       {
         "id": "organs",
         "title": "Reabsorb and specialize",
-        "text": "Open an organelle and choose Reabsorb to remove it. Half its remaining paid tissue returns as biomass. A free build returns no biomass. Adaptations change matching organelles; free division mutation offers appear in the nucleus.",
+        "text": "Open any organelle and choose Recycle to sell it. Regardless of construction order, any non-receptor organelle sells for the top step of the 0, 0, 1, 1, 2, 3, 5… Fibonacci ladder for the count owned (stepping down one rung for each organ sold) and grows the cell back by the refunded biomass. Adaptations change matching organelles; free division mutation offers appear in the nucleus.",
         "sources": []
       },
       {
@@ -607,7 +607,7 @@
         {
           "id": "organ_family_away",
           "title": "Away from family receptor",
-          "text": "A free receptor from the purple Receptor factory. Steers away from locally detected family pheromone trails, helping relatives spread out. Survival needs take priority. Free receptors do not raise the next organelle’s price and return no paid biomass when reabsorbed.",
+          "text": "A free receptor from the purple Receptor factory. Steers away from locally detected family pheromone trails, helping relatives spread out. Survival needs take priority. Free receptors do not raise the next organelle’s price and sell for 0 biomass.",
           "sources": [
             {
               "title": "Chemical sensing under flow",
@@ -881,7 +881,7 @@
         {
           "id": "free-construction",
           "title": "Two free organelles",
-          "text": "Each cell has two reusable free construction places, excluding the always-free sensing receptors. The starter leaf and oral groove fill both. Reabsorption returns half of biomass actually paid into an organ; free tissue gives no biomass refund. Free construction material is an explicit game allowance.",
+          "text": "Each cell has two reusable free construction slots, excluding the always-free sensing receptors. Both buy and sell prices follow the exact 0, 0, 1, 1, 2, 3, 5… Fibonacci ladder determined solely by the number of non-receptor organelles currently owned, regardless of which organelle was built first. Unspent biomass directly scales cell volume and radius.",
           "sources": []
         },
         {

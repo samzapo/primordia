@@ -623,14 +623,15 @@ export class CellInterface {
       }
 
       const idx = cell.organs.indexOf(organ);
-      const refundAmt = cell.constructionRefund(organ).toFixed(1);
+      const refundVal = cell.constructionRefund(organ);
+      const refundAmt = Number.isInteger(refundVal) ? String(refundVal) : refundVal.toFixed(1);
       this.descActionsEl.appendChild(
         mkAct(
           `Recycle (+${refundAmt})`,
           {
             title: `Recycle ${ORGAN_TITLES[organ.kind]}`,
-            subtitle: `Refund +${refundAmt} biomass`,
-            body: 'Reabsorb this organelle and recover 50% of its paid tissue cost (free organs refund 0 biomass).',
+            subtitle: `Sell for +${refundAmt} biomass`,
+            body: 'Sell this organelle at the current Fibonacci price for the number of non-receptor organelles owned (receptors sell for 0).',
           },
           () => {
             if (idx >= 0 && sim.removeOrgan(idx)) {

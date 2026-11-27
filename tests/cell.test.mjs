@@ -11,22 +11,58 @@ import {
 import { PORE_REQUIRED, acceptSurfacePacket, advanceSurfaceComplexes } from '../src/sim/surfaceChemistry.ts';
 import { fillToxinSacs } from '../src/sim/toxinSac.ts';
 
-test('all 18 organ kinds define titles, costs and Fibonacci non-receptor pricing', () => {
+test('all 18 organ kinds define titles, costs and symmetric 0,0,1,1,2,3,5 Fibonacci buy/sell with size scaling', () => {
   assert.equal(ORGAN_KINDS.length, 18);
   const cell = new Cell(10, { x: 500, y: 500 }, 123);
   cell.biomass = 200;
+  cell.updateGeometry();
+
+  // Receptors stay free and do not advance Fibonacci ladder
   assert.equal(cell.constructionPrice('sensing'), 0);
   assert.ok(isReceptorKind('hunting'));
-  assert.equal(cell.constructionPrice('feeding'), 0);
-  assert.ok(cell.addOrgan('feeding', 0, 'graze', false));
-  assert.equal(cell.constructionPrice('propulsion'), 0);
-  assert.ok(cell.addOrgan('propulsion', Math.PI, 'graze', false));
-  // Fibonacci x 10 after 2 free slots: 10, 10, 20, 30...
-  assert.equal(cell.constructionPrice('protection'), 10);
-  assert.ok(cell.addOrgan('protection', 1.2, 'graze', false));
-  assert.equal(cell.constructionPrice('toxin'), 10);
-  assert.ok(cell.addOrgan('toxin', -1.2, 'graze', false));
-  assert.equal(cell.constructionPrice('cilia'), 20);
+  assert.ok(cell.addOrgan('hunting', -0.4, 'hunt', true));
+  assert.equal(cell.constructionRefund(cell.organs[0]), 0);
+
+  // Symmetric Fibonacci buy ladder: 0, 0, 1, 1, 2, 3, 5...
+  const expected = [0, 0, 1, 1, 2, 3, 5];
+  const placements = [
+    ['feeding', 0],
+    ['propulsion', Math.PI],
+    ['protection', 1.2],
+    ['toxin', -1.2],
+    ['cilia', 0.6],
+    ['neutralizing', -0.6],
+    ['acidifying', 2.2],
+  ];
+  for (let i = 0; i < expected.length; i++) {
+    const [kind, ang] = placements[i];
+    const radiusBefore = cell.radius;
+    const biomassBefore = cell.biomass;
+    assert.equal(cell.constructionPrice(kind), expected[i]);
+    assert.ok(cell.addOrgan(kind, ang, 'graze', true));
+    assert.equal(cell.biomass, biomassBefore - expected[i]);
+    if (expected[i] > 0) {
+      assert.ok(cell.radius < radiusBefore, 'spending biomass should shrink cell size');
+    }
+  }
+
+  // Every non-receptor organelle (including the first free ones!) sells at the top Fibonacci rung regardless of order
+  for (let i = expected.length - 1; i >= 0; i--) {
+    const nonReceptors = cell.organs.filter((o) => !isReceptorKind(o.kind));
+    for (const o of nonReceptors) {
+      assert.equal(cell.constructionRefund(o), expected[i]);
+    }
+    // Always sell index 0 of nonReceptors (oldest first!) to prove order independence
+    const targetIdx = cell.organs.findIndex((o) => !isReceptorKind(o.kind));
+    const radiusBeforeSell = cell.radius;
+    const biomassBeforeSell = cell.biomass;
+    cell.recycle(targetIdx);
+    assert.equal(cell.biomass, biomassBeforeSell + expected[i]);
+    if (expected[i] > 0) {
+      assert.ok(cell.radius > radiusBeforeSell, 'selling organelle should grow cell size back');
+    }
+  }
+  assert.equal(cell.biomass, 200);
   assert.ok(ORGAN_TITLES.proboscis.length > 0);
   assert.ok(ORGAN_COST.cilia > 0);
 });

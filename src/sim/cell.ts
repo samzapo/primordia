@@ -157,6 +157,8 @@ export const INTERNAL_ORGANS = new Set<string>(['mitochondrion', 'toxin_sac']);
 
 export const BASELINE_RADIUS = 47.0;
 export const BASELINE_VOLUME = 78.0;
+export const MIN_CELL_VOLUME = 12.0;
+export const BIOMASS_VOLUME_SCALE = 1.8;
 export const TISSUE_AREA =
   (MEMBRANE_COUNT * 0.5 * Math.sin(TAU / MEMBRANE_COUNT) * BASELINE_RADIUS * BASELINE_RADIUS) /
   BASELINE_VOLUME;
@@ -326,6 +328,19 @@ export function organUpkeepEstimate(organ: Pick<Organ, 'kind' | 'scale' | 'hp' |
   return rate;
 }
 
+/** Symmetric Fibonacci organelle cost/sell ladder: 0, 0, 1, 1, 2, 3, 5, 8... by organelle index. */
+export function fibonacciOrganPrice(index: number): number {
+  if (index < 2) return 0;
+  let a = 1;
+  let b = 1;
+  for (let i = 2; i < index; i++) {
+    const next = Math.min(1e15, a + b);
+    a = b;
+    b = next;
+  }
+  return a;
+}
+
 export function tissueRadius(volume: number): number {
   return BASELINE_RADIUS * Math.sqrt(Math.max(0, volume) / BASELINE_VOLUME);
 }
@@ -466,16 +481,7 @@ export class Cell {
 
   constructionPrice(kind: OrganKind): number {
     if (isReceptorKind(kind)) return 0;
-    const n = this.nonReceptorCount();
-    if (n < 2) return 0;
-    let a = 1;
-    let b = 1;
-    for (let i = 2; i < n; i++) {
-      const next = Math.min(1e15, a + b);
-      a = b;
-      b = next;
-    }
-    return a * 10;
+    return fibonacciOrganPrice(this.nonReceptorCount());
   }
 
   synergy(): '' | 'parasite' | 'hunter' | 'producer' | 'grazer' {
@@ -551,16 +557,8 @@ export class Cell {
   }
 
   storageVolume(spentBiomass = 0): number {
-    const syn = this.synergy();
-    const tissueFactor = syn === 'grazer' || syn === 'parasite' ? 0.4 : 0.12;
-    const foodFactor = syn === 'hunter' ? 0.025 : 0.15;
-    const fitted = BASELINE_VOLUME * Math.pow((this.occupied() * 1.1) / (TAU * BASELINE_RADIUS), 2);
-    const v =
-      this.body +
-      Math.max(0, this.biomass - spentBiomass) * tissueFactor +
-      this.substrate * foodFactor +
-      (this.waste + this.carbon) * 0.08;
-    return Math.max(8.0, fitted, v);
+    const effectiveBiomass = Math.max(0, this.biomass - spentBiomass);
+    return Math.max(8.0, MIN_CELL_VOLUME + effectiveBiomass * BIOMASS_VOLUME_SCALE);
   }
 
   growthScale(): number {
@@ -848,7 +846,9 @@ export class Cell {
   }
 
   constructionRefund(organ: Organ): number {
-    return Math.min(organ.material, organ.paidMaterial) * 0.5 + organ.storedToxin * 0.5;
+    if (isReceptorKind(organ.kind)) return 0;
+    const n = this.nonReceptorCount();
+    return fibonacciOrganPrice(Math.max(0, n - 1)) + organ.storedToxin * 0.5;
   }
 
   recycle(index: number): number {
@@ -856,8 +856,8 @@ export class Cell {
       return -1;
     }
     const organ = this.organs[index];
-    this.organs.splice(index, 1);
     const refund = this.constructionRefund(organ);
+    this.organs.splice(index, 1);
     const debris = Math.max(0, organ.material + organ.storedToxin - refund);
     this.biomass += refund;
     if (organ.kind === 'feeding') {
