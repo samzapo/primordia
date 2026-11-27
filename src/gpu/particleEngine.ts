@@ -108,6 +108,9 @@ export class ParticleEngine {
   private stagingReady: [GpuReceipts | null, GpuReceipts | null] = [null, null];
   private stagingInFlight: [boolean, boolean] = [false, false];
   private stagingRevision: [number, number] = [0, 0];
+  private inspectSubmitSeq = 0;
+  private stagingSeq: [number, number] = [0, 0];
+  private stagingInspectEpoch: [number, number] = [0, 0];
   private stagingCounts: [
     { feeds: number; queries: number; bodies: number; decoys: number },
     { feeds: number; queries: number; bodies: number; decoys: number },
@@ -384,6 +387,9 @@ export class ParticleEngine {
     this.uploadFlow(medium);
 
     this.stagingReady = [null, null];
+    this.inspectSubmitSeq = 0;
+    this.stagingSeq = [0, 0];
+    this.stagingInspectEpoch = [0, 0];
     this.stagingCounts = [
       { feeds: 0, queries: 0, bodies: 0, decoys: 0 },
       { feeds: 0, queries: 0, bodies: 0, decoys: 0 },
@@ -410,14 +416,19 @@ export class ParticleEngine {
   }
 
   pollReceipts(): GpuReceipts | null {
+    let bestIdx = -1;
+    let bestSeq = Infinity;
     for (let i = 0; i < 2; i++) {
       const ready = this.stagingReady[i];
-      if (ready) {
-        this.stagingReady[i] = null;
-        return ready;
+      if (ready && this.stagingSeq[i] < bestSeq) {
+        bestSeq = this.stagingSeq[i];
+        bestIdx = i;
       }
     }
-    return null;
+    if (bestIdx < 0) return null;
+    const ready = this.stagingReady[bestIdx];
+    this.stagingReady[bestIdx] = null;
+    return ready;
   }
 
   encodeInspectOnly(
@@ -446,6 +457,8 @@ export class ParticleEngine {
       encoder.copyBufferToBuffer(this.receiptBuffer, 0, this.stagingBuffers[slot], 0, RECEIPT_BYTES);
       this.pendingCopySlot = slot;
       this.stagingRevision[slot] = -1;
+      this.stagingSeq[slot] = ++this.inspectSubmitSeq;
+      this.stagingInspectEpoch[slot] = inspectCursor.epoch;
       this.stagingCounts[slot] = { feeds: 0, queries: 0, bodies: 0, decoys: 0 };
       this.stagingSlot = 1 - slot;
     } else {
@@ -707,6 +720,8 @@ export class ParticleEngine {
       encoder.copyBufferToBuffer(this.receiptBuffer, 0, this.stagingBuffers[slot], 0, RECEIPT_BYTES);
       this.pendingCopySlot = slot;
       this.stagingRevision[slot] = input.revision;
+      this.stagingSeq[slot] = ++this.inspectSubmitSeq;
+      this.stagingInspectEpoch[slot] = input.inspectCursor.epoch;
       this.stagingCounts[slot] = {
         feeds: feedCount,
         queries: queryCount,
@@ -726,6 +741,8 @@ export class ParticleEngine {
 
     this.stagingInFlight[slot] = true;
     const rev = this.stagingRevision[slot];
+    const inspectSeq = this.stagingSeq[slot];
+    const inspectEpoch = this.stagingInspectEpoch[slot];
     const counts = { ...this.stagingCounts[slot] };
     const buf = this.stagingBuffers[slot];
 
@@ -733,7 +750,16 @@ export class ParticleEngine {
       .mapAsync(GPUMapMode.READ)
       .then(() => {
         const range = buf.getMappedRange();
-        const receipts = this.decodeReceipts(range, rev, counts.feeds, counts.queries, counts.bodies, counts.decoys);
+        const receipts = this.decodeReceipts(
+          range,
+          rev,
+          inspectEpoch,
+          inspectSeq,
+          counts.feeds,
+          counts.queries,
+          counts.bodies,
+          counts.decoys,
+        );
         buf.unmap();
         this.stagingInFlight[slot] = false;
         this.stagingReady[slot] = receipts;
@@ -747,6 +773,8 @@ export class ParticleEngine {
   private decodeReceipts(
     buffer: ArrayBuffer,
     revision: number,
+    inspectEpoch: number,
+    inspectSeq: number,
     feedCount: number,
     queryCount: number,
     bodyCount: number,
@@ -870,6 +898,8 @@ export class ParticleEngine {
 
     return {
       revision,
+      inspectEpoch,
+      inspectSeq,
       bodyIntakes,
       feedResults,
       queryResults,

@@ -1154,7 +1154,7 @@ export class Renderer {
       const ly = state.inspector.screenY * state.dpr;
       const lr = state.inspector.radiusPx * state.dpr;
 
-      if (sim.lastInspected?.valid) {
+      if (sim.lastInspected?.valid && (!state.interoception || sim.lastInspected.kind === SPECIES.PHEROMONE)) {
         const ins = sim.lastInspected;
         const dx = offsetVec({ x: state.camX, y: state.camY }, { x: ins.x, y: ins.y });
         const cr = Math.cos(-state.rotation);

@@ -33,6 +33,12 @@ interface InternalInspectResult {
   worldPos: Vec2;
 }
 
+function circleRectGap(rx: number, ry: number, rw: number, rh: number, cx: number, cy: number): number {
+  const nx = Math.max(rx, Math.min(cx, rx + rw));
+  const ny = Math.max(ry, Math.min(cy, ry + rh));
+  return Math.hypot(cx - nx, cy - ny);
+}
+
 export class ParticleInspector {
   readonly tooltipEl: HTMLDivElement;
 
@@ -49,12 +55,29 @@ export class ParticleInspector {
   private cursorAnchorX = 0;
   private cursorAnchorY = 0;
   private internalHit: InternalInspectResult | null = null;
+  private lockedTip: { x: number; y: number } | null = null;
+  private lastTipTargetKey = '';
 
   constructor(parent: HTMLElement) {
     this.tooltipEl = document.createElement('div');
     this.tooltipEl.className = 'inspector-tip hud-panel';
     this.tooltipEl.hidden = true;
     parent.appendChild(this.tooltipEl);
+  }
+
+  private resetInspectionTarget(sim?: Simulation, deactivateCursor = true): void {
+    this.trackUntil = -1;
+    this.trackedInternalId = -1;
+    this.internalHit = null;
+    this.lockedTip = null;
+    this.lastTipTargetKey = '';
+    if (sim) {
+      if (deactivateCursor) sim.inspectCursor.active = false;
+      sim.inspectCursor.trackedSlot = -1;
+      sim.inspectCursor.trackedGen = 0;
+      sim.inspectCursor.epoch += 1;
+      sim.lastInspected = null;
+    }
   }
 
   triggerTouchHold(sx: number, sy: number, nowPerf: number, sim?: Simulation): void {
@@ -69,29 +92,15 @@ export class ParticleInspector {
     this.touchHoldUntil = nowPerf + 3.5;
     this.active = true;
     if (moved || !wasActive) {
-      this.trackUntil = -1;
-      this.trackedInternalId = -1;
-      this.internalHit = null;
-      if (sim) {
-        sim.inspectCursor.trackedSlot = -1;
-        sim.inspectCursor.trackedGen = 0;
-        sim.lastInspected = null;
-      }
+      this.resetInspectionTarget(sim, true);
     }
   }
 
   cancel(sim?: Simulation): void {
     this.active = false;
     this.touchHoldUntil = -1;
-    this.trackUntil = -1;
-    this.trackedInternalId = -1;
-    this.internalHit = null;
     this.tooltipEl.hidden = true;
-    if (sim) {
-      sim.inspectCursor.active = false;
-      sim.inspectCursor.trackedSlot = -1;
-      sim.lastInspected = null;
-    }
+    this.resetInspectionTarget(sim, true);
   }
 
   update(
@@ -109,8 +118,10 @@ export class ParticleInspector {
   ): InspectorRenderState {
     if (blockedByUi) {
       this.active = false;
-      sim.inspectCursor.active = false;
       this.tooltipEl.hidden = true;
+      if (sim.inspectCursor.active || sim.inspectCursor.trackedSlot >= 0 || sim.lastInspected) {
+        this.resetInspectionTarget(sim, true);
+      }
       return { active: false, screenX: 0, screenY: 0, radiusPx: 0 };
     }
 
@@ -120,9 +131,7 @@ export class ParticleInspector {
       }
     } else if (pointerInsideCanvas) {
       if (Math.hypot(pointerX - this.cursorAnchorX, pointerY - this.cursorAnchorY) > CURSOR_RELEASE_PX) {
-        this.trackUntil = -1;
-        this.trackedInternalId = -1;
-        sim.inspectCursor.trackedSlot = -1;
+        this.resetInspectionTarget(sim, true);
         this.cursorAnchorX = pointerX;
         this.cursorAnchorY = pointerY;
       }
@@ -143,21 +152,18 @@ export class ParticleInspector {
         const tol = c.extent() + 8 / Math.max(0.8, camera.zoom);
         if (Math.hypot(d.x, d.y) <= tol) {
           this.active = false;
-          sim.inspectCursor.active = false;
-          sim.inspectCursor.trackedSlot = -1;
-          this.trackUntil = -1;
-          this.trackedInternalId = -1;
           this.tooltipEl.hidden = true;
+          this.resetInspectionTarget(sim, true);
           return { active: false, screenX: this.screenX, screenY: this.screenY, radiusPx: 0 };
         }
       }
     }
 
     if (!this.active) {
-      sim.inspectCursor.active = false;
-      sim.inspectCursor.trackedSlot = -1;
-      this.trackedInternalId = -1;
       this.tooltipEl.hidden = true;
+      if (sim.inspectCursor.active || sim.inspectCursor.trackedSlot >= 0 || sim.lastInspected) {
+        this.resetInspectionTarget(sim, true);
+      }
       return { active: false, screenX: this.screenX, screenY: this.screenY, radiusPx: 0 };
     }
 
@@ -207,28 +213,36 @@ export class ParticleInspector {
     }
 
     // Sync external particle query tracking (0.9s hover lock or full touch hold)
-    const worldRadius = LENS_RADIUS_PX / Math.max(0.8, camera.zoom);
-    sim.inspectCursor.active = true;
-    sim.inspectCursor.x = wp.x;
-    sim.inspectCursor.y = wp.y;
-    sim.inspectCursor.maxRadius = Math.min(85, worldRadius);
-
-    const ins = sim.lastInspected;
-    if (ins && ins.valid) {
-      if (isTouch || nowPerf <= this.trackUntil || sim.inspectCursor.trackedSlot === ins.slot) {
-        sim.inspectCursor.trackedSlot = ins.slot;
-        sim.inspectCursor.trackedGen = ins.gen;
-        if (nowPerf > this.trackUntil) this.trackUntil = nowPerf + 0.9;
-      } else {
-        sim.inspectCursor.trackedSlot = ins.slot;
-        sim.inspectCursor.trackedGen = ins.gen;
-        this.trackUntil = nowPerf + 0.9;
-      }
-    } else {
+    let ins: Simulation['lastInspected'] = null;
+    if (this.internalHit) {
+      sim.inspectCursor.active = false;
       sim.inspectCursor.trackedSlot = -1;
+      sim.inspectCursor.trackedGen = 0;
+      sim.lastInspected = null;
+    } else {
+      const worldRadius = LENS_RADIUS_PX / Math.max(0.8, camera.zoom);
+      sim.inspectCursor.active = true;
+      sim.inspectCursor.x = wp.x;
+      sim.inspectCursor.y = wp.y;
+      sim.inspectCursor.maxRadius = Math.min(85, worldRadius);
+
+      ins = sim.lastInspected;
+      if (ins && ins.valid) {
+        if (isTouch || nowPerf <= this.trackUntil || sim.inspectCursor.trackedSlot === ins.slot) {
+          sim.inspectCursor.trackedSlot = ins.slot;
+          sim.inspectCursor.trackedGen = ins.gen;
+          if (nowPerf > this.trackUntil) this.trackUntil = nowPerf + 0.9;
+        } else {
+          sim.inspectCursor.trackedSlot = ins.slot;
+          sim.inspectCursor.trackedGen = ins.gen;
+          this.trackUntil = nowPerf + 0.9;
+        }
+      } else {
+        sim.inspectCursor.trackedSlot = -1;
+      }
     }
 
-    // Center the optical magnification lens directly on the tracked particle while keeping tooltip stationary at queryX/queryY
+    // Center the optical magnification lens directly on the tracked particle while keeping tooltip stationary & clear of lens
     const extValid = Boolean(ins && ins.valid && (!camera.interoception || ins.kind === SPECIES.PHEROMONE));
     const hasMatch = this.internalHit !== null || extValid;
     let lensScreenX = this.queryX;
@@ -245,8 +259,18 @@ export class ParticleInspector {
     this.screenX = lensScreenX;
     this.screenY = lensScreenY;
 
-    // Render informative tooltip anchored cleanly near the initial poke / cursor spot
-    this.renderTooltip(sim, wp, camera.interoception, ins, viewW, viewH);
+    const targetKey = this.internalHit
+      ? `int:${this.internalHit.id}`
+      : extValid && ins
+        ? `ext:${ins.slot}:${ins.gen}`
+        : '';
+    if (targetKey !== this.lastTipTargetKey) {
+      this.lastTipTargetKey = targetKey;
+      this.lockedTip = null;
+    }
+
+    // Render informative tooltip anchored cleanly near lens and never overlapping magnification
+    this.renderTooltip(sim, wp, camera.interoception, ins, viewW, viewH, lensScreenX, lensScreenY);
 
     return {
       active: hasMatch,
@@ -263,6 +287,8 @@ export class ParticleInspector {
     ins: Simulation['lastInspected'],
     viewW: number,
     viewH: number,
+    lensX: number,
+    lensY: number,
   ): void {
     const lines: Array<{ text: string; bold?: boolean }> = [];
     if (this.internalHit) {
@@ -332,21 +358,66 @@ export class ParticleInspector {
     const tipW = Math.max(200, tipRect.width || 250);
     const tipH = Math.max(64, tipRect.height || 96);
 
-    let tipX = this.queryX + LENS_RADIUS_PX + 12;
-    let tipY = this.queryY - tipH * 0.5;
-    if (tipX + tipW + 12 > viewW) {
-      tipX = this.queryX - LENS_RADIUS_PX - tipW - 12;
+    const minX = 10;
+    const maxX = Math.max(minX, viewW - tipW - 10);
+    const minY = 12;
+    const maxY = Math.max(minY, viewH - tipH - 12);
+    const clampX = (x: number) => Math.min(maxX, Math.max(minX, x));
+    const clampY = (y: number) => Math.min(maxY, Math.max(minY, y));
+    const minKeepDist = LENS_RADIUS_PX + 8;
+    const desiredDist = LENS_RADIUS_PX + 12;
+
+    if (this.lockedTip) {
+      const lx = clampX(this.lockedTip.x);
+      const ly = clampY(this.lockedTip.y);
+      if (
+        Math.abs(lx - this.lockedTip.x) < 1 &&
+        Math.abs(ly - this.lockedTip.y) < 1 &&
+        circleRectGap(lx, ly, tipW, tipH, lensX, lensY) >= minKeepDist
+      ) {
+        this.tooltipEl.style.left = `${Math.round(lx)}px`;
+        this.tooltipEl.style.top = `${Math.round(ly)}px`;
+        return;
+      }
     }
-    if (tipX < 10) {
-      // Narrow mobile viewport: place cleanly above or below anchor
-      tipX = Math.max(10, Math.min(viewW - tipW - 10, this.queryX - tipW * 0.5));
-      tipY = this.queryY > tipH + LENS_RADIUS_PX + 24
-        ? this.queryY - LENS_RADIUS_PX - tipH - 12
-        : this.queryY + LENS_RADIUS_PX + 12;
+
+    const candidates: Array<{ x: number; y: number }> = [
+      { x: lensX + desiredDist, y: this.queryY - tipH * 0.5 },
+      { x: lensX - desiredDist - tipW, y: this.queryY - tipH * 0.5 },
+      { x: this.queryX - tipW * 0.5, y: lensY - desiredDist - tipH },
+      { x: this.queryX - tipW * 0.5, y: lensY + desiredDist },
+      { x: lensX - tipW * 0.5, y: lensY - desiredDist - tipH },
+      { x: lensX - tipW * 0.5, y: lensY + desiredDist },
+      { x: minX, y: lensY - desiredDist - tipH },
+      { x: minX, y: lensY + desiredDist },
+      { x: maxX, y: lensY - desiredDist - tipH },
+      { x: maxX, y: lensY + desiredDist },
+      { x: minX, y: minY + 48 },
+      { x: minX, y: Math.max(minY, maxY - 48) },
+      { x: maxX, y: Math.max(minY, maxY - 48) },
+    ];
+
+    let bestPos: { x: number; y: number } | null = null;
+    let bestScore = -Infinity;
+    for (const raw of candidates) {
+      const x = clampX(raw.x);
+      const y = clampY(raw.y);
+      const gap = circleRectGap(x, y, tipW, tipH, lensX, lensY);
+      const clears = gap >= desiredDist;
+      const hudPenalty = (y + tipH > viewH - 54 ? 250 : 0) + (x + tipW > viewW - 140 && y < 290 ? 180 : 0);
+      const cx = x + tipW * 0.5;
+      const cy = y + tipH * 0.5;
+      const anchorDist = Math.hypot(cx - this.queryX, cy - this.queryY);
+      const score = (clears ? 100000 : gap * 400) - hudPenalty - anchorDist * 0.15;
+      if (score > bestScore) {
+        bestScore = score;
+        bestPos = { x, y };
+      }
     }
-    tipX = Math.min(viewW - tipW - 10, Math.max(10, tipX));
-    tipY = Math.min(viewH - tipH - 12, Math.max(12, tipY));
-    this.tooltipEl.style.left = `${Math.round(tipX)}px`;
-    this.tooltipEl.style.top = `${Math.round(tipY)}px`;
+
+    const chosen = bestPos ?? { x: minX, y: minY };
+    this.lockedTip = chosen;
+    this.tooltipEl.style.left = `${Math.round(chosen.x)}px`;
+    this.tooltipEl.style.top = `${Math.round(chosen.y)}px`;
   }
 }

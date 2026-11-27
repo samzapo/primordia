@@ -199,11 +199,21 @@ export interface GpuStepInput {
   queries: GpuQueryDesc[];
   emissions: QueuedEmission[];
   decoys: GpuDecoyDesc[];
-  inspectCursor: { active: boolean; x: number; y: number; maxRadius: number; trackedSlot: number; trackedGen: number };
+  inspectCursor: {
+    active: boolean;
+    x: number;
+    y: number;
+    maxRadius: number;
+    trackedSlot: number;
+    trackedGen: number;
+    epoch: number;
+  };
 }
 
 export interface GpuReceipts {
   revision: number;
+  inspectEpoch?: number;
+  inspectSeq?: number;
   bodyIntakes: Array<{ food: number; oxygen: number; carbon: number }>;
   feedResults: Array<{ taken: number; fuel: number; momentX: number; momentY: number }>;
   queryResults: Array<{
@@ -402,6 +412,7 @@ export class Simulation implements ChemistryEmitter {
   >();
   private secretionNeeded = new Set<string>(); // `${cellId}:${organId}`
   lastInspected: GpuReceipts['inspected'] = null;
+  private lastInspectSeq = -1;
   inspectCursor = {
     active: false,
     x: 0,
@@ -409,6 +420,7 @@ export class Simulation implements ChemistryEmitter {
     maxRadius: 24,
     trackedSlot: -1,
     trackedGen: 0,
+    epoch: 0,
   };
 
   constructor(seedNumber = 20261004, profile = 0, useGpuParticles = true) {
@@ -1073,15 +1085,25 @@ export class Simulation implements ChemistryEmitter {
   // GPU Receipt Application & Step Pipeline
   // =========================================================================
 
+  private applyInspectedFromReceipt(receipts: GpuReceipts): void {
+    const epoch = receipts.inspectEpoch ?? this.inspectCursor.epoch;
+    const seq = receipts.inspectSeq ?? this.lastInspectSeq + 1;
+    if (epoch !== this.inspectCursor.epoch || seq < this.lastInspectSeq) {
+      return;
+    }
+    this.lastInspectSeq = seq;
+    this.lastInspected = receipts.inspected;
+  }
+
   applyInspectReceipt(receipts: GpuReceipts | null): void {
     if (!receipts) return;
-    this.lastInspected = receipts.inspected;
+    this.applyInspectedFromReceipt(receipts);
   }
 
   applyGpuReceipts(receipts: GpuReceipts | null): void {
     if (!receipts) return;
     if (receipts.revision < 0) {
-      this.lastInspected = receipts.inspected;
+      this.applyInspectedFromReceipt(receipts);
       return;
     }
 
@@ -1089,7 +1111,7 @@ export class Simulation implements ChemistryEmitter {
     this.gpuCensus = { ...receipts.census };
     this.recycled += receipts.census.recycled;
     this.respirationLoss += receipts.census.materialLoss;
-    this.lastInspected = receipts.inspected;
+    this.applyInspectedFromReceipt(receipts);
 
     for (const spark of receipts.reactionSparks) {
       if (spark.cue > 0) {
