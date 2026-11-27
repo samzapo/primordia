@@ -24,11 +24,13 @@ const SPECIES_DETAILS: readonly string[] = [
 ];
 
 interface InternalInspectResult {
+  id: number;
   species: string;
   amount: number;
   age: number;
   fuel: number;
   nutrition: number;
+  worldPos: Vec2;
 }
 
 export class ParticleInspector {
@@ -39,8 +41,11 @@ export class ParticleInspector {
   screenY = 0;
   radiusPx = LENS_RADIUS_PX;
 
+  private queryX = 0;
+  private queryY = 0;
   private touchHoldUntil = -1;
   private trackUntil = -1;
+  private trackedInternalId = -1;
   private cursorAnchorX = 0;
   private cursorAnchorY = 0;
   private internalHit: InternalInspectResult | null = null;
@@ -54,7 +59,9 @@ export class ParticleInspector {
 
   triggerTouchHold(sx: number, sy: number, nowPerf: number, sim?: Simulation): void {
     const wasActive = this.active;
-    const moved = Math.hypot(sx - this.screenX, sy - this.screenY) > 16;
+    const moved = Math.hypot(sx - this.queryX, sy - this.queryY) > 16;
+    this.queryX = sx;
+    this.queryY = sy;
     this.screenX = sx;
     this.screenY = sy;
     this.cursorAnchorX = sx;
@@ -63,6 +70,8 @@ export class ParticleInspector {
     this.active = true;
     if (moved || !wasActive) {
       this.trackUntil = -1;
+      this.trackedInternalId = -1;
+      this.internalHit = null;
       if (sim) {
         sim.inspectCursor.trackedSlot = -1;
         sim.inspectCursor.trackedGen = 0;
@@ -75,6 +84,7 @@ export class ParticleInspector {
     this.active = false;
     this.touchHoldUntil = -1;
     this.trackUntil = -1;
+    this.trackedInternalId = -1;
     this.internalHit = null;
     this.tooltipEl.hidden = true;
     if (sim) {
@@ -111,21 +121,22 @@ export class ParticleInspector {
     } else if (pointerInsideCanvas) {
       if (Math.hypot(pointerX - this.cursorAnchorX, pointerY - this.cursorAnchorY) > CURSOR_RELEASE_PX) {
         this.trackUntil = -1;
+        this.trackedInternalId = -1;
         sim.inspectCursor.trackedSlot = -1;
         this.cursorAnchorX = pointerX;
         this.cursorAnchorY = pointerY;
       }
-      this.screenX = pointerX;
-      this.screenY = pointerY;
+      this.queryX = pointerX;
+      this.queryY = pointerY;
       this.active = true;
     } else {
       this.active = false;
     }
 
-    const wp = camera.screenToWorld(this.screenX, this.screenY, viewW, viewH);
+    const wp = camera.screenToWorld(this.queryX, this.queryY, viewW, viewH);
 
-    // Exteroception: suppress when poking/hovering directly over or near any living cell
-    if (!camera.interoception && this.active) {
+    // Exteroception: suppress when poking/hovering directly over or near any living cell (unless locked onto a particle)
+    if (!camera.interoception && this.active && sim.inspectCursor.trackedSlot < 0) {
       for (const c of sim.cells) {
         if (c.dead) continue;
         const d = offsetVec(c.position, wp);
@@ -135,6 +146,7 @@ export class ParticleInspector {
           sim.inspectCursor.active = false;
           sim.inspectCursor.trackedSlot = -1;
           this.trackUntil = -1;
+          this.trackedInternalId = -1;
           this.tooltipEl.hidden = true;
           return { active: false, screenX: this.screenX, screenY: this.screenY, radiusPx: 0 };
         }
@@ -144,6 +156,7 @@ export class ParticleInspector {
     if (!this.active) {
       sim.inspectCursor.active = false;
       sim.inspectCursor.trackedSlot = -1;
+      this.trackedInternalId = -1;
       this.tooltipEl.hidden = true;
       return { active: false, screenX: this.screenX, screenY: this.screenY, radiusPx: 0 };
     }
@@ -151,28 +164,49 @@ export class ParticleInspector {
     // Interoception: check internal cytoplasmic vacuoles & gases inside focus cell
     this.internalHit = null;
     if (camera.interoception && !focus.dead) {
-      const d = offsetVec(focus.position, wp);
-      const ca = Math.cos(-focus.angle);
-      const sa = Math.sin(-focus.angle);
-      const local: Vec2 = { x: d.x * ca - d.y * sa, y: d.x * sa + d.y * ca };
-      let bestDist = Math.max(14, 18 / Math.max(1, camera.zoom));
-      for (const p of focus.chemistry.particles) {
-        if (!p.alive) continue;
-        const pd = Math.hypot(p.p.x - local.x, p.p.y - local.y);
-        if (pd < bestDist) {
-          bestDist = pd;
-          this.internalHit = {
-            species: p.species,
-            amount: p.amount,
-            age: p.age,
-            fuel: p.fuel,
-            nutrition: p.nutrition,
-          };
+      const cf = Math.cos(focus.angle);
+      const sf = Math.sin(focus.angle);
+      const toWorld = (localPos: Vec2): Vec2 => ({
+        x: focus.position.x + localPos.x * cf - localPos.y * sf,
+        y: focus.position.y + localPos.x * sf + localPos.y * cf,
+      });
+
+      let picked = this.trackedInternalId >= 0
+        ? focus.chemistry.particles.find((p) => p.alive && p.id === this.trackedInternalId)
+        : undefined;
+      if (!picked) {
+        this.trackedInternalId = -1;
+        const d = offsetVec(focus.position, wp);
+        const ca = Math.cos(-focus.angle);
+        const sa = Math.sin(-focus.angle);
+        const local: Vec2 = { x: d.x * ca - d.y * sa, y: d.x * sa + d.y * ca };
+        let bestDist = Math.max(14, 18 / Math.max(1, camera.zoom));
+        for (const p of focus.chemistry.particles) {
+          if (!p.alive) continue;
+          const pd = Math.hypot(p.p.x - local.x, p.p.y - local.y);
+          if (pd < bestDist) {
+            bestDist = pd;
+            picked = p;
+          }
         }
       }
+      if (picked) {
+        this.trackedInternalId = picked.id;
+        this.internalHit = {
+          id: picked.id,
+          species: picked.species,
+          amount: picked.amount,
+          age: picked.age,
+          fuel: picked.fuel,
+          nutrition: picked.nutrition,
+          worldPos: toWorld(picked.p),
+        };
+      }
+    } else {
+      this.trackedInternalId = -1;
     }
 
-    // Sync external particle query tracking (0.9s identity lock)
+    // Sync external particle query tracking (0.9s hover lock or full touch hold)
     const worldRadius = LENS_RADIUS_PX / Math.max(0.8, camera.zoom);
     sim.inspectCursor.active = true;
     sim.inspectCursor.x = wp.x;
@@ -181,7 +215,7 @@ export class ParticleInspector {
 
     const ins = sim.lastInspected;
     if (ins && ins.valid) {
-      if (nowPerf <= this.trackUntil || sim.inspectCursor.trackedSlot === ins.slot) {
+      if (isTouch || nowPerf <= this.trackUntil || sim.inspectCursor.trackedSlot === ins.slot) {
         sim.inspectCursor.trackedSlot = ins.slot;
         sim.inspectCursor.trackedGen = ins.gen;
         if (nowPerf > this.trackUntil) this.trackUntil = nowPerf + 0.9;
@@ -194,14 +228,31 @@ export class ParticleInspector {
       sim.inspectCursor.trackedSlot = -1;
     }
 
-    // Render informative tooltip anchored cleanly near lens
+    // Center the optical magnification lens directly on the tracked particle while keeping tooltip stationary at queryX/queryY
+    const extValid = Boolean(ins && ins.valid && (!camera.interoception || ins.kind === SPECIES.PHEROMONE));
+    const hasMatch = this.internalHit !== null || extValid;
+    let lensScreenX = this.queryX;
+    let lensScreenY = this.queryY;
+    if (this.internalHit) {
+      const s = camera.worldToScreen(this.internalHit.worldPos.x, this.internalHit.worldPos.y, viewW, viewH);
+      lensScreenX = s.x;
+      lensScreenY = s.y;
+    } else if (ins && extValid) {
+      const s = camera.worldToScreen(ins.x, ins.y, viewW, viewH);
+      lensScreenX = s.x;
+      lensScreenY = s.y;
+    }
+    this.screenX = lensScreenX;
+    this.screenY = lensScreenY;
+
+    // Render informative tooltip anchored cleanly near the initial poke / cursor spot
     this.renderTooltip(sim, wp, camera.interoception, ins, viewW, viewH);
 
     return {
-      active: true,
-      screenX: this.screenX,
-      screenY: this.screenY,
-      radiusPx: LENS_RADIUS_PX,
+      active: hasMatch,
+      screenX: lensScreenX,
+      screenY: lensScreenY,
+      radiusPx: hasMatch ? LENS_RADIUS_PX : 0,
     };
   }
 
@@ -281,17 +332,17 @@ export class ParticleInspector {
     const tipW = Math.max(200, tipRect.width || 250);
     const tipH = Math.max(64, tipRect.height || 96);
 
-    let tipX = this.screenX + LENS_RADIUS_PX + 12;
-    let tipY = this.screenY - tipH * 0.5;
+    let tipX = this.queryX + LENS_RADIUS_PX + 12;
+    let tipY = this.queryY - tipH * 0.5;
     if (tipX + tipW + 12 > viewW) {
-      tipX = this.screenX - LENS_RADIUS_PX - tipW - 12;
+      tipX = this.queryX - LENS_RADIUS_PX - tipW - 12;
     }
     if (tipX < 10) {
-      // Narrow mobile viewport: place cleanly above or below lens
-      tipX = Math.max(10, Math.min(viewW - tipW - 10, this.screenX - tipW * 0.5));
-      tipY = this.screenY > tipH + LENS_RADIUS_PX + 24
-        ? this.screenY - LENS_RADIUS_PX - tipH - 12
-        : this.screenY + LENS_RADIUS_PX + 12;
+      // Narrow mobile viewport: place cleanly above or below anchor
+      tipX = Math.max(10, Math.min(viewW - tipW - 10, this.queryX - tipW * 0.5));
+      tipY = this.queryY > tipH + LENS_RADIUS_PX + 24
+        ? this.queryY - LENS_RADIUS_PX - tipH - 12
+        : this.queryY + LENS_RADIUS_PX + 12;
     }
     tipX = Math.min(viewW - tipW - 10, Math.max(10, tipX));
     tipY = Math.min(viewH - tipH - 12, Math.max(12, tipY));
