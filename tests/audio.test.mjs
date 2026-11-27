@@ -52,4 +52,14 @@ test('ProgressiveScore structure runs 128 BPM 64-bar sections, biomass transposi
     assert.ok(SYNTH_VOICES.includes(n.voice));
     assert.ok(n.cellId >= 0);
   }
+
+  // Verify 2-bar tropical Dm -> Bb Major chord root shift in groove section (bar 8 step 128 vs bar 10 step 160)
+  sim.player.addOrgan('feeding', 0, 'graze', false);
+  const dmNotes = score.evaluateStep(128, 1.0, sim, sim.player);
+  const bbNotes = score.evaluateStep(160, 2.0, sim, sim.player);
+  assert.ok(dmNotes.length >= 1 && bbNotes.length >= 1);
+  const dmPitch = dmNotes.find((n) => n.lane > 0);
+  const bbPitch = bbNotes.find((n) => n.lane > 0);
+  assert.ok(dmPitch && bbPitch);
+  assert.equal(((bbPitch.pitchSemitones - dmPitch.pitchSemitones) % 12 + 12) % 12, 8);
 });

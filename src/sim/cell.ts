@@ -83,6 +83,27 @@ export const ORGAN_SUMMARIES: Record<OrganKind, string> = {
   proboscis: 'Extracts stored biomass as food from touched living cells.',
 };
 
+export const ORGAN_DESCRIPTIONS: Record<OrganKind, string> = {
+  propulsion: 'Flagella provide axial thrust and quick steering torque. Receptors choose travel direction.',
+  protection: 'Protects the membrane directly beneath it, absorbing impact and chemical hits across its coverage arc.',
+  poreforming: 'Spends biomass and ATP to fire surface tags and pore subunits toward a chemical target report. Four aligned subunits assemble a membrane pore; inhibitors and repair can remove it.',
+  regenerative: 'Uses biomass and ATP to repair organs and close punctures faster, clears assembling pores, and releases buffers to neutralize acidity.',
+  feeding: 'Senses and pumps nutrients into its oral opening while secreting reusable enzymes that convert environmental waste into food.',
+  sensing: 'Free receptor: reads local pheromones reporting armed non-family cells and retreats from their last reported location, harmful acidity, or nearby toxins.',
+  photosynthesis: 'Uses dissolved CO₂ and light to fix food, biomass, and ATP while releasing oxygen. Works best in sunlit habitat patches (or dim light with Shade Specialist).',
+  toxin: 'Spends ATP and biomass to fire damaging toxin parcels and receptor-blocking decoys toward a target report found by a hunting or flight receptor.',
+  neutralizing: 'Releases complementary antitoxin particles when toxins or hazards are nearby, binding toxin into harmless waste.',
+  acidifying: 'Releases acidifying particles. Mild acidity raises nutrient ATP yield and helps enzyme digestion; excess acidity drains ATP and damages cells.',
+  hunting: 'Free receptor: reads local pheromones from any non-family cell regardless of size or defenses and pursues the last reported location.',
+  cilia: 'A short beating ciliary band provides gentle thrust and draws local pond currents toward the cell, pulling food (and nearby hazards) closer.',
+  mitochondrion: 'Internal organelle: aerobically respires food or reserve biomass with oxygen for up to 5× ATP yield.',
+  counterattack: 'Responds defensively to chemical threats from armed attackers; its selective toxin spares unarmed cells.',
+  toxin_sac: 'Internal storage sac that builds toxin reserves from surplus biomass and ATP, bursting into a defensive toxin cloud upon death.',
+  family_toward: 'Free receptor: follows nearby same-family pheromone trails when basic survival needs are met.',
+  family_away: 'Free receptor: spreads away from crowded same-family pheromone trails while survival needs keep priority.',
+  proboscis: 'Draws food from a living non-relative touched by its tip (up to 2 biomass/s at 0.5 ATP per unit). Pair with a hunting receptor and motility.',
+};
+
 export const ORGAN_COST: Record<OrganKind, number> = {
   propulsion: 8.0,
   protection: 10.0,

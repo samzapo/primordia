@@ -33,19 +33,26 @@ fn wrapDelta(camPos: vec2f, dst: vec2f) -> vec2f {
   return d;
 }
 
-fn worldToScreenPx(worldPos: vec2f, cam: CameraUniforms) -> vec2f {
-  let d = wrapDelta(cam.view0.xy, worldPos);
+fn camRelToScreenPx(relPos: vec2f, cam: CameraUniforms) -> vec2f {
   let rot = -cam.view0.w;
   let c = cos(rot);
   let s = sin(rot);
-  let r = vec2f(d.x * c - d.y * s, d.x * s + d.y * c);
+  let r = vec2f(relPos.x * c - relPos.y * s, relPos.x * s + relPos.y * c);
   return cam.view1.xy * 0.5 + r * cam.view0.z;
+}
+
+fn worldToScreenPx(worldPos: vec2f, cam: CameraUniforms) -> vec2f {
+  return camRelToScreenPx(wrapDelta(cam.view0.xy, worldPos), cam);
 }
 
 fn screenPxToClip(px: vec2f, cam: CameraUniforms) -> vec4f {
   let x = (px.x / max(1.0, cam.view1.x)) * 2.0 - 1.0;
   let y = 1.0 - (px.y / max(1.0, cam.view1.y)) * 2.0;
   return vec4f(x, y, 0.0, 1.0);
+}
+
+fn camRelToClip(relPos: vec2f, cam: CameraUniforms) -> vec4f {
+  return screenPxToClip(camRelToScreenPx(relPos, cam), cam);
 }
 
 fn worldToClip(worldPos: vec2f, cam: CameraUniforms) -> vec4f {

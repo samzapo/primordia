@@ -2,10 +2,10 @@ import { SeededRng } from '../sim/rng.ts';
 import type { Habitat } from '../sim/habitat.ts';
 import type { InducedCurrents } from '../sim/inducedCurrents.ts';
 import type { Medium } from '../sim/medium.ts';
-import { WORLD_H, WORLD_W, type Vec2, clamp, wrapPos } from '../sim/constants.ts';
+import { WORLD_H, WORLD_W, type Vec2, clamp, offsetVec, wrapPos } from '../sim/constants.ts';
 
 export interface FlowCurve {
-  points: Vec2[];
+  points: Vec2[]; // Already camera-relative unwrapped coordinates
   kind: 'crest' | 'gold' | 'wake';
   alpha: number;
   width: number;
@@ -27,37 +27,43 @@ export function buildFlowCurves(
 ): FlowCurve[] {
   const curves: FlowCurve[] = [];
   const stepDist = 11.0;
+  const maxSpan = Math.hypot(viewHalfW, viewHalfH) + 320;
 
-  // Ambient flow crests & streamlines tiled cleanly inside viewport
+  // Ambient flow crests & streamlines emitted relative to viewCenter
   const tile = 220;
-  const minX = viewCenter.x - viewHalfW - tile;
-  const maxX = viewCenter.x + viewHalfW + tile;
-  const minY = viewCenter.y - viewHalfH - tile;
-  const maxY = viewCenter.y + viewHalfH + tile;
-  const gx0 = Math.floor(minX / tile);
-  const gx1 = Math.ceil(maxX / tile);
-  const gy0 = Math.floor(minY / tile);
-  const gy1 = Math.ceil(maxY / tile);
+  const gx0 = Math.floor(-maxSpan / tile);
+  const gx1 = Math.ceil(maxSpan / tile);
+  const gy0 = Math.floor(-maxSpan / tile);
+  const gy1 = Math.ceil(maxSpan / tile);
+  const camTileX = Math.floor(viewCenter.x / tile);
+  const camTileY = Math.floor(viewCenter.y / tile);
+  const cols = Math.ceil(WORLD_W / tile);
+  const rows = Math.ceil(WORLD_H / tile);
 
-  for (let gy = gy0; gy <= gy1; gy++) {
-    for (let gx = gx0; gx <= gx1; gx++) {
-      const wx = ((gx % Math.ceil(WORLD_W / tile)) + Math.ceil(WORLD_W / tile)) % Math.ceil(WORLD_W / tile);
-      const wy = ((gy % Math.ceil(WORLD_H / tile)) + Math.ceil(WORLD_H / tile)) % Math.ceil(WORLD_H / tile);
+  for (let dgy = gy0; dgy <= gy1; dgy++) {
+    for (let dgx = gx0; dgx <= gx1; dgx++) {
+      const gx = camTileX + dgx;
+      const gy = camTileY + dgy;
+      const wx = ((gx % cols) + cols) % cols;
+      const wy = ((gy % rows) + rows) % rows;
       const rng = new SeededRng((seed ^ Math.imul(wx + 31, 73856093) ^ Math.imul(wy + 17, 19349663)) | 0);
       const baseX = (gx + 0.2 + 0.6 * rng.randf()) * tile;
       const baseY = (gy + 0.2 + 0.6 * rng.randf()) * tile;
       const sampleAt = wrapPos({ x: baseX, y: baseY });
+      const rel0 = offsetVec(viewCenter, sampleAt);
+      if (Math.hypot(rel0.x, rel0.y) > maxSpan) continue;
+
       const v0 = medium.sample(sampleAt.x, sampleAt.y);
       const speed = Math.hypot(v0.x, v0.y);
       if (speed < 3.0) continue;
 
       const phase = (time * (0.28 + speed * 0.008) + rng.randf()) % 1.0;
       const pts: Vec2[] = [];
-      let cx = sampleAt.x;
-      let cy = sampleAt.y;
+      let cx = rel0.x;
+      let cy = rel0.y;
       const half = (STREAM_POINT_COUNT - 1) >> 1;
       for (let s = 0; s < half; s++) {
-        const v = medium.sample(cx, cy);
+        const v = medium.sample(viewCenter.x + cx, viewCenter.y + cy);
         const l = Math.hypot(v.x, v.y);
         if (l < 1.0) break;
         cx -= (v.x / l) * stepDist;
@@ -65,7 +71,7 @@ export function buildFlowCurves(
       }
       for (let i = 0; i < STREAM_POINT_COUNT; i++) {
         pts.push({ x: cx, y: cy });
-        const v = medium.sample(cx, cy);
+        const v = medium.sample(viewCenter.x + cx, viewCenter.y + cy);
         const l = Math.hypot(v.x, v.y);
         if (l < 1.0) break;
         cx += (v.x / l) * stepDist;
@@ -83,19 +89,21 @@ export function buildFlowCurves(
     }
   }
 
-  // Gold streamlines emitted by induced current sources
+  // Gold streamlines emitted by induced current sources within viewport
   for (let sIdx = 0; sIdx < induced.activeSources.length; sIdx++) {
     const src = induced.activeSources[sIdx];
     if (curves.length >= 220) break;
+    const srcRel = offsetVec(viewCenter, src);
+    if (Math.hypot(srcRel.x, srcRel.y) > maxSpan + 240) continue;
     const baseAngle = Math.atan2(src.headingY, src.headingX);
     for (let strand = 0; strand < 2; strand++) {
       const ang = baseAngle + (strand - 0.5) * 0.8 + (src.mode === 'spiral' ? src.spin * 0.5 : 0);
-      let cx = src.x + Math.cos(ang) * (18 + strand * 20);
-      let cy = src.y + Math.sin(ang) * (18 + strand * 20);
+      let cx = srcRel.x + Math.cos(ang) * (18 + strand * 20);
+      let cy = srcRel.y + Math.sin(ang) * (18 + strand * 20);
       const pts: Vec2[] = [];
       for (let i = 0; i < 24; i++) {
         pts.push({ x: cx, y: cy });
-        const v = medium.sample(cx, cy);
+        const v = medium.sample(viewCenter.x + cx, viewCenter.y + cy);
         const l = Math.hypot(v.x, v.y);
         if (l < 1.5) break;
         cx += (v.x / l) * 12.0;
@@ -118,9 +126,8 @@ export function buildFlowCurves(
   let wakeCount = 0;
   for (const plant of habitat.plants) {
     if (wakeCount >= MAX_PLANT_WAKES) break;
-    const dx = Math.abs(((plant.p.x - viewCenter.x + WORLD_W * 1.5) % WORLD_W) - WORLD_W * 0.5);
-    const dy = Math.abs(((plant.p.y - viewCenter.y + WORLD_H * 1.5) % WORLD_H) - WORLD_H * 0.5);
-    if (dx > viewHalfW + 360 || dy > viewHalfH + 360) continue;
+    const plantRel = offsetVec(viewCenter, plant.p);
+    if (Math.hypot(plantRel.x, plantRel.y) > maxSpan + plant.radius) continue;
 
     const form = habitat.forms[plant.form];
     if (!form) continue;
@@ -132,13 +139,13 @@ export function buildFlowCurves(
       const br = form.branches[b];
       const rad = br.r * scale;
       if (br.depth > 1 || rad < 4.5) continue;
-      const ax = plant.p.x + (br.a.x * cos - br.a.y * sin) * scale;
-      const ay = plant.p.y + (br.a.x * sin + br.a.y * cos) * scale;
-      const bx = plant.p.x + (br.b.x * cos - br.b.y * sin) * scale;
-      const by = plant.p.y + (br.b.x * sin + br.b.y * cos) * scale;
+      const ax = plantRel.x + (br.a.x * cos - br.a.y * sin) * scale;
+      const ay = plantRel.y + (br.a.x * sin + br.a.y * cos) * scale;
+      const bx = plantRel.x + (br.b.x * cos - br.b.y * sin) * scale;
+      const by = plantRel.y + (br.b.x * sin + br.b.y * cos) * scale;
       const midX = (ax + bx) * 0.5;
       const midY = (ay + by) * 0.5;
-      const v = medium.sample(midX, midY);
+      const v = medium.sample(viewCenter.x + midX, viewCenter.y + midY);
       const speed = Math.hypot(v.x, v.y);
       if (speed < 4.5) continue;
       const dirX = v.x / speed;

@@ -420,6 +420,39 @@ export class ParticleEngine {
     return null;
   }
 
+  encodeInspectOnly(
+    encoder: GPUCommandEncoder,
+    inspectCursor: GpuStepInput['inspectCursor'],
+    time: number,
+  ): void {
+    this.uniformF32[1] = time;
+    this.uniformF32[4] = GPU_MAX_PARTICLES;
+    this.uniformF32[13] = inspectCursor.active ? 1.0 : 0.0;
+    this.uniformF32[14] = inspectCursor.x;
+    this.uniformF32[15] = inspectCursor.y;
+    this.uniformF32[16] = inspectCursor.maxRadius;
+    this.uniformF32[17] = inspectCursor.trackedSlot;
+    this.uniformF32[18] = Math.max(0, inspectCursor.trackedGen);
+    this.device.queue.writeBuffer(this.uniformBuffer, 0, this.uniformF32);
+
+    const pass = encoder.beginComputePass();
+    pass.setPipeline(this.inspectPipe);
+    pass.setBindGroup(0, this.perceptionBG);
+    pass.dispatchWorkgroups(1, 1, 1);
+    pass.end();
+
+    const slot = this.stagingSlot;
+    if (!this.stagingInFlight[slot]) {
+      encoder.copyBufferToBuffer(this.receiptBuffer, 0, this.stagingBuffers[slot], 0, RECEIPT_BYTES);
+      this.pendingCopySlot = slot;
+      this.stagingRevision[slot] = -1;
+      this.stagingCounts[slot] = { feeds: 0, queries: 0, bodies: 0, decoys: 0 };
+      this.stagingSlot = 1 - slot;
+    } else {
+      this.pendingCopySlot = -1;
+    }
+  }
+
   encodeTick(encoder: GPUCommandEncoder, input: GpuStepInput, medium: Medium): void {
     this.uploadFlow(medium);
 

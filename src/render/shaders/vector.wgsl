@@ -15,7 +15,7 @@ struct VSOut {
 @vertex
 fn vsWorld(in: VSIn) -> VSOut {
   var out: VSOut;
-  out.pos = worldToClip(in.pos, cam);
+  out.pos = camRelToClip(in.pos, cam);
   out.color = in.color;
   out.edge = in.edge;
   return out;

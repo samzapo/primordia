@@ -324,11 +324,11 @@ export class Membrane {
       const next = this.points[(i + 1) % MEMBRANE_COUNT];
       enclosed += (this.points[i].x * next.y - this.points[i].y * next.x) * 0.5;
     }
-    const pressureScale = Math.sqrt(targetArea / Math.max(0.001, enclosed));
+    const pressureScale = clamp(Math.sqrt(targetArea / Math.max(targetArea * 0.25, enclosed)), 0.5, 2.0);
     this.maximumRadius = 0;
     for (let i = 0; i < MEMBRANE_COUNT; i++) {
-      const cx = this.points[i].x * pressureScale;
-      const cy = this.points[i].y * pressureScale;
+      const cx = Number.isFinite(this.points[i].x) ? this.points[i].x * pressureScale : this.restPoints[i].x;
+      const cy = Number.isFinite(this.points[i].y) ? this.points[i].y * pressureScale : this.restPoints[i].y;
       this.maximumRadius = Math.max(this.maximumRadius, Math.hypot(cx, cy));
       this.previous[i].x += cx - this.points[i].x;
       this.previous[i].y += cy - this.points[i].y;

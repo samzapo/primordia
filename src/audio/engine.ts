@@ -116,16 +116,16 @@ export class AudioEngine {
     this.masterGain = ctx.createGain();
     this.masterGain.gain.value = this.muted ? 0 : this.volume;
 
-    // 3/16 tempo-synced stereo dub delay send
+    // 3/16 tempo-synced stereo dub delay send (0.18 send, bright open high end)
     this.delayNode = ctx.createDelay(1.0);
     this.delayNode.delayTime.value = STEP_SECONDS * 3;
     const delayFb = ctx.createGain();
-    delayFb.gain.value = 0.24;
+    delayFb.gain.value = 0.26;
     const delayLp = ctx.createBiquadFilter();
     delayLp.type = 'lowpass';
-    delayLp.frequency.value = 2400;
+    delayLp.frequency.value = 4800;
     const delayWet = ctx.createGain();
-    delayWet.gain.value = 0.22;
+    delayWet.gain.value = 0.18;
 
     this.delayNode.connect(delayLp);
     delayLp.connect(delayFb);
@@ -139,8 +139,8 @@ export class AudioEngine {
     for (let i = 0; i < 7; i++) {
       const filter = ctx.createBiquadFilter();
       filter.type = 'lowpass';
-      filter.frequency.value = i <= 1 ? 1400 : 6000;
-      filter.Q.value = 1.2;
+      filter.frequency.value = i === 0 ? 7500 : 6200;
+      filter.Q.value = 0.7;
 
       const shaper = ctx.createWaveShaper();
       shaper.curve = this.cleanCurve;
@@ -151,7 +151,7 @@ export class AudioEngine {
       filter.connect(shaper);
       shaper.connect(panner);
       panner.connect(this.masterGain);
-      if (i >= 2) {
+      if (i >= 1) {
         panner.connect(this.delayNode);
       }
       this.lanes.push({ filter, shaper, panner });
@@ -187,9 +187,9 @@ export class AudioEngine {
   }
 
   update(sim: Simulation, focus: Cell, paused: boolean): void {
-    if (!this.ctx || !this.unlocked || this.muted || this.volume <= 0.005 || paused) {
+    if (!this.ctx || !this.unlocked || this.muted || this.volume <= 0.005) {
       this.startedClock = false;
-      if (paused || this.muted) this.score.resetHistory(sim);
+      if (this.muted) this.score.resetHistory(sim);
       return;
     }
     if (this.ctx.state === 'suspended') return;
@@ -210,16 +210,18 @@ export class AudioEngine {
       guard++;
       const swingOffset = this.stepIndex % 2 === 1 ? STEP_SECONDS * SWING_AMOUNT : 0;
       const playAt = Math.max(now + 0.005, this.nextStepTime + swingOffset);
-      const notes = this.score.evaluateStep(this.stepIndex, playAt, sim, focus);
+      const beatPhase = (this.stepIndex % 4) * STEP_SECONDS + swingOffset;
+      const duck = 0.42 + 0.58 * clamp(beatPhase / 0.18, 0, 1);
+      const notes = this.score.evaluateStep(this.stepIndex, playAt, sim, focus, paused);
       for (const note of notes) {
-        this.triggerNote(note, focus);
+        this.triggerNote(note, focus, note.lane >= 1 ? duck : 1.0);
       }
       this.stepIndex++;
       this.nextStepTime += STEP_SECONDS;
     }
   }
 
-  private triggerNote(note: ScheduledNote, focus: Cell): void {
+  private triggerNote(note: ScheduledNote, focus: Cell, duck = 1.0): void {
     if (!this.ctx) return;
     if (this.activeVoices.length >= MAX_ACTIVE_VOICES) return;
     const buf = this.buffers.get(note.voice);
@@ -231,11 +233,11 @@ export class AudioEngine {
     src.playbackRate.value = Math.pow(2, clamp(note.semitonesFromRef, -24, 24) / 12);
 
     const g = this.ctx.createGain();
-    g.gain.value = clamp(note.gain, 0, 1);
+    g.gain.value = clamp(note.gain * duck, 0, 1);
 
     lane.filter.frequency.setTargetAtTime(note.cutoffHz, note.audioTime, 0.04);
     lane.panner.pan.setTargetAtTime(clamp(note.pan, -1, 1), note.audioTime, 0.03);
-    if (note.lane >= 2) {
+    if (note.lane >= 1) {
       lane.shaper.curve = note.acidDrive > 0.22 ? this.acidCurve : this.cleanCurve;
     }
 

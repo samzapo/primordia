@@ -15,6 +15,7 @@ import type { InvestmentStrategy, RoleName } from '../sim/investmentPolicy.ts';
 import { rawStrategyForCell } from '../sim/investmentPolicy.ts';
 import { MUTATION_DATA } from '../sim/mutations.ts';
 import type { Simulation } from '../sim/simulation.ts';
+import { bindHoldTooltip, hideHoldTooltip } from './tooltip.ts';
 
 export type ModalKind =
   | 'none'
@@ -227,6 +228,7 @@ export class ModalManager {
   }
 
   open(kind: ModalKind, sim: Simulation): void {
+    hideHoldTooltip();
     this.activeModal = kind;
     this.backdrop.hidden = kind === 'none';
     if (kind !== 'none') {
@@ -235,6 +237,7 @@ export class ModalManager {
   }
 
   close(): void {
+    hideHoldTooltip();
     const wasSettings = this.activeModal === 'settings';
     this.activeModal = 'none';
     this.backdrop.hidden = true;
@@ -250,6 +253,10 @@ export class ModalManager {
     closeBtn.type = 'button';
     closeBtn.className = 'hud-btn';
     closeBtn.textContent = 'Close';
+    bindHoldTooltip(closeBtn, () => ({
+      title: 'Close',
+      body: 'Close this dialog and return to the pond.',
+    }));
     closeBtn.addEventListener('click', () => this.close());
     h.append(h2, closeBtn);
     return h;
@@ -291,12 +298,17 @@ export class ModalManager {
     resumeBtn.type = 'button';
     resumeBtn.className = 'hud-btn is-active';
     resumeBtn.textContent = 'Resume Pond';
+    bindHoldTooltip(resumeBtn, () => ({
+      title: 'Resume Pond',
+      body: 'Close settings and resume the live simulation.',
+    }));
     resumeBtn.addEventListener('click', () => this.close());
     nodes.push(resumeBtn);
 
-    const mkToggle = (label: string, val: boolean, onChange: (v: boolean) => void) => {
+    const mkToggle = (label: string, tipBody: string, val: boolean, onChange: (v: boolean) => void) => {
       const row = document.createElement('label');
       row.className = 'setting-row';
+      bindHoldTooltip(row, () => ({ title: label, body: tipBody }));
       const span = document.createElement('span');
       span.textContent = label;
       const chk = document.createElement('input');
@@ -308,11 +320,29 @@ export class ModalManager {
     };
 
     nodes.push(
-      mkToggle('Sunlit Bloom', prefs.bloomEnabled, (v) => this.cb.setVisualPrefs({ bloomEnabled: v })),
-      mkToggle('Water Caustics', prefs.ripplesEnabled, (v) => this.cb.setVisualPrefs({ ripplesEnabled: v })),
-      mkToggle('Peripheral Microscope Blur', prefs.blurEnabled, (v) => this.cb.setVisualPrefs({ blurEnabled: v })),
-      mkToggle('Simplified Molecule Shapes', prefs.simpleParticles, (v) =>
-        this.cb.setVisualPrefs({ simpleParticles: v }),
+      mkToggle(
+        'Sunlit Bloom',
+        'Enable soft sunlight optical glow over sunlit particles and membranes.',
+        prefs.bloomEnabled,
+        (v) => this.cb.setVisualPrefs({ bloomEnabled: v }),
+      ),
+      mkToggle(
+        'Water Caustics',
+        'Show animated sunlit Voronoi ripple caustics on the pond surface.',
+        prefs.ripplesEnabled,
+        (v) => this.cb.setVisualPrefs({ ripplesEnabled: v }),
+      ),
+      mkToggle(
+        'Peripheral Microscope Blur',
+        'Apply subtle depth-of-field blur around the outer perimeter of the lens view.',
+        prefs.blurEnabled,
+        (v) => this.cb.setVisualPrefs({ blurEnabled: v }),
+      ),
+      mkToggle(
+        'Simplified Molecule Shapes',
+        'Render smaller, crisp simplified chemical markers across the pond.',
+        prefs.simpleParticles,
+        (v) => this.cb.setVisualPrefs({ simpleParticles: v }),
       ),
     );
 
@@ -356,6 +386,10 @@ export class ModalManager {
     randBtn.type = 'button';
     randBtn.className = 'hud-btn';
     randBtn.textContent = 'Random Seed';
+    bindHoldTooltip(randBtn, () => ({
+      title: 'Random Seed',
+      body: 'Generate a new random pond seed number for habitat plants, currents, and initial ecology.',
+    }));
     randBtn.addEventListener('click', () => {
       seedInput.value = String(Math.floor(Math.random() * 9000000) + 100000);
     });
@@ -364,6 +398,10 @@ export class ModalManager {
     launchBtn.type = 'button';
     launchBtn.className = 'hud-btn is-active';
     launchBtn.textContent = 'Start New Pond';
+    bindHoldTooltip(launchBtn, () => ({
+      title: 'Start New Pond',
+      body: 'Reset the current pond and generate a fresh ecosystem with the selected seed and habitat profile.',
+    }));
     launchBtn.addEventListener('click', () => {
       const s = Number(seedInput.value) || 20261004;
       const h = Number(habSelect.value) || 0;
@@ -383,12 +421,20 @@ export class ModalManager {
     guideBtn.type = 'button';
     guideBtn.className = 'hud-btn';
     guideBtn.textContent = 'Gameplay & Science Guide';
+    bindHoldTooltip(guideBtn, () => ({
+      title: 'Gameplay & Science Guide',
+      body: 'Open controls help and scientific documentation of cellular metabolism and ecology.',
+    }));
     guideBtn.addEventListener('click', () => this.open('guide', sim));
 
     const resetBtn = document.createElement('button');
     resetBtn.type = 'button';
     resetBtn.className = 'hud-btn is-danger';
     resetBtn.textContent = 'Reset UI Preferences';
+    bindHoldTooltip(resetBtn, () => ({
+      title: 'Reset UI Preferences',
+      body: 'Restore default visual, audio, and local UI preferences.',
+    }));
     resetBtn.addEventListener('click', () => {
       this.cb.onResetPrefs();
       this.render(sim);
@@ -434,6 +480,7 @@ export class ModalManager {
       d.style.color = '#b2cdd4';
       d.textContent = item.desc;
       card.append(t, d);
+      bindHoldTooltip(card, () => ({ title: item.title, subtitle: 'Lineage Strategy', body: item.desc }));
       card.addEventListener('click', () => {
         sim.investment.lineages.set(focus.lineageId(), item.id);
         sim.investment.cells.set(focus.id, item.id);
@@ -465,6 +512,10 @@ export class ModalManager {
         ? `Merge a relative into this cell (${mergeCands.size} eligible)`
         : 'Merge a relative into this cell (none eligible yet)';
     mergeBtn.disabled = mergeCands.size === 0;
+    bindHoldTooltip(mergeBtn, () => ({
+      title: 'Merge Relative',
+      body: 'Absorb a consenting nearby cell of your lineage into the active cell to pool organs and mass.',
+    }));
     mergeBtn.addEventListener('click', () => {
       this.close();
       this.cb.onEnterMergeMode();
@@ -474,6 +525,10 @@ export class ModalManager {
     colorBtn.type = 'button';
     colorBtn.className = 'hud-btn';
     colorBtn.textContent = 'Lineage Colors & Name';
+    bindHoldTooltip(colorBtn, () => ({
+      title: 'Lineage Colors & Name',
+      body: 'Open the hue ring and name editor for this lineage.',
+    }));
     colorBtn.addEventListener('click', () => this.open('palette', sim));
     topActions.append(mergeBtn, colorBtn);
     nodes.push(topActions);
@@ -492,6 +547,11 @@ export class ModalManager {
       info.style.color = '#b7d4dc';
       info.textContent = `Biomass ${c.biomass.toFixed(0)} · ATP ${c.energy.toFixed(0)} · HP ${c.health.toFixed(0)}%`;
       card.append(t, info);
+      bindHoldTooltip(card, () => ({
+        title: `Generation ${c.generation} Cell`,
+        subtitle: c === sim.player ? 'Currently Focused' : `${c.organs.length} organs`,
+        body: 'Tap to focus and take control of this living member of your lineage.',
+      }));
       card.addEventListener('click', () => {
         if (c !== sim.player) {
           sim.followFamily(c.id);
@@ -643,6 +703,10 @@ export class ModalManager {
       sBtn.style.border = '2px solid #fff';
       sBtn.style.background = p.body;
       sBtn.style.cursor = 'pointer';
+      bindHoldTooltip(sBtn, () => ({
+        title: 'Preset Swatch',
+        body: `Select palette ${p.body} on the color wheel.`,
+      }));
       sBtn.addEventListener('click', () => {
         const pr = parseHex(p.body);
         const [nh, ns, nv] = rgbToHsv(pr.r, pr.g, pr.b);
@@ -664,6 +728,10 @@ export class ModalManager {
     resetBtn.type = 'button';
     resetBtn.className = 'hud-btn';
     resetBtn.textContent = 'Default Seed Color';
+    bindHoldTooltip(resetBtn, () => ({
+      title: 'Default Seed Color',
+      body: 'Reset the lineage palette back to its seeded pond colors.',
+    }));
     resetBtn.addEventListener('click', () => {
       sim.lineageColors.delete(lin);
       const cleanName = nameInput.value.trim() || `Lineage ${lin}`;
@@ -677,6 +745,10 @@ export class ModalManager {
     applyBtn.type = 'button';
     applyBtn.className = 'hud-btn is-active';
     applyBtn.textContent = 'Save Style';
+    bindHoldTooltip(applyBtn, () => ({
+      title: 'Save Style',
+      body: 'Save your chosen membrane color and lineage name for this session and future ponds.',
+    }));
     applyBtn.addEventListener('click', () => {
       const cleanName = nameInput.value.trim() || `Lineage ${lin}`;
       sim.lineageColors.set(lin, this.selectedHex);
@@ -702,6 +774,10 @@ export class ModalManager {
       b.type = 'button';
       b.className = `hud-btn ${this.guideTab === id ? 'is-active' : ''}`;
       b.textContent = label;
+      bindHoldTooltip(b, () => ({
+        title: label,
+        body: id === 'gameplay' ? 'View desktop, keyboard, and touch controls.' : 'View cellular biology, metabolism, and chemistry details.',
+      }));
       b.addEventListener('click', () => {
         this.guideTab = id;
         this.renderGuide();
@@ -833,6 +909,11 @@ export class ModalManager {
       s.style.color = '#b2cdd4';
       s.textContent = def?.summary ?? '';
       card.append(t, s);
+      bindHoldTooltip(card, () => ({
+        title: def?.title ?? gene,
+        subtitle: 'Heritable Lineage Adaptation',
+        body: def?.summary ?? 'Unlock this trait for future organelles of this type.',
+      }));
       card.addEventListener('click', () => {
         sim.acceptDivisionMutation(gene);
         this.cb.onNotice(`Unlocked ${def?.title ?? gene} adaptation!`);

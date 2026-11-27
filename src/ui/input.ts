@@ -1,4 +1,4 @@
-import { offsetVec } from '../sim/constants.ts';
+import { offsetVec, type Vec2 } from '../sim/constants.ts';
 import type { Simulation } from '../sim/simulation.ts';
 import type { PondCamera } from './camera.ts';
 import type { CellInterface } from './cellInterface.ts';
@@ -39,6 +39,7 @@ export class InputController {
   pointerY = 0;
   pointerInside = false;
   lastInputIsTouch = false;
+  private lastTouchAtMs = -10000;
 
   private dragging = false;
   private dragMoved = false;
@@ -48,12 +49,13 @@ export class InputController {
   private prevY = 0;
 
   private touches = new Map<number, ActiveTouch>();
-  private prevPinchDist = 0;
-  private prevPinchAngle = 0;
-  private prevPinchMidX = 0;
-  private prevPinchMidY = 0;
+  private pairAnchor: {
+    anchorA: Vec2;
+    anchorB: Vec2;
+    startZoom: number;
+    startDist: number;
+  } | null = null;
 
-  private touchHoldTimer: number | null = null;
   private lastTapTime = 0;
   private lastTapCellId = -1;
 
@@ -78,14 +80,28 @@ export class InputController {
     return target.closest('.interactive') !== null;
   }
 
-  private clearHoldTimer(): void {
-    if (this.touchHoldTimer !== null) {
-      window.clearTimeout(this.touchHoldTimer);
-      this.touchHoldTimer = null;
+  private captureTouchPair(): void {
+    const pts = [...this.touches.values()];
+    if (pts.length < 2) {
+      this.pairAnchor = null;
+      return;
     }
+    this.pairAnchor = this.camera.capturePairAnchors(
+      pts[0],
+      pts[1],
+      this.canvas.clientWidth,
+      this.canvas.clientHeight,
+    );
   }
 
   private bindEvents(): void {
+    window.addEventListener('blur', () => {
+      this.touches.clear();
+      this.pairAnchor = null;
+      this.dragging = false;
+      this.pointerInside = false;
+    });
+
     window.addEventListener('keydown', (e) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) {
         return;
@@ -125,11 +141,10 @@ export class InputController {
     });
 
     this.canvas.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
       if (this.cellUI.placingKind) {
-        e.preventDefault();
         this.cellUI.cancelPlacement();
       } else if (this.cb.getMergeMode()) {
-        e.preventDefault();
         this.cb.setMergeMode(false);
       }
     });
@@ -148,7 +163,14 @@ export class InputController {
       this.cb.onUserGesture();
       if (this.isUiTarget(e.target) || this.cb.isModalOpen()) return;
 
-      this.lastInputIsTouch = e.pointerType === 'touch';
+      if (e.pointerType === 'touch') {
+        this.lastTouchAtMs = performance.now();
+        this.lastInputIsTouch = true;
+      } else {
+        // Ignore compatibility mouse events synthesized immediately after touch input
+        if (this.lastInputIsTouch && performance.now() - this.lastTouchAtMs < 900) return;
+        this.lastInputIsTouch = false;
+      }
       this.pointerX = e.clientX;
       this.pointerY = e.clientY;
       this.pointerInside = true;
@@ -162,19 +184,19 @@ export class InputController {
           this.prevX = e.clientX;
           this.prevY = e.clientY;
           this.dragMoved = false;
-          this.clearHoldTimer();
-          this.touchHoldTimer = window.setTimeout(() => {
-            if (!this.dragMoved && this.touches.size === 1) {
-              this.inspector.triggerTouchHold(e.clientX, e.clientY, performance.now() / 1000);
-            }
-          }, 2500);
+          this.pairAnchor = null;
+          if (!this.cb.getMergeMode() && !this.cellUI.placingKind) {
+            this.inspector.triggerTouchHold(
+              e.clientX,
+              e.clientY,
+              performance.now() / 1000,
+              this.cb.getSim(),
+            );
+          }
         } else if (this.touches.size === 2) {
-          this.clearHoldTimer();
-          const pts = [...this.touches.values()];
-          this.prevPinchDist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
-          this.prevPinchAngle = Math.atan2(pts[1].y - pts[0].y, pts[1].x - pts[0].x);
-          this.prevPinchMidX = (pts[0].x + pts[1].x) * 0.5;
-          this.prevPinchMidY = (pts[0].y + pts[1].y) * 0.5;
+          this.dragMoved = true;
+          this.inspector.cancel(this.cb.getSim());
+          this.captureTouchPair();
         }
         return;
       }
@@ -191,7 +213,13 @@ export class InputController {
     });
 
     this.canvas.addEventListener('pointermove', (e) => {
-      this.lastInputIsTouch = e.pointerType === 'touch';
+      if (e.pointerType === 'touch') {
+        this.lastTouchAtMs = performance.now();
+        this.lastInputIsTouch = true;
+      } else {
+        if (this.lastInputIsTouch && performance.now() - this.lastTouchAtMs < 900) return;
+        this.lastInputIsTouch = false;
+      }
       this.pointerX = e.clientX;
       this.pointerY = e.clientY;
       this.pointerInside = true;
@@ -210,42 +238,33 @@ export class InputController {
         t.x = e.clientX;
         t.y = e.clientY;
 
-        if (this.touches.size === 2) {
+        if (this.touches.size >= 2) {
+          if (!this.pairAnchor) this.captureTouchPair();
           const pts = [...this.touches.values()];
-          const midX = (pts[0].x + pts[1].x) * 0.5;
-          const midY = (pts[0].y + pts[1].y) * 0.5;
-          const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
-          const ang = Math.atan2(pts[1].y - pts[0].y, pts[1].x - pts[0].x);
-          const panDx = midX - this.prevPinchMidX;
-          const panDy = midY - this.prevPinchMidY;
-          const pinchFactor = this.prevPinchDist > 4 ? dist / this.prevPinchDist : 1;
-          let twist = ang - this.prevPinchAngle;
-          if (twist > Math.PI) twist -= Math.PI * 2;
-          if (twist < -Math.PI) twist += Math.PI * 2;
-          this.camera.applyTwoFingerGesture(
-            panDx,
-            panDy,
-            pinchFactor,
-            twist,
-            midX,
-            midY,
-            this.canvas.clientWidth,
-            this.canvas.clientHeight,
-            focus,
-          );
-          this.prevPinchMidX = midX;
-          this.prevPinchMidY = midY;
-          this.prevPinchDist = dist;
-          this.prevPinchAngle = ang;
+          if (this.pairAnchor) {
+            this.camera.applyAnchoredPairGesture(
+              this.pairAnchor.anchorA,
+              this.pairAnchor.anchorB,
+              this.pairAnchor.startZoom,
+              this.pairAnchor.startDist,
+              pts[0],
+              pts[1],
+              this.canvas.clientWidth,
+              this.canvas.clientHeight,
+            );
+          }
           this.dragMoved = true;
+          this.inspector.cancel(sim);
         } else if (this.touches.size === 1) {
           const dx = e.clientX - this.prevX;
           const dy = e.clientY - this.prevY;
-          if (Math.hypot(e.clientX - this.downX, e.clientY - this.downY) > 7) {
+          if (!this.dragMoved && Math.hypot(e.clientX - this.downX, e.clientY - this.downY) > 8) {
             this.dragMoved = true;
-            this.clearHoldTimer();
+            this.inspector.cancel(sim);
           }
-          if (this.dragMoved) this.camera.panByScreenDelta(dx, dy);
+          if (this.dragMoved) {
+            this.camera.panByScreenDelta(dx, dy);
+          }
           this.prevX = e.clientX;
           this.prevY = e.clientY;
         }
@@ -268,17 +287,31 @@ export class InputController {
 
     const handleUp = (e: PointerEvent) => {
       if (e.pointerType === 'touch') {
-        this.clearHoldTimer();
+        this.lastTouchAtMs = performance.now();
         const wasSingle = this.touches.size === 1;
         this.touches.delete(e.pointerId);
-        if (wasSingle && !this.dragMoved && !this.cb.isModalOpen()) {
+        if (this.touches.size === 2) {
+          this.captureTouchPair();
+        } else if (this.touches.size === 1) {
+          // Reset single-finger delta anchor to remaining finger so releasing a pinch never jumps
+          const rem = [...this.touches.values()][0];
+          this.prevX = rem.x;
+          this.prevY = rem.y;
+          this.downX = rem.x;
+          this.downY = rem.y;
+          this.pairAnchor = null;
+          this.dragMoved = true;
+        } else {
+          this.pairAnchor = null;
+        }
+        if (wasSingle && !this.dragMoved && e.type === 'pointerup' && !this.cb.isModalOpen()) {
           this.handleTapOrClick(e.clientX, e.clientY);
         }
         return;
       }
       if (!this.dragging) return;
       this.dragging = false;
-      if (!this.dragMoved && e.button === 0 && !this.cb.isModalOpen()) {
+      if (!this.dragMoved && e.button === 0 && e.type === 'pointerup' && !this.cb.isModalOpen()) {
         this.handleTapOrClick(e.clientX, e.clientY);
       }
     };
@@ -329,6 +362,7 @@ export class InputController {
           sim.followFamily(c.id);
           this.camera.setFocusCell(c, true);
           this.cellUI.close();
+          this.inspector.cancel(sim);
           this.lastTapTime = 0;
           this.lastTapCellId = -1;
           return;
@@ -340,6 +374,19 @@ export class InputController {
     }
 
     // Normal focus cell interaction / organ placement
-    this.cellUI.handleCanvasClick(sim, focus, sx, sy, this.camera, viewW, viewH);
+    const handledCell = this.cellUI.handleCanvasClick(sim, focus, sx, sy, this.camera, viewW, viewH);
+    if (handledCell) {
+      if (this.cellUI.active || this.cellUI.placingKind) {
+        this.inspector.cancel(sim);
+      } else if (this.lastInputIsTouch) {
+        this.inspector.triggerTouchHold(sx, sy, performance.now() / 1000, sim);
+      }
+      return;
+    }
+
+    // Open-water / vacuole poke: keep optical particle lens & info box visible
+    if (this.lastInputIsTouch) {
+      this.inspector.triggerTouchHold(sx, sy, performance.now() / 1000, sim);
+    }
   }
 }

@@ -349,6 +349,8 @@ async function boot(): Promise<void> {
       } else {
         lastOfferCount = sim.evolution.divisionOffers.length;
       }
+    } else {
+      sim.applyInspectReceipt(particleEngine.pollReceipts());
     }
 
     const activeFocus = sim.cells.find((c) => c.id === camera.focusCellId && !c.dead) ?? sim.player;
@@ -368,6 +370,12 @@ async function boot(): Promise<void> {
       canvas.clientHeight,
       nowMs / 1000,
     );
+
+    let encodedInspectWhilePaused = false;
+    if (paused && inspectState.active && sim.inspectCursor.active) {
+      particleEngine.encodeInspectOnly(encoder, sim.inspectCursor, sim.time);
+      encodedInspectWhilePaused = true;
+    }
 
     const mergeIds = new Set<number>(mergeCands.keys());
 
@@ -404,7 +412,7 @@ async function boot(): Promise<void> {
     });
 
     device.queue.submit([encoder.finish()]);
-    if (!paused) {
+    if (!paused || encodedInspectWhilePaused) {
       particleEngine.afterSubmit();
     }
 

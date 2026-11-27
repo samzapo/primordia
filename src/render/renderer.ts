@@ -6,7 +6,7 @@ import {
   ORGAN_KINDS,
   isInternalOrgan,
 } from '../sim/cell.ts';
-import { clamp, offsetVec, SPECIES, type Vec2, WORLD_H, WORLD_W } from '../sim/constants.ts';
+import { clamp, offsetVec, SPECIES, type Vec2, WORLD_H, WORLD_W, wrapPos } from '../sim/constants.ts';
 import { LIGHT_COLS, LIGHT_ROWS, getLightGrid, lightDirection } from '../sim/lightField.ts';
 import { SPECIES_RADII, particleRadius } from '../sim/catalog.ts';
 import { proboscisTip } from '../sim/proboscis.ts';
@@ -460,32 +460,47 @@ export class Renderer {
     this.device.queue.writeBuffer(this.lutUniformBuf, 0, this.lutUniformF32);
   }
 
-  private worldOutlineOf(cell: Cell, tr: CellMotionTransform): Vec2[] {
+  private isRelVisible(rel: Vec2, margin: number, state: RenderFrameState, effHalfW: number, effHalfH: number): boolean {
+    const c = Math.cos(-state.rotation);
+    const s = Math.sin(-state.rotation);
+    const sx = rel.x * c - rel.y * s;
+    const sy = rel.x * s + rel.y * c;
+    return Math.abs(sx) <= effHalfW + margin && Math.abs(sy) <= effHalfH + margin;
+  }
+
+  private relOutlineOf(cell: Cell, tr: CellMotionTransform, baseRel: Vec2): Vec2[] {
     const localPts = cell.membrane.outline();
     const c = Math.cos(cell.angle);
     const s = Math.sin(cell.angle);
+    const maxR = Math.max(80, cell.radius * 3.0);
     const out: Vec2[] = [];
     for (let i = 0; i < localPts.length; i++) {
-      const d = this.motionTracker.applyDeform(localPts[i], tr, cell.angle);
+      let d = this.motionTracker.applyDeform(localPts[i], tr, cell.angle);
+      const r = Math.hypot(d.x, d.y);
+      if (!Number.isFinite(r) || r > maxR) {
+        const fallbackA = (Math.PI * 2 * i) / Math.max(1, localPts.length);
+        const safeR = Math.min(cell.radius, maxR);
+        d = { x: Math.cos(fallbackA) * safeR, y: Math.sin(fallbackA) * safeR };
+      }
       out.push({
-        x: cell.position.x + d.x * c - d.y * s,
-        y: cell.position.y + d.x * s + d.y * c,
+        x: baseRel.x + d.x * c - d.y * s,
+        y: baseRel.y + d.x * s + d.y * c,
       });
     }
     return out;
   }
 
-  private localToWorld(cell: Cell, local: Vec2, tr: CellMotionTransform): Vec2 {
+  private localToRel(cell: Cell, local: Vec2, tr: CellMotionTransform, baseRel: Vec2): Vec2 {
     const d = this.motionTracker.applyDeform(local, tr, cell.angle);
     const c = Math.cos(cell.angle);
     const s = Math.sin(cell.angle);
     return {
-      x: cell.position.x + d.x * c - d.y * s,
-      y: cell.position.y + d.x * s + d.y * c,
+      x: baseRel.x + d.x * c - d.y * s,
+      y: baseRel.y + d.x * s + d.y * c,
     };
   }
 
-  private drawCellWake(cell: Cell, sim: Simulation): void {
+  private drawCellWake(cell: Cell, sim: Simulation, baseRel: Vec2): void {
     const fluid = sim.fluid.sample(cell.position.x, cell.position.y);
     const relX = cell.velocity.x - fluid.x;
     const relY = cell.velocity.y - fluid.y;
@@ -507,8 +522,8 @@ export class Renderer {
         const back = ext * 0.45 + u * len;
         const spread = ext * 0.65 + u * (14 + speed * 0.25);
         pts.push({
-          x: cell.position.x - dirX * back + perpX * side * spread,
-          y: cell.position.y - dirY * back + perpY * side * spread,
+          x: baseRel.x - dirX * back + perpX * side * spread,
+          y: baseRel.y - dirY * back + perpY * side * spread,
         });
       }
       this.vectorBatch.addPolyline(pts, 2.2, [0.8, 0.96, 1.0, strength], 2.0, false, true);
@@ -520,7 +535,8 @@ export class Renderer {
     tr: CellMotionTransform,
     sim: Simulation,
     state: RenderFrameState,
-    worldOutline: Vec2[],
+    baseRel: Vec2,
+    relOutline: Vec2[],
     cmds: LayerCmd[],
   ): void {
     const pal = lineagePalette(sim.seedValue, cell.lineageId(), sim.lineageColors.get(cell.lineageId()));
@@ -560,7 +576,7 @@ export class Renderer {
     for (const organ of cell.organs) {
       if (isInternalOrgan(organ.kind)) continue;
       const baseLocal = cell.localPoint(organ.a);
-      const baseWorld = this.localToWorld(cell, baseLocal, tr);
+      const baseRelPos = this.localToRel(cell, baseLocal, tr, baseRel);
       const ln = cell.localNormal(organ.a);
       const nx = ln.x * cosA - ln.y * sinA;
       const ny = ln.x * sinA + ln.y * cosA;
@@ -578,8 +594,8 @@ export class Renderer {
           const back = u * (24 * sc);
           const wave = Math.sin(sim.time * freq - u * 4.5 + organ.id) * 5.2 * u * sc;
           pts.push({
-            x: baseWorld.x + nx * back - ny * wave,
-            y: baseWorld.y + ny * back + nx * wave,
+            x: baseRelPos.x + nx * back - ny * wave,
+            y: baseRelPos.y + ny * back + nx * wave,
           });
         }
         this.vectorBatch.addPolyline(pts, 2.2 * sc, [col.r, col.g, col.b, 0.92 * hpAlpha], 1.6, false, true);
@@ -591,7 +607,7 @@ export class Renderer {
           const dx = nx * ca - ny * sa;
           const dy = nx * sa + ny * ca;
           this.vectorBatch.addPolyline(
-            [baseWorld, { x: baseWorld.x + dx * 13 * sc, y: baseWorld.y + dy * 13 * sc }],
+            [baseRelPos, { x: baseRelPos.x + dx * 13 * sc, y: baseRelPos.y + dy * 13 * sc }],
             1.4,
             [col.r, col.g, col.b, 0.85 * hpAlpha],
             1.4,
@@ -599,11 +615,13 @@ export class Renderer {
         }
       } else if (organ.kind === 'proboscis' && organ.hp > 0) {
         const tip = proboscisTip(cell, organ);
+        const organWorld = cell.organPosition(organ);
+        const tipDelta = offsetVec(organWorld, tip);
         const unwrappedTip = {
-          x: baseWorld.x + offsetVec(baseWorld, tip).x,
-          y: baseWorld.y + offsetVec(baseWorld, tip).y,
+          x: baseRelPos.x + tipDelta.x,
+          y: baseRelPos.y + tipDelta.y,
         };
-        this.vectorBatch.addPolyline([baseWorld, unwrappedTip], 1.8 * sc, [col.r, col.g, col.b, 0.88], 1.6);
+        this.vectorBatch.addPolyline([baseRelPos, unwrappedTip], 1.8 * sc, [col.r, col.g, col.b, 0.88], 1.6);
         const hit = sim.proboscisContacts.find((pc) => pc.feederId === cell.id && pc.organId === organ.id);
         if (hit) {
           this.vectorBatch.addCircleFilled(unwrappedTip.x, unwrappedTip.y, 4.4, [1.0, 0.42, 0.65, 0.95], 12);
@@ -612,21 +630,21 @@ export class Renderer {
     }
 
     // Step B: 4-Ring explicit mesh dome shading from the real deformed outline
-    const n = worldOutline.length;
+    const n = relOutline.length;
     const ringInner: Vec2[] = [];
     const ringMid: Vec2[] = [];
     const innerColors: [number, number, number, number][] = [];
     const midColors: [number, number, number, number][] = [];
     const outerColors: [number, number, number, number][] = [];
     const centerShift = {
-      x: cell.position.x - lightDir.x * cell.radius * 0.22,
-      y: cell.position.y - lightDir.y * cell.radius * 0.22,
+      x: baseRel.x - lightDir.x * cell.radius * 0.22,
+      y: baseRel.y - lightDir.y * cell.radius * 0.22,
     };
 
     for (let i = 0; i < n; i++) {
-      const ow = worldOutline[i];
-      const dx = ow.x - cell.position.x;
-      const dy = ow.y - cell.position.y;
+      const ow = relOutline[i];
+      const dx = ow.x - baseRel.x;
+      const dy = ow.y - baseRel.y;
       const len = Math.hypot(dx, dy) || 1;
       const nx = dx / len;
       const ny = dy / len;
@@ -637,8 +655,8 @@ export class Renderer {
         y: centerShift.y + (ow.y - centerShift.y) * 0.52,
       });
       ringMid.push({
-        x: cell.position.x + dx * 0.84,
-        y: cell.position.y + dy * 0.84,
+        x: baseRel.x + dx * 0.84,
+        y: baseRel.y + dy * 0.84,
       });
 
       const midMix = mixRgb(bCol, shineRgb, lit * 0.32);
@@ -650,22 +668,22 @@ export class Renderer {
 
     this.vectorBatch.addStarPoly(centerShift, ringInner, [gCol.r, gCol.g, gCol.b, fillAlpha], innerColors[0]);
     this.vectorBatch.addRingBand(ringInner, ringMid, innerColors, midColors);
-    this.vectorBatch.addRingBand(ringMid, worldOutline, midColors, outerColors);
+    this.vectorBatch.addRingBand(ringMid, relOutline, midColors, outerColors);
 
     // Synergy cellular signature
     const syn = cell.synergy();
     if (syn === 'producer') {
-      this.vectorBatch.addCircleFilled(cell.position.x, cell.position.y, cell.radius * 0.45, [0.35, 0.92, 0.55, 0.14], 20);
+      this.vectorBatch.addCircleFilled(baseRel.x, baseRel.y, cell.radius * 0.45, [0.35, 0.92, 0.55, 0.14], 20);
     } else if (syn === 'hunter') {
-      this.vectorBatch.addCircleStroke(cell.position.x, cell.position.y, cell.radius * 0.72, 1.3, [1, 0.62, 0.25, 0.35], 24);
+      this.vectorBatch.addCircleStroke(baseRel.x, baseRel.y, cell.radius * 0.72, 1.3, [1, 0.62, 0.25, 0.35], 24);
     } else if (syn === 'parasite') {
-      this.vectorBatch.addCircleStroke(cell.position.x, cell.position.y, cell.radius * 0.76, 1.4, [0.95, 0.35, 0.62, 0.42], 24);
+      this.vectorBatch.addCircleStroke(baseRel.x, baseRel.y, cell.radius * 0.76, 1.4, [0.95, 0.35, 0.62, 0.42], 24);
     }
 
     // Crisp outer membrane wall + inner highlight rim
     const hasWall = cell.organs.some((o) => o.kind === 'protection' && o.hp > 0);
     this.vectorBatch.addPolyline(
-      worldOutline,
+      relOutline,
       hasWall ? 2.6 : 1.7,
       [eCol.r, eCol.g, eCol.b, 0.95],
       1.6,
@@ -682,8 +700,8 @@ export class Renderer {
     // Selected or hover ring
     if (isFocused) {
       this.vectorBatch.addCircleStroke(
-        cell.position.x,
-        cell.position.y,
+        baseRel.x,
+        baseRel.y,
         cell.extent() + 5,
         1.1,
         [shineRgb.r, shineRgb.g, shineRgb.b, 0.35],
@@ -692,15 +710,15 @@ export class Renderer {
     }
     if (state.mergeSelecting && state.mergeCandidateIds.has(cell.id)) {
       const pulse = 0.6 + 0.4 * Math.sin(sim.time * 5);
-      this.vectorBatch.addCircleStroke(cell.position.x, cell.position.y, cell.extent() + 9, 2.2, [0.4, 0.95, 0.85, pulse], 36);
+      this.vectorBatch.addCircleStroke(baseRel.x, baseRel.y, cell.extent() + 9, 2.2, [0.4, 0.95, 0.85, pulse], 36);
     }
 
     // Microtubules (editing-only!)
     if (cell.id === state.editingCellId) {
       for (const organ of cell.organs) {
-        const ow = this.localToWorld(cell, cell.localPoint(organ.a), tr);
+        const ow = this.localToRel(cell, cell.localPoint(organ.a), tr, baseRel);
         this.vectorBatch.addPolyline(
-          [cell.position, ow],
+          [baseRel, ow],
           0.95,
           [shineRgb.r, shineRgb.g, shineRgb.b, 0.28],
           1.4,
@@ -710,7 +728,7 @@ export class Renderer {
 
     // Surface complement tags, membrane pores & antitoxin shields
     for (const cpx of cell.surfaceComplexes) {
-      const wp = this.localToWorld(cell, cell.localPoint(cpx.a), tr);
+      const wp = this.localToRel(cell, cell.localPoint(cpx.a), tr, baseRel);
       if (cpx.capped) {
         this.vectorBatch.addCircleStroke(wp.x, wp.y, 5.2, 1.8, [0.3, 0.92, 0.82, 0.95], 12);
       } else if (cpx.units > 0) {
@@ -723,7 +741,7 @@ export class Renderer {
     // Exterior membrane organs & scars
     for (const organ of cell.organs) {
       if (isInternalOrgan(organ.kind)) continue;
-      const wp = this.localToWorld(cell, cell.organLocalPosition(organ), tr);
+      const wp = this.localToRel(cell, cell.organLocalPosition(organ), tr, baseRel);
       const col = parseHex(ORGAN_COLORS[organ.kind]);
       const rad = 5.4 * organ.scale;
       this.vectorBatch.addCircleFilled(wp.x, wp.y, rad + 1.4, [eCol.r, eCol.g, eCol.b, 0.85], 16);
@@ -743,20 +761,22 @@ export class Renderer {
     }
 
     for (const scar of cell.lostOrgans) {
-      const wp = this.localToWorld(cell, cell.localPoint(scar.a), tr);
+      const wp = this.localToRel(cell, cell.localPoint(scar.a), tr, baseRel);
       this.vectorBatch.addCircleStroke(wp.x, wp.y, 4.5, 1.3, [0.95, 0.55, 0.55, 0.65], 10);
     }
 
     const vecCmdA = this.vectorBatch.finishRange(vStartA, 'worldAlpha');
     if (vecCmdA) cmds.push({ kind: 'vec', cmd: vecCmdA });
 
+    const toSpriteWorld = (relPt: Vec2): Vec2 => wrapPos({ x: state.camX + relPt.x, y: state.camY + relPt.y });
+
     // Step C: Organ sprite glyphs along perimeter + internal organs
     const sOrgStart = this.spriteBatch.mark();
     for (const organ of cell.organs) {
       const layer = ORGAN_LAYER_INDEX.get(organ.kind) ?? 0;
-      const wp = this.localToWorld(cell, cell.organLocalPosition(organ), tr);
+      const sw = toSpriteWorld(this.localToRel(cell, cell.organLocalPosition(organ), tr, baseRel));
       const hw = (isInternalOrgan(organ.kind) ? 7.5 : 6.2) * organ.scale;
-      this.spriteBatch.push(wp.x, wp.y, hw, hw, cell.angle + organ.a, layer, [1, 1, 1, organ.hp > 0 ? 0.95 : 0.35]);
+      this.spriteBatch.push(sw.x, sw.y, hw, hw, cell.angle + organ.a, layer, [1, 1, 1, organ.hp > 0 ? 0.95 : 0.35]);
     }
     const sprOrgCmd = this.spriteBatch.finishRange(sOrgStart, 'organs');
     if (sprOrgCmd) cmds.push({ kind: 'spr', cmd: sprOrgCmd });
@@ -766,7 +786,7 @@ export class Renderer {
       const vacStart = this.spriteBatch.mark();
       for (const ip of cell.chemistry.particles) {
         if (!ip.alive) continue;
-        const wp = this.localToWorld(cell, ip.p, tr);
+        const sw = toSpriteWorld(this.localToRel(cell, ip.p, tr, baseRel));
         const layer =
           ip.species === 'food'
             ? 0
@@ -776,7 +796,7 @@ export class Renderer {
                 ? 2
                 : 3;
         const r = clamp(2.8 + Math.sqrt(ip.amount) * 3.4, 2.5, 9.5);
-        this.spriteBatch.push(wp.x, wp.y, r, r, ip.angle, layer, [1, 1, 1, intero ? 0.96 : 0.58]);
+        this.spriteBatch.push(sw.x, sw.y, r, r, ip.angle, layer, [1, 1, 1, intero ? 0.96 : 0.58]);
       }
       const vacCmd = this.spriteBatch.finishRange(vacStart, 'vacuoles');
       if (vacCmd) cmds.push({ kind: 'spr', cmd: vacCmd });
@@ -784,15 +804,20 @@ export class Renderer {
 
     // Step E: Nucleus sprite + compact landmarks + warning pulses
     const nucForm = nucleusForm(sim.seedValue, cell.lineageId());
-    const nucPos = isFocused
+    const nucWorld = isFocused
       ? computeInteriorLandmarks(cell).find((l) => l.kind === 'nucleus')?.world ?? cell.position
       : cell.position;
+    const nucRel = {
+      x: baseRel.x + offsetVec(cell.position, nucWorld).x,
+      y: baseRel.y + offsetVec(cell.position, nucWorld).y,
+    };
+    const nucSw = toSpriteWorld(nucRel);
     const nucR = clamp(cell.radius * 0.25, 6.5, 13.5);
     const nucStart = this.spriteBatch.mark();
     const nucRgb = parseHex(pal.nucleus);
     this.spriteBatch.push(
-      nucPos.x,
-      nucPos.y,
+      nucSw.x,
+      nucSw.y,
       nucR,
       nucR,
       cell.angle,
@@ -823,8 +848,10 @@ export class Renderer {
                   : '#ffbe6b';
         const rgb = parseHex(colorHex);
         const pulse = lm.kind === 'atp' && cell.energy < 10 ? 0.55 + 0.45 * Math.sin(sim.time * 8) : 0.85;
-        this.vectorBatch.addCircleFilled(lm.world.x, lm.world.y, r, [rgb.r, rgb.g, rgb.b, pulse * 0.45], 16);
-        this.vectorBatch.addCircleStroke(lm.world.x, lm.world.y, r, 1.3 * compactScale, [rgb.r, rgb.g, rgb.b, pulse], 18);
+        const lmDelta = offsetVec(cell.position, lm.world);
+        const lmRel = { x: baseRel.x + lmDelta.x, y: baseRel.y + lmDelta.y };
+        this.vectorBatch.addCircleFilled(lmRel.x, lmRel.y, r, [rgb.r, rgb.g, rgb.b, pulse * 0.45], 16);
+        this.vectorBatch.addCircleStroke(lmRel.x, lmRel.y, r, 1.3 * compactScale, [rgb.r, rgb.g, rgb.b, pulse], 18);
       }
 
       // Placement preview ghost when adding an organelle
@@ -833,10 +860,11 @@ export class Renderer {
         const ghostLocal = cell.localPoint(pv.angle);
         const ln = cell.localNormal(pv.angle);
         const dist = isInternalOrgan(pv.kind) ? 0.6 : 1.02;
-        const wp = this.localToWorld(
+        const wp = this.localToRel(
           cell,
           { x: ghostLocal.x * dist + ln.x * 4, y: ghostLocal.y * dist + ln.y * 4 },
           tr,
+          baseRel,
         );
         const gCol = pv.valid ? [0.42, 0.98, 0.72, 0.85] : [1.0, 0.38, 0.42, 0.85];
         const ringR = 11 + Math.sin(sim.time * 6) * 2;
@@ -848,7 +876,7 @@ export class Renderer {
       // Lower-left status badges
       const hasPore = cell.surfaceComplexes.some((s) => !s.capped && s.units > 0);
       if (cell.energy <= 0 || hasPore || cell.acidStress > 0.2) {
-        const badgePos = { x: cell.position.x - cell.extent() * 0.78, y: cell.position.y + cell.extent() * 0.78 };
+        const badgePos = { x: baseRel.x - cell.extent() * 0.78, y: baseRel.y + cell.extent() * 0.78 };
         if (cell.energy <= 0) {
           this.vectorBatch.addCircleFilled(badgePos.x, badgePos.y, 4.5, [1.0, 0.56, 0.2, 0.92], 12);
         }
@@ -870,22 +898,26 @@ export class Renderer {
     this.vectorBatch.beginFrame();
     this.spriteBatch.beginFrame();
 
+    const camPos = { x: state.camX, y: state.camY };
     const focusCell = sim.cells.find((c) => c.id === state.focusCellId && !c.dead) ?? sim.player;
-    const focusTr = this.motionTracker.transformFor(focusCell);
-    const focusOutline = this.worldOutlineOf(focusCell, focusTr);
 
     this.updateUniforms(sim, state, focusCell.position);
+
+    const effHalfW = (state.screenCssW / Math.max(0.1, state.zoom)) * 0.5 + 120;
+    const effHalfH = (state.screenCssH / Math.max(0.1, state.zoom)) * 0.5 + 120;
 
     const foregroundIds = new Set<number>([focusCell.id]);
     if (state.mergeSelecting) {
       for (const id of state.mergeCandidateIds) foregroundIds.add(id);
     }
 
-    const outlinesByCell = new Map<number, { tr: CellMotionTransform; outline: Vec2[] }>();
+    const outlinesByCell = new Map<number, { tr: CellMotionTransform; baseRel: Vec2; outline: Vec2[] }>();
     for (const c of sim.cells) {
       if (c.dead) continue;
+      const baseRel = offsetVec(camPos, c.position);
+      if (!this.isRelVisible(baseRel, c.extent() + 160, state, effHalfW, effHalfH)) continue;
       const tr = this.motionTracker.transformFor(c);
-      outlinesByCell.set(c.id, { tr, outline: this.worldOutlineOf(c, tr) });
+      outlinesByCell.set(c.id, { tr, baseRel, outline: this.relOutlineOf(c, tr, baseRel) });
     }
 
     // =========================================================================
@@ -895,15 +927,16 @@ export class Renderer {
     if (state.interoception || state.mergeSelecting) {
       const mStart = this.vectorBatch.mark();
       const white: [number, number, number, number] = [1, 1, 1, 1];
-      if (!focusCell.dead) {
-        this.vectorBatch.addStarPoly(focusCell.position, focusOutline, white, white);
+      const focusEntry = outlinesByCell.get(focusCell.id);
+      if (!focusCell.dead && focusEntry) {
+        this.vectorBatch.addStarPoly(focusEntry.baseRel, focusEntry.outline, white, white);
       }
       if (state.mergeSelecting) {
         for (const id of state.mergeCandidateIds) {
           const entry = outlinesByCell.get(id);
-          if (!entry) continue;
-          const cell = sim.cells.find((c) => c.id === id);
-          if (cell) this.vectorBatch.addStarPoly(cell.position, entry.outline, white, white);
+          if (entry) {
+            this.vectorBatch.addStarPoly(entry.baseRel, entry.outline, white, white);
+          }
         }
       }
       maskCmd = this.vectorBatch.finishRange(mStart, 'worldMask');
@@ -932,15 +965,13 @@ export class Renderer {
     const passBCmdsPreParticles: LayerCmd[] = [];
     const passBCmdsPostParticles: LayerCmd[] = [];
 
-    const effHalfW = (state.screenCssW / Math.max(0.1, state.zoom)) * 0.5 + 120;
-    const effHalfH = (state.screenCssH / Math.max(0.1, state.zoom)) * 0.5 + 120;
     const curves = buildFlowCurves(
       sim.seedValue,
       sim.time,
       sim.fluid,
       sim.induced,
       sim.habitatGeometry,
-      { x: state.camX, y: state.camY },
+      camPos,
       effHalfW,
       effHalfH,
     );
@@ -958,8 +989,8 @@ export class Renderer {
     const plantStart = this.spriteBatch.mark();
     const plantAlpha = state.interoception ? 0.35 : 0.92;
     for (const plant of sim.habitatGeometry.plants) {
-      const d = offsetVec({ x: state.camX, y: state.camY }, plant.p);
-      if (Math.abs(d.x) > effHalfW + plant.radius * 1.6 || Math.abs(d.y) > effHalfH + plant.radius * 1.6) {
+      const rel = offsetVec(camPos, plant.p);
+      if (!this.isRelVisible(rel, plant.radius * 1.6, state, effHalfW, effHalfH)) {
         continue;
       }
       const hw = plant.radius * 1.35;
@@ -977,22 +1008,23 @@ export class Renderer {
     const goldCmd = this.vectorBatch.finishRange(goldStart, 'worldAlpha');
     if (goldCmd) passBCmdsPreParticles.push({ kind: 'vec', cmd: goldCmd });
 
-    // B6: ALL Cell Wakes strictly below ALL cell bodies
+    // B6: ALL Cell Wakes strictly below ALL cell bodies (visible cells only)
     const wakeStart = this.vectorBatch.mark();
     for (const c of sim.cells) {
-      if (!c.dead) this.drawCellWake(c, sim);
+      if (c.dead) continue;
+      const entry = outlinesByCell.get(c.id);
+      if (!entry) continue;
+      this.drawCellWake(c, sim, entry.baseRel);
     }
     const wakeCmd = this.vectorBatch.finishRange(wakeStart, 'worldAlpha');
     if (wakeCmd) passBCmdsPostParticles.push({ kind: 'vec', cmd: wakeCmd });
 
-    // B7: Non-focused exterior cells
+    // B7: Non-focused exterior cells (visible cells only)
     for (const c of sim.cells) {
       if (c.dead || foregroundIds.has(c.id)) continue;
       const entry = outlinesByCell.get(c.id);
       if (!entry) continue;
-      const d = offsetVec({ x: state.camX, y: state.camY }, c.position);
-      if (Math.abs(d.x) > effHalfW + 140 || Math.abs(d.y) > effHalfH + 140) continue;
-      this.drawCellBodyAndExterior(c, entry.tr, sim, state, entry.outline, passBCmdsPostParticles);
+      this.drawCellBodyAndExterior(c, entry.tr, sim, state, entry.baseRel, entry.outline, passBCmdsPostParticles);
     }
 
     this.vectorBatch.uploadPending();
@@ -1059,52 +1091,59 @@ export class Renderer {
     // =========================================================================
     const fgCmds: LayerCmd[] = [];
 
-    // Focused cell & merge candidates
+    // Focused cell & merge candidates (frustum-culled cleanly too!)
     for (const c of sim.cells) {
       if (c.dead || !foregroundIds.has(c.id)) continue;
       const entry = outlinesByCell.get(c.id);
       if (!entry) continue;
-      this.drawCellBodyAndExterior(c, entry.tr, sim, state, entry.outline, fgCmds);
+      this.drawCellBodyAndExterior(c, entry.tr, sim, state, entry.baseRel, entry.outline, fgCmds);
     }
 
-    // Audio pitch waves & death/merge bursts
+    // Audio pitch waves & death/merge bursts (camera-relative)
     const fxStart = this.vectorBatch.mark();
     for (const wave of state.audioWaves) {
+      const rel = offsetVec(camPos, wave);
+      if (!this.isRelVisible(rel, wave.radius + 20, state, effHalfW, effHalfH)) continue;
       const wc = pitchWaveColor(wave.semitones);
-      this.vectorBatch.addCircleStroke(wave.x, wave.y, wave.radius, 1.4, [wc[0], wc[1], wc[2], wave.alpha], 36);
+      this.vectorBatch.addCircleStroke(rel.x, rel.y, wave.radius, 1.4, [wc[0], wc[1], wc[2], wave.alpha], 36);
     }
     for (const burst of sim.deathBursts) {
       const age = sim.time - burst.time;
       if (age < 0 || age > 1.8) continue;
+      const rel = offsetVec(camPos, burst.at);
+      if (!this.isRelVisible(rel, burst.radius * 2.5, state, effHalfW, effHalfH)) continue;
       const t = age / 1.8;
       const col = hexToRgba(lineagePalette(sim.seedValue, burst.lineage, sim.lineageColors.get(burst.lineage)).rim, 1 - t);
-      this.vectorBatch.addCircleStroke(burst.at.x, burst.at.y, burst.radius * (0.6 + t * 1.4), 2.5 * (1 - t), col, 32);
+      this.vectorBatch.addCircleStroke(rel.x, rel.y, burst.radius * (0.6 + t * 1.4), 2.5 * (1 - t), col, 32);
     }
     for (const mb of sim.mergeBursts) {
       const age = sim.time - mb.time;
       if (age < 0 || age > 1.2) continue;
       const t = age / 1.2;
+      const fromRel = offsetVec(camPos, mb.at);
       const delta = offsetVec(mb.at, mb.to);
       const ease = 1 - (1 - t) * (1 - t);
-      const curX = mb.at.x + delta.x * ease;
-      const curY = mb.at.y + delta.y * ease;
+      const curRel = { x: fromRel.x + delta.x * ease, y: fromRel.y + delta.y * ease };
+      if (!this.isRelVisible(curRel, mb.donorRadius + 20, state, effHalfW, effHalfH)) continue;
       const linCol = hexToRgba(
         lineagePalette(sim.seedValue, mb.donorLineage, sim.lineageColors.get(mb.donorLineage)).rim,
         (1 - t) * 0.72,
       );
-      this.vectorBatch.addCircleFilled(curX, curY, mb.donorRadius * (1 - 0.5 * t), linCol, 20);
+      this.vectorBatch.addCircleFilled(curRel.x, curRel.y, mb.donorRadius * (1 - 0.5 * t), linCol, 20);
     }
     const fxCmd = this.vectorBatch.finishRange(fxStart, 'worldAlpha');
     if (fxCmd) fgCmds.push({ kind: 'vec', cmd: fxCmd });
 
-    // Additive 4-point reaction sparks (0.24s window)
+    // Additive 4-point reaction sparks (0.24s window, camera-relative)
     const spStart = this.vectorBatch.mark();
     for (const spark of sim.reactionSparks) {
       const age = sim.time - spark.time;
       if (age < 0 || age > 0.24) continue;
+      const rel = offsetVec(camPos, spark.at);
+      if (!this.isRelVisible(rel, 24, state, effHalfW, effHalfH)) continue;
       const t = age / 0.24;
       const r = 10.5 * Math.sin(t * Math.PI);
-      this.vectorBatch.addSpark4Pt(spark.at.x, spark.at.y, r, spark.serial * 0.7 + t * 1.2, [1.0, 0.94, 0.65, 1 - t]);
+      this.vectorBatch.addSpark4Pt(rel.x, rel.y, r, spark.serial * 0.7 + t * 1.2, [1.0, 0.94, 0.65, 1 - t]);
     }
     const spCmd = this.vectorBatch.finishRange(spStart, 'worldAdd');
     if (spCmd) fgCmds.push({ kind: 'vec', cmd: spCmd });

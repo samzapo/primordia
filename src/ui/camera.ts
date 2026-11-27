@@ -143,6 +143,86 @@ export class PondCamera {
     }
   }
 
+  screenDeltaToWorld(dx: number, dy: number): Vec2 {
+    const invZ = 1 / Math.max(0.001, this.zoom);
+    const vx = dx * invZ;
+    const vy = dy * invZ;
+    const c = Math.cos(this.rotation);
+    const s = Math.sin(this.rotation);
+    return {
+      x: vx * c - vy * s,
+      y: vx * s + vy * c,
+    };
+  }
+
+  capturePairAnchors(
+    p0: Vec2,
+    p1: Vec2,
+    viewW: number,
+    viewH: number,
+  ): { anchorA: Vec2; anchorB: Vec2; startZoom: number; startDist: number } {
+    const anchorA = this.screenToWorld(p0.x, p0.y, viewW, viewH);
+    const sep = this.screenDeltaToWorld(p1.x - p0.x, p1.y - p0.y);
+    return {
+      anchorA,
+      anchorB: { x: anchorA.x + sep.x, y: anchorA.y + sep.y },
+      startZoom: this.zoom,
+      startDist: Math.hypot(p1.x - p0.x, p1.y - p0.y),
+    };
+  }
+
+  applyAnchoredPairGesture(
+    anchorA: Vec2,
+    anchorB: Vec2,
+    startZoom: number,
+    startDist: number,
+    cur0: Vec2,
+    cur1: Vec2,
+    viewW: number,
+    viewH: number,
+  ): void {
+    const tgtX = cur1.x - cur0.x;
+    const tgtY = cur1.y - cur0.y;
+    const tgtLen = Math.hypot(tgtX, tgtY);
+    if (tgtLen < 4) return;
+
+    if (this.interoception) {
+      if (startDist > 4) {
+        this.zoom = this.clampZoom(startZoom * (tgtLen / startDist));
+      }
+      this.motion = null;
+      this.follow = true;
+      return;
+    }
+
+    const srcX = anchorB.x - anchorA.x;
+    const srcY = anchorB.y - anchorA.y;
+    const srcLen = Math.hypot(srcX, srcY);
+    if (srcLen < 1e-4) return;
+
+    const nextZoom = this.clampZoom(tgtLen / srcLen);
+    const nextRot = wrapAngle(Math.atan2(srcY, srcX) - Math.atan2(tgtY, tgtX));
+    const midWX = (anchorA.x + anchorB.x) * 0.5;
+    const midWY = (anchorA.y + anchorB.y) * 0.5;
+    const midSX = (cur0.x + cur1.x) * 0.5;
+    const midSY = (cur0.y + cur1.y) * 0.5;
+
+    const vx = (midSX - viewW * 0.5) / Math.max(0.001, nextZoom);
+    const vy = (midSY - viewH * 0.5) / Math.max(0.001, nextZoom);
+    const c = Math.cos(nextRot);
+    const s = Math.sin(nextRot);
+    const offX = vx * c - vy * s;
+    const offY = vx * s + vy * c;
+
+    const cam = wrapPos({ x: midWX - offX, y: midWY - offY });
+    this.x = cam.x;
+    this.y = cam.y;
+    this.zoom = nextZoom;
+    this.rotation = nextRot;
+    this.follow = false;
+    this.motion = null;
+  }
+
   applyTwoFingerGesture(
     panDx: number,
     panDy: number,
@@ -161,7 +241,7 @@ export class PondCamera {
       this.zoomAtScreenPoint(pinchFactor, midX, midY, viewW, viewH, focusCell);
     }
     if (!this.interoception && Math.abs(twistDelta) > 0.001) {
-      this.rotation = wrapAngle(this.rotation + twistDelta);
+      this.rotation = wrapAngle(this.rotation - twistDelta);
     }
   }
 

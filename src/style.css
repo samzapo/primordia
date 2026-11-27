@@ -608,6 +608,44 @@ body {
   cursor: pointer;
 }
 
+.has-hold-tooltip {
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.hold-tooltip {
+  position: fixed;
+  z-index: 120;
+  padding: 10px 14px;
+  max-width: min(300px, calc(100vw - 20px));
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  box-shadow: 0 14px 36px rgba(0, 8, 22, 0.72);
+  border-color: rgba(128, 239, 206, 0.65);
+}
+
+.hold-tooltip-title {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--mint);
+}
+
+.hold-tooltip-sub {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+.hold-tooltip-body {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text);
+}
+
 [hidden] {
   display: none !important;
 }
@@ -619,12 +657,30 @@ body {
 }
 
 @media (max-width: 720px) {
+  .hud-right-rail {
+    top: calc(14px + var(--tray-offset, 0px));
+    transition: top 0.14s ease;
+  }
   .action-tray {
-    max-width: calc(100vw - 120px);
+    left: 10px;
+    right: 10px;
     top: 8px;
+    transform: none;
+    max-width: none;
+    width: calc(100vw - 20px);
+  }
+  .cancel-placement-btn {
+    top: calc(14px + var(--tray-offset, 0px));
+  }
+  .telemetry-panel {
+    top: calc(66px + var(--tray-offset, 0px));
   }
   .bottom-desc-bar {
     max-width: calc(100vw - 24px);
+    width: calc(100vw - 24px);
     bottom: 84px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
   }
 }

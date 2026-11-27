@@ -1,7 +1,10 @@
 import {
+  ORGAN_DESCRIPTIONS,
   ORGAN_KINDS,
   ORGAN_SUMMARIES,
   ORGAN_TITLES,
+  isInternalOrgan,
+  isReceptorKind,
   organUpkeepEstimate,
   type Cell,
   type Organ,
@@ -13,6 +16,7 @@ import { availableMutationsForOrgan, MUTATION_DATA } from '../sim/mutations.ts';
 import type { Simulation } from '../sim/simulation.ts';
 import { computeInteriorLandmarks, type InteriorLandmark, type LandmarkKind } from '../render/factoryLayout.ts';
 import type { PondCamera } from './camera.ts';
+import { bindHoldTooltip, hasPendingHoldTooltip, hideHoldTooltip } from './tooltip.ts';
 
 export type HitItem =
   | { kind: 'organ'; organ: Organ; label: string; sx: number; sy: number }
@@ -83,6 +87,17 @@ export class CellInterface {
   private lastSim: Simulation | null = null;
   private lastFocus: Cell | null = null;
 
+  private syncTrayOffset(visible: boolean): void {
+    const hud = document.getElementById('hud');
+    if (!hud) return;
+    if (!visible) {
+      hud.style.setProperty('--tray-offset', '0px');
+      return;
+    }
+    const h = this.trayEl.getBoundingClientRect().height;
+    hud.style.setProperty('--tray-offset', h > 0 ? `${Math.round(h + 8)}px` : '0px');
+  }
+
   private syncRender(): void {
     if (this.lastSim && this.lastFocus) {
       this.render(this.lastSim, this.lastFocus);
@@ -98,6 +113,10 @@ export class CellInterface {
     this.cancelBtn.className = 'hud-btn cancel-placement-btn interactive is-danger';
     this.cancelBtn.textContent = 'Cancel Placement (Esc)';
     this.cancelBtn.hidden = true;
+    bindHoldTooltip(this.cancelBtn, () => ({
+      title: 'Cancel Placement',
+      body: 'Exit organelle placement mode without spending biomass.',
+    }));
     this.cancelBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       this.cancelPlacement();
@@ -140,6 +159,7 @@ export class CellInterface {
     this.placingKind = null;
     this.cancelBtn.hidden = true;
     this.lastBuildKey = '';
+    hideHoldTooltip();
     this.syncRender();
   }
 
@@ -152,6 +172,8 @@ export class CellInterface {
     this.descBarEl.hidden = true;
     this.overlapEl.hidden = true;
     this.lastBuildKey = '';
+    this.syncTrayOffset(false);
+    hideHoldTooltip();
   }
 
   openCategory(cat: 'assembly' | 'chemistry' | 'receptors'): void {
@@ -313,6 +335,15 @@ export class CellInterface {
       b.className = 'hud-btn';
       b.style.justifyContent = 'flex-start';
       b.textContent = h.label;
+      bindHoldTooltip(b, () => ({
+        title: h.label,
+        body:
+          h.kind === 'organ'
+            ? ORGAN_DESCRIPTIONS[h.organ.kind]
+            : h.kind === 'scar'
+              ? 'Restore this damaged organelle back into its original socket.'
+              : 'Open this cellular landmark control panel.',
+      }));
       b.addEventListener('click', (e) => {
         e.stopPropagation();
         this.activateHit(h);
@@ -341,12 +372,14 @@ export class CellInterface {
       this.trayEl.hidden = true;
       this.descBarEl.hidden = true;
       this.cancelBtn.hidden = true;
+      this.syncTrayOffset(false);
       return;
     }
 
     this.cancelBtn.hidden = !this.placingKind;
     this.trayEl.hidden = false;
     this.descBarEl.hidden = false;
+    this.syncTrayOffset(true);
 
     const buildKey = JSON.stringify({
       m: this.selectedMode,
@@ -358,20 +391,42 @@ export class CellInterface {
       mut: sim.evolution.learned.length,
     });
     if (buildKey === this.lastBuildKey) return;
+    if (this.lastBuildKey !== '' && hasPendingHoldTooltip()) return;
     this.lastBuildKey = buildKey;
 
     this.rebuildTray(focus);
     this.rebuildDescriptionBar(sim, focus);
+    this.syncTrayOffset(true);
   }
 
   private rebuildTray(cell: Cell): void {
     const nodes: HTMLElement[] = [];
 
     // Top-level category tabs
-    const cats: Array<{ cat: 'assembly' | 'chemistry' | 'receptors'; icon: OrganKind; title: string }> = [
-      { cat: 'assembly', icon: 'feeding', title: 'Structural & Motile Organs' },
-      { cat: 'chemistry', icon: 'photosynthesis', title: 'Metabolic & Chemical Glands' },
-      { cat: 'receptors', icon: 'sensing', title: 'Receptors & Navigation' },
+    const cats: Array<{
+      cat: 'assembly' | 'chemistry' | 'receptors';
+      icon: OrganKind;
+      title: string;
+      desc: string;
+    }> = [
+      {
+        cat: 'assembly',
+        icon: 'feeding',
+        title: 'Structural & Motile Organs',
+        desc: 'Open build options for feeding, swimming, protective armor, and offensive weapons.',
+      },
+      {
+        cat: 'chemistry',
+        icon: 'photosynthesis',
+        title: 'Metabolic & Chemical Glands',
+        desc: 'Open build options for photosynthesis, mitochondria, repair buffers, acidity/antitoxin glands, toxin sac, and proboscis.',
+      },
+      {
+        cat: 'receptors',
+        icon: 'sensing',
+        title: 'Receptors & Navigation',
+        desc: 'Open free chemical receptors (0 biomass) to flee danger, hunt non-relatives, or coordinate with family.',
+      },
     ];
     for (const c of cats) {
       const b = document.createElement('button');
@@ -380,7 +435,8 @@ export class CellInterface {
       if (this.selectedMode.type === 'category' && this.selectedMode.cat === c.cat) {
         b.classList.add('is-selected');
       }
-      b.title = c.title;
+      b.setAttribute('aria-label', c.title);
+      bindHoldTooltip(b, () => ({ title: c.title, subtitle: 'Organ Category', body: c.desc }));
       const img = document.createElement('img');
       img.src = this.organIcons.get(c.icon) ?? '';
       img.alt = c.title;
@@ -418,7 +474,21 @@ export class CellInterface {
       if (cell.biomass < price) slot.classList.add('is-unaffordable');
       if (this.placingKind === kind) slot.classList.add('is-selected');
       slot.dataset.organ = kind;
-      slot.title = `${ORGAN_TITLES[kind]} (${price} biomass)`;
+      slot.setAttribute('aria-label', `${ORGAN_TITLES[kind]} (${price} biomass)`);
+      bindHoldTooltip(slot, () => {
+        const curPrice = cell.constructionPrice(kind);
+        const typeTag = isReceptorKind(kind)
+          ? 'Free receptor (0 biomass)'
+          : isInternalOrgan(kind)
+            ? `Internal organelle · ${curPrice} biomass`
+            : `Membrane organ · ${curPrice} biomass`;
+        const affordTag = cell.biomass < curPrice ? ` · Need ${(curPrice - cell.biomass).toFixed(1)} more` : '';
+        return {
+          title: ORGAN_TITLES[kind],
+          subtitle: `${typeTag}${affordTag}`,
+          body: ORGAN_DESCRIPTIONS[kind],
+        };
+      });
 
       const img = document.createElement('img');
       img.src = this.organIcons.get(kind) ?? '';
@@ -442,10 +512,25 @@ export class CellInterface {
     }
 
     // Landmark shortcut buttons (Nucleus, Divide, ATP)
-    const quick: Array<{ k: LandmarkKind; label: string; title: string }> = [
-      { k: 'nucleus', label: 'Nuc', title: 'Nucleus & Family / Strategy' },
-      { k: 'bud', label: 'Div', title: 'Mitosis & Budding' },
-      { k: 'atp', label: 'ATP', title: 'Energy Budget Breakdown' },
+    const quick: Array<{ k: LandmarkKind; label: string; title: string; body: string }> = [
+      {
+        k: 'nucleus',
+        label: 'Nuc',
+        title: 'Nucleus & Family / Strategy',
+        body: 'Manage lineage colors & name, inspect or merge living relatives, or set daughter growth strategy.',
+      },
+      {
+        k: 'bud',
+        label: 'Div',
+        title: 'Mitosis & Budding',
+        body: 'Check division readiness or manually trigger symmetric mitosis or asymmetric budding.',
+      },
+      {
+        k: 'atp',
+        label: 'ATP',
+        title: 'Energy Budget Breakdown',
+        body: 'Inspect current ATP production rates and largest metabolic upkeep drains.',
+      },
     ];
     for (const q of quick) {
       const b = document.createElement('button');
@@ -454,7 +539,8 @@ export class CellInterface {
       if (this.selectedMode.type === 'landmark' && this.selectedMode.landmarkKind === q.k) {
         b.classList.add('is-selected');
       }
-      b.title = q.title;
+      b.setAttribute('aria-label', q.title);
+      bindHoldTooltip(b, () => ({ title: q.title, body: q.body }));
       b.style.fontSize = '11px';
       b.style.fontWeight = '700';
       b.style.color = q.k === 'atp' ? '#ffd466' : '#80efce';
@@ -474,13 +560,19 @@ export class CellInterface {
 
   private rebuildDescriptionBar(sim: Simulation, cell: Cell): void {
     this.descActionsEl.replaceChildren();
-    const mkAct = (label: string, onClick: () => void, cls = ''): HTMLButtonElement => {
+    const mkAct = (
+      label: string,
+      tip: { title: string; subtitle?: string; body: string },
+      onClick: () => void,
+      cls = '',
+    ): HTMLButtonElement => {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = `hud-btn ${cls}`;
       b.style.minHeight = '36px';
       b.style.padding = '4px 10px';
       b.textContent = label;
+      bindHoldTooltip(b, () => tip);
       b.addEventListener('click', (e) => {
         e.stopPropagation();
         onClick();
@@ -491,7 +583,7 @@ export class CellInterface {
     if (this.placingKind) {
       const price = cell.constructionPrice(this.placingKind);
       this.descTitleEl.textContent = `Placing ${ORGAN_TITLES[this.placingKind]} · Cost ${price} biomass`;
-      this.descSubEl.textContent = `Click around the cell membrane to place. ${ORGAN_SUMMARIES[this.placingKind]}`;
+      this.descSubEl.textContent = `Tap around the cell membrane to place. ${ORGAN_SUMMARIES[this.placingKind]}`;
       return;
     }
 
@@ -509,22 +601,37 @@ export class CellInterface {
 
       const avail = availableMutationsForOrgan(organ.kind, organ.mutation, sim.evolution.learned);
       for (const gene of avail) {
-        const gLabel = MUTATION_DATA[gene]?.short ?? gene;
+        const gDef = MUTATION_DATA[gene];
+        const gLabel = gDef?.short ?? gene;
         this.descActionsEl.appendChild(
-          mkAct(`Adapt: ${gLabel}`, () => {
-            if (sim.mutateOrgan(organ.id, gene)) {
-              this.hooks.onNotice(`Adapted ${ORGAN_TITLES[organ.kind]} -> ${gLabel}`);
-              this.hooks.onEditOccurred();
-              this.lastBuildKey = '';
-            }
-          }),
+          mkAct(
+            `Adapt: ${gLabel}`,
+            {
+              title: gDef?.title ?? gLabel,
+              subtitle: `Gene Adaptation (${ORGAN_TITLES[organ.kind]})`,
+              body: gDef?.summary ?? 'Apply this learned adaptation to the selected organelle.',
+            },
+            () => {
+              if (sim.mutateOrgan(organ.id, gene)) {
+                this.hooks.onNotice(`Adapted ${ORGAN_TITLES[organ.kind]} -> ${gLabel}`);
+                this.hooks.onEditOccurred();
+                this.lastBuildKey = '';
+              }
+            },
+          ),
         );
       }
 
       const idx = cell.organs.indexOf(organ);
+      const refundAmt = cell.constructionRefund(organ).toFixed(1);
       this.descActionsEl.appendChild(
         mkAct(
-          `Recycle (+${cell.constructionRefund(organ).toFixed(1)})`,
+          `Recycle (+${refundAmt})`,
+          {
+            title: `Recycle ${ORGAN_TITLES[organ.kind]}`,
+            subtitle: `Refund +${refundAmt} biomass`,
+            body: 'Reabsorb this organelle and recover 50% of its paid tissue cost (free organs refund 0 biomass).',
+          },
           () => {
             if (idx >= 0 && sim.removeOrgan(idx)) {
               this.hooks.onNotice(`Recycled ${ORGAN_TITLES[organ.kind]}`);
@@ -551,16 +658,24 @@ export class CellInterface {
       this.descTitleEl.textContent = `Damaged ${ORGAN_TITLES[scar.kind]} Scar · Rebuild ${cost} biomass`;
       this.descSubEl.textContent = 'Restore lost organelle cleanly into its original cytoskeletal socket.';
       this.descActionsEl.appendChild(
-        mkAct(`Restore (${cost})`, () => {
-          if (sim.restoreOrgan(scar.id)) {
-            this.hooks.onNotice(`Restored ${ORGAN_TITLES[scar.kind]}`);
-            this.hooks.onEditOccurred();
-            this.selectedMode = { type: 'organ', organId: scar.id };
-            this.lastBuildKey = '';
-          } else {
-            this.hooks.onNotice(`Need ${cost} biomass to restore`);
-          }
-        }),
+        mkAct(
+          `Restore (${cost})`,
+          {
+            title: `Restore ${ORGAN_TITLES[scar.kind]}`,
+            subtitle: `${cost} biomass`,
+            body: 'Rebuild this damaged organelle at its saved angle with any prior gene specialization intact.',
+          },
+          () => {
+            if (sim.restoreOrgan(scar.id)) {
+              this.hooks.onNotice(`Restored ${ORGAN_TITLES[scar.kind]}`);
+              this.hooks.onEditOccurred();
+              this.selectedMode = { type: 'organ', organId: scar.id };
+              this.lastBuildKey = '';
+            } else {
+              this.hooks.onNotice(`Need ${cost} biomass to restore`);
+            }
+          },
+        ),
       );
       return;
     }
@@ -571,9 +686,30 @@ export class CellInterface {
         this.descTitleEl.textContent = `Cell Nucleus · Generation ${cell.generation}`;
         this.descSubEl.textContent = 'Manage lineage colors, inspect or merge relatives, or pick autonomous daughter strategy.';
         this.descActionsEl.append(
-          mkAct('Family & Merge', () => this.hooks.onOpenFamily()),
-          mkAct('Colors & Name', () => this.hooks.onOpenPalette()),
-          mkAct('Role Strategy', () => this.hooks.onOpenInvestment()),
+          mkAct(
+            'Family & Merge',
+            {
+              title: 'Family & Merge',
+              body: 'View all living relatives in your lineage, switch control between them, or merge eligible nearby cells.',
+            },
+            () => this.hooks.onOpenFamily(),
+          ),
+          mkAct(
+            'Colors & Name',
+            {
+              title: 'Lineage Colors & Name',
+              body: 'Customize membrane palette and display name for this lineage.',
+            },
+            () => this.hooks.onOpenPalette(),
+          ),
+          mkAct(
+            'Role Strategy',
+            {
+              title: 'Lineage Daughter Strategy',
+              body: 'Set how autonomous daughters allocate biomass and evolve roles (Balanced, Grazer, Producer, Hunter, or Parasite).',
+            },
+            () => this.hooks.onOpenInvestment(),
+          ),
         );
         return;
       }
@@ -587,6 +723,11 @@ export class CellInterface {
         this.descActionsEl.append(
           mkAct(
             mq.ready ? 'Divide (Mitosis)' : `Mitosis (${Math.round(mq.progress * 100)}%)`,
+            {
+              title: 'Mitosis Division',
+              subtitle: `Requires ${mq.material} biomass & ${mq.energy} ATP`,
+              body: 'Splits evenly into two symmetrical mature daughter cells.',
+            },
             () => {
               if (sim.divideLineage('mitosis', true)) {
                 this.hooks.onNotice('Divided via mitosis!');
@@ -599,6 +740,11 @@ export class CellInterface {
           ),
           mkAct(
             bq.ready ? 'Bud Offspring' : `Bud (${Math.round(bq.progress * 100)}%)`,
+            {
+              title: 'Unequal Budding',
+              subtitle: `Requires ${bq.material} biomass & ${bq.energy} ATP`,
+              body: 'Buds off a smaller agile daughter cell while preserving most parent structures.',
+            },
             () => {
               if (sim.divideLineage('budding', true)) {
                 this.hooks.onNotice('Budded daughter cell!');

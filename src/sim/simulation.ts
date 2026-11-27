@@ -1073,8 +1073,17 @@ export class Simulation implements ChemistryEmitter {
   // GPU Receipt Application & Step Pipeline
   // =========================================================================
 
+  applyInspectReceipt(receipts: GpuReceipts | null): void {
+    if (!receipts) return;
+    this.lastInspected = receipts.inspected;
+  }
+
   applyGpuReceipts(receipts: GpuReceipts | null): void {
     if (!receipts) return;
+    if (receipts.revision < 0) {
+      this.lastInspected = receipts.inspected;
+      return;
+    }
 
     this.acidity.values.set(receipts.acidField);
     this.gpuCensus = { ...receipts.census };

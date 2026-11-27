@@ -5,6 +5,7 @@ import { MICROMETERS_PER_UNIT } from '../sim/constants.ts';
 import type { Simulation } from '../sim/simulation.ts';
 import type { PondCamera } from './camera.ts';
 import { StatusFeed } from './statusFeed.ts';
+import { bindHoldTooltip } from './tooltip.ts';
 
 export interface HudCallbacks {
   onTogglePause(): void;
@@ -55,12 +56,18 @@ export class Hud {
     this.rightRail = document.createElement('div');
     this.rightRail.className = 'hud-right-rail';
 
-    const mkBtn = (label: string, title: string, onClick: () => void): HTMLButtonElement => {
+    const mkBtn = (
+      label: string,
+      title: string,
+      tipBody: string,
+      onClick: () => void,
+    ): HTMLButtonElement => {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'hud-btn interactive';
       b.textContent = label;
-      b.title = title;
+      b.setAttribute('aria-label', title);
+      bindHoldTooltip(b, () => ({ title: b.textContent || title, body: tipBody }));
       b.addEventListener('click', (e) => {
         e.stopPropagation();
         onClick();
@@ -70,32 +77,76 @@ export class Hud {
 
     const row1 = document.createElement('div');
     row1.className = 'rail-row';
-    this.pauseBtn = mkBtn('Pause', 'Pause or resume the pond (P)', cb.onTogglePause);
-    this.settingsBtn = mkBtn('Menu', 'Pause menu & settings (Esc)', cb.onOpenSettings);
+    this.pauseBtn = mkBtn(
+      'Pause',
+      'Pause or resume (P)',
+      'Pause or resume the biological simulation. Camera inspection and cell editing stay active while paused.',
+      cb.onTogglePause,
+    );
+    this.settingsBtn = mkBtn(
+      'Menu',
+      'Pond menu & settings (Esc)',
+      'Open settings to toggle visual effects, view controls, or start a new seeded pond expedition.',
+      cb.onOpenSettings,
+    );
     row1.append(this.pauseBtn, this.settingsBtn);
 
     const row2 = document.createElement('div');
     row2.className = 'rail-row';
-    this.zoomOutBtn = mkBtn('−', 'Zoom out (-)', () => cb.onZoomStep(1 / 1.25));
-    this.zoomInBtn = mkBtn('+', 'Zoom in (+)', () => cb.onZoomStep(1.25));
-    this.followBtn = mkBtn('Follow', 'Follow focused cell (F)', cb.onToggleFollow);
+    this.zoomOutBtn = mkBtn('−', 'Zoom out (-)', 'Zoom out toward the full 80% pond view (keyboard: -).', () =>
+      cb.onZoomStep(1 / 1.25),
+    );
+    this.zoomInBtn = mkBtn('+', 'Zoom in (+)', 'Zoom closer to inspect membranes, organs, and chemical molecules (keyboard: +).', () =>
+      cb.onZoomStep(1.25),
+    );
+    this.followBtn = mkBtn(
+      'Follow',
+      'Follow focused cell (F)',
+      'Switch between following your focused cell and moving the camera freely across the pond (keyboard: F).',
+      cb.onToggleFollow,
+    );
     row2.append(this.zoomOutBtn, this.zoomInBtn, this.followBtn);
 
     const row3 = document.createElement('div');
     row3.className = 'rail-row';
-    this.viewBtn = mkBtn('Internal', 'Toggle Internal / External view (I / Tab)', cb.onToggleIntero);
-    this.familyBtn = mkBtn('Family', 'Family members & cell merging', cb.onOpenFamily);
+    this.viewBtn = mkBtn(
+      'Internal',
+      'Toggle Internal / External view (I)',
+      'Switch between Exteroception (pond view, max 12×) and Interoception (120× cytoplasm & vacuole interior view).',
+      cb.onToggleIntero,
+    );
+    this.familyBtn = mkBtn(
+      'Family',
+      'Family members & cell merging',
+      'Inspect living relatives in your lineage, switch control between cells, or merge an eligible relative.',
+      cb.onOpenFamily,
+    );
     row3.append(this.viewBtn, this.familyBtn);
 
     const row4 = document.createElement('div');
     row4.className = 'rail-row';
-    this.colorBtn = mkBtn('Colors', 'Lineage colors & name', cb.onOpenPalette);
-    this.guideBtn = mkBtn('Guide', 'Gameplay & science guide (F1)', cb.onOpenGuide);
+    this.colorBtn = mkBtn(
+      'Colors',
+      'Lineage colors & name',
+      'Customize your lineage membrane palette and signal name. Saved locally across ponds.',
+      cb.onOpenPalette,
+    );
+    this.guideBtn = mkBtn(
+      'Guide',
+      'Gameplay & science guide (F1)',
+      'Open the interactive Biology, Chemistry, and Controls guide with scientific references.',
+      cb.onOpenGuide,
+    );
     row4.append(this.colorBtn, this.guideBtn);
 
     const rowAudio = document.createElement('div');
     rowAudio.className = 'volume-wrap interactive';
-    this.muteBtn = mkBtn('Music', 'Mute / unmute progressive audio (M)', cb.onToggleMute);
+    this.muteBtn = mkBtn(
+      'Music',
+      'Mute / unmute progressive audio (M)',
+      'Toggle procedural tropical Web Audio driven by cell organelles and sunlight (keyboard: M).',
+      cb.onToggleMute,
+    );
     this.muteBtn.style.minHeight = '34px';
     this.muteBtn.style.padding = '3px 9px';
     this.volSlider = document.createElement('input');
@@ -104,6 +155,10 @@ export class Hud {
     this.volSlider.max = '100';
     this.volSlider.value = String(Math.round(audio.currentVolume * 100));
     this.volSlider.ariaLabel = 'Music volume';
+    bindHoldTooltip(this.volSlider, () => ({
+      title: 'Music Volume',
+      body: 'Adjust procedural music loudness without muting simulation activity.',
+    }));
     this.volSlider.addEventListener('input', () => {
       cb.onVolumeChange(Number(this.volSlider.value) / 100);
     });
@@ -124,7 +179,11 @@ export class Hud {
     this.resourcesCard.className = 'resources-pill hud-panel interactive';
     this.summaryRow = document.createElement('div');
     this.summaryRow.className = 'resources-summary';
-    this.summaryRow.title = 'Click to expand internal resources';
+    this.summaryRow.setAttribute('aria-label', 'Internal resources summary');
+    bindHoldTooltip(this.summaryRow, () => ({
+      title: 'Cell Resources',
+      body: 'Tap to expand or collapse Gut food, Waste, O₂, CO₂, water pH, organ count, and local light.',
+    }));
     this.summaryRow.addEventListener('click', (e) => {
       e.stopPropagation();
       this.resourcesExpanded = !this.resourcesExpanded;
@@ -134,7 +193,12 @@ export class Hud {
     this.detailsGrid = document.createElement('div');
     this.detailsGrid.className = 'res-details';
     this.detailsGrid.hidden = true;
-    const vacBtn = mkBtn('Inspect Vacuoles', 'Inspect internal cytoplasm reserves', cb.onOpenVacuoles);
+    const vacBtn = mkBtn(
+      'Inspect Vacuoles',
+      'Inspect internal cytoplasm reserves',
+      'Open a detailed list of all active food vacuoles, waste parcels, O₂, and CO₂ droplets inside the focused cell.',
+      cb.onOpenVacuoles,
+    );
     vacBtn.style.minHeight = '34px';
     vacBtn.style.gridColumn = 'span 2';
     this.detailsGrid.appendChild(vacBtn);
