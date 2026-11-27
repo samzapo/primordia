@@ -136,6 +136,7 @@ async function boot(): Promise<void> {
   audio.setMuted(prefs.musicMuted, sim);
 
   const camera = new PondCamera();
+  camera.setViewport(canvas.clientWidth || window.innerWidth, canvas.clientHeight || window.innerHeight);
   camera.setFocusCell(sim.player, false);
 
   let userPaused = false;
@@ -354,6 +355,7 @@ async function boot(): Promise<void> {
     }
 
     const activeFocus = sim.cells.find((c) => c.id === camera.focusCellId && !c.dead) ?? sim.player;
+    camera.setViewport(canvas.clientWidth, canvas.clientHeight);
     camera.update(rawDt, activeFocus, sim.time);
     audio.update(sim, activeFocus, paused);
 

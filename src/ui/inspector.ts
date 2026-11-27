@@ -149,7 +149,7 @@ export class ParticleInspector {
       for (const c of sim.cells) {
         if (c.dead) continue;
         const d = offsetVec(c.position, wp);
-        const tol = c.extent() + 8 / Math.max(0.8, camera.zoom);
+        const tol = c.extent() + 8 / Math.max(0.1, camera.zoom);
         if (Math.hypot(d.x, d.y) <= tol) {
           this.active = false;
           this.tooltipEl.hidden = true;
@@ -220,11 +220,11 @@ export class ParticleInspector {
       sim.inspectCursor.trackedGen = 0;
       sim.lastInspected = null;
     } else {
-      const worldRadius = LENS_RADIUS_PX / Math.max(0.8, camera.zoom);
+      const worldRadius = LENS_RADIUS_PX / Math.max(0.1, camera.zoom);
       sim.inspectCursor.active = true;
       sim.inspectCursor.x = wp.x;
       sim.inspectCursor.y = wp.y;
-      sim.inspectCursor.maxRadius = Math.min(85, worldRadius);
+      sim.inspectCursor.maxRadius = Math.min(120, worldRadius);
 
       ins = sim.lastInspected;
       if (ins && ins.valid) {

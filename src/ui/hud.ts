@@ -93,7 +93,7 @@ export class Hud {
 
     const row2 = document.createElement('div');
     row2.className = 'rail-row';
-    this.zoomOutBtn = mkBtn('−', 'Zoom out (-)', 'Zoom out toward the full 80% pond view (keyboard: -).', () =>
+    this.zoomOutBtn = mkBtn('−', 'Zoom out (-)', 'Zoom out up to the full pond view just short of wraparound (keyboard: -).', () =>
       cb.onZoomStep(1 / 1.25),
     );
     this.zoomInBtn = mkBtn('+', 'Zoom in (+)', 'Zoom closer to inspect membranes, organs, and chemical molecules (keyboard: +).', () =>
@@ -300,7 +300,7 @@ export class Hud {
       this.telemetryEl.replaceChildren(
         ...([
           `FPS: ${fps.toFixed(0)} · Sim tick: ${simMs.toFixed(2)} ms`,
-          `Zoom: ${(camera.zoom * 100).toFixed(0)}% (min 80%) · View: ${camera.interoception ? 'Interoception' : 'Exteroception'}`,
+          `Zoom: ${(camera.zoom * 100).toFixed(0)}% (min ${(camera.minZoom() * 100).toFixed(0)}%) · View: ${camera.interoception ? 'Interoception' : 'Exteroception'}`,
           `Living cells: ${living} · Family: ${famCount} · Kills: ${sim.kills}`,
           `GPU Particles: ${sim.gpuCensus.alive} / 32768 (Phero: ${sim.gpuCensus.pheromones}, O₂: ${sim.gpuCensus.oxygen})`,
           `Reactions: ${sim.gpuCensus.reactions} · Recycled: ${sim.recycled.toFixed(1)}`,

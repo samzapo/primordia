@@ -2,7 +2,8 @@ import type { Cell } from '../sim/cell.ts';
 import {
   MAX_INTERO_ZOOM,
   MAX_ZOOM,
-  MIN_ZOOM,
+  VIEW_H,
+  VIEW_W,
   type Vec2,
   WORLD_H,
   WORLD_W,
@@ -13,6 +14,18 @@ import {
   wrapAngle,
   wrapPos,
 } from '../sim/constants.ts';
+
+export const WRAP_ZOOM_MARGIN = 0.96;
+
+/** Minimum zoom that keeps the rotated viewport strictly inside the toroidal wraparound span. */
+export function wraparoundMinZoom(viewW: number, viewH: number, rotation = 0): number {
+  if (viewW <= 0 || viewH <= 0) return 0.1;
+  const c = Math.abs(Math.cos(rotation));
+  const s = Math.abs(Math.sin(rotation));
+  const spanX = viewW * c + viewH * s;
+  const spanY = viewW * s + viewH * c;
+  return Math.max(0.05, spanX / (WORLD_W * WRAP_ZOOM_MARGIN), spanY / (WORLD_H * WRAP_ZOOM_MARGIN));
+}
 
 interface CameraMotion {
   startX: number;
@@ -38,8 +51,21 @@ export class PondCamera {
   focusCellId = 0;
 
   private motion: CameraMotion | null = null;
+  private lastViewW = VIEW_W;
+  private lastViewH = VIEW_H;
   deathFocusUntil = -1;
   deathSite: Vec2 = { x: WORLD_W * 0.5, y: WORLD_H * 0.5 };
+
+  setViewport(viewW: number, viewH: number): void {
+    if (viewW > 0 && viewH > 0) {
+      this.lastViewW = viewW;
+      this.lastViewH = viewH;
+    }
+  }
+
+  minZoom(viewW = this.lastViewW, viewH = this.lastViewH, rotation = this.rotation): number {
+    return wraparoundMinZoom(viewW, viewH, rotation);
+  }
 
   setFocusCell(cell: Cell, animate = true): void {
     this.focusCellId = cell.id;
@@ -52,9 +78,10 @@ export class PondCamera {
     }
   }
 
-  clampZoom(z: number): number {
+  clampZoom(z: number, viewW = this.lastViewW, viewH = this.lastViewH, rotation = this.rotation): number {
+    const lo = this.minZoom(viewW, viewH, rotation);
     const hi = this.interoception ? MAX_INTERO_ZOOM : MAX_ZOOM;
-    return clamp(z, MIN_ZOOM, hi);
+    return clamp(z, lo, Math.max(lo, hi));
   }
 
   toggleFollow(focusCell: Cell): void {
@@ -68,26 +95,28 @@ export class PondCamera {
     this.interoception = !this.interoception;
     if (this.interoception) {
       this.follow = true;
-      const targetZ = clamp(Math.max(this.zoom, 4.2), MIN_ZOOM, MAX_INTERO_ZOOM);
+      const lo = this.minZoom(this.lastViewW, this.lastViewH, focusCell.angle);
+      const targetZ = clamp(Math.max(this.zoom, 4.2), lo, Math.max(lo, MAX_INTERO_ZOOM));
       this.startMotion(focusCell.position.x, focusCell.position.y, targetZ, focusCell.angle, 0.65);
     } else {
-      const targetZ = clamp(Math.min(this.zoom, 2.2), MIN_ZOOM, MAX_ZOOM);
+      const targetZ = this.clampZoom(Math.min(this.zoom, 2.2), this.lastViewW, this.lastViewH, 0);
       this.startMotion(focusCell.position.x, focusCell.position.y, targetZ, 0, 0.65);
     }
   }
 
   frameMergeNeighborhood(focus: Cell, candidates: Cell[], viewW: number, viewH: number): void {
     if (candidates.length === 0) return;
+    this.setViewport(viewW, viewH);
     let maxD = focus.extent() * 2.5;
     for (const c of candidates) {
       const d = offsetVec(focus.position, c.position);
       maxD = Math.max(maxD, Math.hypot(d.x, d.y) + c.extent() * 2);
     }
     const minSpan = Math.max(120, Math.min(viewW, viewH) * 0.42);
-    const fitZoom = this.clampZoom(minSpan / Math.max(1, maxD));
+    const fitZoom = this.clampZoom(minSpan / Math.max(1, maxD), viewW, viewH, 0);
     this.follow = true;
     this.interoception = false;
-    this.startMotion(focus.position.x, focus.position.y, Math.max(MIN_ZOOM, fitZoom), 0, 0.65);
+    this.startMotion(focus.position.x, focus.position.y, fitZoom, 0, 0.65);
   }
 
   triggerDeathFraming(at: Vec2, simTime: number): void {
@@ -95,7 +124,7 @@ export class PondCamera {
     this.deathFocusUntil = simTime + 1.8;
     this.follow = false;
     this.interoception = false;
-    this.startMotion(at.x, at.y, clamp(this.zoom, MIN_ZOOM, 2.5), 0, 0.55);
+    this.startMotion(at.x, at.y, this.clampZoom(Math.min(this.zoom, 2.5), this.lastViewW, this.lastViewH, 0), 0, 0.55);
   }
 
   startMotion(endX: number, endY: number, endZoom: number, endRot: number, duration = 0.65): void {
@@ -128,8 +157,9 @@ export class PondCamera {
   }
 
   zoomAtScreenPoint(factor: number, sx: number, sy: number, viewW: number, viewH: number, focusCell: Cell): void {
+    this.setViewport(viewW, viewH);
     const before = this.follow ? focusCell.position : this.screenToWorld(sx, sy, viewW, viewH);
-    this.zoom = this.clampZoom(this.zoom * factor);
+    this.zoom = this.clampZoom(this.zoom * factor, viewW, viewH, this.rotation);
     this.motion = null;
     if (this.follow && !focusCell.dead) {
       this.x = focusCell.position.x;
@@ -161,6 +191,7 @@ export class PondCamera {
     viewW: number,
     viewH: number,
   ): { anchorA: Vec2; anchorB: Vec2; startZoom: number; startDist: number } {
+    this.setViewport(viewW, viewH);
     const anchorA = this.screenToWorld(p0.x, p0.y, viewW, viewH);
     const sep = this.screenDeltaToWorld(p1.x - p0.x, p1.y - p0.y);
     return {
@@ -181,6 +212,7 @@ export class PondCamera {
     viewW: number,
     viewH: number,
   ): void {
+    this.setViewport(viewW, viewH);
     const tgtX = cur1.x - cur0.x;
     const tgtY = cur1.y - cur0.y;
     const tgtLen = Math.hypot(tgtX, tgtY);
@@ -188,7 +220,7 @@ export class PondCamera {
 
     if (this.interoception) {
       if (startDist > 4) {
-        this.zoom = this.clampZoom(startZoom * (tgtLen / startDist));
+        this.zoom = this.clampZoom(startZoom * (tgtLen / startDist), viewW, viewH, this.rotation);
       }
       this.motion = null;
       this.follow = true;
@@ -200,8 +232,8 @@ export class PondCamera {
     const srcLen = Math.hypot(srcX, srcY);
     if (srcLen < 1e-4) return;
 
-    const nextZoom = this.clampZoom(tgtLen / srcLen);
     const nextRot = wrapAngle(Math.atan2(srcY, srcX) - Math.atan2(tgtY, tgtX));
+    const nextZoom = this.clampZoom(tgtLen / srcLen, viewW, viewH, nextRot);
     const midWX = (anchorA.x + anchorB.x) * 0.5;
     const midWY = (anchorA.y + anchorB.y) * 0.5;
     const midSX = (cur0.x + cur1.x) * 0.5;
@@ -242,6 +274,7 @@ export class PondCamera {
     }
     if (!this.interoception && Math.abs(twistDelta) > 0.001) {
       this.rotation = wrapAngle(this.rotation - twistDelta);
+      this.zoom = this.clampZoom(this.zoom, viewW, viewH, this.rotation);
     }
   }
 
