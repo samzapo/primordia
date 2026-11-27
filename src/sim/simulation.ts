@@ -74,12 +74,15 @@ import {
 import { Habitat, type ContactHelper } from './habitat.ts';
 import { InducedCurrents } from './inducedCurrents.ts';
 import {
+  balancedPath,
+  balancedPondRole,
   createInvestmentState,
   investmentPlacementAngle,
   retireInvestment,
   stepAutonomousBuilds,
   type BuildDecision,
   type InvestmentState,
+  type RoleName,
 } from './investmentPolicy.ts';
 import {
   divisionQuote,
@@ -445,17 +448,17 @@ export class Simulation implements ChemistryEmitter {
     this.player.addOrgan('photosynthesis', Math.PI, 'graze', false);
     this.cells.push(this.player);
     this.inheritedLineages.set(0, 0);
+    this.investment.lineages.set(0, 'balanced');
 
-    // Create initial pond NPCs (i = 0..17; habitat 0 skips hunters at i % 5 == 3)
+    // Create initial pond NPCs across the balanced role mix with minimal synergy starter sets
     for (let i = 0; i < 18; i++) {
-      if (this.habitat === 0 && i % 5 === 3) continue;
       const dist = i % 5 === 3 ? 1050 + i * 45 : i === 0 ? 220 : 340 + i * 94;
       const angle = i * 2.4;
       const p = wrapPos({
         x: this.player.position.x + Math.cos(angle) * dist,
         y: this.player.position.y + Math.sin(angle) * dist,
       });
-      this.makeCell(p, i % 5 === 3 ? 'hunter' : 'grazer');
+      this.makeCell(p, balancedPondRole(this.seedValue, i));
     }
 
     this.habitatGeometry = new Habitat(this.seedValue, this.cells);
@@ -476,35 +479,41 @@ export class Simulation implements ChemistryEmitter {
     );
   }
 
-  private makeCell(p: Vec2, role: 'hunter' | 'grazer' | 'player'): Cell {
+  private makeCell(p: Vec2, role: RoleName): Cell {
     const id = this.nextId++;
     const cell = new Cell(id, p, Math.abs((this.seedValue * 1000003 + id * 9176) | 0));
     cell.role = role;
     cell.angle = this.rng.randf() * TAU;
     cell.body = role === 'hunter' ? 135.0 : this.rng.randRange(14, 32);
-    cell.biomass = role === 'hunter' ? 35.0 : 10.0;
+    cell.biomass = role === 'hunter' ? (this.habitat === 2 ? 90.0 : 35.0) : role === 'producer' ? 24.0 : 20.0;
+    cell.energy = 70.0;
     cell.updateGeometry();
-    cell.addOrgan('feeding', role === 'hunter' ? 1.1 : 1.4, 'graze', false);
-    cell.addOrgan('propulsion', Math.PI, 'graze', false);
+
     if (role === 'hunter') {
-      cell.addOrgan('poreforming', 0, 'graze', false);
       cell.addOrgan('hunting', 0.48, 'hunt', false);
-      if (this.habitat === 2) {
-        cell.addOrgan('toxin', 1.8, 'graze', false);
-        cell.biomass = 90.0;
-        cell.updateGeometry();
-        for (const a of [0.6, 1.9, 2.6, 3.7, 5.65]) {
-          cell.addOrgan('protection', a, 'graze', false);
-        }
-        cell.addOrgan('regenerative', 4.4, 'graze', false);
-      }
+      cell.addOrgan('propulsion', Math.PI, 'graze', false);
+      cell.addOrgan('feeding', 1.1, 'graze', false);
+      cell.addOrgan('poreforming', 0, 'graze', false);
+    } else if (role === 'parasite') {
+      cell.addOrgan('hunting', 0.48, 'hunt', false);
+      cell.addOrgan('sensing', -0.48, 'flee', false);
+      cell.addOrgan('propulsion', Math.PI, 'graze', false);
+      cell.addOrgan('proboscis', 0, 'graze', false);
+    } else if (role === 'producer') {
+      cell.addOrgan('photosynthesis', 0, 'graze', false);
+      cell.addOrgan('photosynthesis', Math.PI, 'graze', false);
+      cell.addOrgan('mitochondrion', 0.5, 'graze', false);
+    } else {
+      cell.addOrgan('feeding', 0, 'graze', false);
+      cell.addOrgan('cilia', Math.PI, 'graze', false);
     }
-    cell.addOrgan('photosynthesis', 0, 'graze', false);
+
     cell.updateGeometry();
     cell.previousAngle = cell.angle;
     cell.senseClock = (cell.id % 9) / 60.0;
     this.cells.push(cell);
     this.inheritedLineages.set(cell.id, cell.lineageId());
+    this.investment.lineages.set(cell.lineageId(), 'balanced');
     return cell;
   }
 
@@ -1070,7 +1079,7 @@ export class Simulation implements ChemistryEmitter {
       for (let attempt = 0; attempt < 128; attempt++) {
         const at: Vec2 = { x: this.rng.randf() * WORLD_W, y: this.rng.randf() * WORLD_H };
         if (!this.safeBirthPosition(at, 48)) continue;
-        const c = this.makeCell(at, 'grazer');
+        const c = this.makeCell(at, balancedPath(this.seedValue, { id: this.nextId } as Cell));
         this.seedCellProducts(c);
         placed = true;
         currentLiving++;

@@ -194,6 +194,36 @@ function drawRoleSketch(ctx: CanvasRenderingContext2D, role: RoleName, cx: numbe
 
   ctx.save();
   ctx.translate(cx, cy);
+  if (role === 'grazer' && pts.length >= 12) {
+    const hairLen = Math.max(3.5, r * 0.24);
+    ctx.save();
+    ctx.strokeStyle = spec.rim;
+    ctx.globalAlpha = 0.85;
+    ctx.lineWidth = Math.max(1.0, r * 0.06);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    const nOut = pts.length;
+    for (let i = 0; i < nOut; i += 4) {
+      const pPrev = pts[(i - 1 + nOut) % nOut];
+      const pCur = pts[i];
+      const pNext = pts[(i + 1) % nOut];
+      const tx = pNext.x - pPrev.x;
+      const ty = pNext.y - pPrev.y;
+      const tLen = Math.hypot(tx, ty) || 1;
+      let nx = ty / tLen;
+      let ny = -tx / tLen;
+      if (pCur.x * nx + pCur.y * ny < 0) {
+        nx = -nx;
+        ny = -ny;
+      }
+      const x0 = pCur.x * sc;
+      const y0 = pCur.y * sc;
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x0 + nx * hairLen, y0 + ny * hairLen);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
   const g = ctx.createRadialGradient(-r * 0.22, -r * 0.22, r * 0.08, 0, 0, r * 1.08);
   g.addColorStop(0, spec.rim);
   g.addColorStop(0.62, spec.body);

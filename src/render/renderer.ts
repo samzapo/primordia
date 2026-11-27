@@ -568,10 +568,45 @@ export class Renderer {
 
     // Step A: Exterior motility & surface organs under membrane rim
     const vStartA = this.vectorBatch.mark();
+    const syn = cell.synergy();
     const lightDir = lightDirection(sim.seedValue, cell.position.x, cell.position.y);
     const cAng = cell.angle;
     const cosA = Math.cos(cAng);
     const sinA = Math.sin(cAng);
+
+    if (syn === 'grazer' && relOutline.length >= 12) {
+      const nOut = relOutline.length;
+      const hairLen = clamp(cell.radius * 0.22, 6.5, 11.5);
+      const hairCol = mixRgb(eCol, shineRgb, 0.48);
+      for (let i = 0; i < nOut; i += 3) {
+        const pPrev = relOutline[(i - 1 + nOut) % nOut];
+        const pCur = relOutline[i];
+        const pNext = relOutline[(i + 1) % nOut];
+        const tx = pNext.x - pPrev.x;
+        const ty = pNext.y - pPrev.y;
+        const tLen = Math.hypot(tx, ty) || 1;
+        let nx = ty / tLen;
+        let ny = -tx / tLen;
+        if ((pCur.x - baseRel.x) * nx + (pCur.y - baseRel.y) * ny < 0) {
+          nx = -nx;
+          ny = -ny;
+        }
+        const sweep = Math.sin(sim.time * 10.5 - i * 0.42 + cell.id * 1.1) * 0.32;
+        const ca = Math.cos(sweep);
+        const sa = Math.sin(sweep);
+        const hx = nx * ca - ny * sa;
+        const hy = nx * sa + ny * ca;
+        this.vectorBatch.addPolyline(
+          [
+            { x: pCur.x - nx * 1.4, y: pCur.y - ny * 1.4 },
+            { x: pCur.x + hx * hairLen, y: pCur.y + hy * hairLen },
+          ],
+          0.85,
+          [hairCol.r, hairCol.g, hairCol.b, 0.78],
+          1.2,
+        );
+      }
+    }
 
     for (const organ of cell.organs) {
       if (isInternalOrgan(organ.kind)) continue;
@@ -671,7 +706,6 @@ export class Renderer {
     this.vectorBatch.addRingBand(ringMid, relOutline, midColors, outerColors);
 
     // Synergy cellular signature
-    const syn = cell.synergy();
     if (syn === 'producer') {
       this.vectorBatch.addCircleFilled(baseRel.x, baseRel.y, cell.radius * 0.45, [0.35, 0.92, 0.55, 0.14], 20);
     } else if (syn === 'hunter') {

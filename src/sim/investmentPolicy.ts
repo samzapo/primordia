@@ -166,6 +166,8 @@ export interface InvestmentSim {
   divisionQuote(cell: Cell, mode: 'mitosis' | 'budding'): { material: number; energy: number };
 }
 
+const ROLE_NAMES = new Set<string>(['hunter', 'parasite', 'grazer', 'producer']);
+
 export function pathAtTicket(ticket: number): RoleName {
   let slot = posmod(ticket, MIX_TOTAL);
   for (const role of ['hunter', 'parasite', 'grazer', 'producer'] as RoleName[]) {
@@ -173,6 +175,24 @@ export function pathAtTicket(ticket: number): RoleName {
     slot -= MIX[role];
   }
   return 'producer';
+}
+
+/** Deterministic stratified 2:4:10:20 balanced role assignment across an 18-cell pond cycle. */
+export function balancedPondRole(seedValue: number, slotIndex: number): RoleName {
+  const roles: RoleName[] = [];
+  for (const role of ['hunter', 'parasite', 'grazer', 'producer'] as RoleName[]) {
+    const count = Math.max(1, Math.round(MIX[role] / 2));
+    for (let k = 0; k < count; k++) roles.push(role);
+  }
+  let rng = (seedValue ^ 0x9e3779b9) >>> 0;
+  for (let i = roles.length - 1; i > 0; i--) {
+    rng = (Math.imul(rng, 1664525) + 1013904223) >>> 0;
+    const j = rng % (i + 1);
+    const tmp = roles[i];
+    roles[i] = roles[j];
+    roles[j] = tmp;
+  }
+  return roles[posmod(slotIndex, roles.length)];
 }
 
 export function balancedPath(seedValue: number, cell: Cell): RoleName {
@@ -190,7 +210,8 @@ export function resolvedStrategyForCell(
   cell: Cell,
 ): InvestmentStrategy {
   const chosen = rawStrategyForCell(state, cell);
-  return chosen === 'balanced' ? balancedPath(seedValue, cell) : chosen;
+  if (chosen !== 'balanced') return chosen;
+  return ROLE_NAMES.has(cell.role) ? (cell.role as RoleName) : balancedPath(seedValue, cell);
 }
 
 export function inheritInvestmentStrategy(state: InvestmentState, parent: Cell, child: Cell): void {

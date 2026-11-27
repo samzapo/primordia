@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { Simulation } from '../src/sim/simulation.ts';
 import { MAX_FAMILY_CELLS, SPECIES } from '../src/sim/constants.ts';
 import { divisionQuote, reproduceCell } from '../src/sim/cellLifecycle.ts';
-import { balancedPath, pathAtTicket } from '../src/sim/investmentPolicy.ts';
+import { balancedPath, balancedPondRole, pathAtTicket, rawStrategyForCell, resolvedStrategyForCell } from '../src/sim/investmentPolicy.ts';
 import { rememberMergeCues, requestFamilyMerge } from '../src/sim/familyMerging.ts';
 
 test('Division quote enforces mitosis 84/56 and budding 50/78 requirements', () => {
@@ -72,8 +72,25 @@ test('Balanced investment lottery follows exact 2/4/10/20 weights', () => {
   assert.equal(counts.parasite, 4);
   assert.equal(counts.grazer, 10);
   assert.equal(counts.producer, 20);
+
+  const pondCounts = { hunter: 0, parasite: 0, grazer: 0, producer: 0 };
+  for (let i = 0; i < 18; i++) {
+    pondCounts[balancedPondRole(20261004, i)]++;
+  }
+  assert.deepEqual(pondCounts, { hunter: 1, parasite: 2, grazer: 5, producer: 10 });
+
   const sim = new Simulation(99, 0, false);
   assert.ok(['hunter', 'parasite', 'grazer', 'producer'].includes(balancedPath(99, sim.player)));
+  assert.equal(rawStrategyForCell(sim.investment, sim.player), 'balanced');
+
+  const npcs = sim.cells.filter((c) => c !== sim.player);
+  assert.equal(npcs.length, 18);
+  for (const npc of npcs) {
+    assert.ok(['hunter', 'parasite', 'grazer', 'producer'].includes(npc.role));
+    assert.equal(npc.synergy(), npc.role);
+    assert.equal(rawStrategyForCell(sim.investment, npc), 'balanced');
+    assert.equal(resolvedStrategyForCell(sim.seedValue, sim.investment, npc), npc.role);
+  }
 });
 
 test('Pheromone reports carry immutable emission-time snapshot metadata', () => {
