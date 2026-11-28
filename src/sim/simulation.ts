@@ -269,6 +269,7 @@ export interface GpuReceipts {
     expiresAt: number;
   } | null;
   acidField: Float32Array;
+  bodyImpacts?: Array<{ bodyIndex: number; sectors: number[]; recoilX: number; recoilY: number }>;
 }
 
 export interface DeathBurst {
@@ -1339,6 +1340,27 @@ export class Simulation implements ChemistryEmitter {
       organ.blocked = clamp(organ.blocked + count * 0.65, 0, 1);
       cell.renderRevision++;
     }
+
+    // 5. Particle-cell bounce dents & gentle sub-knockback recoil
+    if (receipts.bodyImpacts && receipts.bodyImpacts.length > 0) {
+      for (const imp of receipts.bodyImpacts) {
+        const cellId = bodyIds[imp.bodyIndex];
+        if (cellId === undefined) continue;
+        const cell = this.cells.find((c) => c.id === cellId && !c.dead);
+        if (!cell) continue;
+        const secCount = imp.sectors.length || 14;
+        for (let s = 0; s < imp.sectors.length; s++) {
+          const strength = imp.sectors[s];
+          if (strength <= 0.02) continue;
+          const localAngle = ((s + 0.5) / secCount) * TAU;
+          const depth = clamp(strength * 1.6, 0, cell.radius * 0.14);
+          cell.membrane.bounceAt(localAngle, depth, cell.radius);
+        }
+        cell.velocity.x += clamp(imp.recoilX, -4.5, 4.5);
+        cell.velocity.y += clamp(imp.recoilY, -4.5, 4.5);
+        cell.renderRevision++;
+      }
+    }
   }
 
   private enqueueCellSignal(
@@ -1905,7 +1927,7 @@ export class Simulation implements ChemistryEmitter {
       dent: (c, at, depth) => {
         const cc = c as Cell;
         const off = offsetVec(cc.position, at);
-        cc.membrane.compress(Math.atan2(off.y, off.x) - cc.angle, Math.min(depth, cc.radius * 0.075), cc.radius);
+        cc.membrane.bounceAt(Math.atan2(off.y, off.x) - cc.angle, Math.min(depth, cc.radius * 0.13), cc.radius);
       },
     };
 

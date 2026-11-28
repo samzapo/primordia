@@ -109,31 +109,48 @@ export class Membrane {
     this.invalidate();
     const hasHunter = Number.isFinite(this.hunterAngle);
     const hasParasite = Number.isFinite(this.parasiteAngle);
+    const accMag = Math.hypot(acceleration.x, acceleration.y);
+    const accUnitX = accMag > 1e-4 ? acceleration.x / accMag : 1;
+    const accUnitY = accMag > 1e-4 ? acceleration.y / accMag : 0;
+    const softness = this.cellWall ? 0.36 : 1.0;
+    const accNorm = clamp(accMag / 260.0, 0, 1.35) * softness;
 
     for (let i = 0; i < MEMBRANE_COUNT; i++) {
       const a = (TAU * i) / MEMBRANE_COUNT;
-      const contraction =
-        (1.0 + 0.14 * Math.sin(a * 3 + time * 0.48) + 0.075 * Math.sin(a * 5 - time * 0.71)) / 1.006;
-      this.restPoints[i].x = this.normals[i].x * radius * contraction;
-      this.restPoints[i].y = this.normals[i].y * radius * contraction;
+      let dir = this.normals[i];
+      let baseR =
+        radius *
+        ((1.0 + 0.14 * Math.sin(a * 3 + time * 0.55) + 0.08 * Math.sin(a * 5 - time * 0.78)) / 1.006);
+
       if (hasHunter) {
         const polar = Membrane.hunterNodeAngle(i, this.hunterAngle);
-        const prof = radius * Membrane.hunterProfile(polar - this.hunterAngle);
-        this.restPoints[i].x = Math.cos(polar) * prof;
-        this.restPoints[i].y = Math.sin(polar) * prof;
-      }
-      if (hasParasite) {
-        const prof = radius * Membrane.parasiteProfile(a - this.parasiteAngle);
-        this.restPoints[i].x = this.normals[i].x * prof;
-        this.restPoints[i].y = this.normals[i].y * prof;
-      }
-      if (this.cellWall) {
+        dir = { x: Math.cos(polar), y: Math.sin(polar) };
+        const jelly =
+          1.0 + 0.055 * Math.sin(polar * 3 + time * 1.1) + 0.035 * Math.cos(polar * 4 - time * 1.5);
+        baseR = radius * Membrane.hunterProfile(polar - this.hunterAngle) * jelly;
+      } else if (hasParasite) {
+        const jelly =
+          1.0 + 0.075 * Math.sin(a * 2 - time * 2.1) + 0.045 * Math.sin(a * 3 + time * 1.3);
+        baseR = radius * Membrane.parasiteProfile(a - this.parasiteAngle) * jelly;
+      } else if (this.cellWall) {
         const ax = Math.abs(this.normals[i].x);
         const ay = Math.abs(this.normals[i].y);
-        const wallScale = radius / Math.pow(Math.pow(ax, 8) + Math.pow(ay, 8), 1.0 / 8.0);
-        this.restPoints[i].x = this.normals[i].x * wallScale;
-        this.restPoints[i].y = this.normals[i].y * wallScale;
+        const jelly =
+          1.0 + 0.045 * Math.sin(a * 3 + time * 0.85) + 0.025 * Math.sin(a * 5 - time * 1.1);
+        baseR = (radius / Math.pow(Math.pow(ax, 8) + Math.pow(ay, 8), 1.0 / 8.0)) * jelly;
       }
+
+      if (accNorm > 0.01) {
+        const proj = dir.x * accUnitX + dir.y * accUnitY;
+        const lagFactor =
+          proj >= 0
+            ? 1.0 - 0.12 * accNorm * Math.pow(proj, 1.35)
+            : 1.0 + 0.16 * accNorm * Math.pow(-proj, 1.25);
+        baseR *= lagFactor;
+      }
+
+      this.restPoints[i].x = dir.x * baseR;
+      this.restPoints[i].y = dir.y * baseR;
     }
 
     if (this.cellWall || hasHunter || hasParasite) {
@@ -155,9 +172,9 @@ export class Membrane {
       this.restLengths[i] = Math.hypot(next.x - this.restPoints[i].x, next.y - this.restPoints[i].y);
     }
 
-    const damping = this.cellWall ? 0.35 : 0.84;
-    const softness = this.cellWall ? 0.12 : 1.0;
-    const restBlend = this.cellWall ? 1 - Math.exp(-dt * 8) : dt * 0.85;
+    const damping = this.cellWall ? 0.72 : 0.90;
+    const restBlend = this.cellWall ? 1 - Math.exp(-dt * 4.5) : Math.min(0.45, dt * 1.1);
+    const accelInertialGain = (radius / 47.0) * 1.65 * softness;
     for (let i = 0; i < MEMBRANE_COUNT; i++) {
       const px = this.points[i].x;
       const py = this.points[i].y;
@@ -166,20 +183,24 @@ export class Membrane {
       this.previous[i].x = px;
       this.previous[i].y = py;
       this.points[i].x +=
-        mx + (this.restPoints[i].x - px) * restBlend - acceleration.x * dt * dt * 0.18 * softness;
+        mx +
+        (this.restPoints[i].x - px) * restBlend -
+        acceleration.x * dt * dt * accelInertialGain;
       this.points[i].y +=
-        my + (this.restPoints[i].y - py) * restBlend - acceleration.y * dt * dt * 0.18 * softness;
+        my +
+        (this.restPoints[i].y - py) * restBlend -
+        acceleration.y * dt * dt * accelInertialGain;
       if (traction && traction.length === MEMBRANE_COUNT) {
-        this.points[i].x += traction[i].x * dt * dt * 22.0 * softness;
-        this.points[i].y += traction[i].y * dt * dt * 22.0 * softness;
+        this.points[i].x += traction[i].x * dt * dt * 28.0 * softness;
+        this.points[i].y += traction[i].y * dt * dt * 28.0 * softness;
       }
     }
 
     this.skeleton.begin(radius);
     this.edgeLambda.fill(0);
     this.areaLambda = 0;
-    const edgeAlpha = (this.cellWall ? 0.00008 : 0.0008) / (dt * dt);
-    const areaAlpha = 0.00001 / (dt * dt);
+    const edgeAlpha = (this.cellWall ? 0.0005 : 0.0024) / (dt * dt);
+    const areaAlpha = 0.000025 / (dt * dt);
     const targetArea = MEMBRANE_COUNT * radius * radius * Math.sin(TAU / MEMBRANE_COUNT) * 0.5;
 
     for (let iter = 0; iter < 6; iter++) {
@@ -254,49 +275,31 @@ export class Membrane {
     }
     for (let i = 0; i < MEMBRANE_COUNT; i++) {
       const l =
-        lengths[i] * 0.6 +
-        (lengths[(i - 1 + MEMBRANE_COUNT) % MEMBRANE_COUNT] + lengths[(i + 1) % MEMBRANE_COUNT]) * 0.2;
+        lengths[i] * 0.74 +
+        (lengths[(i - 1 + MEMBRANE_COUNT) % MEMBRANE_COUNT] + lengths[(i + 1) % MEMBRANE_COUNT]) * 0.13;
       const curLen = lengths[i] || 1;
       const cx = (this.points[i].x / curLen) * l;
       const cy = (this.points[i].y / curLen) * l;
-      this.previous[i].x += cx - this.points[i].x;
-      this.previous[i].y += cy - this.points[i].y;
+      this.previous[i].x += (cx - this.points[i].x) * 0.65;
+      this.previous[i].y += (cy - this.points[i].y) * 0.65;
       this.points[i].x = cx;
       this.points[i].y = cy;
     }
 
-    if (this.cellWall) {
-      for (let i = 0; i < MEMBRANE_COUNT; i++) {
-        const restL = Math.hypot(this.restPoints[i].x, this.restPoints[i].y);
-        const clamped = clamp(Math.hypot(this.points[i].x, this.points[i].y), restL * 0.98, restL * 1.02);
-        const cx = this.normals[i].x * clamped;
-        const cy = this.normals[i].y * clamped;
-        this.previous[i].x += cx - this.points[i].x;
-        this.previous[i].y += cy - this.points[i].y;
-        this.points[i].x = cx;
-        this.points[i].y = cy;
-      }
-    }
-    if (hasParasite) {
-      for (let i = 0; i < MEMBRANE_COUNT; i++) {
-        const restL = Math.hypot(this.restPoints[i].x, this.restPoints[i].y);
-        const clamped = clamp(Math.hypot(this.points[i].x, this.points[i].y), restL * 0.94, restL * 1.06);
-        const cx = this.normals[i].x * clamped;
-        const cy = this.normals[i].y * clamped;
-        this.previous[i].x += cx - this.points[i].x;
-        this.previous[i].y += cy - this.points[i].y;
-        this.points[i].x = cx;
-        this.points[i].y = cy;
-      }
-    }
-    if (hasHunter) {
+    if (this.cellWall || hasParasite || hasHunter) {
+      const minScale = this.cellWall ? 0.86 : hasParasite ? 0.8 : 0.82;
+      const maxScale = this.cellWall ? 1.16 : hasParasite ? 1.22 : 1.2;
       for (let i = 0; i < MEMBRANE_COUNT; i++) {
         const restL = Math.hypot(this.restPoints[i].x, this.restPoints[i].y) || 1;
-        const clamped = clamp(Math.hypot(this.points[i].x, this.points[i].y), restL * 0.98, restL * 1.02);
-        const cx = (this.restPoints[i].x / restL) * clamped;
-        const cy = (this.restPoints[i].y / restL) * clamped;
-        this.previous[i].x += cx - this.points[i].x;
-        this.previous[i].y += cy - this.points[i].y;
+        const curL = Math.hypot(this.points[i].x, this.points[i].y);
+        const clamped = clamp(curL, restL * minScale, restL * maxScale);
+        if (Math.abs(clamped - curL) <= 1e-4) continue;
+        const ux = curL > 1e-4 ? this.points[i].x / curL : this.restPoints[i].x / restL;
+        const uy = curL > 1e-4 ? this.points[i].y / curL : this.restPoints[i].y / restL;
+        const cx = ux * clamped;
+        const cy = uy * clamped;
+        this.previous[i].x += (cx - this.points[i].x) * 0.65;
+        this.previous[i].y += (cy - this.points[i].y) * 0.65;
         this.points[i].x = cx;
         this.points[i].y = cy;
       }
@@ -330,32 +333,34 @@ export class Membrane {
       const cx = Number.isFinite(this.points[i].x) ? this.points[i].x * pressureScale : this.restPoints[i].x;
       const cy = Number.isFinite(this.points[i].y) ? this.points[i].y * pressureScale : this.restPoints[i].y;
       this.maximumRadius = Math.max(this.maximumRadius, Math.hypot(cx, cy));
-      this.previous[i].x += cx - this.points[i].x;
-      this.previous[i].y += cy - this.points[i].y;
+      this.previous[i].x += (cx - this.points[i].x) * 0.7;
+      this.previous[i].y += (cy - this.points[i].y) * 0.7;
       this.points[i].x = cx;
       this.points[i].y = cy;
     }
   }
 
-  compress(localAngle: number, depth: number, radius: number): void {
-    if (this.cellWall) depth *= 0.12;
+  compress(localAngle: number, depth: number, radius: number, elasticity = 0.45): void {
+    if (this.cellWall) depth *= 0.36;
+    if (depth <= 1e-4) return;
     let beforeArea = 0;
     for (let i = 0; i < MEMBRANE_COUNT; i++) {
       const next = this.points[(i + 1) % MEMBRANE_COUNT];
       beforeArea += (this.points[i].x * next.y - this.points[i].y * next.x) * 0.5;
     }
+    const keepVel = 1 - clamp(elasticity, 0, 0.9);
     for (let i = 0; i < MEMBRANE_COUNT; i++) {
       const pt = this.points[i];
       const ang = Math.atan2(pt.y, pt.x);
       const distance = Math.abs(wrapAngle(ang - localAngle));
-      if (distance >= 0.65) continue;
-      const weight = 0.5 + 0.5 * Math.cos((Math.PI * distance) / 0.65);
+      if (distance >= 0.72) continue;
+      const weight = 0.5 + 0.5 * Math.cos((Math.PI * distance) / 0.72);
       const curLen = Math.hypot(pt.x, pt.y) || 1;
-      const nextLen = Math.max(radius * 0.58, curLen - depth * weight);
+      const nextLen = Math.max(radius * 0.52, curLen - depth * weight);
       const cx = (pt.x / curLen) * nextLen;
       const cy = (pt.y / curLen) * nextLen;
-      this.previous[i].x += cx - pt.x;
-      this.previous[i].y += cy - pt.y;
+      this.previous[i].x += (cx - pt.x) * keepVel;
+      this.previous[i].y += (cy - pt.y) * keepVel;
       pt.x = cx;
       pt.y = cy;
     }
@@ -369,13 +374,17 @@ export class Membrane {
     for (let i = 0; i < MEMBRANE_COUNT; i++) {
       const cx = this.points[i].x * scale;
       const cy = this.points[i].y * scale;
-      this.previous[i].x += cx - this.points[i].x;
-      this.previous[i].y += cy - this.points[i].y;
+      this.previous[i].x += (cx - this.points[i].x) * 0.65;
+      this.previous[i].y += (cy - this.points[i].y) * 0.65;
       this.points[i].x = cx;
       this.points[i].y = cy;
       this.maximumRadius = Math.max(this.maximumRadius, Math.hypot(cx, cy));
     }
     this.invalidate();
+  }
+
+  bounceAt(localAngle: number, depth: number, radius: number): void {
+    this.compress(localAngle, depth, radius, 0.75);
   }
 
   invalidate(): void {

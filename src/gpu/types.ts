@@ -13,8 +13,12 @@ export const PARTICLE_BYTES = PARTICLE_FLOATS * 4;
 export const REPORT_FLOATS = 12; // 48 bytes (3 x vec4)
 export const REPORT_BYTES = REPORT_FLOATS * 4;
 
-export const BODY_FLOATS = 16; // 64 bytes (4 x vec4)
+export const BODY_FLOATS = 20; // 80 bytes (5 x vec4)
 export const BODY_BYTES = BODY_FLOATS * 4;
+
+export const BODY_IMPACT_SECTORS = 14;
+export const BODY_IMPACT_STRIDE = 16; // 14 sectors + recoilX + recoilY
+export const BODY_IMPACTS_LEN = 64 * BODY_IMPACT_STRIDE; // 1024 ints (4096 bytes)
 
 export const FEED_FLOATS = 8; // 32 bytes (2 x vec4)
 export const FEED_BYTES = FEED_FLOATS * 4;
@@ -40,7 +44,8 @@ export const RECEIPT_SPARK_OFFSET = RECEIPT_DECOY_OFFSET + MAX_DECOYS_PER_TICK;
 export const RECEIPT_INSPECT_OFFSET = RECEIPT_SPARK_OFFSET + MAX_REACTION_SPARKS * 4;
 export const RECEIPT_STATS_OFFSET = RECEIPT_INSPECT_OFFSET + 6 * 4;
 export const RECEIPT_ACID_OFFSET = RECEIPT_STATS_OFFSET + 4 * 4;
-export const RECEIPT_TOTAL_FLOATS = RECEIPT_ACID_OFFSET + FIELD_COUNT;
+export const RECEIPT_IMPACTS_OFFSET = RECEIPT_ACID_OFFSET + FIELD_COUNT;
+export const RECEIPT_TOTAL_FLOATS = RECEIPT_IMPACTS_OFFSET + BODY_IMPACTS_LEN;
 export const RECEIPT_BYTES = RECEIPT_TOTAL_FLOATS * 4;
 
 export const GPU_MAX_PARTICLES = MAX_PARTICLES;

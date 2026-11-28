@@ -58,3 +58,46 @@ test('Player editing commands install, mutate, restore and recycle cleanly', () 
   assert.equal(photo.mutation, 'sun_leaf');
   assert.equal(SPECIES.NUTRIENT, 0);
 });
+
+test('GPU particle bodyImpacts bounce membrane elastically while capping cell knockback gently', () => {
+  const sim = new Simulation(5150, 0, true);
+  sim.drainInitialParticles();
+  const input = sim.step(DT, null);
+  const playerIdx = input.bodies.findIndex((b) => b.cell.id === sim.player.id);
+  assert.ok(playerIdx >= 0);
+
+  const beforeR = Math.hypot(sim.player.membrane.points[1].x, sim.player.membrane.points[1].y);
+  const vxBefore = sim.player.velocity.x;
+  const vyBefore = sim.player.velocity.y;
+
+  const sectors = new Array(14).fill(0);
+  sectors[0] = 2.4;
+  sim.step(DT, {
+    revision: input.revision,
+    bodyIntakes: [],
+    feedResults: [],
+    queryResults: [],
+    exposureHits: [],
+    decoyHits: [],
+    reactionSparks: [],
+    census: {
+      alive: 0,
+      pheromones: 0,
+      material: 0,
+      oxygen: 0,
+      decays: 0,
+      materialLoss: 0,
+      recycled: 0,
+      reactions: 0,
+    },
+    inspected: null,
+    acidField: new Float32Array(2560),
+    bodyImpacts: [{ bodyIndex: playerIdx, sectors, recoilX: 120, recoilY: -120 }],
+  });
+
+  const afterR = Math.hypot(sim.player.membrane.points[1].x, sim.player.membrane.points[1].y);
+  assert.ok(afterR < beforeR - 0.5, 'Expected sector impact to dent membrane');
+  // Knockback recoil is tightly bounded so particles never knock cells around hard
+  assert.ok(Math.abs(sim.player.velocity.x - vxBefore) <= 12);
+  assert.ok(Math.abs(sim.player.velocity.y - vyBefore) <= 12);
+});

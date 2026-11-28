@@ -80,3 +80,34 @@ test('rolePreviewGeometry produces distinct synergy-matched silhouettes', () => 
   }
   assert.ok(maxR / minR > 1.6);
 });
+
+test('Membrane deforms smoothly under acceleration and bounces elastically across all cell modes', () => {
+  for (const wall of [false, true]) {
+    const m = new Membrane(47, -1, true);
+    m.cellWall = wall;
+    for (let s = 0; s < 20; s++) {
+      m.step(1 / 60, 47, { x: 0, y: 0 }, s * 0.016);
+    }
+    const baseFront = Math.hypot(m.points[0].x, m.points[0].y);
+    const baseRear = Math.hypot(m.points[MEMBRANE_COUNT / 2].x, m.points[MEMBRANE_COUNT / 2].y);
+
+    // Accelerate strongly along +X: front flattens, rear stretches/lags backward
+    for (let s = 0; s < 18; s++) {
+      m.step(1 / 60, 47, { x: 350, y: 0 }, 0.35 + s * 0.016);
+    }
+    const accFront = Math.hypot(m.points[0].x, m.points[0].y);
+    const accRear = Math.hypot(m.points[MEMBRANE_COUNT / 2].x, m.points[MEMBRANE_COUNT / 2].y);
+    assert.ok(
+      accRear - accFront > baseRear - baseFront + (wall ? 1.2 : 3.5),
+      `Expected visible acceleration bulge difference for cellWall=${wall}`,
+    );
+
+    // Elastic impact bounces inward and rebounds back smoothly
+    const preHit = Math.hypot(m.points[7].x, m.points[7].y);
+    m.bounceAt(Math.PI * 0.5, 5.5, 47);
+    const dented = Math.hypot(m.points[7].x, m.points[7].y);
+    assert.ok(dented < preHit - (wall ? 1.0 : 3.0));
+    m.step(1 / 60, 47, { x: 0, y: 0 }, 0.8);
+    assert.ok(Number.isFinite(m.points[7].x) && Number.isFinite(m.points[7].y));
+  }
+});

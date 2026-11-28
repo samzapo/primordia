@@ -56,6 +56,7 @@ struct BodyGPU {
   ranges: vec4u, // (visStart, visCount, physStart, physCount)
   rooms: vec4f,  // (gutRoom, oxygenRoom, carbonRoom, cellId_f32)
   flags: vec4u,  // (cellId, lineage, hasSurfaceComplexes, unattendedProtected)
+  vel: vec4f,    // (vx, vy, mass, isCellWall)
 };
 
 struct FeedGPU {
@@ -94,6 +95,7 @@ struct Receipts {
   inspected: array<vec4f, 6>,
   stats: array<vec4u, 4>,
   acidField: array<f32, 2560>,
+  bodyImpacts: array<i32, 1024>,
 };
 
 fn speciesRadius(u: SimUniforms, kind: u32) -> f32 {

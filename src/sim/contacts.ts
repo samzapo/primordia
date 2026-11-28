@@ -97,7 +97,7 @@ export function dentCell(cell: Cell, at: Vec2, depth: number): void {
   if (cell.activity <= 0 || depth <= 0.001) return;
   const off = offsetVec(cell.position, at);
   const localAngle = Math.atan2(off.y, off.x) - cell.angle;
-  cell.membrane.compress(localAngle, Math.min(depth, cell.radius * 0.075), cell.radius);
+  cell.membrane.bounceAt(localAngle, Math.min(depth, cell.radius * 0.13), cell.radius);
   cell.renderRevision++;
 }
 

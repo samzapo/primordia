@@ -64,11 +64,12 @@ export class CellMotionTracker {
     }
     const accelMag = Math.hypot(st.smoothAx, st.smoothAy);
     const speed = Math.hypot(cell.velocity.x, cell.velocity.y);
-    const speedAmp = clamp(speed / 180, 0, 0.025);
-    const accelStretch = clamp(accelMag / 600, 0, 1) * 0.045;
-    // Area-preserving 0.6% idle cellular breathing + motion squash/stretch
-    const breathe = 0.006 * Math.sin(st.phase);
-    const sx = clamp(1 + breathe + speedAmp + accelStretch * Math.cos(st.phase * 0.5), 0.92, 1.09);
+    const speedAmp = clamp(speed / 160, 0, 0.032);
+    const accelRatio = clamp(accelMag / 420, 0, 1);
+    const accelStretch = accelRatio * 0.068 + accelRatio * 0.022 * Math.sin(st.phase * 1.4);
+    // Area-preserving organic breathing + inertial acceleration squash/stretch
+    const breathe = 0.014 * Math.sin(st.phase);
+    const sx = clamp(1 + breathe + speedAmp + accelStretch, 0.89, 1.13);
     const sy = 1 / sx;
 
     let squashAngle = cell.angle;

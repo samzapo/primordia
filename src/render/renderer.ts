@@ -12,9 +12,14 @@ import { SPECIES_RADII, particleRadius } from '../sim/catalog.ts';
 import { vacuoleVisualRadius } from '../sim/cellChemistry.ts';
 import { proboscisTip } from '../sim/proboscis.ts';
 import type { Simulation } from '../sim/simulation.ts';
-import { generatePlantAtlas, generateProceduralAtlases, type ProceduralAtlases } from './atlasGenerator.ts';
+import {
+  LANDMARK_SPRITE_KINDS,
+  generatePlantAtlas,
+  generateProceduralAtlases,
+  type ProceduralAtlases,
+} from './atlasGenerator.ts';
 import { CellMotionTracker, type CellMotionTransform } from './cellMotion.ts';
-import { computeInteriorLandmarks } from './factoryLayout.ts';
+import { computeInteriorLandmarks, type LandmarkKind } from './factoryLayout.ts';
 import { buildFlowCurves } from './flowCurves.ts';
 import {
   hexToRgba,
@@ -25,7 +30,6 @@ import {
   parseHex,
   pitchWaveColor,
   signalColorForLineage,
-  UI_COLORS,
 } from './palette.ts';
 import downsampleWgsl from './shaders/downsample.wgsl?raw';
 import microscopeWgsl from './shaders/microscope.wgsl?raw';
@@ -78,6 +82,7 @@ export interface RenderFrameState {
 type LayerCmd = { kind: 'vec'; cmd: VectorDrawCmd } | { kind: 'spr'; cmd: SpriteDrawCmd };
 
 const ORGAN_LAYER_INDEX = new Map<OrganKind, number>(ORGAN_KINDS.map((k, i) => [k, i]));
+const LANDMARK_LAYER_INDEX = new Map<LandmarkKind, number>(LANDMARK_SPRITE_KINDS.map((k, i) => [k, i]));
 
 export class Renderer {
   readonly device: GPUDevice;
@@ -121,7 +126,10 @@ export class Renderer {
   private microscopeBG!: GPUBindGroup;
 
   private readonly vectorBG: GPUBindGroup;
-  private readonly spriteBGs: Record<'plants' | 'organs' | 'nuclei' | 'vacuoles' | 'speciesDetailed' | 'speciesSimple', GPUBindGroup>;
+  private readonly spriteBGs: Record<
+    'plants' | 'organs' | 'nuclei' | 'landmarks' | 'vacuoles' | 'speciesDetailed' | 'speciesSimple',
+    GPUBindGroup
+  >;
   private readonly clampSampler: GPUSampler;
 
   constructor(
@@ -198,6 +206,7 @@ export class Renderer {
       plants: mkSpriteBG(this.atlases.plants),
       organs: mkSpriteBG(this.atlases.organs),
       nuclei: mkSpriteBG(this.atlases.nuclei),
+      landmarks: mkSpriteBG(this.atlases.landmarks),
       vacuoles: mkSpriteBG(this.atlases.vacuoles),
       speciesDetailed: mkSpriteBG(this.atlases.speciesDetailed),
       speciesSimple: mkSpriteBG(this.atlases.speciesSimple),
@@ -763,25 +772,17 @@ export class Renderer {
       }
     }
 
-    // Exterior membrane organs & scars
+    // Exterior membrane socket cradles & scars (leave organelle glyphs unoccluded)
     for (const organ of cell.organs) {
       if (isInternalOrgan(organ.kind)) continue;
       const wp = this.localToRel(cell, cell.organLocalPosition(organ), tr, baseRel);
-      const col = parseHex(ORGAN_COLORS[organ.kind]);
       const rad = 5.4 * organ.scale;
-      this.vectorBatch.addCircleFilled(wp.x, wp.y, rad + 1.4, [eCol.r, eCol.g, eCol.b, 0.85], 16);
-      this.vectorBatch.addCircleFilled(
-        wp.x,
-        wp.y,
-        rad,
-        [col.r, col.g, col.b, organ.hp > 0 ? 0.95 : 0.35],
-        16,
-      );
+      this.vectorBatch.addCircleFilled(wp.x, wp.y, rad * 0.72, [eCol.r, eCol.g, eCol.b, 0.26], 14);
       if (organ.blocked > 0.05) {
-        this.vectorBatch.addCircleStroke(wp.x, wp.y, rad + 3.2, 1.6, [1.0, 0.72, 0.24, organ.blocked], 14);
+        this.vectorBatch.addCircleStroke(wp.x, wp.y, rad + 3.4, 1.6, [1.0, 0.72, 0.24, organ.blocked], 14);
       }
       if (state.selectedOrganId === organ.id && cell.id === state.editingCellId) {
-        this.vectorBatch.addCircleStroke(wp.x, wp.y, rad + 4.5, 1.9, [1, 1, 1, 0.92], 18);
+        this.vectorBatch.addCircleStroke(wp.x, wp.y, rad + 4.8, 1.9, [1, 1, 1, 0.92], 18);
       }
     }
 
@@ -800,8 +801,8 @@ export class Renderer {
     for (const organ of cell.organs) {
       const layer = ORGAN_LAYER_INDEX.get(organ.kind) ?? 0;
       const sw = toSpriteWorld(this.localToRel(cell, cell.organLocalPosition(organ), tr, baseRel));
-      const hw = (isInternalOrgan(organ.kind) ? 7.5 : 6.2) * organ.scale;
-      this.spriteBatch.push(sw.x, sw.y, hw, hw, cell.angle + organ.a, layer, [1, 1, 1, organ.hp > 0 ? 0.95 : 0.35]);
+      const hw = (isInternalOrgan(organ.kind) ? 8.4 : 7.8) * organ.scale;
+      this.spriteBatch.push(sw.x, sw.y, hw, hw, cell.angle + organ.a, layer, [1, 1, 1, organ.hp > 0 ? 0.96 : 0.35]);
     }
     const sprOrgCmd = this.spriteBatch.finishRange(sOrgStart, 'organs');
     if (sprOrgCmd) cmds.push({ kind: 'spr', cmd: sprOrgCmd });
@@ -827,16 +828,46 @@ export class Renderer {
       if (vacCmd) cmds.push({ kind: 'spr', cmd: vacCmd });
     }
 
-    // Step E: Nucleus sprite + compact landmarks + warning pulses
+    // Step E: Cytoplasm organelle landmarks (ER, Golgi, Centrosome, ATP crystals, Division bud) & Nucleus
+    const landmarks = isFocused ? computeInteriorLandmarks(cell) : null;
+    if (landmarks) {
+      const compactScale = clamp(1 / Math.sqrt(Math.max(1, state.zoom / 1.5)), 0.35, 1.0);
+      const lmSprStart = this.spriteBatch.mark();
+      let lmIdx = 0;
+      for (const lm of landmarks) {
+        if (lm.kind === 'nucleus') continue;
+        lmIdx++;
+        const layer = LANDMARK_LAYER_INDEX.get(lm.kind);
+        if (layer === undefined) continue;
+        // Subtle cytoplasmic thermal sway clamped safely with local deformation
+        const driftPhase = sim.time * 1.15 + cell.id * 0.7 + lmIdx * 1.9;
+        const driftAmp = clamp(cell.radius * 0.025, 0.4, 1.3);
+        const driftedLocal = {
+          x: lm.local.x + Math.sin(driftPhase) * driftAmp,
+          y: lm.local.y + Math.cos(driftPhase * 0.83) * driftAmp,
+        };
+        const sw = toSpriteWorld(this.localToRel(cell, driftedLocal, tr, baseRel));
+        const hw = lm.radius * compactScale * 1.12;
+        const starveTint: [number, number, number, number] =
+          lm.kind === 'atp' && cell.energy < 10
+            ? [1.0, 0.52, 0.42, 0.65 + 0.3 * Math.sin(sim.time * 8)]
+            : [1.0, 1.0, 1.0, intero ? 0.9 : 0.66];
+        const rot = cell.angle + Math.atan2(lm.local.y, lm.local.x) * 0.25 + Math.sin(driftPhase * 0.45) * 0.14;
+        this.spriteBatch.push(sw.x, sw.y, hw, hw, rot, layer, starveTint);
+      }
+      const lmSprCmd = this.spriteBatch.finishRange(lmSprStart, 'landmarks');
+      if (lmSprCmd) cmds.push({ kind: 'spr', cmd: lmSprCmd });
+    }
+
     const nucForm = nucleusForm(sim.seedValue, cell.lineageId());
-    const nucWorld = isFocused
-      ? computeInteriorLandmarks(cell).find((l) => l.kind === 'nucleus')?.world ?? cell.position
-      : cell.position;
-    const nucRel = {
-      x: baseRel.x + offsetVec(cell.position, nucWorld).x,
-      y: baseRel.y + offsetVec(cell.position, nucWorld).y,
-    };
-    const nucSw = toSpriteWorld(nucRel);
+    const nucLm = landmarks?.find((l) => l.kind === 'nucleus');
+    const nucLocal = nucLm
+      ? {
+          x: nucLm.local.x + Math.sin(sim.time * 0.9 + cell.id) * 0.65,
+          y: nucLm.local.y + Math.cos(sim.time * 0.78 + cell.id) * 0.65,
+        }
+      : { x: 0, y: 0 };
+    const nucSw = toSpriteWorld(this.localToRel(cell, nucLocal, tr, baseRel));
     const nucR = clamp(cell.radius * 0.25, 6.5, 13.5);
     const nucStart = this.spriteBatch.mark();
     const nucRgb = parseHex(pal.nucleus);
@@ -845,38 +876,22 @@ export class Renderer {
       nucSw.y,
       nucR,
       nucR,
-      cell.angle,
+      cell.angle + Math.sin(sim.time * 0.6 + cell.id) * 0.08,
       nucForm,
-      [nucRgb.r, nucRgb.g, nucRgb.b, intero ? 0.95 : 0.84],
+      [nucRgb.r, nucRgb.g, nucRgb.b, intero ? 0.95 : 0.88],
     );
     const nucCmd = this.spriteBatch.finishRange(nucStart, 'nuclei');
     if (nucCmd) cmds.push({ kind: 'spr', cmd: nucCmd });
 
     if (isFocused) {
       const lmVecStart = this.vectorBatch.mark();
-      const landmarks = computeInteriorLandmarks(cell);
-      const compactScale = clamp(1 / Math.sqrt(Math.max(1, state.zoom / 1.5)), 0.35, 1.0);
-      for (const lm of landmarks) {
-        if (lm.kind === 'nucleus') continue;
-        const r = lm.radius * compactScale;
-        const colorHex =
-          lm.kind === 'atp'
-            ? cell.energy < 10
-              ? UI_COLORS.hurtRed
-              : UI_COLORS.atpGold
-            : lm.kind === 'assembly'
-              ? '#7ec8ff'
-              : lm.kind === 'chemistry'
-                ? '#72f0b5'
-                : lm.kind === 'receptors'
-                  ? '#e688ff'
-                  : '#ffbe6b';
-        const rgb = parseHex(colorHex);
-        const pulse = lm.kind === 'atp' && cell.energy < 10 ? 0.55 + 0.45 * Math.sin(sim.time * 8) : 0.85;
-        const lmDelta = offsetVec(cell.position, lm.world);
-        const lmRel = { x: baseRel.x + lmDelta.x, y: baseRel.y + lmDelta.y };
-        this.vectorBatch.addCircleFilled(lmRel.x, lmRel.y, r, [rgb.r, rgb.g, rgb.b, pulse * 0.45], 16);
-        this.vectorBatch.addCircleStroke(lmRel.x, lmRel.y, r, 1.3 * compactScale, [rgb.r, rgb.g, rgb.b, pulse], 18);
+      if (landmarks && cell.energy < 10) {
+        const atpLm = landmarks.find((l) => l.kind === 'atp');
+        if (atpLm) {
+          const atpRel = this.localToRel(cell, atpLm.local, tr, baseRel);
+          const pulse = 0.5 + 0.5 * Math.sin(sim.time * 8);
+          this.vectorBatch.addCircleStroke(atpRel.x, atpRel.y, atpLm.radius * 1.15, 1.4, [1.0, 0.36, 0.32, pulse], 18);
+        }
       }
 
       // Placement preview ghost when adding an organelle

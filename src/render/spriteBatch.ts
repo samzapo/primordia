@@ -4,7 +4,7 @@ import spriteWgsl from './shaders/sprite.wgsl?raw';
 export interface SpriteDrawCmd {
   start: number;
   count: number;
-  atlasKey: 'plants' | 'organs' | 'nuclei' | 'vacuoles' | 'speciesDetailed' | 'speciesSimple';
+  atlasKey: 'plants' | 'organs' | 'nuclei' | 'landmarks' | 'vacuoles' | 'speciesDetailed' | 'speciesSimple';
 }
 
 const FLOATS_PER_INST = 12; // x, y, halfW, halfH, angle, layer, isScreen, lensClip, r, g, b, a

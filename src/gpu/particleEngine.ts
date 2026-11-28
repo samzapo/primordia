@@ -19,6 +19,9 @@ import {
 import {
   BODY_BYTES,
   BODY_FLOATS,
+  BODY_IMPACTS_LEN,
+  BODY_IMPACT_SECTORS,
+  BODY_IMPACT_STRIDE,
   DECOY_BYTES,
   DECOY_FLOATS,
   EMISSION_BYTES,
@@ -38,6 +41,7 @@ import {
   RECEIPT_EXP_COUNT_OFFSET,
   RECEIPT_EXP_HIT_OFFSET,
   RECEIPT_FEED_OFFSET,
+  RECEIPT_IMPACTS_OFFSET,
   RECEIPT_INSPECT_OFFSET,
   RECEIPT_QUERY_OFFSET,
   RECEIPT_SPARK_OFFSET,
@@ -102,6 +106,7 @@ export class ParticleEngine {
 
   // Receipt & double-buffered async staging readback
   private readonly atomicStatsBuffer: GPUBuffer;
+  private readonly bodyImpactsBuffer: GPUBuffer;
   private readonly receiptBuffer: GPUBuffer;
   private readonly stagingBuffers: [GPUBuffer, GPUBuffer];
   private stagingSlot = 0;
@@ -216,6 +221,7 @@ export class ParticleEngine {
     this.ambientSpawnsBuffer = device.createBuffer({ size: GPU_MAX_AMBIENT_SPAWNS * EMISSION_BYTES, usage: RW, label: 'ambientSpawns' });
 
     this.atomicStatsBuffer = device.createBuffer({ size: 64, usage: RW, label: 'atomicStats' });
+    this.bodyImpactsBuffer = device.createBuffer({ size: BODY_IMPACTS_LEN * 4, usage: RW, label: 'bodyImpacts' });
     this.receiptBuffer = device.createBuffer({ size: RECEIPT_BYTES, usage: RW, label: 'receipts' });
     this.stagingBuffers = [
       device.createBuffer({ size: RECEIPT_BYTES, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST, label: 'staging0' }),
@@ -320,7 +326,7 @@ export class ParticleEngine {
     this.perceptionBG = bgWithLayout(perceptionBGL, [this.uniformBuffer, this.particlesBuffer, this.reportsBuffer, this.binOffsetsBuffer, this.sortedSlotsBuffer, this.queriesBuffer, this.receiptBuffer]);
     this.exposureNominateBG = bg(this.exposureNominatePipe, [this.uniformBuffer, this.particlesBuffer, this.bodiesBuffer, this.bodyPointsBuffer, this.decoysBuffer, this.nominationsBuffer]);
     this.exposureCollectBG = bg(this.exposureCollectPipe, [this.uniformBuffer, this.particlesBuffer, this.bodiesBuffer, this.binOffsetsBuffer, this.sortedSlotsBuffer, this.nominationsBuffer, this.receiptBuffer]);
-    this.projectBodiesBG = bg(this.projectBodiesPipe, [this.uniformBuffer, this.particlesBuffer, this.bodiesBuffer, this.bodyPointsBuffer]);
+    this.projectBodiesBG = bg(this.projectBodiesPipe, [this.uniformBuffer, this.particlesBuffer, this.bodiesBuffer, this.bodyPointsBuffer, this.bodyImpactsBuffer]);
     this.censusReduceBG = bg(this.censusReducePipe, [this.uniformBuffer, this.particlesBuffer, this.acidFieldBuffer, this.atomicStatsBuffer, this.receiptBuffer]);
 
     // Initialize constant species arrays in uniformF32
@@ -535,6 +541,10 @@ export class ParticleEngine {
       this.bodyU32[off + 13] = desc.cell.lineageId() >>> 0;
       this.bodyU32[off + 14] = desc.hasSurfaceComplexes ? 1 : 0;
       this.bodyU32[off + 15] = desc.cell.unattendedProtected ? 1 : 0;
+      this.bodyF32[off + 16] = desc.cell.velocity.x;
+      this.bodyF32[off + 17] = desc.cell.velocity.y;
+      this.bodyF32[off + 18] = desc.cell.mass;
+      this.bodyF32[off + 19] = desc.cell.membrane.cellWall ? 1 : 0;
     }
     if (bodyCount > 0) {
       this.device.queue.writeBuffer(this.bodiesBuffer, 0, this.bodyBuf, 0, bodyCount * BODY_BYTES);
@@ -639,6 +649,7 @@ export class ParticleEngine {
 
     // Clear counters before compute passes
     encoder.clearBuffer(this.atomicStatsBuffer, 0, 64);
+    encoder.clearBuffer(this.bodyImpactsBuffer, 0, BODY_IMPACTS_LEN * 4);
     encoder.clearBuffer(this.receiptBuffer, RECEIPT_EXP_COUNT_OFFSET * 4, 64 * 4 * 4);
     encoder.clearBuffer(this.receiptBuffer, RECEIPT_DECOY_OFFSET * 4, MAX_DECOYS_PER_TICK * 4);
 
@@ -709,6 +720,7 @@ export class ParticleEngine {
       runPass(this.exposureNominatePipe, this.exposureNominateBG, pGroups);
       runPass(this.exposureCollectPipe, this.exposureCollectBG, bodyCount);
       runPass(this.projectBodiesPipe, this.projectBodiesBG, pGroups);
+      encoder.copyBufferToBuffer(this.bodyImpactsBuffer, 0, this.receiptBuffer, RECEIPT_IMPACTS_OFFSET * 4, bodyCount * BODY_IMPACT_STRIDE * 4);
     }
 
     // 10. Census & Acid Readback Pack
@@ -894,6 +906,23 @@ export class ParticleEngine {
     const acidField = new Float32Array(FIELD_COUNT);
     acidField.set(f32.subarray(RECEIPT_ACID_OFFSET, RECEIPT_ACID_OFFSET + FIELD_COUNT));
 
+    const bodyImpacts: NonNullable<GpuReceipts['bodyImpacts']> = [];
+    for (let b = 0; b < bodyCount; b++) {
+      const base = RECEIPT_IMPACTS_OFFSET + b * BODY_IMPACT_STRIDE;
+      const sectors: number[] = [];
+      let any = false;
+      for (let s = 0; s < BODY_IMPACT_SECTORS; s++) {
+        const val = i32[base + s] / 256;
+        sectors.push(val);
+        if (val > 0.001) any = true;
+      }
+      const recoilX = i32[base + 14] / 256;
+      const recoilY = i32[base + 15] / 256;
+      if (any || Math.abs(recoilX) > 0.001 || Math.abs(recoilY) > 0.001) {
+        bodyImpacts.push({ bodyIndex: b, sectors, recoilX, recoilY });
+      }
+    }
+
     const bodyIntakes = new Array(bodyCount).fill(null).map(() => ({ food: 0, oxygen: 0, carbon: 0 }));
 
     return {
@@ -909,6 +938,7 @@ export class ParticleEngine {
       census,
       inspected,
       acidField,
+      bodyImpacts,
     };
   }
 }
