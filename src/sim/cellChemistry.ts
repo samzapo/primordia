@@ -42,6 +42,18 @@ export interface InternalPacket {
   alive: boolean;
 }
 
+export function vacuoleVisualRadius(
+  species: InternalSpecies,
+  amount: number,
+  cellRadius = 47.0,
+): number {
+  const isGas = species === 'oxygen' || species === 'carbon';
+  const baseR = isGas
+    ? clamp(2.0 + Math.sqrt(Math.max(0, amount)) * 2.0, 2.0, 5.0)
+    : clamp(2.6 + Math.sqrt(Math.max(0, amount)) * 3.0, 2.5, 8.5);
+  return Math.min(baseR, Math.max(2.0, cellRadius * 0.24));
+}
+
 export interface VacuoleSummary {
   id: number;
   p: Vec2;
@@ -80,6 +92,7 @@ export interface ChemistryCell {
   operatingBudget(): { steady: number };
   atpDecayRate(): number;
   support(localAngle: number): number;
+  supportLocal(localAngle: number): number;
 }
 
 export interface ChemistryEmitter {
@@ -211,7 +224,7 @@ export class CellChemistry {
 
   constrain(cell: ChemistryCell, p: Vec2, r: number): Vec2 {
     const angle = Math.atan2(p.y, p.x);
-    const maxR = Math.max(4.0, cell.support(angle) - r - 2.0);
+    const maxR = Math.max(0.5, cell.supportLocal(angle) - r - 2.0);
     const len = Math.hypot(p.x, p.y);
     let x = p.x;
     let y = p.y;
@@ -219,10 +232,10 @@ export class CellChemistry {
       x = (x / len) * maxR;
       y = (y / len) * maxR;
     }
-    // Exclude nucleus disc at (-0.12, -0.10)*radius with radius 0.22*radius + r
+    // Exclude nucleus disc while strictly respecting the outer membrane wall
     const nx = -0.12 * cell.radius;
     const ny = -0.1 * cell.radius;
-    const nr = 0.22 * cell.radius + r;
+    const nr = Math.min(0.22 * cell.radius + r, Math.max(1.5, maxR * 0.55));
     const dx = x - nx;
     const dy = y - ny;
     const nd = Math.hypot(dx, dy);
@@ -234,6 +247,12 @@ export class CellChemistry {
         x = nx + nr;
         y = ny;
       }
+    }
+    const afterMaxR = Math.max(0.5, cell.supportLocal(Math.atan2(y, x)) - r - 2.0);
+    const afterLen = Math.hypot(x, y);
+    if (afterLen > afterMaxR && afterLen > 1e-8) {
+      x = (x / afterLen) * afterMaxR;
+      y = (y / afterLen) * afterMaxR;
     }
     return { x, y };
   }
@@ -252,7 +271,7 @@ export class CellChemistry {
     const comp = compartment > 0 ? compartment : this.nextCompartment++;
     const resolvedFuel =
       fuel >= 0 ? fuel : species === 'food' ? amount * FOOD_FUEL : 0;
-    const r = species === 'oxygen' || species === 'carbon' ? 1.4 : 7.0;
+    const r = vacuoleVisualRadius(species, amount, cell.radius);
     const constrained = this.constrain(cell, localPos, r);
 
     // Coalesce if matching packet exists in same compartment, or young packet within 14 units, or over cap
@@ -363,7 +382,7 @@ export class CellChemistry {
     const speed = Math.max(6.0, cell.radius * 0.22);
     const outletAngle = cell.excretionAngle();
     const outletBase = cell.localPoint(outletAngle);
-    const outlet = { x: outletBase.x * 0.88, y: outletBase.y * 0.88 };
+    const outletBaseLen = Math.hypot(outletBase.x, outletBase.y) || 1;
     const exitSpeed = Math.max(10.0, cell.radius * 0.4);
 
     // Track compartments still containing food
@@ -387,14 +406,17 @@ export class CellChemistry {
         p.p.y = fp.y;
         continue;
       }
-      const r = p.species === 'oxygen' || p.species === 'carbon' ? 1.4 : 7.0;
+      const r = vacuoleVisualRadius(p.species, p.amount, cell.radius);
       const isPureExitingWaste =
         p.species === 'waste' && !foodComps.has(p.compartment) && p.age >= RESIDENCE_SECONDS;
 
       for (let s = 0; s < substeps; s++) {
         if (isPureExitingWaste) {
-          const dx = outlet.x - p.p.x;
-          const dy = outlet.y - p.p.y;
+          const outR = Math.max(0.5, cell.supportLocal(outletAngle) - r - 2.0);
+          const ox = Math.cos(outletAngle) * Math.min(outR, outletBaseLen * 0.88);
+          const oy = Math.sin(outletAngle) * Math.min(outR, outletBaseLen * 0.88);
+          const dx = ox - p.p.x;
+          const dy = oy - p.p.y;
           const d = Math.hypot(dx, dy);
           if (d > 1e-4) {
             p.v.x = (dx / d) * exitSpeed;
@@ -403,7 +425,7 @@ export class CellChemistry {
         }
         p.p.x += p.v.x * h;
         p.p.y += p.v.y * h;
-        const maxR = Math.max(4.0, cell.support(Math.atan2(p.p.y, p.p.x)) - r - 2.0);
+        const maxR = Math.max(0.5, cell.supportLocal(Math.atan2(p.p.y, p.p.x)) - r - 2.0);
         const len = Math.hypot(p.p.x, p.p.y);
         if (len > maxR && len > 1e-6) {
           const nx = p.p.x / len;
@@ -419,10 +441,10 @@ export class CellChemistry {
           p.v.x = (p.v.x / vl) * speed;
           p.v.y = (p.v.y / vl) * speed;
         }
-        // Bounce off nucleus
+        // Bounce off nucleus without ever pushing outside membrane wall
         const ncx = -0.12 * cell.radius;
         const ncy = -0.1 * cell.radius;
-        const nr = 0.22 * cell.radius + r;
+        const nr = Math.min(0.22 * cell.radius + r, Math.max(1.5, maxR * 0.55));
         const ndx = p.p.x - ncx;
         const ndy = p.p.y - ncy;
         const nd = Math.hypot(ndx, ndy);
@@ -436,6 +458,12 @@ export class CellChemistry {
             p.v.x -= 2 * vn * nx;
             p.v.y -= 2 * vn * ny;
           }
+        }
+        const postMaxR = Math.max(0.5, cell.supportLocal(Math.atan2(p.p.y, p.p.x)) - r - 2.0);
+        const postLen = Math.hypot(p.p.x, p.p.y);
+        if (postLen > postMaxR && postLen > 1e-6) {
+          p.p.x = (p.p.x / postLen) * postMaxR;
+          p.p.y = (p.p.y / postLen) * postMaxR;
         }
       }
       p.angle = wrapAngle(Math.atan2(p.v.y, p.v.x));
@@ -591,15 +619,19 @@ export class CellChemistry {
 
     const outletAngle = cell.excretionAngle();
     const outletBase = cell.localPoint(outletAngle);
-    const outlet: Vec2 = { x: outletBase.x * 0.88, y: outletBase.y * 0.88 };
-    const exitTol = Math.max(2.0, cell.radius * 0.08);
+    const outletLen = Math.hypot(outletBase.x, outletBase.y) || 1;
     const cos = Math.cos(cell.angle);
     const sin = Math.sin(cell.angle);
 
     for (const p of this.particles) {
       if (!p.alive) continue;
+      const visR = vacuoleVisualRadius(p.species, p.amount, cell.radius);
       if (p.species === 'waste' && !foodComps.has(p.compartment) && p.age >= RESIDENCE_SECONDS) {
-        if (Math.hypot(p.p.x - outlet.x, p.p.y - outlet.y) <= exitTol && this.excretionCredit > 0) {
+        const clampedOut = Math.max(0.5, Math.min(outletLen * 0.88, outletLen - visR - 2.0));
+        const ox = (outletBase.x / outletLen) * clampedOut;
+        const oy = (outletBase.y / outletLen) * clampedOut;
+        const exitTol = Math.max(3.0, cell.radius * 0.12);
+        if (Math.hypot(p.p.x - ox, p.p.y - oy) <= exitTol && this.excretionCredit > 0) {
           const drop = Math.min(p.amount, 1.8, this.excretionCredit);
           if (drop > 1e-9) {
             p.amount -= drop;
@@ -619,8 +651,8 @@ export class CellChemistry {
           }
         }
       } else if ((p.species === 'oxygen' || p.species === 'carbon') && p.amount >= 0.3) {
-        const edge = cell.support(Math.atan2(p.p.y, p.p.x));
-        if (Math.hypot(p.p.x, p.p.y) >= edge - 10.0 && this.gasCredit > 0) {
+        const edge = cell.supportLocal(Math.atan2(p.p.y, p.p.x));
+        if (Math.hypot(p.p.x, p.p.y) >= Math.max(1.0, edge - visR - 6.0) && this.gasCredit > 0) {
           const drop = Math.min(p.amount, 1.8, this.gasCredit);
           if (drop > 1e-9) {
             p.amount -= drop;

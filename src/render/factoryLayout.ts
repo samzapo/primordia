@@ -96,8 +96,9 @@ export function computeInteriorLandmarks(cell: Cell): InteriorLandmark[] {
   const cos = Math.cos(cell.angle);
   const sin = Math.sin(cell.angle);
 
+  const sizeScale = clamp(cell.radius / 38.0, 0.55, 1.0);
   for (const kind of ANCHOR_ORDER) {
-    const baseR = LANDMARK_RADII[kind];
+    const baseR = LANDMARK_RADII[kind] * sizeScale;
     const r =
       kind === 'atp'
         ? baseR * clamp(0.75 + 0.45 * (cell.energy / Math.max(1, cell.energyReference())), 0.7, 1.32)

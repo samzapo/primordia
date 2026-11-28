@@ -9,6 +9,7 @@ import {
 import { clamp, offsetVec, SPECIES, type Vec2, WORLD_H, WORLD_W, wrapPos } from '../sim/constants.ts';
 import { LIGHT_COLS, LIGHT_ROWS, getLightGrid, lightDirection } from '../sim/lightField.ts';
 import { SPECIES_RADII, particleRadius } from '../sim/catalog.ts';
+import { vacuoleVisualRadius } from '../sim/cellChemistry.ts';
 import { proboscisTip } from '../sim/proboscis.ts';
 import type { Simulation } from '../sim/simulation.ts';
 import { generatePlantAtlas, generateProceduralAtlases, type ProceduralAtlases } from './atlasGenerator.ts';
@@ -731,17 +732,7 @@ export class Renderer {
       true,
     );
 
-    // Selected or hover ring
-    if (isFocused) {
-      this.vectorBatch.addCircleStroke(
-        baseRel.x,
-        baseRel.y,
-        cell.extent() + 5,
-        1.1,
-        [shineRgb.r, shineRgb.g, shineRgb.b, 0.35],
-        36,
-      );
-    }
+    // Merge candidate selection ring
     if (state.mergeSelecting && state.mergeCandidateIds.has(cell.id)) {
       const pulse = 0.6 + 0.4 * Math.sin(sim.time * 5);
       this.vectorBatch.addCircleStroke(baseRel.x, baseRel.y, cell.extent() + 9, 2.2, [0.4, 0.95, 0.85, pulse], 36);
@@ -829,7 +820,7 @@ export class Renderer {
               : ip.species === 'oxygen'
                 ? 2
                 : 3;
-        const r = clamp(2.8 + Math.sqrt(ip.amount) * 3.4, 2.5, 9.5);
+        const r = vacuoleVisualRadius(ip.species, ip.amount, cell.radius);
         this.spriteBatch.push(sw.x, sw.y, r, r, ip.angle, layer, [1, 1, 1, intero ? 0.96 : 0.58]);
       }
       const vacCmd = this.spriteBatch.finishRange(vacStart, 'vacuoles');
