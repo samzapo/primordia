@@ -1,4 +1,4 @@
-import type { Cell } from '../sim/cell.ts';
+import type { Cell, Organ, OrganKind } from '../sim/cell.ts';
 import { SeededRng } from '../sim/rng.ts';
 import { clamp, offsetVec } from '../sim/constants.ts';
 import type { Simulation } from '../sim/simulation.ts';
@@ -17,52 +17,32 @@ export const SCALE_AEOLIAN = [0, 2, 3, 5, 7, 8, 10] as const;
 
 export const MOTIF_BEATS = [0, 3, 6, 10, 12, 15] as const;
 
-const TRACKED_KINDS = [
-  'propulsion',
-  'protection',
-  'poreforming',
-  'regenerative',
-  'feeding',
-  'sensing',
-  'photosynthesis',
-  'toxin',
-  'neutralizing',
-  'acidifying',
-  'hunting',
-  'cilia',
-] as const;
+interface OrganMusicProfile {
+  voice: SynthVoice;
+  pattern: readonly number[];
+  degrees: readonly number[];
+}
 
-const ORGAN_VOICES: readonly SynthVoice[] = [
-  'flagellum',
-  'pad',
-  'pore',
-  'enzyme',
-  'graze',
-  'perc',
-  'photo',
-  'toxin',
-  'antitoxin',
-  'acid',
-  'perc',
-  'cilia',
-];
-
-const ORGAN_PATTERNS: readonly (readonly number[])[] = [
-  [2, 6, 10, 14],
-  [0, 7, 12],
-  [0, 3, 6, 10, 14],
-  [3, 11],
-  [0, 3, 8, 10, 14],
-  [1, 4, 9, 12],
-  [0, 2, 5, 8, 10, 13],
-  [3, 6, 11, 14],
-  [5, 13],
-  [0, 3, 7, 10, 15],
-  [2, 5, 8, 14],
-  [1, 3, 5, 9, 11, 13],
-];
-
-const ORGAN_DEGREES: readonly number[] = [0, 7, 0, 12, 3, 10, 7, 0, 12, 3, 5, 2];
+export const ORGAN_MUSIC: Record<OrganKind, OrganMusicProfile> = {
+  propulsion: { voice: 'flagellum', pattern: [2, 6, 10, 14], degrees: [0, 7, 12, 7] },
+  protection: { voice: 'pad', pattern: [0, 7, 12], degrees: [7, 12, 3, 10] },
+  poreforming: { voice: 'pore', pattern: [0, 3, 6, 10, 14], degrees: [0, 12, 7, 3] },
+  regenerative: { voice: 'enzyme', pattern: [3, 11], degrees: [12, 7, 10, 3] },
+  feeding: { voice: 'graze', pattern: [0, 3, 8, 10, 14], degrees: [0, 3, 7, 12] },
+  sensing: { voice: 'perc', pattern: [1, 4, 9, 12], degrees: [10, 7, 12, 3] },
+  photosynthesis: { voice: 'photo', pattern: [0, 2, 5, 8, 10, 13], degrees: [0, 7, 12, 3] },
+  toxin: { voice: 'toxin', pattern: [3, 6, 11, 14], degrees: [0, 3, 7, 10] },
+  neutralizing: { voice: 'antitoxin', pattern: [5, 13], degrees: [12, 7, 3, 10] },
+  acidifying: { voice: 'acid', pattern: [0, 3, 7, 10, 15], degrees: [0, 7, 3, 12] },
+  hunting: { voice: 'perc', pattern: [2, 5, 8, 14], degrees: [5, 12, 7, 3] },
+  cilia: { voice: 'cilia', pattern: [1, 3, 5, 9, 11, 13], degrees: [2, 7, 12, 10] },
+  mitochondrion: { voice: 'enzyme', pattern: [4, 12], degrees: [7, 12, 15, 12] },
+  counterattack: { voice: 'pore', pattern: [6, 14], degrees: [3, 10, 7, 12] },
+  toxin_sac: { voice: 'toxin', pattern: [1, 9], degrees: [0, 10, 7, 3] },
+  family_toward: { voice: 'antitoxin', pattern: [2, 10], degrees: [7, 10, 12, 7] },
+  family_away: { voice: 'cilia', pattern: [6, 15], degrees: [12, 10, 7, 5] },
+  proboscis: { voice: 'acid', pattern: [1, 7, 11], degrees: [3, 7, 10, 12] },
+};
 
 export type CycleSection = 'emerge' | 'groove' | 'lift' | 'break' | 'build' | 'return';
 
@@ -75,6 +55,8 @@ export interface ScheduledNote {
   pan: number;
   audioTime: number;
   cellId: number;
+  organId: number | null;
+  isBackground?: boolean;
   x: number;
   y: number;
   cutoffHz: number;
@@ -113,13 +95,21 @@ function panFromFocus(focus: Cell, atX: number, atY: number): number {
   return clamp(dx / 360, -0.85, 0.85);
 }
 
+interface ActiveOrganVoice {
+  organ: Organ;
+  kindIndex: number;
+  slotIndex: number;
+  profile: OrganMusicProfile;
+  weight: number;
+}
+
 interface ObservedSource {
   cell: Cell;
   lane: number;
   gain: number;
   pan: number;
   mass: number;
-  counts: Float32Array;
+  activeOrgans: ActiveOrganVoice[];
   motif: number[];
   light: number;
   acid: number;
@@ -143,19 +133,23 @@ export class ProgressiveScore {
       const prox = c === focus ? 1.0 : Math.pow(clamp(1 - dist / (700 + c.extent()), 0, 1), 1.65);
       if (prox < 0.005) continue;
 
-      const counts = new Float32Array(TRACKED_KINDS.length);
+      const activeOrgans: ActiveOrganVoice[] = [];
+      const seenPerKind = new Map<OrganKind, number>();
       for (const organ of c.organs) {
         if (organ.hp <= 0) continue;
-        const vKind = organ.kind === 'toxin_sac' ? 'toxin' : organ.kind;
-        const kIdx = TRACKED_KINDS.indexOf(vKind as (typeof TRACKED_KINDS)[number]);
-        if (kIdx >= 0) {
-          counts[kIdx] += 0.35 + 0.65 * clamp(organ.hp / Math.max(organ.maxHp, 0.01), 0, 1);
-        }
+        const profile = ORGAN_MUSIC[organ.kind];
+        if (!profile) continue;
+        const kindIndex = seenPerKind.get(organ.kind) ?? 0;
+        seenPerKind.set(organ.kind, kindIndex + 1);
+        activeOrgans.push({
+          organ,
+          kindIndex,
+          slotIndex: activeOrgans.length,
+          profile,
+          weight: 0.35 + 0.65 * clamp(organ.hp / Math.max(organ.maxHp, 0.01), 0, 1),
+        });
       }
-      // Circulating digestive vacuoles softly trigger feeding marimba mallets
-      if (c.substrate > 0.05 && counts[4] < 0.8) {
-        counts[4] = Math.max(counts[4], 1.0);
-      }
+
       const weight = c.organicMass();
       const baseGain = prox * (c === focus ? 0.62 : 0.1) * (paused ? 0.65 : 1.0);
       candidates.push({
@@ -164,7 +158,7 @@ export class ProgressiveScore {
         gain: baseGain,
         pan: panFromFocus(focus, c.position.x, c.position.y),
         mass: weight,
-        counts,
+        activeOrgans,
         motif: lineageMelodyDegrees(sim.seedValue, c.lineageId()),
         light: c === focus ? sim.lightAt(c.position) : sim.lightAt(c.position) * 0.25 + 0.3,
         acid: Math.abs(sim.acidity.sample(c.position.x, c.position.y)),
@@ -246,98 +240,172 @@ export class ProgressiveScore {
     const sources = this.collectSources(sim, focus, paused);
     const leadId = focus && !focus.dead ? focus.id : (sources[0]?.cell.id ?? -1);
 
-    // Lane 0: Crisp rounded four-on-the-floor kick
-    if (!focus.dead && beat % 4 === 0 && (!broken || beat === 0 || beat === 8)) {
-      notes.push({
-        lane: 0,
-        voice: 'kick',
-        semitonesFromRef: 0, // base note 36
-        pitchSemitones: 0,
-        gain: broken ? 0.36 : 0.72,
-        pan: 0,
-        audioTime,
-        cellId: focus.id,
-        x: focus.position.x,
-        y: focus.position.y,
-        cutoffHz: 6500,
-        acidDrive: 0,
-      });
-    }
-
-    // Lead lineage bright tropical motif (played by focus cell's active organs)
-    const motifBeatIdx = MOTIF_BEATS.indexOf(beat as (typeof MOTIF_BEATS)[number]);
-    if (
-      !focus.dead &&
-      motifBeatIdx >= 0 &&
-      (!broken || beat === 0 || beat === 10) &&
-      (!opening || beat === 0 || beat === 10)
-    ) {
-      const lead = sources.find((s) => s.cell.id === leadId);
-      if (lead) {
-        const availVoices: SynthVoice[] = [];
-        for (let k = 0; k < TRACKED_KINDS.length; k++) {
-          if (lead.counts[k] > 0) availVoices.push(ORGAN_VOICES[k]);
-        }
-        if (availVoices.length === 0) availVoices.push('graze');
-        let deg = lead.motif[motifBeatIdx];
-        if (deg === 3) deg = third;
-        const voice = availVoices[Math.floor(bar / 2) % availVoices.length];
-        const midiNote = root + 12 + deg;
-        const vGain = (section === 'lift' || section === 'return' ? 0.24 : 0.18) * lead.gain * 1.45;
+    // Lane 0: Nucleus baseline pulse (sub-bass, bassline groove & warm background pad)
+    if (!focus.dead) {
+      if (beat % 4 === 0 && (!broken || beat === 0 || beat === 8)) {
         notes.push({
-          lane: lead.lane,
-          voice,
-          semitonesFromRef: midiNote - VOICE_BASE_NOTE[voice],
-          pitchSemitones: midiNote - 36,
-          gain: clamp(vGain, 0.08, 0.42),
-          pan: lead.pan,
+          lane: 0,
+          voice: 'kick',
+          semitonesFromRef: 0, // base note 36
+          pitchSemitones: 0,
+          gain: broken ? 0.34 : 0.68,
+          pan: 0,
           audioTime,
-          cellId: lead.cell.id,
-          x: lead.cell.position.x,
-          y: lead.cell.position.y,
-          cutoffHz: clamp(400 + 6100 * Math.pow(lead.light, 1.4), 500, 7500),
-          acidDrive: clamp(lead.acid * 0.8, 0, 0.7),
+          cellId: focus.id,
+          organId: null,
+          x: focus.position.x,
+          y: focus.position.y,
+          cutoffHz: 6500,
+          acidDrive: 0,
+        });
+      }
+
+      // Deep sub-bass root anchor from the nucleus
+      if (beat === 0 || (!broken && beat === 8)) {
+        const subMidi = clamp(root - 12, 26, 48);
+        notes.push({
+          lane: 0,
+          voice: 'sub',
+          semitonesFromRef: subMidi - VOICE_BASE_NOTE.sub,
+          pitchSemitones: subMidi - 36,
+          gain: broken ? 0.28 : 0.44,
+          pan: 0,
+          audioTime,
+          cellId: focus.id,
+          organId: null,
+          isBackground: true,
+          x: focus.position.x,
+          y: focus.position.y,
+          cutoffHz: 1800,
+          acidDrive: 0,
+        });
+      }
+
+      // Warm melodic bassline groove from the nucleus
+      if (!broken && (beat === 2 || beat === 6 || beat === 10 || beat === 14)) {
+        const bassDeg = beat === 6 || beat === 14 ? 7 : beat === 10 ? third : 0;
+        const bassMidi = clamp(root - 12 + bassDeg, 28, 55);
+        notes.push({
+          lane: 0,
+          voice: 'sub',
+          semitonesFromRef: bassMidi - VOICE_BASE_NOTE.sub,
+          pitchSemitones: bassMidi - 36,
+          gain: 0.32,
+          pan: 0,
+          audioTime,
+          cellId: focus.id,
+          organId: null,
+          x: focus.position.x,
+          y: focus.position.y,
+          cutoffHz: 2800,
+          acidDrive: 0,
+        });
+      }
+
+      // Soft warm harmonic chord background pad (no motif ring when nucleus-only)
+      if (beat === 0 || (!opening && beat === 8)) {
+        const padMidi = root + (beat === 8 ? third : 0);
+        notes.push({
+          lane: 1,
+          voice: 'pad',
+          semitonesFromRef: padMidi - VOICE_BASE_NOTE.pad,
+          pitchSemitones: padMidi - 36,
+          gain: broken ? 0.08 : 0.13,
+          pan: 0,
+          audioTime,
+          cellId: focus.id,
+          organId: null,
+          isBackground: true,
+          x: focus.position.x,
+          y: focus.position.y,
+          cutoffHz: clamp(cutoffHz * 0.75, 500, 4800),
+          acidDrive: acidDrive * 0.5,
         });
       }
     }
 
-    // Polyphonic organ-driven arpeggios & percussion across local cells (cap at 6 notes/step)
-    let allowance = 6;
+    // Lead lineage bright tropical motif (only when focus cell has non-nucleus active organelles)
+    const motifBeatIdx = MOTIF_BEATS.indexOf(beat as (typeof MOTIF_BEATS)[number]);
+    const lead = sources.find((s) => s.cell.id === leadId);
+    if (
+      !focus.dead &&
+      lead &&
+      lead.activeOrgans.length > 0 &&
+      motifBeatIdx >= 0 &&
+      (!broken || beat === 0 || beat === 10) &&
+      (!opening || beat === 0 || beat === 10)
+    ) {
+      const chosen = lead.activeOrgans[Math.floor(bar / 2) % lead.activeOrgans.length];
+      const organWorld = lead.cell.organPosition(chosen.organ);
+      let deg = lead.motif[motifBeatIdx];
+      if (deg === 3) deg = third;
+      const midiNote = root + 12 + deg;
+      const vGain = (section === 'lift' || section === 'return' ? 0.22 : 0.16) * lead.gain * 1.35;
+      notes.push({
+        lane: lead.lane,
+        voice: chosen.profile.voice,
+        semitonesFromRef: midiNote - VOICE_BASE_NOTE[chosen.profile.voice],
+        pitchSemitones: midiNote - 36,
+        gain: clamp(vGain, 0.08, 0.38),
+        pan: panFromFocus(focus, organWorld.x, organWorld.y),
+        audioTime,
+        cellId: lead.cell.id,
+        organId: chosen.organ.id,
+        x: organWorld.x,
+        y: organWorld.y,
+        cutoffHz: clamp(400 + 6100 * Math.pow(lead.light, 1.4), 500, 7500),
+        acidDrive: clamp(lead.acid * 0.8, 0, 0.7),
+      });
+    }
+
+    // Polyphonic per-organelle motif layer: each additional organelle adds its own motif & emits waves from itself
+    let totalMotifOrgans = 0;
+    for (const s of sources) totalMotifOrgans += s.activeOrgans.length;
+    let allowance = Math.min(12, Math.max(6, totalMotifOrgans));
+    const organAtten = totalMotifOrgans > 2 ? 1 / Math.sqrt(totalMotifOrgans / 2) : 1.0;
+
     for (const s of sources) {
+      if (s.activeOrgans.length === 0) continue;
       let hits = 0;
-      const limit = s.gain > 0.4 ? 2 : 1;
-      for (let shift = 0; shift < TRACKED_KINDS.length; shift++) {
-        const k = (shift + Math.floor(stepIndex / 4)) % TRACKED_KINDS.length;
-        const count = s.counts[k];
-        if (count <= 0) continue;
-        if (!ORGAN_PATTERNS[k].includes(beat)) continue;
-        if (s.cell.id !== leadId && (bar + s.cell.id) % 2 !== 0) continue;
+      const limit = s.cell.id === leadId ? Math.min(8, s.activeOrgans.length) : s.gain > 0.35 ? 2 : 1;
+      for (let shift = 0; shift < s.activeOrgans.length; shift++) {
+        const entry = s.activeOrgans[(shift + Math.floor(stepIndex / 4)) % s.activeOrgans.length];
+        const pat = entry.profile.pattern;
+        // Phase-shift duplicate/additional organelles so every added organelle contributes distinct steps & harmony
+        const localBeat = (beat - entry.kindIndex * 2 + entry.slotIndex * 0 + STEPS_PER_BAR) % STEPS_PER_BAR;
+        if (!pat.includes(localBeat)) continue;
+        if (s.cell.id !== leadId && (bar + s.cell.id + entry.slotIndex) % 2 !== 0) continue;
         if (s.gain < 0.2 && (bar + s.cell.id) % 3 !== 0) continue;
-        if (opening && beat !== 0 && beat !== 8) continue;
         if (broken && beat !== 0 && beat !== 8 && beat !== 11 && beat !== 13) continue;
         if (allowance <= 0 || hits >= limit) break;
 
-        const voice = ORGAN_VOICES[k];
-        const register = -12 * clamp(Math.floor(Math.log(Math.max(1, s.mass / 100)) / Math.log(4)), 0, 2);
-        let deg = ORGAN_DEGREES[k];
-        if (k === 4) deg = [0, third, 7, 12][((Math.floor(stepIndex / 2) + s.cell.id) >>> 0) % 4];
-        if (k === 6) deg = [0, 7, 12, third + 12][((Math.floor(stepIndex / 2) + bar) >>> 0) % 4];
-        if (k === 9) deg = [0, 7, third, 12][((stepIndex + bar) >>> 0) % 4];
+        const register =
+          -12 * clamp(Math.floor(Math.log(Math.max(1, s.mass / 100)) / Math.log(4)), 0, 2) +
+          (entry.kindIndex % 2 === 1 ? 12 : 0);
+        const degs = entry.profile.degrees;
+        let deg = degs[(Math.floor(stepIndex / 2) + entry.slotIndex + entry.kindIndex + bar) % degs.length];
+        if (deg === 3) deg = third;
 
-        const midiNote = clamp(root + 12 + register + deg, 29, 88);
-        const noteGain = clamp(0.26 * Math.min(1.5, Math.sqrt(count)) * (opening ? 0.72 : 1.0) * (s.cell.id === leadId ? 0.88 : 0.45), 0.04, 0.36);
+        const midiNote = clamp(root + 12 + register + deg, 31, 90);
+        const noteGain = clamp(
+          0.24 * entry.weight * organAtten * (opening ? 0.75 : 1.0) * (s.cell.id === leadId ? 0.92 : 0.42),
+          0.05,
+          0.34,
+        );
+        const organWorld = s.cell.organPosition(entry.organ);
 
         notes.push({
           lane: s.lane,
-          voice,
-          semitonesFromRef: midiNote - VOICE_BASE_NOTE[voice],
+          voice: entry.profile.voice,
+          semitonesFromRef: midiNote - VOICE_BASE_NOTE[entry.profile.voice],
           pitchSemitones: midiNote - 36,
           gain: noteGain,
-          pan: s.pan,
+          pan: panFromFocus(focus, organWorld.x, organWorld.y),
           audioTime,
           cellId: s.cell.id,
-          x: s.cell.position.x,
-          y: s.cell.position.y,
+          organId: entry.organ.id,
+          x: organWorld.x,
+          y: organWorld.y,
           cutoffHz: clamp(400 + 6100 * Math.pow(s.light, 1.4), 500, 7500),
           acidDrive: clamp(s.acid * 0.8, 0, 0.7),
         });
@@ -346,20 +414,28 @@ export class ProgressiveScore {
       }
     }
 
-    // Subtle lift/build percussive hat & clap sparkles synced to section
-    if (!broken && (section === 'groove' || section === 'lift' || section === 'build' || section === 'return')) {
+    // Percussion sparkle accents activate only once organelles are present beyond nucleus
+    if (
+      totalMotifOrgans > 0 &&
+      !broken &&
+      (section === 'groove' || section === 'lift' || section === 'build' || section === 'return')
+    ) {
+      const percAnchor = lead && lead.activeOrgans.length > 0 ? lead.activeOrgans[0].organ : null;
+      const percPos = percAnchor && lead ? lead.cell.organPosition(percAnchor) : focus.position;
       if (beat % 4 === 2) {
         notes.push({
           lane: 3,
           voice: 'hat',
           semitonesFromRef: 0,
           pitchSemitones: 24,
-          gain: section === 'lift' ? 0.16 : 0.11,
+          gain: section === 'lift' ? 0.14 : 0.1,
           pan: 0.18,
           audioTime,
           cellId: focus.id,
-          x: focus.position.x,
-          y: focus.position.y,
+          organId: percAnchor ? percAnchor.id : null,
+          isBackground: true,
+          x: percPos.x,
+          y: percPos.y,
           cutoffHz: 7500,
           acidDrive: 0,
         });
@@ -370,12 +446,14 @@ export class ProgressiveScore {
           voice: 'clap',
           semitonesFromRef: 0,
           pitchSemitones: 18,
-          gain: 0.16,
+          gain: 0.14,
           pan: -0.14,
           audioTime,
           cellId: focus.id,
-          x: focus.position.x,
-          y: focus.position.y,
+          organId: percAnchor ? percAnchor.id : null,
+          isBackground: true,
+          x: percPos.x,
+          y: percPos.y,
           cutoffHz: 6800,
           acidDrive: 0,
         });
@@ -383,8 +461,6 @@ export class ProgressiveScore {
     }
 
     this.lastSoundSeq = Math.max(this.lastSoundSeq, sim.soundSequence);
-    void cutoffHz;
-    void acidDrive;
     return notes;
   }
 }

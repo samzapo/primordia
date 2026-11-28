@@ -1,6 +1,7 @@
 import type { Cell } from '../sim/cell.ts';
 import { clamp } from '../sim/constants.ts';
 import type { Simulation } from '../sim/simulation.ts';
+import { computeInteriorLandmarks } from '../render/factoryLayout.ts';
 import type { AudioWaveVisual } from '../render/renderer.ts';
 import {
   ProgressiveScore,
@@ -28,11 +29,32 @@ interface ActiveVoiceRecord {
 
 interface TriggeredWave {
   cellId: number;
+  organId: number | null;
   x: number;
   y: number;
   semitones: number;
   startAudioTime: number;
   duration: number;
+}
+
+/** Resolve the live world emission center of an active sound wave (organelle or nucleus). */
+export function resolveWaveOrigin(
+  sim: Simulation,
+  wave: { cellId: number; organId: number | null; x: number; y: number },
+): { x: number; y: number; baseR: number } | null {
+  const cell = sim.cells.find((c) => c.id === wave.cellId && !c.dead);
+  if (!cell) return { x: wave.x, y: wave.y, baseR: 6 };
+  if (wave.organId !== null) {
+    const organ = cell.organById(wave.organId);
+    if (!organ || organ.hp <= 0) return null;
+    const pos = cell.organPosition(organ);
+    return { x: pos.x, y: pos.y, baseR: 6.5 * organ.scale };
+  }
+  const nuc =
+    cell === sim.player
+      ? computeInteriorLandmarks(cell).find((l) => l.kind === 'nucleus')?.world ?? cell.position
+      : cell.position;
+  return { x: nuc.x, y: nuc.y, baseR: 8 };
 }
 
 const MAX_ACTIVE_VOICES = 40;
@@ -249,9 +271,10 @@ export class AudioEngine {
     src.stop(note.audioTime + dur + 0.02);
     this.activeVoices.push({ stopAt: note.audioTime + dur + 0.02 });
 
-    if (note.gain >= 0.14) {
+    if (!note.isBackground && note.gain >= 0.05 && this.waveHistory.length < 48) {
       this.waveHistory.push({
         cellId: note.cellId,
+        organId: note.organId,
         x: note.x || focus.position.x,
         y: note.y || focus.position.y,
         semitones: note.pitchSemitones,
@@ -268,17 +291,16 @@ export class AudioEngine {
     for (const w of this.waveHistory) {
       const age = now - w.startAudioTime;
       if (age < 0 || age > w.duration) continue;
-      const cell = sim.cells.find((c) => c.id === w.cellId && !c.dead);
-      const baseR = cell ? cell.extent() : 32;
-      const cx = cell ? cell.position.x : w.x;
-      const cy = cell ? cell.position.y : w.y;
+      const origin = resolveWaveOrigin(sim, w);
+      if (!origin) continue;
       const t = age / w.duration;
+      const isOrgan = w.organId !== null;
       out.push({
-        x: cx,
-        y: cy,
+        x: origin.x,
+        y: origin.y,
         semitones: w.semitones,
-        radius: baseR + t * 56,
-        alpha: (1 - t) * 0.42,
+        radius: origin.baseR + t * (isOrgan ? 42 : 34),
+        alpha: (1 - t) * (isOrgan ? 0.54 : 0.34),
       });
     }
     return out;
