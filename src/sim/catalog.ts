@@ -92,5 +92,8 @@ export function bindingThreshold(a: number, b: number, acid: number): number {
     const dev = clamp(Math.abs(acid - 0.25) / 0.25, 0.0, 1.0);
     return 0.5 + 0.46 * dev * dev;
   }
+  if ((a === SPECIES.WASTE && b === SPECIES.OXYGEN) || (a === SPECIES.OXYGEN && b === SPECIES.WASTE)) {
+    return 0.88;
+  }
   return 0.5;
 }

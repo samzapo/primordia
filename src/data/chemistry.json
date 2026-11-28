@@ -21,8 +21,8 @@
       "id": 2,
       "key": "waste",
       "name": "Waste",
-      "radius": 3,
-      "decay": 0.006,
+      "radius": 3.8,
+      "decay": 0.0012,
       "color": "a955d0"
     },
     {
@@ -37,8 +37,8 @@
       "id": 4,
       "key": "toxin",
       "name": "Toxin",
-      "radius": 5,
-      "decay": 0.1,
+      "radius": 5.2,
+      "decay": 0.035,
       "color": "ff407b"
     },
     {
@@ -53,8 +53,8 @@
       "id": 6,
       "key": "enzyme",
       "name": "Enzyme",
-      "radius": 4,
-      "decay": 0.02,
+      "radius": 4.6,
+      "decay": 0.003,
       "color": "ffe34a"
     },
     {
@@ -62,7 +62,7 @@
       "key": "antitoxin",
       "name": "Antitoxin",
       "radius": 4,
-      "decay": 0.015,
+      "decay": 0.004,
       "color": "4094ff"
     },
     {
@@ -70,7 +70,7 @@
       "key": "acid",
       "name": "Acid",
       "radius": 3,
-      "decay": 0.008,
+      "decay": 0.0025,
       "color": "f34db1"
     },
     {
@@ -78,7 +78,7 @@
       "key": "buffer",
       "name": "Buffer",
       "radius": 3,
-      "decay": 0.008,
+      "decay": 0.0025,
       "color": "2ce3bb"
     },
     {
@@ -86,7 +86,7 @@
       "key": "decoy",
       "name": "Decoy",
       "radius": 3.5,
-      "decay": 0.08,
+      "decay": 0.025,
       "color": "ba50ee"
     },
     {

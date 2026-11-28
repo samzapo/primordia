@@ -19,10 +19,10 @@ fn canReact(aKind: u32, aAmt: f32, bKind: u32, bAmt: f32, acid: f32) -> bool {
     return true;
   }
   if (aKind == SP_WASTE && bKind == SP_OXYGEN) {
-    return bAmt >= aAmt * 0.15 && acid < 0.8;
+    return bAmt >= aAmt * 0.45 && acid < 0.8;
   }
   if (bKind == SP_WASTE && aKind == SP_OXYGEN) {
-    return aAmt >= bAmt * 0.15 && acid < 0.8;
+    return aAmt >= bAmt * 0.45 && acid < 0.8;
   }
   if ((aKind == SP_NUTRIENT && bKind == SP_TOXIN) || (aKind == SP_TOXIN && bKind == SP_NUTRIENT)) {
     return true;

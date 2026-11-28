@@ -230,6 +230,9 @@ fn bindingThreshold(a: u32, b: u32, acid: f32) -> f32 {
     let dev = clamp(abs(acid - 0.25) / 0.25, 0.0, 1.0);
     return 0.5 + 0.46 * dev * dev;
   }
+  if ((a == SP_WASTE && b == SP_OXYGEN) || (a == SP_OXYGEN && b == SP_WASTE)) {
+    return 0.88;
+  }
   return 0.5;
 }
 

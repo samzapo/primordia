@@ -99,7 +99,7 @@ fn commitPairs(@builtin(global_invocation_id) gid: vec3u) {
       b.matter.x = 2.0 * particleRadius(u, SP_WASTE, b.matter.y);
     }
     reacted = true;
-  } else if (ka == SP_WASTE && kb == SP_OXYGEN && b.matter.y >= a.matter.y * 0.15 && acid < 0.8) {
+  } else if (ka == SP_WASTE && kb == SP_OXYGEN && b.matter.y >= a.matter.y * 0.45 && acid < 0.8) {
     let amt = a.matter.y;
     a.motion.w = f32(SP_NUTRIENT);
     a.matter.z = 0.0;
@@ -111,7 +111,7 @@ fn commitPairs(@builtin(global_invocation_id) gid: vec3u) {
     b.matter.x = 2.0 * particleRadius(u, SP_CARBON, b.matter.y);
     atomicAddFloat(6u, amt * 0.6);
     reacted = true;
-  } else if (kb == SP_WASTE && ka == SP_OXYGEN && a.matter.y >= b.matter.y * 0.15 && acid < 0.8) {
+  } else if (kb == SP_WASTE && ka == SP_OXYGEN && a.matter.y >= b.matter.y * 0.45 && acid < 0.8) {
     let amt = b.matter.y;
     b.motion.w = f32(SP_NUTRIENT);
     b.matter.z = 0.0;

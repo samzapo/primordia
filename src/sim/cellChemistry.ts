@@ -16,7 +16,7 @@ export const FERMENT_ATP = ENERGY_DENSITY; // 40.0
 export const RESERVE_ATP = ENERGY_DENSITY; // 40.0
 export const FOOD_FUEL = ENERGY_DENSITY * 18.0; // 720.0
 export const TISSUE_FUEL = ENERGY_DENSITY * 7.5; // 300.0
-export const RESIDENCE_SECONDS = 10.0;
+export const RESIDENCE_SECONDS = 5.0;
 export const BIOMASS_YIELD = 0.7;
 
 export const LEAF_BIOMASS = 0.035;

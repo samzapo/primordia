@@ -520,13 +520,21 @@ export class Simulation implements ChemistryEmitter {
 
   private seedCellProducts(cell: Cell): void {
     const foodCount = this.habitat !== 1 ? 55 : 14;
+    const wasteCount = this.habitat !== 1 ? 10 : 6;
     const parcelScale = ECOLOGY.parcel_scale;
-    const total = foodCount + 180;
+    const total = foodCount + wasteCount + 180;
     for (let i = 0; i < total; i++) {
       const kind =
-        i < foodCount ? SPECIES.NUTRIENT : i < foodCount + 60 ? SPECIES.CARBON : SPECIES.OXYGEN;
+        i < foodCount
+          ? SPECIES.NUTRIENT
+          : i < foodCount + wasteCount
+            ? SPECIES.WASTE
+            : i < foodCount + wasteCount + 60
+              ? SPECIES.CARBON
+              : SPECIES.OXYGEN;
       let amount = (kind !== SPECIES.CARBON ? 0.3 : 0.4) * parcelScale;
       if (kind === SPECIES.NUTRIENT) amount *= ECOLOGY.seed_food_scale;
+      if (kind === SPECIES.WASTE) amount = 0.35 * parcelScale;
       const dir = this.rng.randf() * TAU;
       const dist = cell.radius + 12.0 + this.rng.randf() * 160.0;
       const at = wrapPos({
@@ -1681,7 +1689,7 @@ export class Simulation implements ChemistryEmitter {
                 ? SPECIES.BUFFER
                 : -1;
       if (kind < 0 || organ.hp <= 0 || cell.biomass < 0.06) continue;
-      const rate = kind === SPECIES.ENZYME ? 0.35 : 2.0;
+      const rate = kind === SPECIES.ENZYME ? 0.45 : 2.0;
       const secRate = rate * organ.scale * organ.scale * cell.genesFactor(organ, 'secretion');
       const energyCost =
         SECRETION_COST * cell.genesFactor(organ, 'secretion_cost') +
@@ -1700,17 +1708,18 @@ export class Simulation implements ChemistryEmitter {
       const dir = { x: n.x * c - n.y * s, y: n.x * s + n.y * c };
       const op = cell.organPosition(organ);
       const disp = 18.0 * cell.genesFactor(organ, 'dispersal');
+      const secretAmt = kind === SPECIES.ENZYME ? 0.12 : 0.06;
       const secretCap =
         kind === SPECIES.ACID
           ? COMBAT.acid_secretion_capacity
           : kind === SPECIES.BUFFER
             ? 0.25
-            : 0.06;
+            : secretAmt;
       this.spawnParticle(
         kind,
         { x: op.x + dir.x * 10, y: op.y + dir.y * 10 },
         { x: dir.x * disp, y: dir.y * disp },
-        0.06,
+        secretAmt,
         cell.id,
         secretCap,
       );
@@ -2507,7 +2516,7 @@ export class Simulation implements ChemistryEmitter {
       return true;
     }
     if (b.kind === SPECIES.WASTE && a.kind === SPECIES.OXYGEN) return this.reactCpuPair(b, a, acid);
-    if (a.kind === SPECIES.WASTE && b.kind === SPECIES.OXYGEN && b.amount >= a.amount * 0.15 && acid < 0.8) {
+    if (a.kind === SPECIES.WASTE && b.kind === SPECIES.OXYGEN && b.amount >= a.amount * 0.45 && acid < 0.8) {
       const amt = a.amount;
       a.kind = SPECIES.NUTRIENT;
       a.capacity = 0;
