@@ -10,6 +10,7 @@ import {
 } from '../src/sim/cell.ts';
 import { PORE_REQUIRED, acceptSurfacePacket, advanceSurfaceComplexes } from '../src/sim/surfaceChemistry.ts';
 import { fillToxinSacs } from '../src/sim/toxinSac.ts';
+import { computeInteriorLandmarks, stepInteriorSprings } from '../src/sim/interiorLayout.ts';
 
 test('all 18 organ kinds define titles, costs and symmetric 0,0,1,1,2,3,5 Fibonacci buy/sell with size scaling', () => {
   assert.equal(ORGAN_KINDS.length, 18);
@@ -139,4 +140,54 @@ test('toxin sac stores venom capacity steadily from ATP & biomass', () => {
   const sac = cell.organs[0];
   fillToxinSacs(cell, 1.0);
   assert.ok(sac.storedToxin > 0);
+});
+
+test('interior clickable organelles stay in continuous angular sectors when small and lag on cytoplasmic springs', () => {
+  const cell = new Cell(9, { x: 200, y: 200 }, 9);
+  cell.angle = 0;
+
+  const sampleAngles = (bio) => {
+    cell.biomass = bio;
+    cell.updateGeometry();
+    const m = computeInteriorLandmarks(cell);
+    const angles = new Map();
+    for (const lm of m) {
+      if (lm.kind === 'nucleus') continue;
+      angles.set(lm.kind, Math.atan2(lm.restLocal.y, lm.restLocal.x));
+    }
+    return angles;
+  };
+
+  const largeAngles = sampleAngles(36);
+  const smallAngles = sampleAngles(0.5);
+  for (const [k, aLarge] of largeAngles) {
+    const aSmall = smallAngles.get(k);
+    assert.ok(Math.abs(aSmall - aLarge) < 1e-4, `landmark ${k} jumped angle when shrunk`);
+  }
+
+  cell.biomass = 36;
+  cell.updateGeometry();
+  stepInteriorSprings(cell, 1 / 60);
+  const restX = new Map(computeInteriorLandmarks(cell).map((l) => [l.kind, l.local.x]));
+
+  // Accelerate strongly in +X: organelles suspended in gelatinous cytoplasm lag backward (-X)
+  cell.shapeAcceleration = { x: 450, y: 0 };
+  for (let i = 0; i < 15; i++) {
+    stepInteriorSprings(cell, 1 / 60);
+  }
+  const lagged = computeInteriorLandmarks(cell);
+  for (const lm of lagged) {
+    const base = restX.get(lm.kind);
+    assert.ok(lm.local.x < base - 1.5, `expected ${lm.kind} to lag backward under +X acceleration`);
+  }
+
+  // Stop accelerating: springs restore landmarks smoothly back toward rest inside membrane
+  cell.shapeAcceleration = { x: 0, y: 0 };
+  for (let i = 0; i < 120; i++) {
+    stepInteriorSprings(cell, 1 / 60);
+  }
+  const settled = computeInteriorLandmarks(cell);
+  for (const lm of settled) {
+    assert.ok(Math.abs(lm.local.x - lm.restLocal.x) < 0.25);
+  }
 });

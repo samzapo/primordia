@@ -22,6 +22,8 @@ export interface ProceduralAtlases {
   vacuoles: GPUTexture;
   sampler: GPUSampler;
   organIcons2D: Map<OrganKind, string>;
+  landmarkIcons2D: Map<LandmarkKind, string>;
+  nucleusIcons2D: string[];
 }
 
 function makeCanvas(w: number, h: number): HTMLCanvasElement {
@@ -1272,6 +1274,7 @@ export function generateProceduralAtlases(device: GPUDevice, plantForms: PlantFo
   }
 
   const nucleusCanvases: HTMLCanvasElement[] = [];
+  const nucleusIcons2D: string[] = [];
   for (let f = 0; f < 3; f++) {
     const c = makeCanvas(96, 96);
     const ctx = c.getContext('2d')!;
@@ -1330,13 +1333,17 @@ export function generateProceduralAtlases(device: GPUDevice, plantForms: PlantFo
     ctx.fill();
 
     nucleusCanvases.push(c);
+    nucleusIcons2D.push(c.toDataURL());
   }
 
   const landmarkCanvases: HTMLCanvasElement[] = [];
+  const landmarkIcons2D = new Map<LandmarkKind, string>();
+  landmarkIcons2D.set('nucleus', nucleusIcons2D[1] ?? nucleusIcons2D[0] ?? '');
   for (const lKind of LANDMARK_SPRITE_KINDS) {
     const c = makeCanvas(96, 96);
     drawLandmarkIcon2D(c.getContext('2d')!, lKind, 96);
     landmarkCanvases.push(c);
+    landmarkIcons2D.set(lKind, c.toDataURL());
   }
 
   const vacuoleCanvases: HTMLCanvasElement[] = [];
@@ -1381,5 +1388,7 @@ export function generateProceduralAtlases(device: GPUDevice, plantForms: PlantFo
     vacuoles: createMipmappedArrayTexture(device, vacuoleCanvases, 96, 'vacuoleAtlas'),
     sampler,
     organIcons2D,
+    landmarkIcons2D,
+    nucleusIcons2D,
   };
 }

@@ -1,6 +1,5 @@
 import {
   ORGAN_DESCRIPTIONS,
-  ORGAN_KINDS,
   ORGAN_SUMMARIES,
   ORGAN_TITLES,
   isInternalOrgan,
@@ -15,6 +14,7 @@ import { offsetVec, wrapAngle } from '../sim/constants.ts';
 import { availableMutationsForOrgan, MUTATION_DATA } from '../sim/mutations.ts';
 import type { Simulation } from '../sim/simulation.ts';
 import { computeInteriorLandmarks, type InteriorLandmark, type LandmarkKind } from '../render/factoryLayout.ts';
+import { nucleusForm } from '../render/palette.ts';
 import type { PondCamera } from './camera.ts';
 import { bindHoldTooltip, hasPendingHoldTooltip, hideHoldTooltip } from './tooltip.ts';
 
@@ -70,6 +70,8 @@ export class CellInterface {
   private readonly overlapEl: HTMLDivElement;
 
   private readonly organIcons: Map<OrganKind, string>;
+  private readonly landmarkIcons: Map<LandmarkKind, string>;
+  private readonly nucleusIcons: string[];
   private readonly hooks: InterfaceModalHooks;
 
   active = false;
@@ -104,8 +106,16 @@ export class CellInterface {
     }
   }
 
-  constructor(parent: HTMLElement, organIcons: Map<OrganKind, string>, hooks: InterfaceModalHooks) {
+  constructor(
+    parent: HTMLElement,
+    organIcons: Map<OrganKind, string>,
+    landmarkIcons: Map<LandmarkKind, string>,
+    nucleusIcons: string[],
+    hooks: InterfaceModalHooks,
+  ) {
     this.organIcons = organIcons;
+    this.landmarkIcons = landmarkIcons;
+    this.nucleusIcons = nucleusIcons;
     this.hooks = hooks;
 
     this.cancelBtn = document.createElement('button');
@@ -177,9 +187,14 @@ export class CellInterface {
   }
 
   openCategory(cat: 'assembly' | 'chemistry' | 'receptors'): void {
+    const alreadyOpen =
+      this.active &&
+      !this.placingKind &&
+      this.selectedMode.type === 'category' &&
+      this.selectedMode.cat === cat;
     this.active = true;
     this.placingKind = null;
-    this.selectedMode = { type: 'category', cat };
+    this.selectedMode = alreadyOpen ? { type: 'none' } : { type: 'category', cat };
     this.overlapEl.hidden = true;
     this.lastBuildKey = '';
     this.syncRender();
@@ -292,11 +307,11 @@ export class CellInterface {
       return true;
     }
 
-    // Check if user tapped anywhere inside cell body to open root tray
+    // Check if user tapped anywhere inside cell body to open root tray (nothing pre-selected)
     const d = offsetVec(cell.position, worldClick);
     if (Math.hypot(d.x, d.y) <= cell.extent() + 12) {
       this.active = true;
-      this.selectedMode = { type: 'category', cat: 'assembly' };
+      this.selectedMode = { type: 'none' };
       this.lastBuildKey = '';
       this.syncRender();
       return true;
@@ -402,29 +417,25 @@ export class CellInterface {
   private rebuildTray(cell: Cell): void {
     const nodes: HTMLElement[] = [];
 
-    // Top-level category tabs
+    // Top-level category tabs matching the clickable cytoplasmic organelles
     const cats: Array<{
       cat: 'assembly' | 'chemistry' | 'receptors';
-      icon: OrganKind;
       title: string;
       desc: string;
     }> = [
       {
         cat: 'assembly',
-        icon: 'feeding',
-        title: 'Structural & Motile Organs',
+        title: 'Assembly Site · Structural & Motile Organs',
         desc: 'Open build options for feeding, swimming, protective armor, and offensive weapons.',
       },
       {
         cat: 'chemistry',
-        icon: 'photosynthesis',
-        title: 'Metabolic & Chemical Glands',
+        title: 'Metabolic Lab · Metabolic & Chemical Glands',
         desc: 'Open build options for photosynthesis, mitochondria, repair buffers, acidity/antitoxin glands, toxin sac, and proboscis.',
       },
       {
         cat: 'receptors',
-        icon: 'sensing',
-        title: 'Receptors & Navigation',
+        title: 'Receptor Hub · Receptors & Navigation',
         desc: 'Open free chemical receptors (0 biomass) to flee danger, hunt non-relatives, or coordinate with family.',
       },
     ];
@@ -432,13 +443,14 @@ export class CellInterface {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'tray-slot';
+      b.dataset.category = c.cat;
       if (this.selectedMode.type === 'category' && this.selectedMode.cat === c.cat) {
         b.classList.add('is-selected');
       }
       b.setAttribute('aria-label', c.title);
       bindHoldTooltip(b, () => ({ title: c.title, subtitle: 'Organ Category', body: c.desc }));
       const img = document.createElement('img');
-      img.src = this.organIcons.get(c.icon) ?? '';
+      img.src = this.landmarkIcons.get(c.cat) ?? '';
       img.alt = c.title;
       b.appendChild(img);
       b.addEventListener('click', (e) => {
@@ -448,107 +460,119 @@ export class CellInterface {
       nodes.push(b);
     }
 
-    // Divider spacer
-    const sep = document.createElement('div');
-    sep.style.width = '1px';
-    sep.style.height = '34px';
-    sep.style.alignSelf = 'center';
-    sep.style.background = 'rgba(120,175,210,0.35)';
-    nodes.push(sep);
+    // Show purchasable organs ONLY when an organelle-purchasing category is selected
+    if (this.selectedMode.type === 'category') {
+      const sep = document.createElement('div');
+      sep.style.width = '1px';
+      sep.style.height = '34px';
+      sep.style.alignSelf = 'center';
+      sep.style.background = 'rgba(120,175,210,0.35)';
+      nodes.push(sep);
 
-    // Context organelle buttons when a category is open, OR landmark quick slots
-    const list: readonly OrganKind[] =
-      this.selectedMode.type === 'category'
-        ? this.selectedMode.cat === 'assembly'
+      const list: readonly OrganKind[] =
+        this.selectedMode.cat === 'assembly'
           ? ASSEMBLY_ORGANS
           : this.selectedMode.cat === 'chemistry'
             ? CHEMISTRY_ORGANS
-            : RECEPTOR_ORGANS
-        : ORGAN_KINDS.slice(0, 5);
+            : RECEPTOR_ORGANS;
 
-    for (const kind of list) {
-      const price = cell.constructionPrice(kind);
-      const slot = document.createElement('button');
-      slot.type = 'button';
-      slot.className = 'tray-slot';
-      if (cell.biomass < price) slot.classList.add('is-unaffordable');
-      if (this.placingKind === kind) slot.classList.add('is-selected');
-      slot.dataset.organ = kind;
-      slot.setAttribute('aria-label', `${ORGAN_TITLES[kind]} (${price} biomass)`);
-      bindHoldTooltip(slot, () => {
-        const curPrice = cell.constructionPrice(kind);
-        const typeTag = isReceptorKind(kind)
-          ? 'Free receptor (0 biomass)'
-          : isInternalOrgan(kind)
-            ? `Internal organelle · ${curPrice} biomass`
-            : `Membrane organ · ${curPrice} biomass`;
-        const affordTag = cell.biomass < curPrice ? ` · Need ${(curPrice - cell.biomass).toFixed(1)} more` : '';
-        return {
-          title: ORGAN_TITLES[kind],
-          subtitle: `${typeTag}${affordTag}`,
-          body: ORGAN_DESCRIPTIONS[kind],
-        };
-      });
+      for (const kind of list) {
+        const price = cell.constructionPrice(kind);
+        const slot = document.createElement('button');
+        slot.type = 'button';
+        slot.className = 'tray-slot';
+        if (cell.biomass < price) slot.classList.add('is-unaffordable');
+        if (this.placingKind === kind) slot.classList.add('is-selected');
+        slot.dataset.organ = kind;
+        slot.setAttribute('aria-label', `${ORGAN_TITLES[kind]} (${price} biomass)`);
+        bindHoldTooltip(slot, () => {
+          const curPrice = cell.constructionPrice(kind);
+          const typeTag = isReceptorKind(kind)
+            ? 'Free receptor (0 biomass)'
+            : isInternalOrgan(kind)
+              ? `Internal organelle · ${curPrice} biomass`
+              : `Membrane organ · ${curPrice} biomass`;
+          const affordTag = cell.biomass < curPrice ? ` · Need ${(curPrice - cell.biomass).toFixed(1)} more` : '';
+          return {
+            title: ORGAN_TITLES[kind],
+            subtitle: `${typeTag}${affordTag}`,
+            body: ORGAN_DESCRIPTIONS[kind],
+          };
+        });
 
-      const img = document.createElement('img');
-      img.src = this.organIcons.get(kind) ?? '';
-      img.alt = ORGAN_TITLES[kind];
-      const badge = document.createElement('span');
-      badge.className = 'tray-price';
-      badge.textContent = String(price);
-      slot.append(img, badge);
+        const img = document.createElement('img');
+        img.src = this.organIcons.get(kind) ?? '';
+        img.alt = ORGAN_TITLES[kind];
+        const badge = document.createElement('span');
+        badge.className = 'tray-price';
+        badge.textContent = String(price);
+        slot.append(img, badge);
 
-      slot.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (cell.biomass < price) {
-          this.hooks.onNotice(`Need ${price} biomass for ${ORGAN_TITLES[kind]}`);
-          return;
-        }
-        this.placingKind = kind;
-        this.lastBuildKey = '';
-        this.syncRender();
-      });
-      nodes.push(slot);
+        slot.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (cell.biomass < price) {
+            this.hooks.onNotice(`Need ${price} biomass for ${ORGAN_TITLES[kind]}`);
+            return;
+          }
+          this.placingKind = kind;
+          this.lastBuildKey = '';
+          this.syncRender();
+        });
+        nodes.push(slot);
+      }
     }
 
-    // Landmark shortcut buttons (Nucleus, Divide, ATP)
-    const quick: Array<{ k: LandmarkKind; label: string; title: string; body: string }> = [
+    const landmarkSep = document.createElement('div');
+    landmarkSep.style.width = '1px';
+    landmarkSep.style.height = '34px';
+    landmarkSep.style.alignSelf = 'center';
+    landmarkSep.style.background = 'rgba(120,175,210,0.35)';
+    nodes.push(landmarkSep);
+
+    // Landmark shortcut buttons matching the clickable Nucleus, Division Bud, and ATP Sac inside the cell
+    const quick: Array<{ k: LandmarkKind; title: string; body: string }> = [
       {
         k: 'nucleus',
-        label: 'Nuc',
         title: 'Nucleus & Family / Strategy',
         body: 'Manage lineage colors & name, inspect or merge living relatives, or set daughter growth strategy.',
       },
       {
         k: 'bud',
-        label: 'Div',
-        title: 'Mitosis & Budding',
+        title: 'Division Bud · Mitosis & Budding',
         body: 'Check division readiness or manually trigger symmetric mitosis or asymmetric budding.',
       },
       {
         k: 'atp',
-        label: 'ATP',
-        title: 'Energy Budget Breakdown',
+        title: 'ATP Sac · Energy Budget Breakdown',
         body: 'Inspect current ATP production rates and largest metabolic upkeep drains.',
       },
     ];
+    const nucFormIdx = this.lastSim ? nucleusForm(this.lastSim.seedValue, cell.lineageId()) : 1;
     for (const q of quick) {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'tray-slot';
+      b.dataset.landmark = q.k;
       if (this.selectedMode.type === 'landmark' && this.selectedMode.landmarkKind === q.k) {
         b.classList.add('is-selected');
       }
       b.setAttribute('aria-label', q.title);
       bindHoldTooltip(b, () => ({ title: q.title, body: q.body }));
-      b.style.fontSize = '11px';
-      b.style.fontWeight = '700';
-      b.style.color = q.k === 'atp' ? '#ffd466' : '#80efce';
-      b.textContent = q.label;
+      const img = document.createElement('img');
+      img.src =
+        q.k === 'nucleus'
+          ? (this.nucleusIcons[nucFormIdx] ?? this.landmarkIcons.get('nucleus') ?? '')
+          : (this.landmarkIcons.get(q.k) ?? '');
+      img.alt = q.title;
+      b.appendChild(img);
       b.addEventListener('click', (e) => {
         e.stopPropagation();
+        const same =
+          !this.placingKind &&
+          this.selectedMode.type === 'landmark' &&
+          this.selectedMode.landmarkKind === q.k;
         this.placingKind = null;
-        this.selectedMode = { type: 'landmark', landmarkKind: q.k };
+        this.selectedMode = same ? { type: 'none' } : { type: 'landmark', landmarkKind: q.k };
         this.lastBuildKey = '';
         this.syncRender();
       });
@@ -590,7 +614,7 @@ export class CellInterface {
     if (this.selectedMode.type === 'organ') {
       const organ = cell.organById(this.selectedMode.organId);
       if (!organ) {
-        this.selectedMode = { type: 'category', cat: 'assembly' };
+        this.selectedMode = { type: 'none' };
         this.lastBuildKey = '';
         return;
       }
@@ -637,7 +661,7 @@ export class CellInterface {
             if (idx >= 0 && sim.removeOrgan(idx)) {
               this.hooks.onNotice(`Recycled ${ORGAN_TITLES[organ.kind]}`);
               this.hooks.onEditOccurred();
-              this.selectedMode = { type: 'category', cat: 'assembly' };
+              this.selectedMode = { type: 'none' };
               this.lastBuildKey = '';
             }
           },
@@ -651,7 +675,7 @@ export class CellInterface {
       const targetId = this.selectedMode.scarId;
       const scar = cell.lostOrgans.find((s) => s.id === targetId);
       if (!scar) {
-        this.selectedMode = { type: 'category', cat: 'assembly' };
+        this.selectedMode = { type: 'none' };
         this.lastBuildKey = '';
         return;
       }
@@ -773,6 +797,7 @@ export class CellInterface {
     }
 
     this.descTitleEl.textContent = 'Cell Organ Tray';
-    this.descSubEl.textContent = 'Select an organelle icon above to build on the membrane, or click any installed organ to inspect & mutate it.';
+    this.descSubEl.textContent =
+      'Select an organelle category above to show buildable organs, or select the nucleus, division bud, ATP sac, or an installed organelle.';
   }
 }

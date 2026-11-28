@@ -8,6 +8,7 @@ import {
 } from './constants.ts';
 import { CellChemistry, RESERVE_ATP, TISSUE_FUEL } from './cellChemistry.ts';
 import { EnergyBudget } from './energyBudget.ts';
+import type { CytoplasmSpringState, LandmarkKind } from './interiorLayout.ts';
 import { MEMBRANE_COUNT, Membrane } from './membrane.ts';
 import { mutationFactor } from './mutations.ts';
 import {
@@ -405,6 +406,7 @@ export class Cell {
   emissionClock = 0;
   signals: PendingSignal[] = [];
   shapeAcceleration: Vec2 = { x: 0, y: 0 };
+  cytoplasmSprings = new Map<LandmarkKind, CytoplasmSpringState>();
 
   automaticDivision = true;
   automaticBudding = true;

@@ -329,6 +329,14 @@ export class Renderer {
     return this.atlases.organIcons2D;
   }
 
+  get landmarkIcons2D(): Map<LandmarkKind, string> {
+    return this.atlases.landmarkIcons2D;
+  }
+
+  get nucleusIcons2D(): string[] {
+    return this.atlases.nucleusIcons2D;
+  }
+
   syncWorld(sim: Simulation): void {
     const lightGrid = getLightGrid(sim.seedValue);
     for (let i = 0; i < lightGrid.length; i++) {
@@ -833,26 +841,17 @@ export class Renderer {
     if (landmarks) {
       const compactScale = clamp(1 / Math.sqrt(Math.max(1, state.zoom / 1.5)), 0.35, 1.0);
       const lmSprStart = this.spriteBatch.mark();
-      let lmIdx = 0;
       for (const lm of landmarks) {
         if (lm.kind === 'nucleus') continue;
-        lmIdx++;
         const layer = LANDMARK_LAYER_INDEX.get(lm.kind);
         if (layer === undefined) continue;
-        // Subtle cytoplasmic thermal sway clamped safely with local deformation
-        const driftPhase = sim.time * 1.15 + cell.id * 0.7 + lmIdx * 1.9;
-        const driftAmp = clamp(cell.radius * 0.025, 0.4, 1.3);
-        const driftedLocal = {
-          x: lm.local.x + Math.sin(driftPhase) * driftAmp,
-          y: lm.local.y + Math.cos(driftPhase * 0.83) * driftAmp,
-        };
-        const sw = toSpriteWorld(this.localToRel(cell, driftedLocal, tr, baseRel));
+        const sw = toSpriteWorld(this.localToRel(cell, lm.local, tr, baseRel));
         const hw = lm.radius * compactScale * 1.12;
         const starveTint: [number, number, number, number] =
           lm.kind === 'atp' && cell.energy < 10
             ? [1.0, 0.52, 0.42, 0.65 + 0.3 * Math.sin(sim.time * 8)]
-            : [1.0, 1.0, 1.0, intero ? 0.9 : 0.66];
-        const rot = cell.angle + Math.atan2(lm.local.y, lm.local.x) * 0.25 + Math.sin(driftPhase * 0.45) * 0.14;
+            : [1.0, 1.0, 1.0, intero ? 0.9 : 0.72];
+        const rot = cell.angle + Math.atan2(lm.local.y, lm.local.x) * 0.25;
         this.spriteBatch.push(sw.x, sw.y, hw, hw, rot, layer, starveTint);
       }
       const lmSprCmd = this.spriteBatch.finishRange(lmSprStart, 'landmarks');
@@ -861,14 +860,10 @@ export class Renderer {
 
     const nucForm = nucleusForm(sim.seedValue, cell.lineageId());
     const nucLm = landmarks?.find((l) => l.kind === 'nucleus');
-    const nucLocal = nucLm
-      ? {
-          x: nucLm.local.x + Math.sin(sim.time * 0.9 + cell.id) * 0.65,
-          y: nucLm.local.y + Math.cos(sim.time * 0.78 + cell.id) * 0.65,
-        }
-      : { x: 0, y: 0 };
+    const nucSpring = cell.cytoplasmSprings.get('nucleus');
+    const nucLocal = nucLm ? nucLm.local : nucSpring ? { x: nucSpring.x, y: nucSpring.y } : { x: 0, y: 0 };
     const nucSw = toSpriteWorld(this.localToRel(cell, nucLocal, tr, baseRel));
-    const nucR = clamp(cell.radius * 0.25, 6.5, 13.5);
+    const nucR = clamp(cell.radius * 0.25, 4.2, 13.5);
     const nucStart = this.spriteBatch.mark();
     const nucRgb = parseHex(pal.nucleus);
     this.spriteBatch.push(
@@ -876,7 +871,7 @@ export class Renderer {
       nucSw.y,
       nucR,
       nucR,
-      cell.angle + Math.sin(sim.time * 0.6 + cell.id) * 0.08,
+      cell.angle,
       nucForm,
       [nucRgb.r, nucRgb.g, nucRgb.b, intero ? 0.95 : 0.88],
     );

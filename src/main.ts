@@ -146,7 +146,7 @@ async function boot(): Promise<void> {
 
   const inspector = new ParticleInspector(hudRoot);
 
-  const cellUI = new CellInterface(hudRoot, renderer.organIcons2D, {
+  const cellUI = new CellInterface(hudRoot, renderer.organIcons2D, renderer.landmarkIcons2D, renderer.nucleusIcons2D, {
     onOpenFamily: () => modals.open('family', sim),
     onOpenPalette: () => modals.open('palette', sim),
     onOpenInvestment: () => modals.open('investment', sim),

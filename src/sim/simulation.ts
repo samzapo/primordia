@@ -73,6 +73,7 @@ import {
 } from './familyMerging.ts';
 import { Habitat, type ContactHelper } from './habitat.ts';
 import { InducedCurrents } from './inducedCurrents.ts';
+import { stepInteriorSprings } from './interiorLayout.ts';
 import {
   balancedPath,
   balancedPondRole,
@@ -2103,6 +2104,7 @@ export class Simulation implements ChemistryEmitter {
         y: cell.shapeAcceleration.x * rs + cell.shapeAcceleration.y * rc,
       };
       cell.membrane.step(dt, cell.radius, acc, cell.age + cell.id * 1.7, traction);
+      stepInteriorSprings(cell, dt);
       cell.renderRevision++;
       this.emitAndAttackCell(cell, dt);
     }
