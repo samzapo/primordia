@@ -415,9 +415,10 @@ export class CellInterface {
   }
 
   private rebuildTray(cell: Cell): void {
-    const nodes: HTMLElement[] = [];
+    const mainRow = document.createElement('div');
+    mainRow.className = 'tray-row tray-main-row';
 
-    // Top-level category tabs matching the clickable cytoplasmic organelles
+    // Left group: organelle factory category tabs matching intracellular organelles
     const cats: Array<{
       cat: 'assembly' | 'chemistry' | 'receptors';
       title: string;
@@ -457,17 +458,72 @@ export class CellInterface {
         e.stopPropagation();
         this.openCategory(c.cat);
       });
-      nodes.push(b);
+      mainRow.appendChild(b);
     }
 
-    // Show purchasable organs ONLY when an organelle-purchasing category is selected
+    const landmarkSep = document.createElement('div');
+    landmarkSep.style.width = '1px';
+    landmarkSep.style.height = '34px';
+    landmarkSep.style.alignSelf = 'center';
+    landmarkSep.style.background = 'rgba(120,175,210,0.35)';
+    mainRow.appendChild(landmarkSep);
+
+    // Right group: clickable Nucleus, Division Bud, and ATP Sac matching intracellular organelles
+    const quick: Array<{ k: LandmarkKind; title: string; body: string }> = [
+      {
+        k: 'nucleus',
+        title: 'Nucleus & Family / Strategy',
+        body: 'Manage lineage colors & name, inspect or merge living relatives, or set daughter growth strategy.',
+      },
+      {
+        k: 'bud',
+        title: 'Division Bud · Mitosis & Budding',
+        body: 'Check division readiness or manually trigger symmetric mitosis or asymmetric budding.',
+      },
+      {
+        k: 'atp',
+        title: 'ATP Sac · Energy Budget Breakdown',
+        body: 'Inspect current ATP production rates and largest metabolic upkeep drains.',
+      },
+    ];
+    const nucFormIdx = this.lastSim ? nucleusForm(this.lastSim.seedValue, cell.lineageId()) : 1;
+    for (const q of quick) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'tray-slot';
+      b.dataset.landmark = q.k;
+      if (this.selectedMode.type === 'landmark' && this.selectedMode.landmarkKind === q.k) {
+        b.classList.add('is-selected');
+      }
+      b.setAttribute('aria-label', q.title);
+      bindHoldTooltip(b, () => ({ title: q.title, body: q.body }));
+      const img = document.createElement('img');
+      img.src =
+        q.k === 'nucleus'
+          ? (this.nucleusIcons[nucFormIdx] ?? this.landmarkIcons.get('nucleus') ?? '')
+          : (this.landmarkIcons.get(q.k) ?? '');
+      img.alt = q.title;
+      b.appendChild(img);
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const same =
+          !this.placingKind &&
+          this.selectedMode.type === 'landmark' &&
+          this.selectedMode.landmarkKind === q.k;
+        this.placingKind = null;
+        this.selectedMode = same ? { type: 'none' } : { type: 'landmark', landmarkKind: q.k };
+        this.lastBuildKey = '';
+        this.syncRender();
+      });
+      mainRow.appendChild(b);
+    }
+
+    const rows: HTMLElement[] = [mainRow];
+
+    // Bottom row: expanded purchasable organs ONLY when an organelle factory category is selected
     if (this.selectedMode.type === 'category') {
-      const sep = document.createElement('div');
-      sep.style.width = '1px';
-      sep.style.height = '34px';
-      sep.style.alignSelf = 'center';
-      sep.style.background = 'rgba(120,175,210,0.35)';
-      nodes.push(sep);
+      const subRow = document.createElement('div');
+      subRow.className = 'tray-row tray-subrow';
 
       const list: readonly OrganKind[] =
         this.selectedMode.cat === 'assembly'
@@ -518,68 +574,12 @@ export class CellInterface {
           this.lastBuildKey = '';
           this.syncRender();
         });
-        nodes.push(slot);
+        subRow.appendChild(slot);
       }
+      rows.push(subRow);
     }
 
-    const landmarkSep = document.createElement('div');
-    landmarkSep.style.width = '1px';
-    landmarkSep.style.height = '34px';
-    landmarkSep.style.alignSelf = 'center';
-    landmarkSep.style.background = 'rgba(120,175,210,0.35)';
-    nodes.push(landmarkSep);
-
-    // Landmark shortcut buttons matching the clickable Nucleus, Division Bud, and ATP Sac inside the cell
-    const quick: Array<{ k: LandmarkKind; title: string; body: string }> = [
-      {
-        k: 'nucleus',
-        title: 'Nucleus & Family / Strategy',
-        body: 'Manage lineage colors & name, inspect or merge living relatives, or set daughter growth strategy.',
-      },
-      {
-        k: 'bud',
-        title: 'Division Bud · Mitosis & Budding',
-        body: 'Check division readiness or manually trigger symmetric mitosis or asymmetric budding.',
-      },
-      {
-        k: 'atp',
-        title: 'ATP Sac · Energy Budget Breakdown',
-        body: 'Inspect current ATP production rates and largest metabolic upkeep drains.',
-      },
-    ];
-    const nucFormIdx = this.lastSim ? nucleusForm(this.lastSim.seedValue, cell.lineageId()) : 1;
-    for (const q of quick) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'tray-slot';
-      b.dataset.landmark = q.k;
-      if (this.selectedMode.type === 'landmark' && this.selectedMode.landmarkKind === q.k) {
-        b.classList.add('is-selected');
-      }
-      b.setAttribute('aria-label', q.title);
-      bindHoldTooltip(b, () => ({ title: q.title, body: q.body }));
-      const img = document.createElement('img');
-      img.src =
-        q.k === 'nucleus'
-          ? (this.nucleusIcons[nucFormIdx] ?? this.landmarkIcons.get('nucleus') ?? '')
-          : (this.landmarkIcons.get(q.k) ?? '');
-      img.alt = q.title;
-      b.appendChild(img);
-      b.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const same =
-          !this.placingKind &&
-          this.selectedMode.type === 'landmark' &&
-          this.selectedMode.landmarkKind === q.k;
-        this.placingKind = null;
-        this.selectedMode = same ? { type: 'none' } : { type: 'landmark', landmarkKind: q.k };
-        this.lastBuildKey = '';
-        this.syncRender();
-      });
-      nodes.push(b);
-    }
-
-    this.trayEl.replaceChildren(...nodes);
+    this.trayEl.replaceChildren(...rows);
   }
 
   private rebuildDescriptionBar(sim: Simulation, cell: Cell): void {
